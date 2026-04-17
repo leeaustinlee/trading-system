@@ -526,10 +526,35 @@ class FullApiIntegrationTests {
     }
 
     @Test
-    void migrationHealth_shouldReturnChecks() throws Exception {
-        mockMvc.perform(get("/api/system/migration/health"))
+    void migrationHealth_v4ColumnsMustExist() throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/system/migration/health"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.checks").isArray());
+                .andExpect(jsonPath("$.checks").isArray())
+                .andReturn();
+
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        JsonNode checks = body.path("checks");
+
+        // V4 columns: close_price and realized_pnl must be present in DB
+        assertCheckOk(checks, "column.position.close_price");
+        assertCheckOk(checks, "column.position.realized_pnl");
+
+        // Core tables must exist
+        assertCheckOk(checks, "table.position");
+        assertCheckOk(checks, "table.ai_research_log");
+        assertCheckOk(checks, "table.external_probe_log");
+    }
+
+    private void assertCheckOk(JsonNode checks, String key) {
+        for (JsonNode check : checks) {
+            if (key.equals(check.path("key").asText())) {
+                assertThat(check.path("ok").asBoolean())
+                        .as("Migration check [%s] should be OK", key)
+                        .isTrue();
+                return;
+            }
+        }
+        throw new AssertionError("Migration check key not found: " + key);
     }
 
     // ─────────────────────────────────────────────────────────────────

@@ -1,0 +1,82 @@
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 30000
+      idle-timeout: 600000
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    out-of-order: false
+
+logging:
+  level:
+    root: INFO
+    com.austin.trading: INFO
+    org.springframework.scheduling: DEBUG
+
+trading:
+  timezone: ${TRADING_TIMEZONE:Asia/Taipei}
+  line:
+    enabled: ${LINE_ENABLED:true}
+    token: ${LINE_TOKEN}
+  scheduler:
+    hourly-gate:
+      enabled: true
+    hourly-gate-cron: "0 5 10-13 * * MON-FRI"
+    final-decision:
+      enabled: true
+    final-decision-cron: "0 30 9 * * MON-FRI"
+    five-minute-monitor:
+      enabled: true
+    five-minute-monitor-cron: "0 */5 9-13 * * MON-FRI"
+    premarket-notify:
+      enabled: true
+    premarket-notify-cron: "0 30 8 * * MON-FRI"
+    aftermarket-review:
+      enabled: true
+    aftermarket-review-cron: "0 0 14 * * MON-FRI"
+    postmarket-analysis:
+      enabled: true
+    postmarket-analysis-cron: "0 30 15 * * MON-FRI"
+    premarket-data-prep:
+      enabled: true
+    premarket-data-prep-cron: "0 10 8 * * MON-FRI"
+    postmarket-data-prep:
+      enabled: true
+    postmarket-data-prep-cron: "0 5 15 * * MON-FRI"
+    t86-data-prep:
+      enabled: true
+    t86-data-prep-cron: "0 10 18 * * MON-FRI"
+    midday-review:
+      enabled: true
+    midday-review-cron: "0 0 11 * * MON-FRI"
+    tomorrow-plan:
+      enabled: true
+    tomorrow-plan-cron: "0 30 18 * * MON-FRI"
+    open-data-prep:
+      enabled: true
+    open-data-prep-cron: "0 1 9 * * MON-FRI"
+    external-probe-health:
+      enabled: true
+    external-probe-health-cron: "0 25 8,15 * * MON-FRI"
+
+  taifex:
+    base-url: ${TAIFEX_BASE_URL:https://openapi.taifex.com.tw}
+
+  ai:
+    claude:
+      enabled: ${CLAUDE_ENABLED:true}
+      api-key: ${CLAUDE_API_KEY}
+      model: ${CLAUDE_MODEL:claude-sonnet-4-6}
+      max-tokens: ${CLAUDE_MAX_TOKENS:4096}
+      research-output-path: ${CLAUDE_RESEARCH_OUTPUT_PATH:}

@@ -106,7 +106,12 @@
 ### 0.2 未完成
 - LINE 實際 token 設定與 end-to-end 測試（LineSender 框架已備，需設 `trading.line.token`）
 - `AiClaudeClient` 實際呼叫 end-to-end 測試（需設 `trading.ai.claude.api-key`）
-- V4 migration（position_close_fields）需確認已套用至 DB
+
+### 0.2.2 已完成（本輪 2026-04-17）
+- V4 migration 欄位確認：integration test 驗證 `position.close_price` / `position.realized_pnl` 存在
+- Production profile（`application-prod.yml`）：Flyway 啟用、ddl-auto:validate、所有排程開啟
+- `MigrationHealthService` 改善：Flyway 停用時回報 flyway.disabled=true，不誤判為失敗
+- `.env.example` 補全說明、新增 `scripts/run-prod.sh` 正式環境啟動腳本（含必填欄位驗證）
 
 ### 0.2.1 已完成（本輪 2026-04-17）
 - Dashboard 與各頁 UI（Phase 4）：七頁分頁 SPA（總覽/候選股/持倉/損益/決策歷史/AI研究/系統）
