@@ -4,10 +4,12 @@ import com.austin.trading.ai.AiFacade;
 import com.austin.trading.dto.response.AiResearchResponse;
 import com.austin.trading.service.AiResearchService;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 /**
  * AI 研究記錄 API。
@@ -68,5 +70,39 @@ public class AiController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         return aiFacade.doFinalDecisionResearch(date != null ? date : LocalDate.now());
+    }
+
+    /**
+     * 從本機 Markdown 檔案匯入研究結果到 DB。
+     * <p>
+     * 用途：把 Claude Code 排程 Agent 已寫好的研究檔補入資料庫。
+     * </p>
+     * <pre>
+     * POST /api/ai/research/import-file
+     *   ?filePath=/mnt/d/ai/stock/claude-research-latest.md
+     *   &researchType=T86_TOMORROW
+     *   &tradingDate=2026-04-17          （選填，預設今日）
+     * </pre>
+     */
+    @PostMapping("/research/import-file")
+    public ResponseEntity<Map<String, Object>> importFromFile(
+            @RequestParam String filePath,
+            @RequestParam(defaultValue = "POSTMARKET") String researchType,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tradingDate,
+            @RequestParam(required = false) String symbol
+    ) {
+        LocalDate date = tradingDate != null ? tradingDate : LocalDate.now();
+        return aiResearchService.importFromPath(filePath, date, researchType.toUpperCase(), symbol)
+                .<ResponseEntity<Map<String, Object>>>map(r -> ResponseEntity.ok(Map.of(
+                        "success", true,
+                        "id", r.id(),
+                        "researchType", r.researchType(),
+                        "tradingDate", r.tradingDate().toString(),
+                        "contentLength", r.researchResult() != null ? r.researchResult().length() : 0
+                )))
+                .orElseGet(() -> ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "error", "File not found or read failed: " + filePath
+                )));
     }
 }

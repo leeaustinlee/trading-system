@@ -178,20 +178,39 @@ public class AiResearchService {
      */
     public Optional<AiResearchResponse> importFromFile(
             LocalDate tradingDate, String researchType, String symbol) {
+        return importFromPath(aiClaudeConfig.getResearchOutputPath(), tradingDate, researchType, symbol);
+    }
 
-        return readLatestFromFile().map(content -> {
+    /**
+     * 從指定路徑的 Markdown 檔案匯入研究結果到 DB。
+     * 適用於一次性補入歷史研究紀錄，或排程 Agent 寫完後立即落表。
+     */
+    public Optional<AiResearchResponse> importFromPath(
+            String filePath, LocalDate tradingDate, String researchType, String symbol) {
+
+        if (filePath == null || filePath.isBlank()) return Optional.empty();
+        try {
+            Path p = Paths.get(filePath);
+            if (!Files.exists(p)) {
+                log.debug("[AiResearchService] file not found: {}", filePath);
+                return Optional.empty();
+            }
+            String content = Files.readString(p);
             AiResearchLogEntity entity = new AiResearchLogEntity();
             entity.setTradingDate(tradingDate);
             entity.setResearchType(researchType);
             entity.setSymbol(symbol);
-            entity.setPromptSummary("(Claude Code 排程 Agent 寫入)");
+            entity.setPromptSummary("(Claude Code Agent / file import)");
             entity.setResearchResult(content);
             entity.setModel("claude-code-agent");
             entity.setTokensUsed(0);
             AiResearchLogEntity saved = repository.save(entity);
-            log.info("[AiResearchService] Imported from file id={} type={}", saved.getId(), researchType);
-            return toResponse(saved);
-        });
+            log.info("[AiResearchService] Imported id={} type={} date={}", saved.getId(), researchType, tradingDate);
+            return Optional.of(toResponse(saved));
+        } catch (IOException e) {
+            log.warn("[AiResearchService] Failed to import from {}: {}", filePath, e.getMessage());
+            return Optional.empty();
+        }
     }
 
     // ── 私有 ─────────────────────────────────────────────────────────────────────
