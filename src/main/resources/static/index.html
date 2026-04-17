@@ -16,840 +16,1112 @@
       --err: #a31b2b;
       --accent: #0455bf;
       --accent-2: #0d9a8f;
-      --shadow: 0 10px 30px rgba(21, 36, 61, 0.08);
+      --shadow: 0 10px 30px rgba(21,36,61,.08);
+      --nav-h: 52px;
     }
-
-    * {
-      box-sizing: border-box;
-    }
-
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      margin: 0;
-      font-family: "Segoe UI", "PingFang TC", "Noto Sans TC", sans-serif;
+      font-family: "Segoe UI","PingFang TC","Noto Sans TC",sans-serif;
       color: var(--ink);
       background:
-        radial-gradient(circle at 20% -10%, #d9edff 0, transparent 35%),
-        radial-gradient(circle at 90% 20%, #d8fff7 0, transparent 30%),
+        radial-gradient(circle at 20% -10%,#d9edff 0,transparent 35%),
+        radial-gradient(circle at 90% 20%,#d8fff7 0,transparent 30%),
         var(--bg);
       min-height: 100vh;
     }
 
-    .wrap {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 24px 16px 48px;
+    /* ── Nav ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      height: var(--nav-h);
+      background: rgba(255,255,255,.88);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line);
+      display: flex; align-items: center;
+      padding: 0 20px; gap: 4px;
     }
-
-    .hero {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      justify-content: space-between;
-      align-items: flex-end;
-      margin-bottom: 18px;
+    .nav-brand { font-weight: 700; font-size: 15px; margin-right: 16px; white-space: nowrap; }
+    .nav-tab {
+      border: none; background: none; cursor: pointer;
+      padding: 6px 12px; border-radius: 8px;
+      font-size: 13px; font-weight: 600; color: var(--muted);
+      transition: background .15s, color .15s;
+      white-space: nowrap;
     }
-
-    .title {
-      margin: 0;
-      font-size: clamp(24px, 4vw, 34px);
-      letter-spacing: 0.2px;
+    .nav-tab:hover { background: #eef2f8; color: var(--ink); }
+    .nav-tab.active { background: #e0ecff; color: var(--accent); }
+    .nav-spacer { flex: 1; }
+    .nav-meta { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    #btnRefreshNav {
+      border: 1px solid var(--line); border-radius: 8px;
+      background: #fff; color: var(--ink);
+      padding: 5px 10px; cursor: pointer; font-size: 12px; font-weight: 600;
     }
+    #btnRefreshNav:hover { background: #f0f4fb; }
 
-    .subtitle {
-      margin: 6px 0 0;
-      color: var(--muted);
-      font-size: 14px;
-    }
+    /* ── Pages ── */
+    .page { display: none; }
+    .page.active { display: block; }
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 20px 16px 48px; }
 
-    .controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .row-tools {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    .row-tools label {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      cursor: pointer;
-    }
-
-    .row-tools select {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 4px 6px;
-      font-size: 12px;
-      color: var(--ink);
-      background: #fff;
-    }
-
-    button {
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #fff;
-      color: var(--ink);
-      padding: 8px 12px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
-    }
-
-    button.primary {
-      background: linear-gradient(120deg, var(--accent), var(--accent-2));
-      color: #fff;
-      border: none;
-    }
-
-    button:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 18px rgba(15, 49, 93, 0.12);
-      border-color: #b6c5df;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(12, minmax(0, 1fr));
-      gap: 12px;
-    }
-
+    /* ── Grid ── */
+    .grid { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); gap: 12px; }
     .card {
       grid-column: span 12;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      box-shadow: var(--shadow);
-      padding: 14px;
-      animation: fadeUp .45s ease both;
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 14px; box-shadow: var(--shadow);
+      padding: 16px; animation: fadeUp .4s ease both;
     }
-
-    .card h2 {
-      font-size: 16px;
-      margin: 0 0 10px;
-    }
-
-    .kv {
-      display: grid;
-      grid-template-columns: 120px 1fr;
-      gap: 6px 8px;
-      font-size: 13px;
-    }
-
-    .k {
-      color: var(--muted);
-    }
-
-    .v {
-      font-weight: 600;
-      word-break: break-word;
-    }
-
-    .pill {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 700;
-    }
-
-    .pill.ok {
-      background: #d9f8ea;
-      color: var(--ok);
-    }
-
-    .pill.warn {
-      background: #fff1cf;
-      color: var(--warn);
-    }
-
-    .pill.err {
-      background: #ffe0e5;
-      color: var(--err);
-    }
-
-    .mono {
-      font-family: "Consolas", "Courier New", monospace;
-      font-size: 12px;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-
-    th, td {
-      text-align: left;
-      border-bottom: 1px solid var(--line);
-      padding: 8px 4px;
-      vertical-align: top;
-    }
-
-    th {
-      color: var(--muted);
-      font-weight: 600;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: .4px;
-    }
-
-    .errbox {
-      background: #ffe7eb;
-      color: #812130;
-      border: 1px solid #f3bcc7;
-      border-radius: 10px;
-      padding: 10px;
-      margin-bottom: 10px;
-      display: none;
-      font-size: 13px;
-    }
-
+    .card h2 { font-size: 15px; margin-bottom: 12px; font-weight: 700; }
+    .span-3 { grid-column: span 12; }
     .span-4 { grid-column: span 12; }
     .span-6 { grid-column: span 12; }
     .span-8 { grid-column: span 12; }
-
-    @media (min-width: 900px) {
+    @media(min-width:700px) {
+      .span-3 { grid-column: span 6; }
+      .span-4 { grid-column: span 6; }
+    }
+    @media(min-width:1000px) {
+      .span-3 { grid-column: span 3; }
       .span-4 { grid-column: span 4; }
       .span-6 { grid-column: span 6; }
       .span-8 { grid-column: span 8; }
     }
 
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
+    /* ── KV ── */
+    .kv { display: grid; grid-template-columns: 130px 1fr; gap: 6px 8px; font-size: 13px; }
+    .k { color: var(--muted); }
+    .v { font-weight: 600; word-break: break-word; }
+
+    /* ── Pill ── */
+    .pill {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      font-size: 12px; font-weight: 700;
     }
+    .pill.ok { background:#d9f8ea; color:var(--ok); }
+    .pill.warn { background:#fff1cf; color:var(--warn); }
+    .pill.err { background:#ffe0e5; color:var(--err); }
+    .pill.muted { background:#edf0f5; color:var(--muted); }
 
-    .decision-chart {
-      display: flex;
-      align-items: end;
-      gap: 8px;
-      min-height: 160px;
-      padding: 10px 2px 4px;
+    /* ── Table ── */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th,td { text-align:left; border-bottom:1px solid var(--line); padding:8px 4px; vertical-align:top; }
+    th { color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
+    tr:last-child td { border-bottom: none; }
+    tr.row-warn { background:#fff9e8; }
+    tr.row-err { background:#ffedf0; }
+
+    /* ── Misc ── */
+    .mono { font-family:"Consolas","Courier New",monospace; font-size:12px; }
+    .small { font-size:12px; color:var(--muted); }
+    .num-pos { color:var(--ok); font-weight:700; }
+    .num-neg { color:var(--err); font-weight:700; }
+    .errbox {
+      background:#ffe7eb; color:#812130; border:1px solid #f3bcc7;
+      border-radius:10px; padding:10px 14px; margin-bottom:12px;
+      font-size:13px; display:none;
     }
-
-    .decision-col {
-      width: 24px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
+    .toolbar {
+      display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+      margin-bottom:12px;
     }
-
-    .decision-bar {
-      width: 100%;
-      border-radius: 8px 8px 4px 4px;
-      background: #d4deef;
-      transition: .2s ease;
+    .toolbar label { font-size:13px; color:var(--muted); display:flex; align-items:center; gap:4px; }
+    .toolbar input[type=date],
+    .toolbar input[type=text],
+    .toolbar select {
+      border:1px solid var(--line); border-radius:8px;
+      padding:5px 8px; font-size:13px; color:var(--ink); background:#fff;
     }
-
-    .decision-bar.enter { background: linear-gradient(180deg, #2aa97a, #0b7a54); }
-    .decision-bar.watch { background: linear-gradient(180deg, #f0b650, #9a6500); }
-    .decision-bar.rest { background: linear-gradient(180deg, #e67984, #a31b2b); }
-
-    .decision-label {
-      font-size: 10px;
-      color: var(--muted);
-      transform: rotate(-25deg);
-      transform-origin: top left;
-      width: 40px;
-      white-space: nowrap;
+    .btn {
+      border:1px solid var(--line); border-radius:10px;
+      background:#fff; color:var(--ink);
+      padding:6px 12px; cursor:pointer; font-weight:600; font-size:13px;
+      transition:transform .15s,border-color .15s,box-shadow .15s;
     }
-
-    .decision-summary {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 8px;
-      font-size: 12px;
+    .btn:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(15,49,93,.1); border-color:#b6c5df; }
+    .btn.primary {
+      background:linear-gradient(120deg,var(--accent),var(--accent-2));
+      color:#fff; border:none;
     }
+    .btn.warn-btn { background:#fff3cd; color:#7a5000; border-color:#f0d89c; }
+    .empty-row td { color:var(--muted); font-style:italic; }
 
-    .decision-summary .pill {
-      padding: 3px 10px;
+    /* ── PnL stat row ── */
+    .stat-row { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:12px; }
+    .stat-box {
+      flex:1; min-width:100px; border:1px solid var(--line);
+      border-radius:10px; padding:10px 14px; background:var(--panel);
     }
+    .stat-box .stat-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
+    .stat-box .stat-value { font-size:20px; font-weight:700; margin-top:4px; }
 
-    tr.row-warn {
-      background: #fff9e8;
+    /* ── Decision trend chart ── */
+    .decision-chart { display:flex; align-items:flex-end; gap:6px; min-height:130px; padding:8px 2px 4px; }
+    .decision-col { width:22px; display:flex; flex-direction:column; align-items:center; gap:4px; }
+    .decision-bar { width:100%; border-radius:6px 6px 3px 3px; background:#d4deef; transition:.2s; }
+    .decision-bar.enter { background:linear-gradient(180deg,#2aa97a,#0b7a54); }
+    .decision-bar.watch { background:linear-gradient(180deg,#f0b650,#9a6500); }
+    .decision-bar.rest  { background:linear-gradient(180deg,#e67984,#a31b2b); }
+    .decision-label { font-size:10px; color:var(--muted); transform:rotate(-30deg) translateX(-4px); transform-origin:top left; width:36px; white-space:nowrap; }
+    .decision-summary { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+
+    /* ── AI Research ── */
+    .ai-log-item {
+      border:1px solid var(--line); border-radius:10px;
+      padding:10px 12px; margin-bottom:8px; font-size:12px;
     }
+    .ai-log-head { font-weight:700; margin-bottom:4px; display:flex; justify-content:space-between; }
+    .ai-log-body { color:#374860; white-space:pre-wrap; max-height:200px; overflow-y:auto; }
 
-    tr.row-err {
-      background: #ffedf0;
-    }
-
-    .num-pos { color: var(--ok); font-weight: 700; }
-    .num-neg { color: var(--err); font-weight: 700; }
-    .small { font-size: 12px; color: var(--muted); }
-
-    .alerts {
-      display: grid;
-      gap: 8px;
-    }
-
+    /* ── Alert feed ── */
     .alert-item {
-      border: 1px solid #f2c2cc;
-      background: #fff0f3;
-      border-radius: 10px;
-      padding: 8px 10px;
-      font-size: 12px;
-      color: #7d2534;
+      border:1px solid #f2c2cc; background:#fff0f3;
+      border-radius:10px; padding:8px 10px; font-size:12px; color:#7d2534;
     }
+    .alert-item.warn { border-color:#f0ddb2; background:#fff7e8; color:#7c5b12; }
+    .alert-head { font-weight:700; margin-bottom:3px; }
+    .alerts { display:grid; gap:8px; }
 
-    .alert-item.warn {
-      border-color: #f0ddb2;
-      background: #fff7e8;
-      color: #7c5b12;
-    }
-
-    .alert-head {
-      font-weight: 700;
-      margin-bottom: 3px;
+    @keyframes fadeUp {
+      from { opacity:0; transform:translateY(8px); }
+      to   { opacity:1; transform:translateY(0); }
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="hero">
-      <div>
-        <h1 class="title">Trading System Console</h1>
-        <p class="subtitle" id="metaLine">載入中...</p>
-      </div>
-      <div class="controls">
-        <button class="primary" id="btnRefresh">立即刷新</button>
-        <button id="btnProbeDry">Probe Dry-Run</button>
-        <button id="btnProbeLine">Probe LINE Live</button>
-        <button id="btnProbeClaude">Probe Claude Live</button>
-      </div>
-    </div>
 
-    <div id="errBox" class="errbox"></div>
+<nav>
+  <div class="nav-brand">Trading Console</div>
+  <button class="nav-tab active" data-page="pageDashboard">總覽</button>
+  <button class="nav-tab" data-page="pageCandidates">候選股</button>
+  <button class="nav-tab" data-page="pagePositions">持倉</button>
+  <button class="nav-tab" data-page="pagePnl">損益</button>
+  <button class="nav-tab" data-page="pageDecisions">決策歷史</button>
+  <button class="nav-tab" data-page="pageAiResearch">AI 研究</button>
+  <button class="nav-tab" data-page="pageSystem">系統</button>
+  <div class="nav-spacer"></div>
+  <span class="nav-meta" id="navMeta"></span>
+  <button id="btnRefreshNav">⟳ 刷新</button>
+</nav>
+
+<!-- ══════════════ PAGE: Dashboard ══════════════ -->
+<div class="page active" id="pageDashboard">
+  <div class="wrap">
+    <div id="errBoxDash" class="errbox"></div>
+    <div class="grid">
+
+      <section class="card span-4">
+        <h2>市場狀態</h2>
+        <div class="kv">
+          <div class="k">Market Grade</div><div class="v" id="d-marketGrade">-</div>
+          <div class="k">Market Phase</div><div class="v" id="d-marketPhase">-</div>
+          <div class="k">Decision</div><div class="v" id="d-marketDecision">-</div>
+          <div class="k">Decision Lock</div><div class="v" id="d-decisionLock">-</div>
+          <div class="k">Time Decay</div><div class="v" id="d-timeDecay">-</div>
+          <div class="k">Hourly Gate</div><div class="v" id="d-hourlyGate">-</div>
+          <div class="k">Monitor Mode</div><div class="v" id="d-monitorMode">-</div>
+        </div>
+      </section>
+
+      <section class="card span-4">
+        <h2>最新決策</h2>
+        <div class="kv">
+          <div class="k">Final Decision</div><div class="v" id="d-finalDecision">-</div>
+          <div class="k">Summary</div><div class="v" id="d-finalSummary">-</div>
+          <div class="k">Hourly Gate</div><div class="v" id="d-latestHourly">-</div>
+          <div class="k">Hourly Event</div><div class="v" id="d-hourlyEvent">-</div>
+          <div class="k">Monitor Mode</div><div class="v" id="d-latestMonitor">-</div>
+          <div class="k">Monitor Event</div><div class="v" id="d-monitorEvent">-</div>
+          <div class="k">Notification</div><div class="v" id="d-latestNotice">-</div>
+        </div>
+      </section>
+
+      <section class="card span-4">
+        <h2>損益總覽</h2>
+        <div class="kv">
+          <div class="k">Total Realized</div><div class="v" id="d-pnlRealized">-</div>
+          <div class="k">Total Unrealized</div><div class="v" id="d-pnlUnrealized">-</div>
+          <div class="k">Avg Win Rate</div><div class="v" id="d-pnlWinRate">-</div>
+          <div class="k">Days</div><div class="v" id="d-pnlDays">-</div>
+        </div>
+      </section>
+
+      <section class="card span-6">
+        <h2>候選股（Top）</h2>
+        <table>
+          <thead><tr><th>代號</th><th>名稱</th><th>Score</th><th>RR</th><th>模式</th><th>納入計畫</th></tr></thead>
+          <tbody id="d-candidatesBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-6">
+        <h2>持倉中</h2>
+        <table>
+          <thead><tr><th>代號</th><th>方向</th><th>股數</th><th>均價</th><th>開倉時間</th></tr></thead>
+          <tbody id="d-positionsBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-6">
+        <h2>近期通知</h2>
+        <table>
+          <thead><tr><th>時間</th><th>類型</th><th>標題</th></tr></thead>
+          <tbody id="d-notificationsBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-6">
+        <h2>系統警示</h2>
+        <div class="small" id="d-alertsMeta" style="margin-bottom:8px">無異常</div>
+        <div id="d-alertsBody" class="alerts"></div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE: Candidates ══════════════ -->
+<div class="page" id="pageCandidates">
+  <div class="wrap">
+    <div id="errBoxCand" class="errbox"></div>
+    <div class="grid">
+
+      <section class="card span-12">
+        <h2>目前候選股</h2>
+        <table>
+          <thead><tr>
+            <th>代號</th><th>名稱</th><th>Score</th><th>RR</th>
+            <th>估值模式</th><th>進場區間</th><th>停損</th><th>停利1</th><th>停利2</th>
+            <th>納入計畫</th><th>排除原因</th>
+          </tr></thead>
+          <tbody id="c-currentBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-12">
+        <h2>候選歷史</h2>
+        <div class="toolbar">
+          <label>代號 <input type="text" id="c-histSymbol" placeholder="2330" style="width:80px" /></label>
+          <button class="btn" id="c-histLoad">查詢</button>
+        </div>
+        <table>
+          <thead><tr>
+            <th>日期</th><th>代號</th><th>名稱</th><th>Score</th><th>RR</th><th>估值模式</th><th>納入計畫</th>
+          </tr></thead>
+          <tbody id="c-histBody"></tbody>
+        </table>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE: Positions ══════════════ -->
+<div class="page" id="pagePositions">
+  <div class="wrap">
+    <div id="errBoxPos" class="errbox"></div>
+    <div class="grid">
+
+      <section class="card span-12">
+        <h2>持倉中</h2>
+        <div class="toolbar">
+          <label>代號 <input type="text" id="p-openSymbol" placeholder="全部" style="width:80px" /></label>
+          <button class="btn" id="p-openLoad">查詢</button>
+        </div>
+        <table>
+          <thead><tr>
+            <th>代號</th><th>名稱</th><th>方向</th><th>股數</th><th>均價</th><th>開倉時間</th><th>停損</th><th>停利</th>
+          </tr></thead>
+          <tbody id="p-openBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-12">
+        <h2>歷史持倉</h2>
+        <div class="toolbar">
+          <label>代號 <input type="text" id="p-histSymbol" placeholder="全部" style="width:80px" /></label>
+          <label>起 <input type="date" id="p-histFrom" /></label>
+          <label>迄 <input type="date" id="p-histTo" /></label>
+          <button class="btn" id="p-histLoad">查詢</button>
+        </div>
+        <table>
+          <thead><tr>
+            <th>開倉</th><th>代號</th><th>方向</th><th>股數</th><th>均價</th><th>收盤價</th><th>已實現損益</th><th>關閉時間</th>
+          </tr></thead>
+          <tbody id="p-histBody"></tbody>
+        </table>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE: PnL ══════════════ -->
+<div class="page" id="pagePnl">
+  <div class="wrap">
+    <div id="errBoxPnl" class="errbox"></div>
+
+    <div class="stat-row" id="pnl-statRow"></div>
 
     <div class="grid">
-      <section class="card span-4">
-        <h2>Market / State</h2>
-        <div class="kv">
-          <div class="k">Market Grade</div><div class="v" id="marketGrade">-</div>
-          <div class="k">Market Phase</div><div class="v" id="marketPhase">-</div>
-          <div class="k">Decision</div><div class="v" id="marketDecision">-</div>
-          <div class="k">Decision Lock</div><div class="v" id="decisionLock">-</div>
-          <div class="k">Time Decay</div><div class="v" id="timeDecay">-</div>
-          <div class="k">Hourly Gate</div><div class="v" id="hourlyGate">-</div>
-          <div class="k">Monitor Mode</div><div class="v" id="monitorMode">-</div>
-        </div>
-      </section>
-
-      <section class="card span-4">
-        <h2>Decision / Monitor</h2>
-        <div class="kv">
-          <div class="k">Final Decision</div><div class="v" id="finalDecision">-</div>
-          <div class="k">Final Summary</div><div class="v" id="finalSummary">-</div>
-          <div class="k">Latest Hourly</div><div class="v" id="latestHourly">-</div>
-          <div class="k">Hourly Event</div><div class="v" id="hourlyEvent">-</div>
-          <div class="k">Latest Monitor</div><div class="v" id="latestMonitor">-</div>
-          <div class="k">Monitor Event</div><div class="v" id="monitorEvent">-</div>
-          <div class="k">Notification</div><div class="v" id="latestNotice">-</div>
-        </div>
-      </section>
-
-      <section class="card span-4">
-        <h2>Probe / Migration</h2>
-        <div class="kv">
-          <div class="k">TAIFEX</div><div class="v" id="probeTaifex">-</div>
-          <div class="k">LINE</div><div class="v" id="probeLine">-</div>
-          <div class="k">CLAUDE</div><div class="v" id="probeClaude">-</div>
-          <div class="k">Migration</div><div class="v" id="migrationOk">-</div>
-        </div>
-        <div class="mono" id="probeMeta" style="margin-top:10px;color:#4d5a70;"></div>
-      </section>
-
-      <section class="card span-4">
-        <h2>PnL Summary</h2>
-        <div class="kv">
-          <div class="k">Total Realized</div><div class="v" id="pnlRealized">-</div>
-          <div class="k">Total Unrealized</div><div class="v" id="pnlUnrealized">-</div>
-          <div class="k">Avg Win Rate</div><div class="v" id="pnlWinRate">-</div>
-          <div class="k">Days</div><div class="v" id="pnlDays">-</div>
-        </div>
-      </section>
-
-      <section class="card span-6">
-        <h2>Top Candidates</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Symbol</th>
-              <th>Name</th>
-              <th>Score</th>
-              <th>RR</th>
-              <th>Mode</th>
-              <th>Plan</th>
-            </tr>
-          </thead>
-          <tbody id="candidatesBody"></tbody>
-        </table>
-      </section>
-
-      <section class="card span-6">
-        <h2>Open Positions</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Symbol</th>
-              <th>Side</th>
-              <th>Qty</th>
-              <th>AvgCost</th>
-              <th>OpenedAt</th>
-            </tr>
-          </thead>
-          <tbody id="positionsBody"></tbody>
-        </table>
-      </section>
-
-      <section class="card span-6">
-        <h2>Recent Notifications</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Type</th>
-              <th>Title</th>
-            </tr>
-          </thead>
-          <tbody id="notificationsBody"></tbody>
-        </table>
-      </section>
-
-      <section class="card span-6">
-        <h2>Probe History</h2>
-        <div class="row-tools">
-          <span id="probeHistoryMeta">最近 20 筆</span>
-          <div>
-            <label>筆數
-              <select id="selProbeLimit">
-                <option value="20">20</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-              </select>
-            </label>
-            <label><input type="checkbox" id="chkProbeFailedOnly" /> 只看失敗</label>
-          </div>
+      <section class="card span-12">
+        <h2>每日損益</h2>
+        <div class="toolbar">
+          <label>起 <input type="date" id="pnl-from" /></label>
+          <label>迄 <input type="date" id="pnl-to" /></label>
+          <button class="btn" id="pnl-load">查詢</button>
         </div>
         <table>
-          <thead>
-            <tr>
-              <th>CheckedAt</th>
-              <th>TAIFEX</th>
-              <th>LINE</th>
-              <th>CLAUDE</th>
-            </tr>
-          </thead>
-          <tbody id="probeHistoryBody"></tbody>
+          <thead><tr>
+            <th>日期</th><th>毛損益</th><th>手續費+稅</th><th>淨損益</th>
+            <th>筆數</th><th>獲利</th><th>虧損</th><th>備註</th>
+          </tr></thead>
+          <tbody id="pnl-body"></tbody>
         </table>
-      </section>
-
-      <section class="card span-6">
-        <h2>Final Decision Trend</h2>
-        <div id="decisionChart" class="decision-chart"></div>
-        <div id="decisionSummary" class="decision-summary"></div>
-        <table style="margin-top:8px;">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Decision</th>
-              <th>Summary</th>
-            </tr>
-          </thead>
-          <tbody id="decisionTableBody"></tbody>
-        </table>
-      </section>
-
-      <section class="card span-6">
-        <h2>Migration Checks</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Key</th>
-              <th>Status</th>
-              <th>Detail</th>
-            </tr>
-          </thead>
-          <tbody id="migrationBody"></tbody>
-        </table>
-      </section>
-
-      <section class="card span-6">
-        <h2>System Alerts Feed</h2>
-        <div class="row-tools">
-          <span id="alertsMeta">無異常</span>
-        </div>
-        <div id="alertsBody" class="alerts"></div>
       </section>
     </div>
   </div>
+</div>
 
-  <script>
-    const byId = (id) => document.getElementById(id);
-    const errBox = byId("errBox");
-    let latestProbe = null;
-    let probeHistoryData = [];
-    let migrationHealthData = null;
-    let decisionHistoryData = [];
+<!-- ══════════════ PAGE: Decisions ══════════════ -->
+<div class="page" id="pageDecisions">
+  <div class="wrap">
+    <div id="errBoxDec" class="errbox"></div>
+    <div class="grid">
 
-    function statusPill(status, success) {
-      const s = (status || "-").toUpperCase();
-      const cls = success ? "ok" : (s === "WARN" || s === "SKIPPED" ? "warn" : "err");
-      return `<span class="pill ${cls}">${escapeHtml(s)}</span>`;
-    }
+      <section class="card span-8">
+        <h2>Final Decision 趨勢</h2>
+        <div id="dec-chart" class="decision-chart"></div>
+        <div id="dec-summary" class="decision-summary"></div>
+        <table style="margin-top:10px">
+          <thead><tr><th>日期</th><th>決策</th><th>摘要</th><th>Market Grade</th><th>Score</th></tr></thead>
+          <tbody id="dec-tableBody"></tbody>
+        </table>
+      </section>
 
-    function escapeHtml(v) {
-      if (v === null || v === undefined) return "-";
-      return String(v)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll("\"", "&quot;");
-    }
+      <section class="card span-4">
+        <h2>Hourly Gate 歷史</h2>
+        <table>
+          <thead><tr><th>時間</th><th>Gate</th><th>事件</th></tr></thead>
+          <tbody id="dec-hourlyBody"></tbody>
+        </table>
+      </section>
 
-    function setText(id, value) {
-      byId(id).textContent = value ?? "-";
-    }
+      <section class="card span-6">
+        <h2>Monitor 決策歷史</h2>
+        <table>
+          <thead><tr><th>時間</th><th>Mode</th><th>事件</th><th>Action</th></tr></thead>
+          <tbody id="dec-monitorBody"></tbody>
+        </table>
+      </section>
 
-    function showError(msg) {
-      errBox.style.display = "block";
-      errBox.textContent = msg;
-    }
+      <section class="card span-6">
+        <h2>近期通知</h2>
+        <table>
+          <thead><tr><th>時間</th><th>類型</th><th>標題</th><th>頻道</th></tr></thead>
+          <tbody id="dec-notifBody"></tbody>
+        </table>
+      </section>
 
-    function clearError() {
-      errBox.style.display = "none";
-      errBox.textContent = "";
-    }
+    </div>
+  </div>
+</div>
 
-    async function fetchJson(url, opts) {
-      const res = await fetch(url, opts);
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`${url} -> HTTP ${res.status} ${text}`);
-      }
-      return res.json();
-    }
+<!-- ══════════════ PAGE: AI Research ══════════════ -->
+<div class="page" id="pageAiResearch">
+  <div class="wrap">
+    <div id="errBoxAi" class="errbox"></div>
+    <div class="grid">
 
-    async function loadDashboard() {
-      const data = await fetchJson("/api/dashboard/current");
-      setText("marketGrade", data.market?.marketGrade);
-      setText("marketPhase", data.market?.marketPhase);
-      setText("marketDecision", data.market?.decision);
-      setText("decisionLock", data.tradingState?.decisionLock);
-      setText("timeDecay", data.tradingState?.timeDecayStage);
-      setText("hourlyGate", data.tradingState?.hourlyGate);
-      setText("monitorMode", data.tradingState?.monitorMode);
-
-      setText("finalDecision", data.finalDecision?.decision);
-      setText("finalSummary", data.finalDecision?.summary);
-      setText("latestHourly", data.hourlyGateDecision?.hourlyGate);
-      setText("hourlyEvent", data.hourlyGateDecision?.triggerEvent);
-      setText("latestMonitor", data.monitorDecision?.monitorMode);
-      setText("monitorEvent", data.monitorDecision?.triggerEvent);
-      setText("latestNotice", data.latestNotification?.title);
-
-      const body = byId("candidatesBody");
-      const rows = (data.candidates || []).map(c => `
-        <tr>
-          <td class="mono">${escapeHtml(c.symbol)}</td>
-          <td>${escapeHtml(c.stockName)}</td>
-          <td>${escapeHtml(c.score)}</td>
-          <td>${escapeHtml(c.riskRewardRatio)}</td>
-          <td>${escapeHtml(c.valuationMode)}</td>
-          <td>${c.includeInFinalPlan ? "Y" : "N"}</td>
-        </tr>
-      `).join("");
-      body.innerHTML = rows || `<tr><td colspan="6">No candidates</td></tr>`;
-    }
-
-    async function loadPnlSummary() {
-      const data = await fetchJson("/api/pnl/summary?days=20");
-      renderPnlValue("pnlRealized", data.totalRealizedPnl);
-      renderPnlValue("pnlUnrealized", data.totalUnrealizedPnl);
-      setText("pnlWinRate", data.avgWinRate == null ? "-" : `${data.avgWinRate}%`);
-      setText("pnlDays", data.days);
-    }
-
-    async function loadOpenPositions() {
-      const data = await fetchJson("/api/positions/open?size=20");
-      const body = byId("positionsBody");
-      body.innerHTML = (data || []).map(p => `
-        <tr>
-          <td class="mono">${escapeHtml(p.symbol)}</td>
-          <td>${escapeHtml(p.side)}</td>
-          <td>${escapeHtml(p.qty)}</td>
-          <td>${escapeHtml(p.avgCost)}</td>
-          <td class="small">${escapeHtml(p.openedAt)}</td>
-        </tr>
-      `).join("");
-      if (!data || data.length === 0) {
-        body.innerHTML = `<tr><td colspan="5">No open positions</td></tr>`;
-      }
-    }
-
-    async function loadRecentNotifications() {
-      const data = await fetchJson("/api/notifications?limit=10");
-      const body = byId("notificationsBody");
-      body.innerHTML = (data || []).map(n => `
-        <tr>
-          <td class="small">${escapeHtml(n.eventTime)}</td>
-          <td>${escapeHtml(n.notificationType)}</td>
-          <td>${escapeHtml(n.title)}</td>
-        </tr>
-      `).join("");
-      if (!data || data.length === 0) {
-        body.innerHTML = `<tr><td colspan="3">No notifications</td></tr>`;
-      }
-    }
-
-    function renderPnlValue(id, value) {
-      const el = byId(id);
-      if (value == null) {
-        el.textContent = "-";
-        el.className = "v";
-        return;
-      }
-      const num = Number(value);
-      el.textContent = value;
-      el.className = num < 0 ? "v num-neg" : "v num-pos";
-    }
-
-    async function loadMigrationHealth() {
-      const data = await fetchJson("/api/system/migration/health");
-      migrationHealthData = data;
-      byId("migrationOk").innerHTML = statusPill(data.ok ? "OK" : "ERROR", data.ok);
-
-      const body = byId("migrationBody");
-      body.innerHTML = (data.checks || []).map(c => `
-        <tr>
-          <td class="mono">${escapeHtml(c.key)}</td>
-          <td>${statusPill(c.ok ? "OK" : "MISSING", c.ok)}</td>
-          <td>${escapeHtml(c.detail)}</td>
-        </tr>
-      `).join("");
-      renderSystemAlerts();
-    }
-
-    async function runProbe(liveLine = false, liveClaude = false) {
-      const params = new URLSearchParams({
-        liveLine: String(liveLine),
-        liveClaude: String(liveClaude)
-      });
-      latestProbe = await fetchJson(`/api/system/external/probe?${params.toString()}`);
-      renderLatestProbe(latestProbe);
-      await loadProbeHistory();
-    }
-
-    function renderLatestProbe(p) {
-      byId("probeTaifex").innerHTML = statusPill(p.taifex?.status, p.taifex?.success);
-      byId("probeLine").innerHTML = statusPill(p.line?.status, p.line?.success);
-      byId("probeClaude").innerHTML = statusPill(p.claude?.status, p.claude?.success);
-      byId("probeMeta").textContent = `checkedAt=${p.checkedAt || "-"}  taifexDate=${p.taifexDate || "-"}`;
-    }
-
-    async function loadProbeHistory() {
-      const limit = byId("selProbeLimit").value || "20";
-      const data = await fetchJson(`/api/system/external/probe/history?limit=${limit}`);
-      probeHistoryData = data || [];
-      renderProbeHistory();
-      if (!latestProbe && probeHistoryData.length > 0) {
-        renderLatestProbe(probeHistoryData[0]);
-      }
-      renderSystemAlerts();
-    }
-
-    function renderProbeHistory() {
-      const failedOnly = byId("chkProbeFailedOnly").checked;
-      const data = failedOnly ? probeHistoryData.filter(hasProbeFailure) : probeHistoryData;
-      const body = byId("probeHistoryBody");
-      body.innerHTML = (data || []).map(r => `
-        <tr class="${probeRowClass(r)}">
-          <td class="mono">${escapeHtml(r.checkedAt)}</td>
-          <td>${statusPill(r.taifex?.status, r.taifex?.success)}</td>
-          <td>${statusPill(r.line?.status, r.line?.success)}</td>
-          <td>${statusPill(r.claude?.status, r.claude?.success)}</td>
-        </tr>
-      `).join("");
-      if (!data || data.length === 0) {
-        body.innerHTML = `<tr><td colspan="4">No probe logs</td></tr>`;
-      }
-      byId("probeHistoryMeta").textContent = failedOnly
-        ? `失敗筆數：${data.length}/${probeHistoryData.length}`
-        : `最近 ${probeHistoryData.length} 筆`;
-    }
-
-    function hasProbeFailure(row) {
-      const items = [row.taifex, row.line, row.claude].filter(Boolean);
-      return items.some(i => {
-        const status = (i.status || "").toUpperCase();
-        return status !== "SKIPPED" && i.success === false;
-      });
-    }
-
-    function probeRowClass(row) {
-      const items = [row.taifex, row.line, row.claude].filter(Boolean);
-      const hasErr = items.some(i => (i.status || "").toUpperCase() === "ERROR");
-      const hasWarn = items.some(i => (i.status || "").toUpperCase() === "WARN");
-      if (hasErr) return "row-err";
-      if (hasWarn) return "row-warn";
-      return "";
-    }
-
-    async function loadDecisionHistory() {
-      const data = await fetchJson("/api/decisions/history?limit=24");
-      decisionHistoryData = data || [];
-      renderDecisionHistory(decisionHistoryData);
-      renderSystemAlerts();
-    }
-
-    function renderDecisionHistory(rows) {
-      const chart = byId("decisionChart");
-      const summary = byId("decisionSummary");
-      const tableBody = byId("decisionTableBody");
-      if (!rows.length) {
-        chart.innerHTML = `<div class="mono">No decision history</div>`;
-        summary.innerHTML = "";
-        tableBody.innerHTML = `<tr><td colspan="3">No decision history</td></tr>`;
-        return;
-      }
-
-      let enter = 0, watch = 0, rest = 0;
-      const max = rows.length;
-      chart.innerHTML = rows.slice().reverse().map((r, idx) => {
-        const d = (r.decision || "WATCH").toUpperCase();
-        if (d === "ENTER") enter++;
-        else if (d === "REST") rest++;
-        else watch++;
-        const h = Math.max(8, Math.round(((idx + 1) / max) * 120));
-        return `
-          <div class="decision-col" title="${escapeHtml(r.tradingDate)} ${escapeHtml(d)}">
-            <div class="decision-bar ${decisionClass(d)}" style="height:${h}px"></div>
-            <div class="decision-label">${escapeHtml((r.tradingDate || "").slice(5))}</div>
+      <section class="card span-4">
+        <h2>觸發 AI 研究</h2>
+        <div style="display:grid;gap:8px;font-size:13px">
+          <div>
+            <div class="k" style="margin-bottom:4px">盤前研究</div>
+            <div class="toolbar">
+              <input type="text" id="ai-txf" placeholder="台指期摘要（可留空）" style="flex:1;min-width:0" />
+            </div>
+            <button class="btn primary" id="ai-btnPremarket" style="width:100%">執行盤前研究</button>
           </div>
-        `;
-      }).join("");
+          <hr style="border:none;border-top:1px solid var(--line)" />
+          <div>
+            <div class="k" style="margin-bottom:4px">個股評估</div>
+            <div class="toolbar">
+              <label>代號 <input type="text" id="ai-symbol" placeholder="2330" style="width:80px" /></label>
+              <label>日期 <input type="date" id="ai-date" /></label>
+            </div>
+            <button class="btn primary" id="ai-btnStock" style="width:100%">執行個股評估</button>
+          </div>
+          <hr style="border:none;border-top:1px solid var(--line)" />
+          <div>
+            <div class="k" style="margin-bottom:4px">最終決策研究</div>
+            <button class="btn primary" id="ai-btnFinalDecision" style="width:100%">執行最終決策研究</button>
+          </div>
+          <div id="ai-triggerStatus" class="small" style="color:var(--ok)"></div>
+        </div>
+      </section>
 
-      summary.innerHTML = `
-        <span class="pill ok">ENTER ${enter}</span>
-        <span class="pill warn">WATCH ${watch}</span>
-        <span class="pill err">REST ${rest}</span>
-      `;
+      <section class="card span-8">
+        <h2>AI 研究紀錄</h2>
+        <div class="toolbar">
+          <label>日期 <input type="date" id="ai-filterDate" /></label>
+          <label>類型
+            <select id="ai-filterType">
+              <option value="">全部</option>
+              <option value="PREMARKET">PREMARKET</option>
+              <option value="STOCK">STOCK</option>
+              <option value="FINAL_DECISION">FINAL_DECISION</option>
+              <option value="HOURLY_GATE">HOURLY_GATE</option>
+              <option value="MONITOR">MONITOR</option>
+            </select>
+          </label>
+          <button class="btn" id="ai-loadLogs">查詢</button>
+        </div>
+        <div id="ai-logsBody"></div>
+      </section>
 
-      tableBody.innerHTML = rows.slice(0, 10).map(r => `
-        <tr>
-          <td class="mono">${escapeHtml(r.tradingDate)}</td>
-          <td>${statusPill(r.decision, (r.decision || "").toUpperCase() === "ENTER")}</td>
-          <td>${escapeHtml(r.summary)}</td>
-        </tr>
-      `).join("");
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE: System ══════════════ -->
+<div class="page" id="pageSystem">
+  <div class="wrap">
+    <div id="errBoxSys" class="errbox"></div>
+    <div class="grid">
+
+      <section class="card span-4">
+        <h2>外部探針</h2>
+        <div class="kv" id="sys-probeKv">
+          <div class="k">TAIFEX</div><div class="v" id="sys-probeTaifex">-</div>
+          <div class="k">LINE</div><div class="v" id="sys-probeLine">-</div>
+          <div class="k">CLAUDE</div><div class="v" id="sys-probeClaude">-</div>
+          <div class="k">查詢時間</div><div class="v mono small" id="sys-probeAt">-</div>
+          <div class="k">TAIFEX日期</div><div class="v mono small" id="sys-probeTaifexDate">-</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn" id="sys-btnDry">Dry-Run</button>
+          <button class="btn warn-btn" id="sys-btnLine">Live LINE</button>
+          <button class="btn warn-btn" id="sys-btnClaude">Live Claude</button>
+        </div>
+      </section>
+
+      <section class="card span-4">
+        <h2>Migration 健康</h2>
+        <table>
+          <thead><tr><th>Key</th><th>狀態</th><th>詳情</th></tr></thead>
+          <tbody id="sys-migrationBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-4">
+        <h2>系統警示</h2>
+        <div class="small" id="sys-alertsMeta" style="margin-bottom:8px">無異常</div>
+        <div id="sys-alertsBody" class="alerts"></div>
+      </section>
+
+      <section class="card span-12">
+        <h2>探針歷史</h2>
+        <div class="toolbar">
+          <label>筆數
+            <select id="sys-probeLimit">
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </label>
+          <label><input type="checkbox" id="sys-probeFailedOnly" /> 只看失敗</label>
+          <button class="btn" id="sys-probeHistLoad">載入</button>
+        </div>
+        <table>
+          <thead><tr><th>時間</th><th>TAIFEX</th><th>LINE</th><th>CLAUDE</th></tr></thead>
+          <tbody id="sys-probeHistBody"></tbody>
+        </table>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ── helpers ── */
+  const $ = id => document.getElementById(id);
+  const esc = v => {
+    if (v == null) return "-";
+    return String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  };
+  const setText = (id, v) => { const el = $(id); if (el) el.textContent = v ?? "-"; };
+  const pill = (label, cls) => `<span class="pill ${cls}">${esc(label)}</span>`;
+  const statusPill = (status, success) => {
+    const s = (status || "-").toUpperCase();
+    const cls = success ? "ok" : (s === "WARN" || s === "SKIPPED" ? "warn" : "err");
+    return pill(s, cls);
+  };
+  const decisionPill = d => {
+    const s = (d || "WATCH").toUpperCase();
+    return pill(s, s === "ENTER" ? "ok" : s === "REST" ? "err" : "warn");
+  };
+  const numHtml = (v, id) => {
+    if (v == null) return "-";
+    const cls = Number(v) < 0 ? "num-neg" : "num-pos";
+    return `<span class="${cls}">${esc(v)}</span>`;
+  };
+  const fmtDate = s => s ? String(s).slice(0,10) : "-";
+  const fmtTime = s => s ? String(s).slice(0,16).replace("T"," ") : "-";
+
+  async function api(url, opts) {
+    const r = await fetch(url, opts);
+    if (!r.ok) { const t = await r.text(); throw new Error(`${url} → HTTP ${r.status}: ${t}`); }
+    return r.json();
+  }
+
+  function showErr(boxId, msg) {
+    const el = $(boxId); if (!el) return;
+    el.textContent = msg; el.style.display = "block";
+  }
+  function clearErr(boxId) {
+    const el = $(boxId); if (!el) return;
+    el.textContent = ""; el.style.display = "none";
+  }
+
+  /* ── Nav routing ── */
+  const tabs = document.querySelectorAll(".nav-tab");
+  tabs.forEach(t => t.addEventListener("click", () => {
+    tabs.forEach(x => x.classList.remove("active"));
+    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+    t.classList.add("active");
+    const target = $(t.dataset.page);
+    if (target) target.classList.add("active");
+    loadPageData(t.dataset.page);
+  }));
+
+  /* ─────────────────────────────────────────────
+     PAGE: Dashboard
+  ───────────────────────────────────────────── */
+  async function loadDashboard() {
+    clearErr("errBoxDash");
+    try {
+      const [dash, pnl, pos, notifs] = await Promise.all([
+        api("/api/dashboard/current"),
+        api("/api/pnl/summary?days=20"),
+        api("/api/positions/open?size=10"),
+        api("/api/notifications?limit=10")
+      ]);
+
+      setText("d-marketGrade",  dash.market?.marketGrade);
+      setText("d-marketPhase",  dash.market?.marketPhase);
+      setText("d-marketDecision", dash.market?.decision);
+      setText("d-decisionLock", dash.tradingState?.decisionLock);
+      setText("d-timeDecay",    dash.tradingState?.timeDecayStage);
+      setText("d-hourlyGate",   dash.tradingState?.hourlyGate);
+      setText("d-monitorMode",  dash.tradingState?.monitorMode);
+
+      setText("d-finalDecision", dash.finalDecision?.decision);
+      setText("d-finalSummary",  dash.finalDecision?.summary);
+      setText("d-latestHourly",  dash.hourlyGateDecision?.hourlyGate);
+      setText("d-hourlyEvent",   dash.hourlyGateDecision?.triggerEvent);
+      setText("d-latestMonitor", dash.monitorDecision?.monitorMode);
+      setText("d-monitorEvent",  dash.monitorDecision?.triggerEvent);
+      setText("d-latestNotice",  dash.latestNotification?.title);
+
+      // PnL
+      $("d-pnlRealized").innerHTML = numHtml(pnl.totalRealizedPnl);
+      $("d-pnlUnrealized").innerHTML = numHtml(pnl.totalUnrealizedPnl);
+      setText("d-pnlWinRate", pnl.avgWinRate != null ? `${pnl.avgWinRate}%` : "-");
+      setText("d-pnlDays", pnl.days);
+
+      // Candidates
+      const cands = dash.candidates || [];
+      $("d-candidatesBody").innerHTML = cands.length
+        ? cands.map(c => `<tr>
+            <td class="mono">${esc(c.symbol)}</td>
+            <td>${esc(c.stockName)}</td>
+            <td>${esc(c.score)}</td>
+            <td>${esc(c.riskRewardRatio)}</td>
+            <td>${esc(c.valuationMode)}</td>
+            <td>${c.includeInFinalPlan ? pill("Y","ok") : pill("N","muted")}</td>
+          </tr>`).join("")
+        : `<tr class="empty-row"><td colspan="6">無候選股</td></tr>`;
+
+      // Positions
+      $("d-positionsBody").innerHTML = (pos || []).length
+        ? (pos || []).map(p => `<tr>
+            <td class="mono">${esc(p.symbol)}</td>
+            <td>${esc(p.side)}</td>
+            <td>${esc(p.qty)}</td>
+            <td>${esc(p.avgCost)}</td>
+            <td class="small">${fmtTime(p.openedAt)}</td>
+          </tr>`).join("")
+        : `<tr class="empty-row"><td colspan="5">無持倉</td></tr>`;
+
+      // Notifications
+      $("d-notificationsBody").innerHTML = (notifs || []).length
+        ? (notifs || []).map(n => `<tr>
+            <td class="small mono">${fmtTime(n.eventTime)}</td>
+            <td>${esc(n.notificationType)}</td>
+            <td>${esc(n.title)}</td>
+          </tr>`).join("")
+        : `<tr class="empty-row"><td colspan="3">無通知</td></tr>`;
+
+      renderDashAlerts({});
+
+    } catch(e) { showErr("errBoxDash", `Dashboard 載入失敗：${e.message}`); }
+  }
+
+  function renderDashAlerts(extra) {
+    const alerts = [];
+    // add any passed alerts
+    if (extra.migration === false) alerts.push({ level:"err", head:"Migration", body:"有 migration 項目未通過" });
+    const body = $("d-alertsBody");
+    if (!alerts.length) {
+      setText("d-alertsMeta","無異常");
+      body.innerHTML = `<div class="small">目前無需要處理的系統異常。</div>`;
+      return;
     }
+    setText("d-alertsMeta",`異常數：${alerts.length}`);
+    body.innerHTML = alerts.slice(0,10).map(a => `
+      <div class="alert-item ${a.level==="warn"?"warn":""}">
+        <div class="alert-head">${esc(a.head)}</div>
+        <div>${esc(a.body)}</div>
+      </div>`).join("");
+  }
 
-    function decisionClass(decision) {
-      const d = (decision || "").toUpperCase();
-      if (d === "ENTER") return "enter";
-      if (d === "REST") return "rest";
-      return "watch";
+  /* ─────────────────────────────────────────────
+     PAGE: Candidates
+  ───────────────────────────────────────────── */
+  async function loadCandidates() {
+    clearErr("errBoxCand");
+    try {
+      const data = await api("/api/candidates/current");
+      $("c-currentBody").innerHTML = (data || []).length
+        ? (data || []).map(c => `<tr>
+            <td class="mono">${esc(c.symbol)}</td>
+            <td>${esc(c.stockName)}</td>
+            <td>${esc(c.score)}</td>
+            <td>${esc(c.riskRewardRatio)}</td>
+            <td>${esc(c.valuationMode)}</td>
+            <td>${esc(c.entryPriceZone)}</td>
+            <td>${esc(c.stopLossPrice)}</td>
+            <td>${esc(c.takeProfit1)}</td>
+            <td>${esc(c.takeProfit2)}</td>
+            <td>${c.includeInFinalPlan ? pill("Y","ok") : pill("N","muted")}</td>
+            <td class="small">${esc(c.rejectReason)}</td>
+          </tr>`).join("")
+        : `<tr class="empty-row"><td colspan="11">目前無候選股</td></tr>`;
+    } catch(e) { showErr("errBoxCand", `載入失敗：${e.message}`); }
+  }
+
+  async function loadCandidateHistory() {
+    clearErr("errBoxCand");
+    try {
+      const sym = $("c-histSymbol").value.trim();
+      const url = `/api/candidates/history${sym ? `?symbol=${encodeURIComponent(sym)}` : ""}`;
+      const data = await api(url);
+      $("c-histBody").innerHTML = (data || []).length
+        ? (data || []).map(c => `<tr>
+            <td class="mono">${fmtDate(c.createdAt)}</td>
+            <td class="mono">${esc(c.symbol)}</td>
+            <td>${esc(c.stockName)}</td>
+            <td>${esc(c.score)}</td>
+            <td>${esc(c.riskRewardRatio)}</td>
+            <td>${esc(c.valuationMode)}</td>
+            <td>${c.includeInFinalPlan ? pill("Y","ok") : pill("N","muted")}</td>
+          </tr>`).join("")
+        : `<tr class="empty-row"><td colspan="7">無資料</td></tr>`;
+    } catch(e) { showErr("errBoxCand", `載入失敗：${e.message}`); }
+  }
+
+  $("c-histLoad").addEventListener("click", loadCandidateHistory);
+
+  /* ─────────────────────────────────────────────
+     PAGE: Positions
+  ───────────────────────────────────────────── */
+  async function loadOpenPositions() {
+    clearErr("errBoxPos");
+    try {
+      const sym = $("p-openSymbol").value.trim();
+      const url = `/api/positions/open?size=50${sym ? `&symbol=${encodeURIComponent(sym)}` : ""}`;
+      const data = await api(url);
+      $("p-openBody").innerHTML = (data || []).length
+        ? (data || []).map(p => `<tr>
+            <td class="mono">${esc(p.symbol)}</td>
+            <td>${esc(p.stockName)}</td>
+            <td>${esc(p.side)}</td>
+            <td>${esc(p.qty)}</td>
+            <td>${esc(p.avgCost)}</td>
+            <td class="small mono">${fmtTime(p.openedAt)}</td>
+            <td>${esc(p.stopLossPrice)}</td>
+            <td>${esc(p.takeProfitPrice)}</td>
+          </tr>`).join("")
+        : `<tr class="empty-row"><td colspan="8">無持倉</td></tr>`;
+    } catch(e) { showErr("errBoxPos", `載入失敗：${e.message}`); }
+  }
+
+  async function loadPositionHistory() {
+    clearErr("errBoxPos");
+    try {
+      const sym  = $("p-histSymbol").value.trim();
+      const from = $("p-histFrom").value;
+      const to   = $("p-histTo").value;
+      const params = new URLSearchParams({ size: "100" });
+      if (sym)  params.set("symbol", sym);
+      if (from) params.set("dateFrom", from);
+      if (to)   params.set("dateTo", to);
+      const data = await api(`/api/positions/history?${params}`);
+      $("p-histBody").innerHTML = (data || []).length
+        ? (data || []).map(p => `<tr>
+            <td class="mono">${fmtDate(p.openedAt)}</td>
+            <td class="mono">${esc(p.symbol)}</td>
+            <td>${esc(p.side)}</td>
+            <td>${esc(p.qty)}</td>
+            <td>${esc(p.avgCost)}</td>
+            <td>${esc(p.closePrice)}</td>
+            <td>${numHtml(p.realizedPnl)}</td>
+            <td class="small mono">${fmtTime(p.closedAt)}</td>
+          </tr>`).join("")
+        : `<tr class="empty-row"><td colspan="8">無資料</td></tr>`;
+    } catch(e) { showErr("errBoxPos", `載入失敗：${e.message}`); }
+  }
+
+  $("p-openLoad").addEventListener("click", loadOpenPositions);
+  $("p-histLoad").addEventListener("click", loadPositionHistory);
+
+  /* ─────────────────────────────────────────────
+     PAGE: PnL
+  ───────────────────────────────────────────── */
+  async function loadPnl() {
+    clearErr("errBoxPnl");
+    try {
+      const [summary, history] = await Promise.all([
+        api("/api/pnl/summary?days=90"),
+        loadPnlHistory()
+      ]);
+      renderPnlStats(summary);
+    } catch(e) { showErr("errBoxPnl", `載入失敗：${e.message}`); }
+  }
+
+  function renderPnlStats(s) {
+    const stats = [
+      { label:"Total Realized", value: s.totalRealizedPnl, colored: true },
+      { label:"Avg Win Rate",   value: s.avgWinRate != null ? `${s.avgWinRate}%` : null },
+      { label:"Days",           value: s.days },
+      { label:"Unrealized",     value: s.totalUnrealizedPnl, colored: true }
+    ];
+    $("pnl-statRow").innerHTML = stats.map(st => {
+      const cls = st.colored && st.value != null
+        ? (Number(st.value) < 0 ? "num-neg" : "num-pos") : "";
+      return `<div class="stat-box">
+        <div class="stat-label">${esc(st.label)}</div>
+        <div class="stat-value ${cls}">${esc(st.value ?? "-")}</div>
+      </div>`;
+    }).join("");
+  }
+
+  async function loadPnlHistory() {
+    clearErr("errBoxPnl");
+    const from = $("pnl-from").value;
+    const to   = $("pnl-to").value;
+    const params = new URLSearchParams({ limit: "200" });
+    if (from) params.set("dateFrom", from);
+    if (to)   params.set("dateTo", to);
+    try {
+      const data = await api(`/api/pnl/history?${params}`);
+      $("pnl-body").innerHTML = (data || []).length
+        ? (data || []).map(r => `<tr>
+            <td class="mono">${fmtDate(r.tradingDate)}</td>
+            <td>${numHtml(r.grossPnl)}</td>
+            <td>${esc(r.estimatedFeeAndTax)}</td>
+            <td>${numHtml(r.netPnl)}</td>
+            <td>${esc(r.tradeCount)}</td>
+            <td>${esc(r.winCount)}</td>
+            <td>${esc(r.lossCount)}</td>
+            <td class="small">${esc(r.notes)}</td>
+          </tr>`).join("")
+        : `<tr class="empty-row"><td colspan="8">無資料</td></tr>`;
+      return data;
+    } catch(e) { showErr("errBoxPnl", `載入失敗：${e.message}`); }
+  }
+
+  $("pnl-load").addEventListener("click", loadPnlHistory);
+
+  /* ─────────────────────────────────────────────
+     PAGE: Decisions
+  ───────────────────────────────────────────── */
+  async function loadDecisions() {
+    clearErr("errBoxDec");
+    try {
+      const [history, hourly, monitor, notifs] = await Promise.all([
+        api("/api/decisions/history?limit=30"),
+        api("/api/decisions/hourly-gate/history?limit=20"),
+        api("/api/monitor/decisions/history?limit=20"),
+        api("/api/notifications?limit=20")
+      ]);
+
+      // Chart + table
+      renderDecisionChart(history || []);
+
+      $("dec-hourlyBody").innerHTML = (hourly || []).length
+        ? (hourly || []).map(h => `<tr>
+            <td class="mono small">${fmtTime(h.createdAt)}</td>
+            <td>${esc(h.hourlyGate)}</td>
+            <td class="small">${esc(h.triggerEvent)}</td>
+          </tr>`).join("")
+        : `<tr class="empty-row"><td colspan="3">無資料</td></tr>`;
+
+      $("dec-monitorBody").innerHTML = (monitor || []).length
+        ? (monitor || []).map(m => `<tr>
+            <td class="mono small">${fmtTime(m.createdAt)}</td>
+            <td>${esc(m.monitorMode)}</td>
+            <td class="small">${esc(m.triggerEvent)}</td>
+            <td class="small">${esc(m.action)}</td>
+          </tr>`).join("")
+        : `<tr class="empty-row"><td colspan="4">無資料</td></tr>`;
+
+      $("dec-notifBody").innerHTML = (notifs || []).length
+        ? (notifs || []).map(n => `<tr>
+            <td class="mono small">${fmtTime(n.eventTime)}</td>
+            <td>${esc(n.notificationType)}</td>
+            <td>${esc(n.title)}</td>
+            <td class="small">${esc(n.channel)}</td>
+          </tr>`).join("")
+        : `<tr class="empty-row"><td colspan="4">無資料</td></tr>`;
+
+    } catch(e) { showErr("errBoxDec", `載入失敗：${e.message}`); }
+  }
+
+  function renderDecisionChart(rows) {
+    const chart  = $("dec-chart");
+    const summary = $("dec-summary");
+    const tbody   = $("dec-tableBody");
+    if (!rows.length) {
+      chart.innerHTML = `<div class="mono" style="color:var(--muted)">無決策歷史</div>`;
+      summary.innerHTML = "";
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="5">無資料</td></tr>`;
+      return;
     }
+    let enter=0, watch=0, rest=0;
+    const max = rows.length;
+    chart.innerHTML = rows.slice().reverse().map((r, i) => {
+      const d = (r.decision||"WATCH").toUpperCase();
+      if (d==="ENTER") enter++;
+      else if (d==="REST") rest++;
+      else watch++;
+      const h = Math.max(8, Math.round(((i+1)/max)*110));
+      const cls = d==="ENTER"?"enter":d==="REST"?"rest":"watch";
+      return `<div class="decision-col" title="${esc(r.tradingDate)} ${esc(d)}">
+        <div class="decision-bar ${cls}" style="height:${h}px"></div>
+        <div class="decision-label">${esc((r.tradingDate||"").slice(5))}</div>
+      </div>`;
+    }).join("");
+    summary.innerHTML = `
+      <span class="pill ok">ENTER ${enter}</span>
+      <span class="pill warn">WATCH ${watch}</span>
+      <span class="pill err">REST ${rest}</span>`;
+    tbody.innerHTML = rows.slice(0,15).map(r => `<tr>
+      <td class="mono">${fmtDate(r.tradingDate)}</td>
+      <td>${decisionPill(r.decision)}</td>
+      <td class="small">${esc(r.summary)}</td>
+      <td>${esc(r.marketGrade)}</td>
+      <td>${esc(r.totalScore)}</td>
+    </tr>`).join("");
+  }
 
-    function renderSystemAlerts() {
-      const alerts = [];
-
-      if (migrationHealthData && migrationHealthData.ok === false) {
-        (migrationHealthData.checks || []).forEach(c => {
-          if (!c.ok) {
-            alerts.push({
-              level: "err",
-              head: "Migration Health",
-              body: `${c.key} -> ${c.detail}`
-            });
-          }
-        });
-      }
-
-      probeHistoryData.slice(0, 10).forEach(p => {
-        [
-          ["TAIFEX", p.taifex],
-          ["LINE", p.line],
-          ["CLAUDE", p.claude]
-        ].forEach(([name, item]) => {
-          if (!item) return;
-          const status = (item.status || "").toUpperCase();
-          if (status === "SKIPPED" || item.success === true) return;
-          alerts.push({
-            level: status === "WARN" ? "warn" : "err",
-            head: `External Probe ${name}`,
-            body: `${p.checkedAt || "-"} ${status} ${item.detail || ""}`
-          });
-        });
-      });
-
-      const latestDecision = decisionHistoryData[0];
-      if (latestDecision && (latestDecision.decision || "").toUpperCase() === "REST") {
-        alerts.push({
-          level: "warn",
-          head: "Final Decision",
-          body: `${latestDecision.tradingDate} REST - ${latestDecision.summary || ""}`
-        });
-      }
-
-      const body = byId("alertsBody");
-      if (!alerts.length) {
-        byId("alertsMeta").textContent = "無異常";
-        body.innerHTML = `<div class="small">目前無需要處理的系統異常。</div>`;
+  /* ─────────────────────────────────────────────
+     PAGE: AI Research
+  ───────────────────────────────────────────── */
+  async function loadAiResearch() {
+    clearErr("errBoxAi");
+    const date = $("ai-filterDate").value;
+    const type = $("ai-filterType").value;
+    const params = new URLSearchParams();
+    if (date) params.set("date", date);
+    if (type) params.set("type", type);
+    try {
+      const data = await api(`/api/ai/research?${params}`);
+      const el = $("ai-logsBody");
+      if (!data || !data.length) {
+        el.innerHTML = `<div class="small" style="color:var(--muted)">無研究記錄</div>`;
         return;
       }
-      byId("alertsMeta").textContent = `異常數：${alerts.length}`;
-      body.innerHTML = alerts.slice(0, 16).map(a => `
-        <div class="alert-item ${a.level === "warn" ? "warn" : ""}">
-          <div class="alert-head">${escapeHtml(a.head)}</div>
-          <div>${escapeHtml(a.body)}</div>
-        </div>
-      `).join("");
+      el.innerHTML = (data || []).map(r => `
+        <div class="ai-log-item">
+          <div class="ai-log-head">
+            <span>${esc(r.researchType)} — ${esc(r.symbol||"市場")} — ${fmtTime(r.createdAt)}</span>
+            <span class="small">${esc(r.model)} / ${esc(r.totalTokens)} tokens</span>
+          </div>
+          <div class="ai-log-body">${esc(r.responseContent)}</div>
+        </div>`).join("");
+    } catch(e) { showErr("errBoxAi", `載入失敗：${e.message}`); }
+  }
+
+  async function triggerAi(url, body, label) {
+    $("ai-triggerStatus").textContent = `${label} 執行中...`;
+    try {
+      await api(url, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body||{}) });
+      $("ai-triggerStatus").textContent = `${label} 完成`;
+      await loadAiResearch();
+    } catch(e) {
+      $("ai-triggerStatus").textContent = `${label} 失敗：${e.message}`;
+      showErr("errBoxAi", `${label} 失敗：${e.message}`);
     }
+  }
 
-    async function refreshAll() {
-      clearError();
-      try {
-        await Promise.all([
-          loadDashboard(),
-          loadPnlSummary(),
-          loadOpenPositions(),
-          loadRecentNotifications(),
-          loadMigrationHealth(),
-          loadProbeHistory(),
-          loadDecisionHistory()
-        ]);
-        byId("metaLine").textContent = `最後更新：${new Date().toLocaleString("zh-TW")}（每 45 秒自動刷新）`;
-      } catch (e) {
-        showError(`刷新失敗：${e.message}`);
-      }
+  $("ai-btnPremarket").addEventListener("click", () => {
+    const txf = $("ai-txf").value.trim();
+    triggerAi(`/api/ai/research/premarket${txf?`?txfSummary=${encodeURIComponent(txf)}`:""}`, null, "盤前研究");
+  });
+  $("ai-btnStock").addEventListener("click", () => {
+    const sym  = $("ai-symbol").value.trim();
+    const date = $("ai-date").value;
+    if (!sym) { showErr("errBoxAi","請輸入代號"); return; }
+    triggerAi(`/api/ai/research/stock/${encodeURIComponent(sym)}${date?`?date=${date}`:""}`, null, `個股評估 ${sym}`);
+  });
+  $("ai-btnFinalDecision").addEventListener("click", () => {
+    triggerAi("/api/ai/research/final-decision", null, "最終決策研究");
+  });
+  $("ai-loadLogs").addEventListener("click", loadAiResearch);
+
+  /* ─────────────────────────────────────────────
+     PAGE: System
+  ───────────────────────────────────────────── */
+  let sysProbeHistData = [];
+
+  async function loadSystemPage() {
+    clearErr("errBoxSys");
+    try {
+      await Promise.all([loadMigration(), loadProbeHistory()]);
+    } catch(e) { showErr("errBoxSys", `載入失敗：${e.message}`); }
+  }
+
+  async function loadMigration() {
+    const data = await api("/api/system/migration/health");
+    $("sys-migrationBody").innerHTML = (data.checks||[]).map(c => `<tr>
+      <td class="mono">${esc(c.key)}</td>
+      <td>${statusPill(c.ok?"OK":"MISSING", c.ok)}</td>
+      <td class="small">${esc(c.detail)}</td>
+    </tr>`).join("");
+    renderSysAlerts(data);
+    return data;
+  }
+
+  async function runProbe(liveLine=false, liveClaude=false) {
+    clearErr("errBoxSys");
+    try {
+      const params = new URLSearchParams({ liveLine: String(liveLine), liveClaude: String(liveClaude) });
+      const p = await api(`/api/system/external/probe?${params}`);
+      $("sys-probeTaifex").innerHTML     = statusPill(p.taifex?.status,  p.taifex?.success);
+      $("sys-probeLine").innerHTML       = statusPill(p.line?.status,    p.line?.success);
+      $("sys-probeClaude").innerHTML     = statusPill(p.claude?.status,  p.claude?.success);
+      setText("sys-probeAt",         p.checkedAt);
+      setText("sys-probeTaifexDate", p.taifexDate);
+      await loadProbeHistory();
+    } catch(e) { showErr("errBoxSys", `Probe 失敗：${e.message}`); }
+  }
+
+  async function loadProbeHistory() {
+    const limit = $("sys-probeLimit").value || "20";
+    const data = await api(`/api/system/external/probe/history?limit=${limit}`);
+    sysProbeHistData = data || [];
+    renderProbeHistTable();
+    if (sysProbeHistData.length) {
+      const p = sysProbeHistData[0];
+      $("sys-probeTaifex").innerHTML     = statusPill(p.taifex?.status,  p.taifex?.success);
+      $("sys-probeLine").innerHTML       = statusPill(p.line?.status,    p.line?.success);
+      $("sys-probeClaude").innerHTML     = statusPill(p.claude?.status,  p.claude?.success);
+      setText("sys-probeAt",         p.checkedAt);
+      setText("sys-probeTaifexDate", p.taifexDate);
     }
+  }
 
-    byId("btnRefresh").addEventListener("click", refreshAll);
-    byId("btnProbeDry").addEventListener("click", async () => {
-      try { await runProbe(false, false); } catch (e) { showError(`Probe dry-run 失敗：${e.message}`); }
-    });
-    byId("btnProbeLine").addEventListener("click", async () => {
-      try { await runProbe(true, false); } catch (e) { showError(`Probe LINE live 失敗：${e.message}`); }
-    });
-    byId("btnProbeClaude").addEventListener("click", async () => {
-      try { await runProbe(false, true); } catch (e) { showError(`Probe Claude live 失敗：${e.message}`); }
-    });
-    byId("chkProbeFailedOnly").addEventListener("change", renderProbeHistory);
-    byId("selProbeLimit").addEventListener("change", loadProbeHistory);
+  function renderProbeHistTable() {
+    const failedOnly = $("sys-probeFailedOnly").checked;
+    const data = failedOnly ? sysProbeHistData.filter(r => {
+      const items = [r.taifex, r.line, r.claude].filter(Boolean);
+      return items.some(i => {
+        const s = (i.status||"").toUpperCase();
+        return s !== "SKIPPED" && i.success === false;
+      });
+    }) : sysProbeHistData;
+    $("sys-probeHistBody").innerHTML = data.length
+      ? data.map(r => {
+          const hasErr  = [r.taifex,r.line,r.claude].some(i => i && (i.status||"").toUpperCase()==="ERROR");
+          const hasWarn = [r.taifex,r.line,r.claude].some(i => i && (i.status||"").toUpperCase()==="WARN");
+          const cls = hasErr?"row-err":hasWarn?"row-warn":"";
+          return `<tr class="${cls}">
+            <td class="mono small">${fmtTime(r.checkedAt)}</td>
+            <td>${statusPill(r.taifex?.status,  r.taifex?.success)}</td>
+            <td>${statusPill(r.line?.status,    r.line?.success)}</td>
+            <td>${statusPill(r.claude?.status,  r.claude?.success)}</td>
+          </tr>`;
+        }).join("")
+      : `<tr class="empty-row"><td colspan="4">無記錄</td></tr>`;
+  }
 
-    refreshAll();
-    setInterval(refreshAll, 45000);
-  </script>
+  function renderSysAlerts(migration) {
+    const alerts = [];
+    if (migration && !migration.ok) {
+      (migration.checks||[]).filter(c => !c.ok).forEach(c => {
+        alerts.push({ level:"err", head:"Migration Health", body:`${c.key} → ${c.detail}` });
+      });
+    }
+    sysProbeHistData.slice(0,5).forEach(p => {
+      [["TAIFEX",p.taifex],["LINE",p.line],["CLAUDE",p.claude]].forEach(([name,item]) => {
+        if (!item) return;
+        const s = (item.status||"").toUpperCase();
+        if (s==="SKIPPED" || item.success===true) return;
+        alerts.push({ level:s==="WARN"?"warn":"err", head:`Probe ${name}`, body:`${fmtTime(p.checkedAt)} ${s} ${item.detail||""}` });
+      });
+    });
+    const body = $("sys-alertsBody");
+    if (!alerts.length) {
+      setText("sys-alertsMeta","無異常");
+      body.innerHTML = `<div class="small">目前無需要處理的系統異常。</div>`;
+      return;
+    }
+    setText("sys-alertsMeta",`異常數：${alerts.length}`);
+    body.innerHTML = alerts.slice(0,10).map(a => `
+      <div class="alert-item ${a.level==="warn"?"warn":""}">
+        <div class="alert-head">${esc(a.head)}</div>
+        <div>${esc(a.body)}</div>
+      </div>`).join("");
+  }
+
+  $("sys-btnDry").addEventListener("click",    () => runProbe(false, false));
+  $("sys-btnLine").addEventListener("click",   () => runProbe(true,  false));
+  $("sys-btnClaude").addEventListener("click", () => runProbe(false, true));
+  $("sys-probeFailedOnly").addEventListener("change", renderProbeHistTable);
+  $("sys-probeHistLoad").addEventListener("click", loadProbeHistory);
+
+  /* ─────────────────────────────────────────────
+     Page router
+  ───────────────────────────────────────────── */
+  function loadPageData(pageId) {
+    switch(pageId) {
+      case "pageDashboard":  loadDashboard(); break;
+      case "pageCandidates": loadCandidates(); break;
+      case "pagePositions":  loadOpenPositions(); loadPositionHistory(); break;
+      case "pagePnl":        loadPnl(); break;
+      case "pageDecisions":  loadDecisions(); break;
+      case "pageAiResearch": loadAiResearch(); break;
+      case "pageSystem":     loadSystemPage(); break;
+    }
+  }
+
+  /* ─────────────────────────────────────────────
+     Global refresh
+  ───────────────────────────────────────────── */
+  async function refreshCurrent() {
+    const activeTab = document.querySelector(".nav-tab.active");
+    if (activeTab) loadPageData(activeTab.dataset.page);
+    $("navMeta").textContent = `更新：${new Date().toLocaleTimeString("zh-TW")}`;
+  }
+
+  $("btnRefreshNav").addEventListener("click", refreshCurrent);
+
+  // Init
+  loadDashboard();
+  $("navMeta").textContent = `更新：${new Date().toLocaleTimeString("zh-TW")}`;
+  setInterval(refreshCurrent, 60000);
+</script>
 </body>
 </html>
