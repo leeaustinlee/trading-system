@@ -1,11 +1,13 @@
 package com.austin.trading.service;
 
+import com.austin.trading.dto.request.MarketSnapshotCreateRequest;
 import com.austin.trading.dto.response.MarketCurrentResponse;
 import com.austin.trading.entity.MarketSnapshotEntity;
 import com.austin.trading.repository.MarketSnapshotRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,6 +31,16 @@ public class MarketDataService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    public MarketCurrentResponse createSnapshot(MarketSnapshotCreateRequest req) {
+        MarketSnapshotEntity entity = new MarketSnapshotEntity();
+        entity.setTradingDate(req.tradingDate() != null ? req.tradingDate() : LocalDate.now());
+        entity.setMarketGrade(req.marketGrade());
+        entity.setMarketPhase(req.marketPhase());
+        entity.setDecision(req.decision());
+        entity.setPayloadJson(req.payloadJson());
+        return toResponse(marketSnapshotRepository.save(entity));
     }
 
     private MarketCurrentResponse toResponse(MarketSnapshotEntity entity) {

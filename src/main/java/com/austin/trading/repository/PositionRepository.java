@@ -14,6 +14,9 @@ public interface PositionRepository extends JpaRepository<PositionEntity, Long> 
 
     List<PositionEntity> findByStatusOrderByCreatedAtDesc(String status, Pageable pageable);
 
+    /** 取得所有指定狀態的持倉（不分頁，用於資金計算） */
+    List<PositionEntity> findByStatus(String status);
+
     List<PositionEntity> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     @Query("SELECT p FROM PositionEntity p WHERE p.status = :status " +

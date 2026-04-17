@@ -381,6 +381,31 @@
 <div class="page active" id="pageDashboard">
   <div class="wrap">
     <div id="errBoxDash" class="errbox"></div>
+
+    <!-- 資金總覽 stat-row -->
+    <div class="stat-row" id="d-capitalRow" style="margin-bottom:16px">
+      <div class="stat-box">
+        <div class="stat-label">可動用現金</div>
+        <div class="stat-value" id="d-capCash">-</div>
+        <button class="btn" id="d-capEditBtn" style="margin-top:8px;padding:4px 12px;font-size:12px;width:100%">⚙ 設定</button>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">持倉現值</div>
+        <div class="stat-value" id="d-capValue">-</div>
+        <div class="small" id="d-capCost" style="margin-top:4px;color:var(--muted)"></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">未實現損益</div>
+        <div class="stat-value" id="d-capUnrealized">-</div>
+        <div class="small" id="d-capPositions" style="margin-top:4px;color:var(--muted)"></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">總資產估計</div>
+        <div class="stat-value" id="d-capTotal">-</div>
+        <div class="small" id="d-capCashRatio" style="margin-top:4px;color:var(--muted)"></div>
+      </div>
+    </div>
+
     <div class="grid">
 
       <section class="card span-4">
@@ -534,7 +559,7 @@
           <thead><tr>
             <th>代號</th><th>名稱</th><th>方向</th><th>股數</th><th>均價</th>
             <th>停損</th><th>停利1</th><th>停利2</th>
-            <th>預估損益</th>
+            <th>現值</th><th>預估損益</th>
             <th>開倉時間</th><th>備註</th><th style="width:130px">操作</th>
           </tr></thead>
           <tbody id="p-openBody"></tbody>
@@ -1112,8 +1137,26 @@
   /* ─────────────────────────────────────────────
      PAGE: Dashboard
   ───────────────────────────────────────────── */
+  async function loadCapitalSummary() {
+    try {
+      const c = await api("/api/capital/summary");
+      $("d-capCash").innerHTML       = `<span style="font-size:20px;font-weight:700">${fmtPrice(c.availableCash)}</span>`;
+      $("d-capValue").innerHTML      = c.investedValue != null
+        ? `<span style="font-size:20px;font-weight:700">${fmtPrice(c.investedValue)}</span>`
+        : `<span style="font-size:16px;color:var(--muted)">${fmtPrice(c.investedCost)} <span style="font-size:11px">(成本)</span></span>`;
+      $("d-capCost").textContent     = c.investedValue != null ? `成本 ${fmtPrice(c.investedCost)}` : "";
+      $("d-capUnrealized").innerHTML = c.unrealizedPnl != null
+        ? numHtml(c.unrealizedPnl)
+        : `<span style="color:var(--muted);font-size:16px">盤外</span>`;
+      $("d-capPositions").textContent = `${c.openPositionCount} 檔持倉`;
+      $("d-capTotal").innerHTML      = `<span style="font-size:20px;font-weight:700">${fmtPrice(c.totalAssets)}</span>`;
+      $("d-capCashRatio").textContent = `現金比 ${c.cashRatio}%`;
+    } catch(_) { /* 不影響主頁 */ }
+  }
+
   async function loadDashboard() {
     clearErr("errBoxDash");
+    loadCapitalSummary();   // 非阻塞，獨立載入
     try {
       const [dash, pnl, pos, notifs] = await Promise.all([
         api("/api/dashboard/current"),
@@ -1269,8 +1312,16 @@
               const diff = isShort ? (Number(p.avgCost) - cur) : (cur - Number(p.avgCost));
               unrealized = Math.round(diff * Number(p.qty));
             }
+            const cost = p.avgCost != null && p.qty != null ? Number(p.avgCost) * Number(p.qty) : null;
+            const currentValue = cur != null && p.qty != null ? cur * Number(p.qty) : null;
+            const pnlPct = unrealized != null && cost && cost > 0
+              ? ((unrealized / cost) * 100).toFixed(2) : null;
+
+            const valueCell = currentValue != null
+              ? `<span class="quote-price" style="font-size:14px">${fmtPrice(currentValue)}</span>`
+              : `<span class="quote-meta">--</span>`;
             const pnlCell = unrealized != null
-              ? `${numHtml(unrealized)}<br><span class="quote-meta">@${fmtPrice(cur)}</span>`
+              ? `${numHtml(unrealized)}${pnlPct != null ? `<br><span class="quote-meta">${pnlPct > 0 ? '+' : ''}${pnlPct}%</span>` : ""}`
               : `<span class="quote-meta">--</span>`;
             return `<tr>
               <td class="mono">${esc(p.symbol)}</td>
@@ -1281,6 +1332,7 @@
               <td class="${p.stopLossPrice ? 'num-neg' : ''}">${esc(p.stopLossPrice)}</td>
               <td>${esc(p.takeProfit1)}</td>
               <td>${esc(p.takeProfit2)}</td>
+              <td style="text-align:right">${valueCell}</td>
               <td style="text-align:right">${pnlCell}</td>
               <td class="small mono">${fmtTime(p.openedAt)}</td>
               <td class="small">${esc(p.note)}</td>
@@ -1292,7 +1344,7 @@
               </td>
             </tr>`;
           }).join("")
-        : `<tr class="empty-row"><td colspan="12">無持倉</td></tr>`;
+        : `<tr class="empty-row"><td colspan="13">無持倉</td></tr>`;
     } catch(e) { showErr("errBoxPos", `載入失敗：${e.message}`); }
   }
 
@@ -1959,6 +2011,39 @@
   }
 
   /* ─────────────────────────────────────────────
+     Capital Config Modal
+  ───────────────────────────────────────────── */
+  async function openCapitalModal() {
+    clearErr("cap-err");
+    try {
+      const cfg = await api("/api/capital/config");
+      $("cap-cash").value  = cfg.availableCash ?? 0;
+      $("cap-notes").value = cfg.notes ?? "";
+    } catch(_) {
+      $("cap-cash").value  = 0;
+      $("cap-notes").value = "";
+    }
+    $("modal-capital").style.display = "flex";
+  }
+
+  async function submitCapitalConfig() {
+    clearErr("cap-err");
+    const cash = $("cap-cash").value;
+    if (!cash || isNaN(Number(cash))) { showErr("cap-err", "請輸入有效金額"); return; }
+    try {
+      await api("/api/capital/config", {
+        method: "PUT",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ availableCash: Number(cash), notes: $("cap-notes").value.trim() || null })
+      });
+      closeModal("modal-capital");
+      await loadCapitalSummary();
+    } catch(e) { showErr("cap-err", e.message); }
+  }
+
+  $("d-capEditBtn").addEventListener("click", openCapitalModal);
+
+  /* ─────────────────────────────────────────────
      PnL Modals
   ───────────────────────────────────────────── */
   function openPnlAddModal() {
@@ -2079,5 +2164,29 @@
   $("navMeta").textContent = `更新：${new Date().toLocaleTimeString("zh-TW")}`;
   setInterval(refreshCurrent, 60000);
 </script>
+
+<!-- ══════════════════════════════════════════
+     Capital Config Modal
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-capital" style="display:none" onclick="if(event.target===this)closeModal('modal-capital')">
+  <div class="modal-box" style="max-width:400px">
+    <h3>設定可動用資金</h3>
+    <div id="cap-err" class="err-msg" style="display:none"></div>
+    <div class="form-grid">
+      <div class="form-field form-full">
+        <label>可動用現金（元）</label>
+        <input id="cap-cash" type="number" min="0" step="1000" placeholder="例：300000">
+      </div>
+      <div class="form-field form-full">
+        <label>備註（選填）</label>
+        <input id="cap-notes" type="text" maxlength="100" placeholder="例：2026-04 帳戶重置">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="submitCapitalConfig()">儲存</button>
+      <button class="btn" style="background:var(--bg3)" onclick="closeModal('modal-capital')">取消</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
