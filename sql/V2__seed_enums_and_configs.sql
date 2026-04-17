@@ -1,0 +1,2 @@
+-- Placeholder for enum/config seed data.
+-- 建議後續新增 system_config, enum_dictionary 等表並在此 seed。

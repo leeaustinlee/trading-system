@@ -1,0 +1,22 @@
+# Maven
+target/
+
+# IntelliJ
+.idea/
+*.iml
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config (重要)
+application-local.yml
+.env
+
+# secrets
+*.key
+*.pem
+secrets/

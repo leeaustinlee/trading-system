@@ -1,0 +1,76 @@
+spring:
+  application:
+    name: trading-system
+  datasource:
+    url: jdbc:mysql://localhost:3330/trading_system?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Taipei
+    username: root
+    password: HKtv2014
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  flyway:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+trading:
+  timezone: Asia/Taipei
+  line:
+    enabled: false
+    token: ""     # LINE Notify token，設 trading.line.token=xxx 啟用
+  scheduler:
+    hourly-gate:
+      enabled: false
+    hourly-gate-cron: "0 5 10-13 * * MON-FRI"
+    final-decision:
+      enabled: false
+    final-decision-cron: "0 30 9 * * MON-FRI"
+    five-minute-monitor:
+      enabled: false
+    five-minute-monitor-cron: "0 */5 9-13 * * MON-FRI"
+    premarket-notify:
+      enabled: false
+    premarket-notify-cron: "0 30 8 * * MON-FRI"
+    aftermarket-review:
+      enabled: false
+    aftermarket-review-cron: "0 0 14 * * MON-FRI"
+    postmarket-analysis:
+      enabled: false
+    postmarket-analysis-cron: "0 30 15 * * MON-FRI"
+    premarket-data-prep:
+      enabled: false
+    premarket-data-prep-cron: "0 10 8 * * MON-FRI"
+    postmarket-data-prep:
+      enabled: false
+    postmarket-data-prep-cron: "0 5 15 * * MON-FRI"
+    t86-data-prep:
+      enabled: false
+    t86-data-prep-cron: "0 10 18 * * MON-FRI"
+    midday-review:
+      enabled: false
+    midday-review-cron: "0 0 11 * * MON-FRI"
+    tomorrow-plan:
+      enabled: false
+    tomorrow-plan-cron: "0 30 18 * * MON-FRI"
+    open-data-prep:
+      enabled: false
+    open-data-prep-cron: "0 1 9 * * MON-FRI"
+    external-probe-health:
+      enabled: false
+    external-probe-health-cron: "0 25 8,15 * * MON-FRI"
+
+  taifex:
+    base-url: "https://openapi.taifex.com.tw"
+
+  ai:
+    claude:
+      enabled: false
+      api-key: ""           # Anthropic API key：sk-ant-xxxxx
+      model: "claude-sonnet-4-6"
+      max-tokens: 4096
+      research-output-path: ""   # 例：/mnt/d/ai/stock/claude-research-latest.md

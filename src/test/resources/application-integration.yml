@@ -1,0 +1,42 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3330/trading_system_it?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Taipei&createDatabaseIfNotExist=true
+    username: root
+    password: HKtv2014
+  jpa:
+    hibernate:
+      ddl-auto: update
+  flyway:
+    enabled: false
+
+trading:
+  line:
+    enabled: false
+  ai:
+    claude:
+      enabled: false
+  scheduler:
+    hourly-gate:
+      enabled: false
+    final-decision:
+      enabled: false
+    five-minute-monitor:
+      enabled: false
+    premarket-notify:
+      enabled: false
+    aftermarket-review:
+      enabled: false
+    postmarket-analysis:
+      enabled: false
+    premarket-data-prep:
+      enabled: false
+    postmarket-data-prep:
+      enabled: false
+    t86-data-prep:
+      enabled: false
+    midday-review:
+      enabled: false
+    tomorrow-plan:
+      enabled: false
+    open-data-prep:
+      enabled: false

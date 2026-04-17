@@ -1,0 +1,855 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trading System Console</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --ink: #162133;
+      --muted: #5f6c80;
+      --panel: #ffffff;
+      --line: #d7dfeb;
+      --ok: #0b7a54;
+      --warn: #9a6500;
+      --err: #a31b2b;
+      --accent: #0455bf;
+      --accent-2: #0d9a8f;
+      --shadow: 0 10px 30px rgba(21, 36, 61, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang TC", "Noto Sans TC", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 20% -10%, #d9edff 0, transparent 35%),
+        radial-gradient(circle at 90% 20%, #d8fff7 0, transparent 30%),
+        var(--bg);
+      min-height: 100vh;
+    }
+
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+
+    .hero {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 18px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: clamp(24px, 4vw, 34px);
+      letter-spacing: 0.2px;
+    }
+
+    .subtitle {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .row-tools {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .row-tools label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .row-tools select {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 4px 6px;
+      font-size: 12px;
+      color: var(--ink);
+      background: #fff;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--ink);
+      padding: 8px 12px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+    }
+
+    button.primary {
+      background: linear-gradient(120deg, var(--accent), var(--accent-2));
+      color: #fff;
+      border: none;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(15, 49, 93, 0.12);
+      border-color: #b6c5df;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .card {
+      grid-column: span 12;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 14px;
+      animation: fadeUp .45s ease both;
+    }
+
+    .card h2 {
+      font-size: 16px;
+      margin: 0 0 10px;
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 6px 8px;
+      font-size: 13px;
+    }
+
+    .k {
+      color: var(--muted);
+    }
+
+    .v {
+      font-weight: 600;
+      word-break: break-word;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .pill.ok {
+      background: #d9f8ea;
+      color: var(--ok);
+    }
+
+    .pill.warn {
+      background: #fff1cf;
+      color: var(--warn);
+    }
+
+    .pill.err {
+      background: #ffe0e5;
+      color: var(--err);
+    }
+
+    .mono {
+      font-family: "Consolas", "Courier New", monospace;
+      font-size: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      padding: 8px 4px;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+    }
+
+    .errbox {
+      background: #ffe7eb;
+      color: #812130;
+      border: 1px solid #f3bcc7;
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 10px;
+      display: none;
+      font-size: 13px;
+    }
+
+    .span-4 { grid-column: span 12; }
+    .span-6 { grid-column: span 12; }
+    .span-8 { grid-column: span 12; }
+
+    @media (min-width: 900px) {
+      .span-4 { grid-column: span 4; }
+      .span-6 { grid-column: span 6; }
+      .span-8 { grid-column: span 8; }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .decision-chart {
+      display: flex;
+      align-items: end;
+      gap: 8px;
+      min-height: 160px;
+      padding: 10px 2px 4px;
+    }
+
+    .decision-col {
+      width: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .decision-bar {
+      width: 100%;
+      border-radius: 8px 8px 4px 4px;
+      background: #d4deef;
+      transition: .2s ease;
+    }
+
+    .decision-bar.enter { background: linear-gradient(180deg, #2aa97a, #0b7a54); }
+    .decision-bar.watch { background: linear-gradient(180deg, #f0b650, #9a6500); }
+    .decision-bar.rest { background: linear-gradient(180deg, #e67984, #a31b2b); }
+
+    .decision-label {
+      font-size: 10px;
+      color: var(--muted);
+      transform: rotate(-25deg);
+      transform-origin: top left;
+      width: 40px;
+      white-space: nowrap;
+    }
+
+    .decision-summary {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+      font-size: 12px;
+    }
+
+    .decision-summary .pill {
+      padding: 3px 10px;
+    }
+
+    tr.row-warn {
+      background: #fff9e8;
+    }
+
+    tr.row-err {
+      background: #ffedf0;
+    }
+
+    .num-pos { color: var(--ok); font-weight: 700; }
+    .num-neg { color: var(--err); font-weight: 700; }
+    .small { font-size: 12px; color: var(--muted); }
+
+    .alerts {
+      display: grid;
+      gap: 8px;
+    }
+
+    .alert-item {
+      border: 1px solid #f2c2cc;
+      background: #fff0f3;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: #7d2534;
+    }
+
+    .alert-item.warn {
+      border-color: #f0ddb2;
+      background: #fff7e8;
+      color: #7c5b12;
+    }
+
+    .alert-head {
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <h1 class="title">Trading System Console</h1>
+        <p class="subtitle" id="metaLine">載入中...</p>
+      </div>
+      <div class="controls">
+        <button class="primary" id="btnRefresh">立即刷新</button>
+        <button id="btnProbeDry">Probe Dry-Run</button>
+        <button id="btnProbeLine">Probe LINE Live</button>
+        <button id="btnProbeClaude">Probe Claude Live</button>
+      </div>
+    </div>
+
+    <div id="errBox" class="errbox"></div>
+
+    <div class="grid">
+      <section class="card span-4">
+        <h2>Market / State</h2>
+        <div class="kv">
+          <div class="k">Market Grade</div><div class="v" id="marketGrade">-</div>
+          <div class="k">Market Phase</div><div class="v" id="marketPhase">-</div>
+          <div class="k">Decision</div><div class="v" id="marketDecision">-</div>
+          <div class="k">Decision Lock</div><div class="v" id="decisionLock">-</div>
+          <div class="k">Time Decay</div><div class="v" id="timeDecay">-</div>
+          <div class="k">Hourly Gate</div><div class="v" id="hourlyGate">-</div>
+          <div class="k">Monitor Mode</div><div class="v" id="monitorMode">-</div>
+        </div>
+      </section>
+
+      <section class="card span-4">
+        <h2>Decision / Monitor</h2>
+        <div class="kv">
+          <div class="k">Final Decision</div><div class="v" id="finalDecision">-</div>
+          <div class="k">Final Summary</div><div class="v" id="finalSummary">-</div>
+          <div class="k">Latest Hourly</div><div class="v" id="latestHourly">-</div>
+          <div class="k">Hourly Event</div><div class="v" id="hourlyEvent">-</div>
+          <div class="k">Latest Monitor</div><div class="v" id="latestMonitor">-</div>
+          <div class="k">Monitor Event</div><div class="v" id="monitorEvent">-</div>
+          <div class="k">Notification</div><div class="v" id="latestNotice">-</div>
+        </div>
+      </section>
+
+      <section class="card span-4">
+        <h2>Probe / Migration</h2>
+        <div class="kv">
+          <div class="k">TAIFEX</div><div class="v" id="probeTaifex">-</div>
+          <div class="k">LINE</div><div class="v" id="probeLine">-</div>
+          <div class="k">CLAUDE</div><div class="v" id="probeClaude">-</div>
+          <div class="k">Migration</div><div class="v" id="migrationOk">-</div>
+        </div>
+        <div class="mono" id="probeMeta" style="margin-top:10px;color:#4d5a70;"></div>
+      </section>
+
+      <section class="card span-4">
+        <h2>PnL Summary</h2>
+        <div class="kv">
+          <div class="k">Total Realized</div><div class="v" id="pnlRealized">-</div>
+          <div class="k">Total Unrealized</div><div class="v" id="pnlUnrealized">-</div>
+          <div class="k">Avg Win Rate</div><div class="v" id="pnlWinRate">-</div>
+          <div class="k">Days</div><div class="v" id="pnlDays">-</div>
+        </div>
+      </section>
+
+      <section class="card span-6">
+        <h2>Top Candidates</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Name</th>
+              <th>Score</th>
+              <th>RR</th>
+              <th>Mode</th>
+              <th>Plan</th>
+            </tr>
+          </thead>
+          <tbody id="candidatesBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-6">
+        <h2>Open Positions</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Side</th>
+              <th>Qty</th>
+              <th>AvgCost</th>
+              <th>OpenedAt</th>
+            </tr>
+          </thead>
+          <tbody id="positionsBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-6">
+        <h2>Recent Notifications</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Type</th>
+              <th>Title</th>
+            </tr>
+          </thead>
+          <tbody id="notificationsBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-6">
+        <h2>Probe History</h2>
+        <div class="row-tools">
+          <span id="probeHistoryMeta">最近 20 筆</span>
+          <div>
+            <label>筆數
+              <select id="selProbeLimit">
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </label>
+            <label><input type="checkbox" id="chkProbeFailedOnly" /> 只看失敗</label>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>CheckedAt</th>
+              <th>TAIFEX</th>
+              <th>LINE</th>
+              <th>CLAUDE</th>
+            </tr>
+          </thead>
+          <tbody id="probeHistoryBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-6">
+        <h2>Final Decision Trend</h2>
+        <div id="decisionChart" class="decision-chart"></div>
+        <div id="decisionSummary" class="decision-summary"></div>
+        <table style="margin-top:8px;">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Decision</th>
+              <th>Summary</th>
+            </tr>
+          </thead>
+          <tbody id="decisionTableBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-6">
+        <h2>Migration Checks</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Status</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody id="migrationBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-6">
+        <h2>System Alerts Feed</h2>
+        <div class="row-tools">
+          <span id="alertsMeta">無異常</span>
+        </div>
+        <div id="alertsBody" class="alerts"></div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const byId = (id) => document.getElementById(id);
+    const errBox = byId("errBox");
+    let latestProbe = null;
+    let probeHistoryData = [];
+    let migrationHealthData = null;
+    let decisionHistoryData = [];
+
+    function statusPill(status, success) {
+      const s = (status || "-").toUpperCase();
+      const cls = success ? "ok" : (s === "WARN" || s === "SKIPPED" ? "warn" : "err");
+      return `<span class="pill ${cls}">${escapeHtml(s)}</span>`;
+    }
+
+    function escapeHtml(v) {
+      if (v === null || v === undefined) return "-";
+      return String(v)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll("\"", "&quot;");
+    }
+
+    function setText(id, value) {
+      byId(id).textContent = value ?? "-";
+    }
+
+    function showError(msg) {
+      errBox.style.display = "block";
+      errBox.textContent = msg;
+    }
+
+    function clearError() {
+      errBox.style.display = "none";
+      errBox.textContent = "";
+    }
+
+    async function fetchJson(url, opts) {
+      const res = await fetch(url, opts);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`${url} -> HTTP ${res.status} ${text}`);
+      }
+      return res.json();
+    }
+
+    async function loadDashboard() {
+      const data = await fetchJson("/api/dashboard/current");
+      setText("marketGrade", data.market?.marketGrade);
+      setText("marketPhase", data.market?.marketPhase);
+      setText("marketDecision", data.market?.decision);
+      setText("decisionLock", data.tradingState?.decisionLock);
+      setText("timeDecay", data.tradingState?.timeDecayStage);
+      setText("hourlyGate", data.tradingState?.hourlyGate);
+      setText("monitorMode", data.tradingState?.monitorMode);
+
+      setText("finalDecision", data.finalDecision?.decision);
+      setText("finalSummary", data.finalDecision?.summary);
+      setText("latestHourly", data.hourlyGateDecision?.hourlyGate);
+      setText("hourlyEvent", data.hourlyGateDecision?.triggerEvent);
+      setText("latestMonitor", data.monitorDecision?.monitorMode);
+      setText("monitorEvent", data.monitorDecision?.triggerEvent);
+      setText("latestNotice", data.latestNotification?.title);
+
+      const body = byId("candidatesBody");
+      const rows = (data.candidates || []).map(c => `
+        <tr>
+          <td class="mono">${escapeHtml(c.symbol)}</td>
+          <td>${escapeHtml(c.stockName)}</td>
+          <td>${escapeHtml(c.score)}</td>
+          <td>${escapeHtml(c.riskRewardRatio)}</td>
+          <td>${escapeHtml(c.valuationMode)}</td>
+          <td>${c.includeInFinalPlan ? "Y" : "N"}</td>
+        </tr>
+      `).join("");
+      body.innerHTML = rows || `<tr><td colspan="6">No candidates</td></tr>`;
+    }
+
+    async function loadPnlSummary() {
+      const data = await fetchJson("/api/pnl/summary?days=20");
+      renderPnlValue("pnlRealized", data.totalRealizedPnl);
+      renderPnlValue("pnlUnrealized", data.totalUnrealizedPnl);
+      setText("pnlWinRate", data.avgWinRate == null ? "-" : `${data.avgWinRate}%`);
+      setText("pnlDays", data.days);
+    }
+
+    async function loadOpenPositions() {
+      const data = await fetchJson("/api/positions/open?size=20");
+      const body = byId("positionsBody");
+      body.innerHTML = (data || []).map(p => `
+        <tr>
+          <td class="mono">${escapeHtml(p.symbol)}</td>
+          <td>${escapeHtml(p.side)}</td>
+          <td>${escapeHtml(p.qty)}</td>
+          <td>${escapeHtml(p.avgCost)}</td>
+          <td class="small">${escapeHtml(p.openedAt)}</td>
+        </tr>
+      `).join("");
+      if (!data || data.length === 0) {
+        body.innerHTML = `<tr><td colspan="5">No open positions</td></tr>`;
+      }
+    }
+
+    async function loadRecentNotifications() {
+      const data = await fetchJson("/api/notifications?limit=10");
+      const body = byId("notificationsBody");
+      body.innerHTML = (data || []).map(n => `
+        <tr>
+          <td class="small">${escapeHtml(n.eventTime)}</td>
+          <td>${escapeHtml(n.notificationType)}</td>
+          <td>${escapeHtml(n.title)}</td>
+        </tr>
+      `).join("");
+      if (!data || data.length === 0) {
+        body.innerHTML = `<tr><td colspan="3">No notifications</td></tr>`;
+      }
+    }
+
+    function renderPnlValue(id, value) {
+      const el = byId(id);
+      if (value == null) {
+        el.textContent = "-";
+        el.className = "v";
+        return;
+      }
+      const num = Number(value);
+      el.textContent = value;
+      el.className = num < 0 ? "v num-neg" : "v num-pos";
+    }
+
+    async function loadMigrationHealth() {
+      const data = await fetchJson("/api/system/migration/health");
+      migrationHealthData = data;
+      byId("migrationOk").innerHTML = statusPill(data.ok ? "OK" : "ERROR", data.ok);
+
+      const body = byId("migrationBody");
+      body.innerHTML = (data.checks || []).map(c => `
+        <tr>
+          <td class="mono">${escapeHtml(c.key)}</td>
+          <td>${statusPill(c.ok ? "OK" : "MISSING", c.ok)}</td>
+          <td>${escapeHtml(c.detail)}</td>
+        </tr>
+      `).join("");
+      renderSystemAlerts();
+    }
+
+    async function runProbe(liveLine = false, liveClaude = false) {
+      const params = new URLSearchParams({
+        liveLine: String(liveLine),
+        liveClaude: String(liveClaude)
+      });
+      latestProbe = await fetchJson(`/api/system/external/probe?${params.toString()}`);
+      renderLatestProbe(latestProbe);
+      await loadProbeHistory();
+    }
+
+    function renderLatestProbe(p) {
+      byId("probeTaifex").innerHTML = statusPill(p.taifex?.status, p.taifex?.success);
+      byId("probeLine").innerHTML = statusPill(p.line?.status, p.line?.success);
+      byId("probeClaude").innerHTML = statusPill(p.claude?.status, p.claude?.success);
+      byId("probeMeta").textContent = `checkedAt=${p.checkedAt || "-"}  taifexDate=${p.taifexDate || "-"}`;
+    }
+
+    async function loadProbeHistory() {
+      const limit = byId("selProbeLimit").value || "20";
+      const data = await fetchJson(`/api/system/external/probe/history?limit=${limit}`);
+      probeHistoryData = data || [];
+      renderProbeHistory();
+      if (!latestProbe && probeHistoryData.length > 0) {
+        renderLatestProbe(probeHistoryData[0]);
+      }
+      renderSystemAlerts();
+    }
+
+    function renderProbeHistory() {
+      const failedOnly = byId("chkProbeFailedOnly").checked;
+      const data = failedOnly ? probeHistoryData.filter(hasProbeFailure) : probeHistoryData;
+      const body = byId("probeHistoryBody");
+      body.innerHTML = (data || []).map(r => `
+        <tr class="${probeRowClass(r)}">
+          <td class="mono">${escapeHtml(r.checkedAt)}</td>
+          <td>${statusPill(r.taifex?.status, r.taifex?.success)}</td>
+          <td>${statusPill(r.line?.status, r.line?.success)}</td>
+          <td>${statusPill(r.claude?.status, r.claude?.success)}</td>
+        </tr>
+      `).join("");
+      if (!data || data.length === 0) {
+        body.innerHTML = `<tr><td colspan="4">No probe logs</td></tr>`;
+      }
+      byId("probeHistoryMeta").textContent = failedOnly
+        ? `失敗筆數：${data.length}/${probeHistoryData.length}`
+        : `最近 ${probeHistoryData.length} 筆`;
+    }
+
+    function hasProbeFailure(row) {
+      const items = [row.taifex, row.line, row.claude].filter(Boolean);
+      return items.some(i => {
+        const status = (i.status || "").toUpperCase();
+        return status !== "SKIPPED" && i.success === false;
+      });
+    }
+
+    function probeRowClass(row) {
+      const items = [row.taifex, row.line, row.claude].filter(Boolean);
+      const hasErr = items.some(i => (i.status || "").toUpperCase() === "ERROR");
+      const hasWarn = items.some(i => (i.status || "").toUpperCase() === "WARN");
+      if (hasErr) return "row-err";
+      if (hasWarn) return "row-warn";
+      return "";
+    }
+
+    async function loadDecisionHistory() {
+      const data = await fetchJson("/api/decisions/history?limit=24");
+      decisionHistoryData = data || [];
+      renderDecisionHistory(decisionHistoryData);
+      renderSystemAlerts();
+    }
+
+    function renderDecisionHistory(rows) {
+      const chart = byId("decisionChart");
+      const summary = byId("decisionSummary");
+      const tableBody = byId("decisionTableBody");
+      if (!rows.length) {
+        chart.innerHTML = `<div class="mono">No decision history</div>`;
+        summary.innerHTML = "";
+        tableBody.innerHTML = `<tr><td colspan="3">No decision history</td></tr>`;
+        return;
+      }
+
+      let enter = 0, watch = 0, rest = 0;
+      const max = rows.length;
+      chart.innerHTML = rows.slice().reverse().map((r, idx) => {
+        const d = (r.decision || "WATCH").toUpperCase();
+        if (d === "ENTER") enter++;
+        else if (d === "REST") rest++;
+        else watch++;
+        const h = Math.max(8, Math.round(((idx + 1) / max) * 120));
+        return `
+          <div class="decision-col" title="${escapeHtml(r.tradingDate)} ${escapeHtml(d)}">
+            <div class="decision-bar ${decisionClass(d)}" style="height:${h}px"></div>
+            <div class="decision-label">${escapeHtml((r.tradingDate || "").slice(5))}</div>
+          </div>
+        `;
+      }).join("");
+
+      summary.innerHTML = `
+        <span class="pill ok">ENTER ${enter}</span>
+        <span class="pill warn">WATCH ${watch}</span>
+        <span class="pill err">REST ${rest}</span>
+      `;
+
+      tableBody.innerHTML = rows.slice(0, 10).map(r => `
+        <tr>
+          <td class="mono">${escapeHtml(r.tradingDate)}</td>
+          <td>${statusPill(r.decision, (r.decision || "").toUpperCase() === "ENTER")}</td>
+          <td>${escapeHtml(r.summary)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function decisionClass(decision) {
+      const d = (decision || "").toUpperCase();
+      if (d === "ENTER") return "enter";
+      if (d === "REST") return "rest";
+      return "watch";
+    }
+
+    function renderSystemAlerts() {
+      const alerts = [];
+
+      if (migrationHealthData && migrationHealthData.ok === false) {
+        (migrationHealthData.checks || []).forEach(c => {
+          if (!c.ok) {
+            alerts.push({
+              level: "err",
+              head: "Migration Health",
+              body: `${c.key} -> ${c.detail}`
+            });
+          }
+        });
+      }
+
+      probeHistoryData.slice(0, 10).forEach(p => {
+        [
+          ["TAIFEX", p.taifex],
+          ["LINE", p.line],
+          ["CLAUDE", p.claude]
+        ].forEach(([name, item]) => {
+          if (!item) return;
+          const status = (item.status || "").toUpperCase();
+          if (status === "SKIPPED" || item.success === true) return;
+          alerts.push({
+            level: status === "WARN" ? "warn" : "err",
+            head: `External Probe ${name}`,
+            body: `${p.checkedAt || "-"} ${status} ${item.detail || ""}`
+          });
+        });
+      });
+
+      const latestDecision = decisionHistoryData[0];
+      if (latestDecision && (latestDecision.decision || "").toUpperCase() === "REST") {
+        alerts.push({
+          level: "warn",
+          head: "Final Decision",
+          body: `${latestDecision.tradingDate} REST - ${latestDecision.summary || ""}`
+        });
+      }
+
+      const body = byId("alertsBody");
+      if (!alerts.length) {
+        byId("alertsMeta").textContent = "無異常";
+        body.innerHTML = `<div class="small">目前無需要處理的系統異常。</div>`;
+        return;
+      }
+      byId("alertsMeta").textContent = `異常數：${alerts.length}`;
+      body.innerHTML = alerts.slice(0, 16).map(a => `
+        <div class="alert-item ${a.level === "warn" ? "warn" : ""}">
+          <div class="alert-head">${escapeHtml(a.head)}</div>
+          <div>${escapeHtml(a.body)}</div>
+        </div>
+      `).join("");
+    }
+
+    async function refreshAll() {
+      clearError();
+      try {
+        await Promise.all([
+          loadDashboard(),
+          loadPnlSummary(),
+          loadOpenPositions(),
+          loadRecentNotifications(),
+          loadMigrationHealth(),
+          loadProbeHistory(),
+          loadDecisionHistory()
+        ]);
+        byId("metaLine").textContent = `最後更新：${new Date().toLocaleString("zh-TW")}（每 45 秒自動刷新）`;
+      } catch (e) {
+        showError(`刷新失敗：${e.message}`);
+      }
+    }
+
+    byId("btnRefresh").addEventListener("click", refreshAll);
+    byId("btnProbeDry").addEventListener("click", async () => {
+      try { await runProbe(false, false); } catch (e) { showError(`Probe dry-run 失敗：${e.message}`); }
+    });
+    byId("btnProbeLine").addEventListener("click", async () => {
+      try { await runProbe(true, false); } catch (e) { showError(`Probe LINE live 失敗：${e.message}`); }
+    });
+    byId("btnProbeClaude").addEventListener("click", async () => {
+      try { await runProbe(false, true); } catch (e) { showError(`Probe Claude live 失敗：${e.message}`); }
+    });
+    byId("chkProbeFailedOnly").addEventListener("change", renderProbeHistory);
+    byId("selProbeLimit").addEventListener("change", loadProbeHistory);
+
+    refreshAll();
+    setInterval(refreshAll, 45000);
+  </script>
+</body>
+</html>
