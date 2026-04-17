@@ -1,18 +1,18 @@
 # Next Step Dev Plan (2026-04-17)
 
 ## 1. 目前基線
-- 測試狀態：`mvn -Dmaven.repo.local=/tmp/m2 test` 已通過（27 tests, 0 fail）
-- 已落地：Phase 1~3 核心引擎、Phase 5 AI adapter、主要 scheduler 與 API
-- 主要缺口：整合測試、外部服務 end-to-end 驗證、`chasedHighEntry` 規則落地
+- 測試狀態：`mvn -Dmaven.repo.local=/tmp/m2 test` 已通過（62 tests pass，4 skipped）
+- 已落地：Phase 1~5 全部完成（引擎、排程、UI、AI adapter、整合測試、部署設定）
+- 唯一缺口：Claude API key 實機驗證
 
 ## 2. 下一步開發目標（本輪）
-1. 建立「可回歸」的整合測試骨架（優先）
-2. 完成外部依賴驗證（TAIFEX / LINE / Claude）
-3. 補齊交易欄位邏輯（`chasedHighEntry`）
+1. ~~建立「可回歸」的整合測試骨架~~ ✅ 已完成（FullApiIntegrationTests 25 tests）
+2. ~~完成外部依賴驗證（TAIFEX / LINE / Claude）~~ ✅ TAIFEX + LINE 已驗證；Claude 待實機
+3. ~~補齊交易欄位邏輯（`chasedHighEntry`）~~ ✅ 已完成（ChasedHighEntryEngine）
 
 ## 3. 任務切片與驗收
 
-### Slice A：整合測試骨架（P0）
+### Slice A：整合測試骨架（P0）✅ 已完成
 - 範圍檔案：
   - `src/test/java/com/austin/trading/integration/*`
   - `src/test/resources/application-test.yml`（若尚未建立）
@@ -26,7 +26,7 @@
   - 測試可在本機穩定重跑 3 次皆通過
   - 不依賴手動資料修補
 
-### Slice B：外部服務驗證（P1）
+### Slice B：外部服務驗證（P1）✅ 框架已完成，TAIFEX + LINE 已實機驗證
 - 範圍檔案：
   - `src/main/java/com/austin/trading/client/TaifexClient.java`
   - `src/main/java/com/austin/trading/notify/LineSender.java`
@@ -40,7 +40,7 @@
   - 三項驗證各有成功 log 與一次失敗情境 log
   - 失敗情境不影響主流程（不中斷 scheduler）
 
-### Slice C：`chasedHighEntry` 邏輯（P1）
+### Slice C：`chasedHighEntry` 邏輯（P1）✅ 已完成
 - 範圍檔案：
   - `src/main/java/com/austin/trading/service/FinalDecisionService.java`
   - `src/main/java/com/austin/trading/entity/PositionEntity.java`（若需）
@@ -52,10 +52,15 @@
   - 至少 3 個測試情境：追高 / 非追高 / 資料不足
   - API response 可查得欄位結果
 
-## 4. 建議執行順序
-1. Slice A（先確保回歸保護）
-2. Slice C（核心規則補齊）
-3. Slice B（對外整合驗證）
+## 4. 唯一剩餘任務
+
+### Slice D：Claude API key 實機驗證（P1）
+- 設定：`CLAUDE_ENABLED=true`、`CLAUDE_API_KEY=<your_key>`
+- 呼叫：`GET /api/system/external/probe?liveClaude=true`
+- 驗收：
+  - 回傳 `claude.status=OK`、`claude.success=true`
+  - `ai_research_log` 新增一筆研究紀錄
+  - 失敗情境（錯誤 key）不中斷 scheduler
 
 ## 5. 每次提交前固定檢查
 ```bash
@@ -71,8 +76,8 @@ mvn -Dmaven.repo.local=/tmp/m2 test
 ```
 
 ## 6. 風險提示
-- 目前專案目錄未偵測到 Git repo metadata（無法以 commit 歷史判斷進度）
 - `docs/spec.md` 的「固定排程」段落含流程層時間（含 Claude 節點），與 Java scheduler 實際 cron 屬不同層；後續要維持雙軌說明，避免混淆
+- IntelliJ Run 需設 Active profiles = `local`，否則讀 base `application.yml` 導致 DB 密碼未帶入
 
 ## 7. 執行狀態（2026-04-17）
 - Slice A：已建立整合測試骨架（`ApiIntegrationTests`），覆蓋：

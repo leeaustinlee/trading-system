@@ -4,7 +4,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3330/trading_system?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Taipei}
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:}
+    password: ${DB_PASSWORD:HKtv2014}
   jpa:
     hibernate:
       ddl-auto: update
