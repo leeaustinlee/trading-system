@@ -14,6 +14,8 @@ public interface DailyPnlRepository extends JpaRepository<DailyPnlEntity, Long> 
 
     Optional<DailyPnlEntity> findTopByOrderByTradingDateDescCreatedAtDesc();
 
+    Optional<DailyPnlEntity> findByTradingDate(LocalDate tradingDate);
+
     List<DailyPnlEntity> findAllByOrderByTradingDateDescCreatedAtDesc(Pageable pageable);
 
     @Query("SELECT p FROM DailyPnlEntity p WHERE " +

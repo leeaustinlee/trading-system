@@ -3,76 +3,108 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Trading System Console</title>
+  <title>操盤主控台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f5f7fb;
-      --ink: #162133;
-      --muted: #5f6c80;
+      --bg: #f0f4fa;
+      --ink: #12233e;
+      --muted: #5c6d84;
       --panel: #ffffff;
-      --line: #d7dfeb;
-      --ok: #0b7a54;
-      --warn: #9a6500;
-      --err: #a31b2b;
-      --accent: #0455bf;
-      --accent-2: #0d9a8f;
-      --shadow: 0 10px 30px rgba(21,36,61,.08);
-      --nav-h: 52px;
+      --line: #d3dbe8;
+      --ok: #0a7a52;
+      --warn: #8c5d00;
+      --err: #a0192a;
+      --accent: #0452b8;
+      --accent-2: #0c9589;
+      --accent-light: #e6f0ff;
+      --shadow: 0 4px 20px rgba(18,35,62,.07);
+      --shadow-hover: 0 8px 28px rgba(18,35,62,.12);
+      --nav-h: 56px;
+      --radius: 16px;
+      --radius-sm: 10px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 15px; }
     body {
-      font-family: "Segoe UI","PingFang TC","Noto Sans TC",sans-serif;
+      font-family: "Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
       color: var(--ink);
       background:
-        radial-gradient(circle at 20% -10%,#d9edff 0,transparent 35%),
-        radial-gradient(circle at 90% 20%,#d8fff7 0,transparent 30%),
+        radial-gradient(circle at 15% -5%, #cee4ff 0, transparent 40%),
+        radial-gradient(circle at 88% 18%, #c8fff5 0, transparent 32%),
         var(--bg);
       min-height: 100vh;
+      line-height: 1.6;
     }
 
     /* ── Nav ── */
     nav {
       position: sticky; top: 0; z-index: 100;
       height: var(--nav-h);
-      background: rgba(255,255,255,.88);
-      backdrop-filter: blur(10px);
+      background: rgba(255,255,255,.92);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
       border-bottom: 1px solid var(--line);
       display: flex; align-items: center;
-      padding: 0 20px; gap: 4px;
+      padding: 0 24px; gap: 2px;
+      box-shadow: 0 1px 8px rgba(18,35,62,.05);
     }
-    .nav-brand { font-weight: 700; font-size: 15px; margin-right: 16px; white-space: nowrap; }
+    .nav-brand {
+      font-weight: 700; font-size: 16px; margin-right: 20px;
+      white-space: nowrap; color: var(--accent);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .nav-brand::before {
+      content: "📊";
+      font-size: 18px;
+    }
     .nav-tab {
       border: none; background: none; cursor: pointer;
-      padding: 6px 12px; border-radius: 8px;
-      font-size: 13px; font-weight: 600; color: var(--muted);
+      padding: 7px 14px; border-radius: var(--radius-sm);
+      font-size: 14px; font-weight: 600; color: var(--muted);
       transition: background .15s, color .15s;
       white-space: nowrap;
+      font-family: inherit;
     }
-    .nav-tab:hover { background: #eef2f8; color: var(--ink); }
-    .nav-tab.active { background: #e0ecff; color: var(--accent); }
+    .nav-tab:hover { background: #edf2fa; color: var(--ink); }
+    .nav-tab.active {
+      background: var(--accent-light);
+      color: var(--accent);
+    }
     .nav-spacer { flex: 1; }
-    .nav-meta { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .nav-meta { font-size: 13px; color: var(--muted); white-space: nowrap; margin-right: 8px; }
     #btnRefreshNav {
-      border: 1px solid var(--line); border-radius: 8px;
+      border: 1px solid var(--line); border-radius: var(--radius-sm);
       background: #fff; color: var(--ink);
-      padding: 5px 10px; cursor: pointer; font-size: 12px; font-weight: 600;
+      padding: 6px 12px; cursor: pointer; font-size: 13px; font-weight: 600;
+      font-family: inherit;
+      transition: background .15s, box-shadow .15s;
     }
-    #btnRefreshNav:hover { background: #f0f4fb; }
+    #btnRefreshNav:hover { background: #f0f4fb; box-shadow: 0 2px 8px rgba(18,35,62,.08); }
 
     /* ── Pages ── */
     .page { display: none; }
     .page.active { display: block; }
-    .wrap { max-width: 1280px; margin: 0 auto; padding: 20px 16px 48px; }
+    .wrap { max-width: 1320px; margin: 0 auto; padding: 24px 20px 60px; }
 
     /* ── Grid ── */
-    .grid { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); gap: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); gap: 16px; }
     .card {
       grid-column: span 12;
       background: var(--panel); border: 1px solid var(--line);
-      border-radius: 14px; box-shadow: var(--shadow);
-      padding: 16px; animation: fadeUp .4s ease both;
+      border-radius: var(--radius); box-shadow: var(--shadow);
+      padding: 20px 22px; animation: fadeUp .35s ease both;
+      transition: box-shadow .2s;
     }
-    .card h2 { font-size: 15px; margin-bottom: 12px; font-weight: 700; }
+    .card:hover { box-shadow: var(--shadow-hover); }
+    .card h2 {
+      font-size: 15px; margin-bottom: 16px; font-weight: 700;
+      color: var(--ink); display: flex; align-items: center; gap: 8px;
+      padding-bottom: 12px; border-bottom: 1px solid var(--line);
+    }
+    .card h2::before { content: ""; display: inline-block; width: 3px; height: 16px; background: var(--accent); border-radius: 2px; }
     .span-3 { grid-column: span 12; }
     .span-4 { grid-column: span 12; }
     .span-6 { grid-column: span 12; }
@@ -89,109 +121,250 @@
     }
 
     /* ── KV ── */
-    .kv { display: grid; grid-template-columns: 130px 1fr; gap: 6px 8px; font-size: 13px; }
-    .k { color: var(--muted); }
+    .kv { display: grid; grid-template-columns: 130px 1fr; gap: 8px 10px; font-size: 14px; }
+    .k { color: var(--muted); font-weight: 500; display: flex; align-items: center; }
     .v { font-weight: 600; word-break: break-word; }
 
     /* ── Pill ── */
     .pill {
-      display: inline-block; padding: 2px 8px; border-radius: 999px;
-      font-size: 12px; font-weight: 700;
+      display: inline-block; padding: 3px 10px; border-radius: 999px;
+      font-size: 12px; font-weight: 700; letter-spacing: .2px;
     }
-    .pill.ok { background:#d9f8ea; color:var(--ok); }
-    .pill.warn { background:#fff1cf; color:var(--warn); }
-    .pill.err { background:#ffe0e5; color:var(--err); }
-    .pill.muted { background:#edf0f5; color:var(--muted); }
+    .pill.ok { background:#d3f8ea; color:#076b45; }
+    .pill.warn { background:#fff2cc; color:#7a5000; }
+    .pill.err { background:#ffe3e7; color:#91161f; }
+    .pill.muted { background:#edf0f6; color:var(--muted); }
 
     /* ── Table ── */
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th,td { text-align:left; border-bottom:1px solid var(--line); padding:8px 4px; vertical-align:top; }
-    th { color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th,td { text-align:left; border-bottom:1px solid var(--line); padding:10px 6px; vertical-align:middle; }
+    th {
+      color: var(--muted); font-weight: 600; font-size: 12px;
+      letter-spacing: .3px; background: #f7f9fc;
+    }
+    th:first-child { border-radius: 8px 0 0 0; }
+    th:last-child { border-radius: 0 8px 0 0; }
     tr:last-child td { border-bottom: none; }
-    tr.row-warn { background:#fff9e8; }
-    tr.row-err { background:#ffedf0; }
+    tr:hover td { background: #f7faff; }
+    tr.row-warn { background:#fff9e6; }
+    tr.row-warn td { background: transparent !important; }
+    tr.row-err { background:#fff0f2; }
+    tr.row-err td { background: transparent !important; }
 
     /* ── Misc ── */
-    .mono { font-family:"Consolas","Courier New",monospace; font-size:12px; }
-    .small { font-size:12px; color:var(--muted); }
+    .mono { font-family:"Consolas","Courier New",monospace; font-size:13px; }
+    .small { font-size:13px; color:var(--muted); }
     .num-pos { color:var(--ok); font-weight:700; }
     .num-neg { color:var(--err); font-weight:700; }
     .errbox {
-      background:#ffe7eb; color:#812130; border:1px solid #f3bcc7;
-      border-radius:10px; padding:10px 14px; margin-bottom:12px;
-      font-size:13px; display:none;
+      background:#ffeaea; color:#7d1928; border:1px solid #f3bcbe;
+      border-radius:var(--radius-sm); padding:12px 16px; margin-bottom:14px;
+      font-size:14px; display:none;
     }
     .toolbar {
       display:flex; flex-wrap:wrap; align-items:center; gap:8px;
-      margin-bottom:12px;
+      margin-bottom:14px;
     }
-    .toolbar label { font-size:13px; color:var(--muted); display:flex; align-items:center; gap:4px; }
+    .toolbar label { font-size:14px; color:var(--muted); display:flex; align-items:center; gap:6px; font-weight:500; }
     .toolbar input[type=date],
     .toolbar input[type=text],
     .toolbar select {
       border:1px solid var(--line); border-radius:8px;
-      padding:5px 8px; font-size:13px; color:var(--ink); background:#fff;
+      padding:6px 10px; font-size:14px; color:var(--ink); background:#fff;
+      font-family: inherit;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .toolbar input:focus, .toolbar select:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(4,82,184,.12);
     }
     .btn {
-      border:1px solid var(--line); border-radius:10px;
+      border:1px solid var(--line); border-radius:var(--radius-sm);
       background:#fff; color:var(--ink);
-      padding:6px 12px; cursor:pointer; font-weight:600; font-size:13px;
-      transition:transform .15s,border-color .15s,box-shadow .15s;
+      padding:7px 16px; cursor:pointer; font-weight:600; font-size:14px;
+      transition:transform .15s, border-color .15s, box-shadow .15s;
+      font-family: inherit;
     }
-    .btn:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(15,49,93,.1); border-color:#b6c5df; }
+    .btn:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(18,35,62,.1); border-color:#b0c4de; }
     .btn.primary {
-      background:linear-gradient(120deg,var(--accent),var(--accent-2));
+      background:linear-gradient(120deg,var(--accent),#0680d8);
       color:#fff; border:none;
+      box-shadow: 0 3px 12px rgba(4,82,184,.25);
     }
-    .btn.warn-btn { background:#fff3cd; color:#7a5000; border-color:#f0d89c; }
-    .empty-row td { color:var(--muted); font-style:italic; }
+    .btn.primary:hover { box-shadow: 0 6px 20px rgba(4,82,184,.35); }
+    .btn.warn-btn { background:#fff8e6; color:#7a5000; border-color:#e8ca7a; }
+    .btn.warn-btn:hover { background:#fff3cc; }
+    .empty-row td { color:var(--muted); font-style:italic; text-align: center; }
 
     /* ── PnL stat row ── */
-    .stat-row { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:12px; }
+    .stat-row { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:16px; }
     .stat-box {
-      flex:1; min-width:100px; border:1px solid var(--line);
-      border-radius:10px; padding:10px 14px; background:var(--panel);
+      flex:1; min-width:130px;
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      padding:16px 20px;
+      background: linear-gradient(145deg, #ffffff, #f5f9ff);
+      position: relative; overflow: hidden;
+      box-shadow: var(--shadow);
     }
-    .stat-box .stat-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
-    .stat-box .stat-value { font-size:20px; font-weight:700; margin-top:4px; }
+    .stat-box::after {
+      content: "";
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    }
+    .stat-box .stat-label { font-size:12px; color:var(--muted); font-weight:600; letter-spacing:.3px; }
+    .stat-box .stat-value { font-size:24px; font-weight:700; margin-top:6px; line-height: 1.2; }
 
     /* ── Decision trend chart ── */
-    .decision-chart { display:flex; align-items:flex-end; gap:6px; min-height:130px; padding:8px 2px 4px; }
-    .decision-col { width:22px; display:flex; flex-direction:column; align-items:center; gap:4px; }
-    .decision-bar { width:100%; border-radius:6px 6px 3px 3px; background:#d4deef; transition:.2s; }
-    .decision-bar.enter { background:linear-gradient(180deg,#2aa97a,#0b7a54); }
-    .decision-bar.watch { background:linear-gradient(180deg,#f0b650,#9a6500); }
-    .decision-bar.rest  { background:linear-gradient(180deg,#e67984,#a31b2b); }
+    .decision-chart { display:flex; align-items:flex-end; gap:6px; min-height:140px; padding:8px 2px 4px; }
+    .decision-col { width:24px; display:flex; flex-direction:column; align-items:center; gap:4px; }
+    .decision-bar { width:100%; border-radius:6px 6px 3px 3px; background:#dde4ef; transition:.2s; }
+    .decision-bar.enter { background:linear-gradient(180deg,#36c085,#0a7a52); }
+    .decision-bar.watch { background:linear-gradient(180deg,#f5c047,#8c5d00); }
+    .decision-bar.rest  { background:linear-gradient(180deg,#f07580,#a0192a); }
     .decision-label { font-size:10px; color:var(--muted); transform:rotate(-30deg) translateX(-4px); transform-origin:top left; width:36px; white-space:nowrap; }
-    .decision-summary { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+    .decision-summary { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
 
     /* ── AI Research ── */
     .ai-log-item {
-      border:1px solid var(--line); border-radius:10px;
-      padding:10px 12px; margin-bottom:8px; font-size:12px;
+      border:1px solid var(--line); border-radius:var(--radius-sm);
+      padding:14px 16px; margin-bottom:10px;
+      background: linear-gradient(145deg, #fff, #f8faff);
     }
-    .ai-log-head { font-weight:700; margin-bottom:4px; display:flex; justify-content:space-between; }
-    .ai-log-body { color:#374860; white-space:pre-wrap; max-height:200px; overflow-y:auto; }
+    .ai-log-head {
+      font-weight:700; margin-bottom:8px; display:flex;
+      justify-content:space-between; align-items: flex-start;
+      font-size:14px; gap: 8px;
+    }
+    .ai-log-head .tag {
+      background: var(--accent-light); color: var(--accent);
+      padding: 2px 8px; border-radius: 6px; font-size: 12px; white-space: nowrap;
+    }
+    .ai-log-body { color:#374860; white-space:pre-wrap; font-size:13px; line-height: 1.7; max-height:320px; overflow-y:auto; transition: max-height .3s ease; }
+    .ai-log-body.expanded { max-height:none; }
+    .ai-log-toggle { margin-top:8px; font-size:12px; color:var(--accent); cursor:pointer; font-weight:600; user-select:none; }
+    .ai-log-toggle:hover { text-decoration:underline; }
 
     /* ── Alert feed ── */
     .alert-item {
-      border:1px solid #f2c2cc; background:#fff0f3;
-      border-radius:10px; padding:8px 10px; font-size:12px; color:#7d2534;
+      border:1px solid #f0b8c3; background:#fff0f3;
+      border-radius:var(--radius-sm); padding:10px 14px; font-size:13px; color:#7a2133;
+      border-left: 4px solid var(--err);
     }
-    .alert-item.warn { border-color:#f0ddb2; background:#fff7e8; color:#7c5b12; }
-    .alert-head { font-weight:700; margin-bottom:3px; }
+    .alert-item.warn { border-color:#e8d28c; background:#fffaec; color:#7a5a12; border-left-color: var(--warn); }
+    .alert-head { font-weight:700; margin-bottom:4px; font-size:14px; }
     .alerts { display:grid; gap:8px; }
 
+    /* ── Section separator label ── */
+    .section-title {
+      font-size: 13px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .6px;
+      margin: 16px 0 8px; display: flex; align-items: center; gap: 8px;
+    }
+    .section-title::after {
+      content: ""; flex: 1; height: 1px; background: var(--line);
+    }
+
     @keyframes fadeUp {
-      from { opacity:0; transform:translateY(8px); }
+      from { opacity:0; transform:translateY(10px); }
       to   { opacity:1; transform:translateY(0); }
     }
+
+    /* ── Live Quote flash ── */
+    @keyframes flashGreen {
+      0%   { background:#d3f8ea; }
+      100% { background: transparent; }
+    }
+    @keyframes flashRed {
+      0%   { background:#ffe3e7; }
+      100% { background: transparent; }
+    }
+    .price-flash-up   { animation: flashGreen .9s ease-out; }
+    .price-flash-down { animation: flashRed   .9s ease-out; }
+
+    .live-status {
+      display:inline-flex; align-items:center; gap:5px;
+      font-size:12px; color:var(--muted); font-weight:500;
+    }
+    .live-dot {
+      width:7px; height:7px; border-radius:50%;
+      background:#c8c8c8;
+    }
+    .live-dot.active {
+      background: #2da86e;
+      box-shadow: 0 0 0 0 rgba(45,168,110,.6);
+      animation: pulse 1.8s infinite;
+    }
+    .live-dot.err { background: var(--err); animation: none; }
+    @keyframes pulse {
+      0%   { box-shadow: 0 0 0 0   rgba(45,168,110,.6); }
+      70%  { box-shadow: 0 0 0 6px rgba(45,168,110,0);  }
+      100% { box-shadow: 0 0 0 0   rgba(45,168,110,0);  }
+    }
+    .quote-price { font-weight:700; font-size:15px; font-family:"Consolas","Courier New",monospace; }
+    .quote-change { font-size:13px; font-weight:700; }
+    .quote-change.up  { color: var(--ok); }
+    .quote-change.dn  { color: var(--err); }
+    .quote-change.flat{ color: var(--muted); }
+    .quote-meta { font-size:12px; color:var(--muted); }
+
+    /* ── Position Modals ── */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(18,35,62,.45);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .modal-box {
+      background: #fff; border-radius: var(--radius);
+      box-shadow: 0 12px 40px rgba(18,35,62,.22);
+      padding: 28px 28px 22px;
+      min-width: 360px; max-width: 520px; width: 100%;
+      animation: fadeUp .2s ease;
+    }
+    .modal-title {
+      font-size: 16px; font-weight: 700; margin-bottom: 20px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-close {
+      background: none; border: none; cursor: pointer;
+      font-size: 20px; color: var(--muted); padding: 0 4px; line-height: 1;
+      font-family: inherit;
+    }
+    .modal-close:hover { color: var(--ink); }
+    .form-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;
+    }
+    .form-full { grid-column: span 2; }
+    .form-field label {
+      font-size: 12px; color: var(--muted); font-weight: 600;
+      display: block; margin-bottom: 4px; letter-spacing: .2px;
+    }
+    .form-field input, .form-field select, .form-field textarea {
+      width: 100%; border: 1px solid var(--line); border-radius: 8px;
+      padding: 8px 10px; font-size: 14px; color: var(--ink); background: #fff;
+      font-family: inherit;
+    }
+    .form-field textarea { resize: vertical; min-height: 56px; }
+    .form-field input:focus, .form-field select:focus, .form-field textarea:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(4,82,184,.12);
+    }
+    .modal-actions {
+      display: flex; gap: 8px; justify-content: flex-end;
+      padding-top: 16px; border-top: 1px solid var(--line);
+    }
+    .btn.danger { background:#fff0f2; color:var(--err); border-color:#f3bcbe; }
+    .btn.danger:hover { background:#ffe3e7; }
   </style>
 </head>
 <body>
 
 <nav>
-  <div class="nav-brand">Trading Console</div>
+  <div class="nav-brand">操盤主控台</div>
   <button class="nav-tab active" data-page="pageDashboard">總覽</button>
   <button class="nav-tab" data-page="pageCandidates">候選股</button>
   <button class="nav-tab" data-page="pagePositions">持倉</button>
@@ -213,51 +386,60 @@
       <section class="card span-4">
         <h2>市場狀態</h2>
         <div class="kv">
-          <div class="k">Market Grade</div><div class="v" id="d-marketGrade">-</div>
-          <div class="k">Market Phase</div><div class="v" id="d-marketPhase">-</div>
-          <div class="k">Decision</div><div class="v" id="d-marketDecision">-</div>
-          <div class="k">Decision Lock</div><div class="v" id="d-decisionLock">-</div>
-          <div class="k">Time Decay</div><div class="v" id="d-timeDecay">-</div>
-          <div class="k">Hourly Gate</div><div class="v" id="d-hourlyGate">-</div>
-          <div class="k">Monitor Mode</div><div class="v" id="d-monitorMode">-</div>
+          <div class="k">市場等級</div><div class="v" id="d-marketGrade">-</div>
+          <div class="k">行情階段</div><div class="v" id="d-marketPhase">-</div>
+          <div class="k">決策方向</div><div class="v" id="d-marketDecision">-</div>
+          <div class="k">決策鎖定</div><div class="v" id="d-decisionLock">-</div>
+          <div class="k">時間衰減</div><div class="v" id="d-timeDecay">-</div>
+          <div class="k">整點閘道</div><div class="v" id="d-hourlyGate">-</div>
+          <div class="k">監控模式</div><div class="v" id="d-monitorMode">-</div>
         </div>
       </section>
 
       <section class="card span-4">
         <h2>最新決策</h2>
         <div class="kv">
-          <div class="k">Final Decision</div><div class="v" id="d-finalDecision">-</div>
-          <div class="k">Summary</div><div class="v" id="d-finalSummary">-</div>
-          <div class="k">Hourly Gate</div><div class="v" id="d-latestHourly">-</div>
-          <div class="k">Hourly Event</div><div class="v" id="d-hourlyEvent">-</div>
-          <div class="k">Monitor Mode</div><div class="v" id="d-latestMonitor">-</div>
-          <div class="k">Monitor Event</div><div class="v" id="d-monitorEvent">-</div>
-          <div class="k">Notification</div><div class="v" id="d-latestNotice">-</div>
+          <div class="k">最終決策</div><div class="v" id="d-finalDecision">-</div>
+          <div class="k">決策摘要</div><div class="v" id="d-finalSummary">-</div>
+          <div class="k">整點閘道</div><div class="v" id="d-latestHourly">-</div>
+          <div class="k">整點事件</div><div class="v" id="d-hourlyEvent">-</div>
+          <div class="k">監控模式</div><div class="v" id="d-latestMonitor">-</div>
+          <div class="k">監控事件</div><div class="v" id="d-monitorEvent">-</div>
+          <div class="k">最新通知</div><div class="v" id="d-latestNotice">-</div>
         </div>
       </section>
 
       <section class="card span-4">
         <h2>損益總覽</h2>
         <div class="kv">
-          <div class="k">Total Realized</div><div class="v" id="d-pnlRealized">-</div>
-          <div class="k">Total Unrealized</div><div class="v" id="d-pnlUnrealized">-</div>
-          <div class="k">Avg Win Rate</div><div class="v" id="d-pnlWinRate">-</div>
-          <div class="k">Days</div><div class="v" id="d-pnlDays">-</div>
+          <div class="k">總已實現損益</div><div class="v" id="d-pnlRealized">-</div>
+          <div class="k">總未實現損益</div><div class="v" id="d-pnlUnrealized">-</div>
+          <div class="k">平均勝率</div><div class="v" id="d-pnlWinRate">-</div>
+          <div class="k">交易天數</div><div class="v" id="d-pnlDays">-</div>
         </div>
       </section>
 
       <section class="card span-6">
-        <h2>候選股（Top）</h2>
+        <h2>候選股即時報價
+          <span class="live-status" style="margin-left:auto">
+            <span class="live-dot" id="d-liveDot"></span>
+            <span id="d-liveStatus">--</span>
+          </span>
+        </h2>
         <table>
-          <thead><tr><th>代號</th><th>名稱</th><th>Score</th><th>RR</th><th>模式</th><th>納入計畫</th></tr></thead>
-          <tbody id="d-candidatesBody"></tbody>
+          <thead><tr>
+            <th>代號</th><th>名稱</th><th>現價</th><th>漲跌</th><th>日高</th><th>日低</th><th>量(張)</th>
+          </tr></thead>
+          <tbody id="d-liveBody"></tbody>
         </table>
       </section>
 
       <section class="card span-6">
         <h2>持倉中</h2>
         <table>
-          <thead><tr><th>代號</th><th>方向</th><th>股數</th><th>均價</th><th>開倉時間</th></tr></thead>
+          <thead><tr>
+            <th>代號</th><th>方向</th><th>股數</th><th>均價</th><th>開倉時間</th>
+          </tr></thead>
           <tbody id="d-positionsBody"></tbody>
         </table>
       </section>
@@ -272,7 +454,7 @@
 
       <section class="card span-6">
         <h2>系統警示</h2>
-        <div class="small" id="d-alertsMeta" style="margin-bottom:8px">無異常</div>
+        <div class="small" id="d-alertsMeta" style="margin-bottom:10px">無異常</div>
         <div id="d-alertsBody" class="alerts"></div>
       </section>
 
@@ -287,10 +469,28 @@
     <div class="grid">
 
       <section class="card span-12">
-        <h2>目前候選股</h2>
+        <h2>即時報價
+          <span class="live-status" style="margin-left:auto">
+            <span class="live-dot" id="c-liveDot"></span>
+            <span id="c-liveStatus">--</span>
+          </span>
+        </h2>
         <table>
           <thead><tr>
-            <th>代號</th><th>名稱</th><th>Score</th><th>RR</th>
+            <th>代號</th><th>名稱</th>
+            <th>現價</th><th>漲跌</th><th>漲跌幅</th>
+            <th>開盤</th><th>日高</th><th>日低</th>
+            <th>量(張)</th><th>昨收</th><th>更新</th>
+          </tr></thead>
+          <tbody id="c-liveBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-12">
+        <h2>目前候選股（研究資料）</h2>
+        <table>
+          <thead><tr>
+            <th>代號</th><th>名稱</th><th>評分</th><th>風報比</th>
             <th>估值模式</th><th>進場區間</th><th>停損</th><th>停利1</th><th>停利2</th>
             <th>納入計畫</th><th>排除原因</th>
           </tr></thead>
@@ -301,12 +501,12 @@
       <section class="card span-12">
         <h2>候選歷史</h2>
         <div class="toolbar">
-          <label>代號 <input type="text" id="c-histSymbol" placeholder="2330" style="width:80px" /></label>
+          <label>代號 <input type="text" id="c-histSymbol" placeholder="2330" style="width:90px" /></label>
           <button class="btn" id="c-histLoad">查詢</button>
         </div>
         <table>
           <thead><tr>
-            <th>日期</th><th>代號</th><th>名稱</th><th>Score</th><th>RR</th><th>估值模式</th><th>納入計畫</th>
+            <th>日期</th><th>代號</th><th>名稱</th><th>評分</th><th>風報比</th><th>估值模式</th><th>納入計畫</th>
           </tr></thead>
           <tbody id="c-histBody"></tbody>
         </table>
@@ -323,14 +523,19 @@
     <div class="grid">
 
       <section class="card span-12">
-        <h2>持倉中</h2>
+        <h2>持倉中
+          <button class="btn primary" id="p-btnAdd" style="margin-left:auto;padding:5px 14px;font-size:13px">＋ 新增持倉</button>
+        </h2>
         <div class="toolbar">
-          <label>代號 <input type="text" id="p-openSymbol" placeholder="全部" style="width:80px" /></label>
+          <label>代號 <input type="text" id="p-openSymbol" placeholder="全部" style="width:90px" /></label>
           <button class="btn" id="p-openLoad">查詢</button>
         </div>
         <table>
           <thead><tr>
-            <th>代號</th><th>名稱</th><th>方向</th><th>股數</th><th>均價</th><th>開倉時間</th><th>停損</th><th>停利</th>
+            <th>代號</th><th>名稱</th><th>方向</th><th>股數</th><th>均價</th>
+            <th>停損</th><th>停利1</th><th>停利2</th>
+            <th>預估損益</th>
+            <th>開倉時間</th><th>備註</th><th style="width:130px">操作</th>
           </tr></thead>
           <tbody id="p-openBody"></tbody>
         </table>
@@ -339,14 +544,15 @@
       <section class="card span-12">
         <h2>歷史持倉</h2>
         <div class="toolbar">
-          <label>代號 <input type="text" id="p-histSymbol" placeholder="全部" style="width:80px" /></label>
+          <label>代號 <input type="text" id="p-histSymbol" placeholder="全部" style="width:90px" /></label>
           <label>起 <input type="date" id="p-histFrom" /></label>
           <label>迄 <input type="date" id="p-histTo" /></label>
           <button class="btn" id="p-histLoad">查詢</button>
         </div>
         <table>
           <thead><tr>
-            <th>開倉</th><th>代號</th><th>方向</th><th>股數</th><th>均價</th><th>收盤價</th><th>已實現損益</th><th>關閉時間</th>
+            <th>開倉日</th><th>代號</th><th>名稱</th><th>方向</th><th>股數</th>
+            <th>均價</th><th>出清價</th><th>出場原因</th><th>已實現損益</th><th>備註</th><th>平倉時間</th>
           </tr></thead>
           <tbody id="p-histBody"></tbody>
         </table>
@@ -365,7 +571,9 @@
 
     <div class="grid">
       <section class="card span-12">
-        <h2>每日損益</h2>
+        <h2>每日損益
+          <button class="btn primary" id="pnl-btnAdd" style="margin-left:auto;padding:5px 14px;font-size:13px">＋ 手動新增</button>
+        </h2>
         <div class="toolbar">
           <label>起 <input type="date" id="pnl-from" /></label>
           <label>迄 <input type="date" id="pnl-to" /></label>
@@ -373,8 +581,8 @@
         </div>
         <table>
           <thead><tr>
-            <th>日期</th><th>毛損益</th><th>手續費+稅</th><th>淨損益</th>
-            <th>筆數</th><th>獲利</th><th>虧損</th><th>備註</th>
+            <th>日期</th><th>毛損益</th><th>手續費＋稅（估）</th><th>淨損益</th>
+            <th>筆數</th><th>獲利</th><th>虧損</th><th>備註</th><th style="width:80px">操作</th>
           </tr></thead>
           <tbody id="pnl-body"></tbody>
         </table>
@@ -390,27 +598,29 @@
     <div class="grid">
 
       <section class="card span-8">
-        <h2>Final Decision 趨勢</h2>
+        <h2>最終決策趨勢</h2>
         <div id="dec-chart" class="decision-chart"></div>
         <div id="dec-summary" class="decision-summary"></div>
-        <table style="margin-top:10px">
-          <thead><tr><th>日期</th><th>決策</th><th>摘要</th><th>Market Grade</th><th>Score</th></tr></thead>
+        <table style="margin-top:12px">
+          <thead><tr>
+            <th>日期</th><th>決策</th><th>摘要</th><th>市場等級</th><th>評分</th>
+          </tr></thead>
           <tbody id="dec-tableBody"></tbody>
         </table>
       </section>
 
       <section class="card span-4">
-        <h2>Hourly Gate 歷史</h2>
+        <h2>整點閘道歷史</h2>
         <table>
-          <thead><tr><th>時間</th><th>Gate</th><th>事件</th></tr></thead>
+          <thead><tr><th>時間</th><th>閘道</th><th>事件</th></tr></thead>
           <tbody id="dec-hourlyBody"></tbody>
         </table>
       </section>
 
       <section class="card span-6">
-        <h2>Monitor 決策歷史</h2>
+        <h2>監控決策歷史</h2>
         <table>
-          <thead><tr><th>時間</th><th>Mode</th><th>事件</th><th>Action</th></tr></thead>
+          <thead><tr><th>時間</th><th>模式</th><th>事件</th><th>動作</th></tr></thead>
           <tbody id="dec-monitorBody"></tbody>
         </table>
       </section>
@@ -435,29 +645,41 @@
 
       <section class="card span-4">
         <h2>觸發 AI 研究</h2>
-        <div style="display:grid;gap:8px;font-size:13px">
+        <div style="display:grid;gap:14px;font-size:14px">
           <div>
-            <div class="k" style="margin-bottom:4px">盤前研究</div>
-            <div class="toolbar">
+            <div class="section-title">盤前研究</div>
+            <div class="toolbar" style="margin-bottom:8px">
               <input type="text" id="ai-txf" placeholder="台指期摘要（可留空）" style="flex:1;min-width:0" />
             </div>
             <button class="btn primary" id="ai-btnPremarket" style="width:100%">執行盤前研究</button>
           </div>
-          <hr style="border:none;border-top:1px solid var(--line)" />
           <div>
-            <div class="k" style="margin-bottom:4px">個股評估</div>
-            <div class="toolbar">
-              <label>代號 <input type="text" id="ai-symbol" placeholder="2330" style="width:80px" /></label>
+            <div class="section-title">個股評估</div>
+            <div class="toolbar" style="margin-bottom:8px">
+              <label>代號 <input type="text" id="ai-symbol" placeholder="2330" style="width:90px" /></label>
               <label>日期 <input type="date" id="ai-date" /></label>
             </div>
             <button class="btn primary" id="ai-btnStock" style="width:100%">執行個股評估</button>
           </div>
-          <hr style="border:none;border-top:1px solid var(--line)" />
           <div>
-            <div class="k" style="margin-bottom:4px">最終決策研究</div>
+            <div class="section-title">最終決策研究</div>
             <button class="btn primary" id="ai-btnFinalDecision" style="width:100%">執行最終決策研究</button>
           </div>
-          <div id="ai-triggerStatus" class="small" style="color:var(--ok)"></div>
+          <div>
+            <div class="section-title">匯入研究報告（claude-research-latest.md）</div>
+            <div class="toolbar" style="margin-bottom:8px">
+              <label>類型
+                <select id="ai-importType" style="font-family:inherit;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:14px">
+                  <option value="T86_TOMORROW">明日策略（T86）</option>
+                  <option value="POSTMARKET">盤後（POSTMARKET）</option>
+                  <option value="PREMARKET">盤前（PREMARKET）</option>
+                </select>
+              </label>
+              <label>日期 <input type="date" id="ai-importDate" style="font-family:inherit;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:14px" /></label>
+            </div>
+            <button class="btn" id="ai-btnImport" style="width:100%">匯入最新研究報告</button>
+          </div>
+          <div id="ai-triggerStatus" style="font-size:13px;color:var(--ok);font-weight:600"></div>
         </div>
       </section>
 
@@ -468,11 +690,13 @@
           <label>類型
             <select id="ai-filterType">
               <option value="">全部</option>
-              <option value="PREMARKET">PREMARKET</option>
-              <option value="STOCK">STOCK</option>
-              <option value="FINAL_DECISION">FINAL_DECISION</option>
-              <option value="HOURLY_GATE">HOURLY_GATE</option>
-              <option value="MONITOR">MONITOR</option>
+              <option value="PREMARKET">盤前（PREMARKET）</option>
+              <option value="STOCK">個股（STOCK）</option>
+              <option value="FINAL_DECISION">最終決策</option>
+              <option value="HOURLY_GATE">整點閘道</option>
+              <option value="MONITOR">監控</option>
+              <option value="POSTMARKET">盤後（POSTMARKET）</option>
+              <option value="T86_TOMORROW">明日策略（T86）</option>
             </select>
           </label>
           <button class="btn" id="ai-loadLogs">查詢</button>
@@ -497,26 +721,26 @@
           <div class="k">LINE</div><div class="v" id="sys-probeLine">-</div>
           <div class="k">CLAUDE</div><div class="v" id="sys-probeClaude">-</div>
           <div class="k">查詢時間</div><div class="v mono small" id="sys-probeAt">-</div>
-          <div class="k">TAIFEX日期</div><div class="v mono small" id="sys-probeTaifexDate">-</div>
+          <div class="k">TAIFEX 日期</div><div class="v mono small" id="sys-probeTaifexDate">-</div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-          <button class="btn" id="sys-btnDry">Dry-Run</button>
-          <button class="btn warn-btn" id="sys-btnLine">Live LINE</button>
-          <button class="btn warn-btn" id="sys-btnClaude">Live Claude</button>
+        <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+          <button class="btn" id="sys-btnDry">乾跑測試</button>
+          <button class="btn warn-btn" id="sys-btnLine">實發 LINE</button>
+          <button class="btn warn-btn" id="sys-btnClaude">實發 Claude</button>
         </div>
       </section>
 
       <section class="card span-4">
         <h2>Migration 健康</h2>
         <table>
-          <thead><tr><th>Key</th><th>狀態</th><th>詳情</th></tr></thead>
+          <thead><tr><th>項目</th><th>狀態</th><th>詳情</th></tr></thead>
           <tbody id="sys-migrationBody"></tbody>
         </table>
       </section>
 
       <section class="card span-4">
         <h2>系統警示</h2>
-        <div class="small" id="sys-alertsMeta" style="margin-bottom:8px">無異常</div>
+        <div class="small" id="sys-alertsMeta" style="margin-bottom:10px">無異常</div>
         <div id="sys-alertsBody" class="alerts"></div>
       </section>
 
@@ -525,9 +749,9 @@
         <div class="toolbar">
           <label>筆數
             <select id="sys-probeLimit">
-              <option value="20">20</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
+              <option value="20">20 筆</option>
+              <option value="50">50 筆</option>
+              <option value="100">100 筆</option>
             </select>
           </label>
           <label><input type="checkbox" id="sys-probeFailedOnly" /> 只看失敗</label>
@@ -543,6 +767,241 @@
   </div>
 </div>
 
+<!-- ══════════════ MODAL: 手動新增損益 ══════════════ -->
+<div class="modal-overlay" id="modal-pnl-add" style="display:none" onclick="if(event.target===this)closeModal('modal-pnl-add')">
+  <div class="modal-box">
+    <div class="modal-title">
+      手動新增每日損益
+      <button class="modal-close" onclick="closeModal('modal-pnl-add')">✕</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-field form-full">
+        <label>日期 *</label>
+        <input id="pnl-ma-date" type="date" />
+      </div>
+      <div class="form-field">
+        <label>毛損益</label>
+        <input id="pnl-ma-gross" type="number" step="1" placeholder="不含費稅" />
+      </div>
+      <div class="form-field">
+        <label>費稅估算</label>
+        <input id="pnl-ma-fee" type="number" step="1" min="0" />
+      </div>
+      <div class="form-field">
+        <label>淨損益（可自動計算）</label>
+        <input id="pnl-ma-net" type="number" step="1" placeholder="留空自動算" />
+      </div>
+      <div class="form-field">
+        <label>交易筆數</label>
+        <input id="pnl-ma-count" type="number" step="1" min="0" />
+      </div>
+      <div class="form-field">
+        <label>獲利筆數</label>
+        <input id="pnl-ma-win" type="number" step="1" min="0" />
+      </div>
+      <div class="form-field">
+        <label>虧損筆數</label>
+        <input id="pnl-ma-loss" type="number" step="1" min="0" />
+      </div>
+      <div class="form-field form-full">
+        <label>備註</label>
+        <textarea id="pnl-ma-notes" rows="2" placeholder="如：券商確認版 +12,500 元"></textarea>
+      </div>
+    </div>
+    <div id="pnl-ma-err" class="errbox" style="margin-bottom:10px"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-pnl-add')">取消</button>
+      <button class="btn primary" onclick="submitPnlAdd()">新增</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ MODAL: 編輯損益 ══════════════ -->
+<div class="modal-overlay" id="modal-pnl-edit" style="display:none" onclick="if(event.target===this)closeModal('modal-pnl-edit')">
+  <div class="modal-box">
+    <div class="modal-title">
+      編輯損益 <span id="pnl-me-title" style="font-size:14px;font-weight:500;color:var(--muted)"></span>
+      <button class="modal-close" onclick="closeModal('modal-pnl-edit')">✕</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-field">
+        <label>毛損益</label>
+        <input id="pnl-me-gross" type="number" step="1" />
+      </div>
+      <div class="form-field">
+        <label>費稅估算（實際）</label>
+        <input id="pnl-me-fee" type="number" step="1" min="0" />
+      </div>
+      <div class="form-field">
+        <label>淨損益（留空自動算）</label>
+        <input id="pnl-me-net" type="number" step="1" />
+      </div>
+      <div class="form-field">
+        <label>交易筆數</label>
+        <input id="pnl-me-count" type="number" step="1" min="0" />
+      </div>
+      <div class="form-field">
+        <label>獲利筆數</label>
+        <input id="pnl-me-win" type="number" step="1" min="0" />
+      </div>
+      <div class="form-field">
+        <label>虧損筆數</label>
+        <input id="pnl-me-loss" type="number" step="1" min="0" />
+      </div>
+      <div class="form-field form-full">
+        <label>備註</label>
+        <textarea id="pnl-me-notes" rows="2"></textarea>
+      </div>
+    </div>
+    <div id="pnl-me-err" class="errbox" style="margin-bottom:10px"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-pnl-edit')">取消</button>
+      <button class="btn primary" id="pnl-me-submitBtn">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ MODAL: 新增持倉 ══════════════ -->
+<div class="modal-overlay" id="modal-add-pos" style="display:none" onclick="if(event.target===this)closeModal('modal-add-pos')">
+  <div class="modal-box">
+    <div class="modal-title">
+      新增持倉
+      <button class="modal-close" onclick="closeModal('modal-add-pos')">✕</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-field">
+        <label>代號 *</label>
+        <input id="ma-symbol" placeholder="2330" />
+      </div>
+      <div class="form-field">
+        <label>名稱</label>
+        <input id="ma-stockName" placeholder="台積電" />
+      </div>
+      <div class="form-field">
+        <label>方向 *</label>
+        <select id="ma-side">
+          <option value="LONG">做多</option>
+          <option value="SHORT">做空</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>開倉時間</label>
+        <input id="ma-openedAt" type="datetime-local" />
+      </div>
+      <div class="form-field">
+        <label>股數 *</label>
+        <input id="ma-qty" type="number" step="1" min="1" placeholder="1000" />
+      </div>
+      <div class="form-field">
+        <label>均價 *</label>
+        <input id="ma-avgCost" type="number" step="0.01" min="0.01" placeholder="500.00" />
+      </div>
+      <div class="form-field">
+        <label>停損價</label>
+        <input id="ma-stopLoss" type="number" step="0.01" min="0" />
+      </div>
+      <div class="form-field">
+        <label>停利一</label>
+        <input id="ma-tp1" type="number" step="0.01" min="0" />
+      </div>
+      <div class="form-field">
+        <label>停利二</label>
+        <input id="ma-tp2" type="number" step="0.01" min="0" />
+      </div>
+      <div class="form-field form-full">
+        <label>備註</label>
+        <textarea id="ma-note" rows="2"></textarea>
+      </div>
+    </div>
+    <div id="ma-err" class="errbox" style="margin-bottom:10px"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-add-pos')">取消</button>
+      <button class="btn primary" onclick="submitAddPosition()">新增</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ MODAL: 編輯持倉 ══════════════ -->
+<div class="modal-overlay" id="modal-edit-pos" style="display:none" onclick="if(event.target===this)closeModal('modal-edit-pos')">
+  <div class="modal-box">
+    <div class="modal-title">
+      編輯持倉 <span id="me-title" style="font-size:14px;font-weight:500;color:var(--muted)"></span>
+      <button class="modal-close" onclick="closeModal('modal-edit-pos')">✕</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-field">
+        <label>股數（加減碼後）</label>
+        <input id="me-qty" type="number" step="1" min="1" />
+      </div>
+      <div class="form-field">
+        <label>均價（加減碼後）</label>
+        <input id="me-avgCost" type="number" step="0.01" min="0.01" />
+      </div>
+      <div class="form-field">
+        <label>停損價</label>
+        <input id="me-stopLoss" type="number" step="0.01" min="0" />
+      </div>
+      <div class="form-field">
+        <label>停利一</label>
+        <input id="me-tp1" type="number" step="0.01" min="0" />
+      </div>
+      <div class="form-field">
+        <label>停利二</label>
+        <input id="me-tp2" type="number" step="0.01" min="0" />
+      </div>
+      <div class="form-field form-full">
+        <label>備註</label>
+        <textarea id="me-note" rows="2"></textarea>
+      </div>
+    </div>
+    <div id="me-err" class="errbox" style="margin-bottom:10px"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-edit-pos')">取消</button>
+      <button class="btn primary" id="me-submitBtn">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ MODAL: 出清持倉 ══════════════ -->
+<div class="modal-overlay" id="modal-close-pos" style="display:none" onclick="if(event.target===this)closeModal('modal-close-pos')">
+  <div class="modal-box">
+    <div class="modal-title">
+      出清持倉 <span id="mc-title" style="font-size:13px;font-weight:500;color:var(--muted)"></span>
+      <button class="modal-close" onclick="closeModal('modal-close-pos')">✕</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-field">
+        <label>出清價 *</label>
+        <input id="mc-closePrice" type="number" step="0.01" min="0.01" />
+      </div>
+      <div class="form-field">
+        <label>出場原因</label>
+        <select id="mc-exitReason">
+          <option value="">-- 選擇 --</option>
+          <option value="STOP_LOSS">停損</option>
+          <option value="TAKE_PROFIT_1">停利一</option>
+          <option value="TAKE_PROFIT_2">停利二</option>
+          <option value="TRAILING">移動停利</option>
+          <option value="MANUAL">手動出清</option>
+        </select>
+      </div>
+      <div class="form-field form-full">
+        <label>出清時間</label>
+        <input id="mc-closedAt" type="datetime-local" />
+      </div>
+      <div class="form-field form-full">
+        <label>備註</label>
+        <textarea id="mc-note" rows="2"></textarea>
+      </div>
+    </div>
+    <div id="mc-err" class="errbox" style="margin-bottom:10px"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-close-pos')">取消</button>
+      <button class="btn danger" id="mc-submitBtn">確認出清</button>
+    </div>
+  </div>
+</div>
+
 <script>
   /* ── helpers ── */
   const $ = id => document.getElementById(id);
@@ -550,18 +1009,73 @@
     if (v == null) return "-";
     return String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   };
-  const setText = (id, v) => { const el = $(id); if (el) el.textContent = v ?? "-"; };
+  const setText = (id, v) => { const el = $(id); if (el) el.textContent = zh(v) ?? "-"; };
   const pill = (label, cls) => `<span class="pill ${cls}">${esc(label)}</span>`;
+
+  /* ── 代碼 → 繁體中文對照表 ── */
+  const ZH_MAP = {
+    // 市場等級
+    "A": "A級（主升）", "B": "B級（震盪偏多）", "C": "C級（出貨/偏空）",
+    // 決策
+    "ENTER": "可進場", "WATCH": "僅觀察", "REST": "建議休息",
+    // 市場階段
+    "PREMARKET": "盤前", "OPEN": "盤中", "CLOSE": "收盤後",
+    "開盤洗盤期": "開盤洗盤期", "主升發動期": "主升發動期",
+    "高檔震盪期": "高檔震盪期", "出貨鈍化期": "出貨鈍化期",
+    // 決策鎖
+    "NONE": "無鎖定", "LOCKED": "已鎖定",
+    // 時間衰減
+    "EARLY": "早盤", "MID": "中盤", "LATE": "尾盤", "CLOSED": "已收盤",
+    // 整點閘道 / 監控模式
+    "ON": "開啟", "OFF": "關閉", "ACTIVE": "積極監控",
+    "SKIPPED": "略過",
+    // 持倉方向
+    "BUY": "做多", "SELL": "做空", "LONG": "做多", "SHORT": "做空",
+    // 持倉狀態
+    "OPEN": "持倉中", "OPEN_POSITION": "持倉中",
+    // 通知類型
+    "SYSTEM": "系統通知", "LINE_NOTIFY": "LINE通知",
+    "AI_RESEARCH": "AI研究", "ALERT": "警示",
+    // 探針狀態
+    "OK": "正常", "ERROR": "異常", "WARN": "警告",
+    // 估值模式（舊代碼相容）
+    "VALUE_LOW":   "低估值買進",
+    "VALUE_FAIR":  "合理估值",
+    "VALUE_STORY": "題材成長",
+    "MOMENTUM":    "動能追強",
+    "BREAKOUT":    "突破追強",
+    "REVERSAL":    "轉強進場",
+    "PULLBACK":    "回測進場",
+    "NEUTRAL":     "中性觀察",
+    // 交易決定
+    "CAN_ENTER": "可進場", "ONLY_WATCH": "僅觀察", "REST_TODAY": "今日休息",
+    // 出場原因
+    "STOP_LOSS": "停損", "TAKE_PROFIT_1": "停利一", "TAKE_PROFIT_2": "停利二",
+    "TRAILING": "移動停利", "MANUAL": "手動出清",
+  };
+
+  /* 翻譯單一值；若查不到直接回傳原值 */
+  const zh = v => {
+    if (v == null) return null;
+    const s = String(v);
+    return ZH_MAP[s] || ZH_MAP[s.toUpperCase()] || s;
+  };
+
+  /* 翻譯並 HTML escape */
+  const zhEsc = v => esc(zh(v));
+
   const statusPill = (status, success) => {
     const s = (status || "-").toUpperCase();
+    const label = zh(s) || s;
     const cls = success ? "ok" : (s === "WARN" || s === "SKIPPED" ? "warn" : "err");
-    return pill(s, cls);
+    return pill(label, cls);
   };
   const decisionPill = d => {
     const s = (d || "WATCH").toUpperCase();
-    return pill(s, s === "ENTER" ? "ok" : s === "REST" ? "err" : "warn");
+    const label = zh(s) || s;
+    return pill(label, s === "ENTER" ? "ok" : s === "REST" ? "err" : "warn");
   };
-  const numHtml = (v, id) => {
+  const numHtml = (v) => {
     if (v == null) return "-";
     const cls = Number(v) < 0 ? "num-neg" : "num-pos";
     return `<span class="${cls}">${esc(v)}</span>`;
@@ -625,29 +1139,18 @@
       setText("d-latestNotice",  dash.latestNotification?.title);
 
       // PnL
-      $("d-pnlRealized").innerHTML = numHtml(pnl.totalRealizedPnl);
+      $("d-pnlRealized").innerHTML   = numHtml(pnl.totalRealizedPnl);
       $("d-pnlUnrealized").innerHTML = numHtml(pnl.totalUnrealizedPnl);
       setText("d-pnlWinRate", pnl.avgWinRate != null ? `${pnl.avgWinRate}%` : "-");
       setText("d-pnlDays", pnl.days);
 
-      // Candidates
-      const cands = dash.candidates || [];
-      $("d-candidatesBody").innerHTML = cands.length
-        ? cands.map(c => `<tr>
-            <td class="mono">${esc(c.symbol)}</td>
-            <td>${esc(c.stockName)}</td>
-            <td>${esc(c.score)}</td>
-            <td>${esc(c.riskRewardRatio)}</td>
-            <td>${esc(c.valuationMode)}</td>
-            <td>${c.includeInFinalPlan ? pill("Y","ok") : pill("N","muted")}</td>
-          </tr>`).join("")
-        : `<tr class="empty-row"><td colspan="6">無候選股</td></tr>`;
+      // Candidates（即時報價由 fetchLiveQuotes 負責，此處略過）
 
       // Positions
       $("d-positionsBody").innerHTML = (pos || []).length
         ? (pos || []).map(p => `<tr>
             <td class="mono">${esc(p.symbol)}</td>
-            <td>${esc(p.side)}</td>
+            <td>${zhEsc(p.side)}</td>
             <td>${esc(p.qty)}</td>
             <td>${esc(p.avgCost)}</td>
             <td class="small">${fmtTime(p.openedAt)}</td>
@@ -658,7 +1161,7 @@
       $("d-notificationsBody").innerHTML = (notifs || []).length
         ? (notifs || []).map(n => `<tr>
             <td class="small mono">${fmtTime(n.eventTime)}</td>
-            <td>${esc(n.notificationType)}</td>
+            <td>${zhEsc(n.notificationType)}</td>
             <td>${esc(n.title)}</td>
           </tr>`).join("")
         : `<tr class="empty-row"><td colspan="3">無通知</td></tr>`;
@@ -670,7 +1173,6 @@
 
   function renderDashAlerts(extra) {
     const alerts = [];
-    // add any passed alerts
     if (extra.migration === false) alerts.push({ level:"err", head:"Migration", body:"有 migration 項目未通過" });
     const body = $("d-alertsBody");
     if (!alerts.length) {
@@ -699,12 +1201,12 @@
             <td>${esc(c.stockName)}</td>
             <td>${esc(c.score)}</td>
             <td>${esc(c.riskRewardRatio)}</td>
-            <td>${esc(c.valuationMode)}</td>
+            <td>${zhEsc(c.valuationMode)}</td>
             <td>${esc(c.entryPriceZone)}</td>
             <td>${esc(c.stopLossPrice)}</td>
             <td>${esc(c.takeProfit1)}</td>
             <td>${esc(c.takeProfit2)}</td>
-            <td>${c.includeInFinalPlan ? pill("Y","ok") : pill("N","muted")}</td>
+            <td>${c.includeInFinalPlan ? pill("納入","ok") : pill("未納入","muted")}</td>
             <td class="small">${esc(c.rejectReason)}</td>
           </tr>`).join("")
         : `<tr class="empty-row"><td colspan="11">目前無候選股</td></tr>`;
@@ -719,13 +1221,13 @@
       const data = await api(url);
       $("c-histBody").innerHTML = (data || []).length
         ? (data || []).map(c => `<tr>
-            <td class="mono">${fmtDate(c.createdAt)}</td>
+            <td class="mono">${fmtDate(c.tradingDate)}</td>
             <td class="mono">${esc(c.symbol)}</td>
             <td>${esc(c.stockName)}</td>
             <td>${esc(c.score)}</td>
             <td>${esc(c.riskRewardRatio)}</td>
-            <td>${esc(c.valuationMode)}</td>
-            <td>${c.includeInFinalPlan ? pill("Y","ok") : pill("N","muted")}</td>
+            <td>${zhEsc(c.valuationMode)}</td>
+            <td>${c.includeInFinalPlan ? pill("納入","ok") : pill("未納入","muted")}</td>
           </tr>`).join("")
         : `<tr class="empty-row"><td colspan="7">無資料</td></tr>`;
     } catch(e) { showErr("errBoxCand", `載入失敗：${e.message}`); }
@@ -736,24 +1238,61 @@
   /* ─────────────────────────────────────────────
      PAGE: Positions
   ───────────────────────────────────────────── */
+  let _openPosCache = {};   // id -> PositionResponse，供 modal 使用
+
   async function loadOpenPositions() {
     clearErr("errBoxPos");
     try {
       const sym = $("p-openSymbol").value.trim();
       const url = `/api/positions/open?size=50${sym ? `&symbol=${encodeURIComponent(sym)}` : ""}`;
       const data = await api(url);
+      _openPosCache = {};
+      (data || []).forEach(p => { _openPosCache[p.id] = p; });
+
+      // 抓現價（失敗不影響持倉顯示）
+      const liveMap = {};
+      if ((data || []).length) {
+        const symbolsParam = [...new Set((data || []).map(p => p.symbol))].join(",");
+        try {
+          const quotes = await api(`/api/positions/live-quotes?symbols=${encodeURIComponent(symbolsParam)}`);
+          (quotes || []).forEach(q => { liveMap[q.symbol] = q; });
+        } catch(_) { /* ignore */ }
+      }
+
       $("p-openBody").innerHTML = (data || []).length
-        ? (data || []).map(p => `<tr>
-            <td class="mono">${esc(p.symbol)}</td>
-            <td>${esc(p.stockName)}</td>
-            <td>${esc(p.side)}</td>
-            <td>${esc(p.qty)}</td>
-            <td>${esc(p.avgCost)}</td>
-            <td class="small mono">${fmtTime(p.openedAt)}</td>
-            <td>${esc(p.stopLossPrice)}</td>
-            <td>${esc(p.takeProfitPrice)}</td>
-          </tr>`).join("")
-        : `<tr class="empty-row"><td colspan="8">無持倉</td></tr>`;
+        ? (data || []).map(p => {
+            const q = liveMap[p.symbol];
+            const cur = q?.currentPrice ?? null;
+            let unrealized = null;
+            if (cur != null && p.avgCost != null && p.qty != null) {
+              const isShort = (p.side || "").toUpperCase() === "SHORT" || p.side === "做空";
+              const diff = isShort ? (Number(p.avgCost) - cur) : (cur - Number(p.avgCost));
+              unrealized = Math.round(diff * Number(p.qty));
+            }
+            const pnlCell = unrealized != null
+              ? `${numHtml(unrealized)}<br><span class="quote-meta">@${fmtPrice(cur)}</span>`
+              : `<span class="quote-meta">--</span>`;
+            return `<tr>
+              <td class="mono">${esc(p.symbol)}</td>
+              <td>${esc(p.stockName)}</td>
+              <td>${zhEsc(p.side)}</td>
+              <td>${esc(p.qty)}</td>
+              <td>${esc(p.avgCost)}</td>
+              <td class="${p.stopLossPrice ? 'num-neg' : ''}">${esc(p.stopLossPrice)}</td>
+              <td>${esc(p.takeProfit1)}</td>
+              <td>${esc(p.takeProfit2)}</td>
+              <td style="text-align:right">${pnlCell}</td>
+              <td class="small mono">${fmtTime(p.openedAt)}</td>
+              <td class="small">${esc(p.note)}</td>
+              <td style="white-space:nowrap">
+                <button class="btn" style="padding:3px 10px;font-size:12px;margin-right:4px"
+                  onclick="openEditModal(${p.id})">編輯</button>
+                <button class="btn danger" style="padding:3px 10px;font-size:12px"
+                  onclick="openCloseModal(${p.id})">出清</button>
+              </td>
+            </tr>`;
+          }).join("")
+        : `<tr class="empty-row"><td colspan="12">無持倉</td></tr>`;
     } catch(e) { showErr("errBoxPos", `載入失敗：${e.message}`); }
   }
 
@@ -772,19 +1311,23 @@
         ? (data || []).map(p => `<tr>
             <td class="mono">${fmtDate(p.openedAt)}</td>
             <td class="mono">${esc(p.symbol)}</td>
-            <td>${esc(p.side)}</td>
+            <td>${esc(p.stockName)}</td>
+            <td>${zhEsc(p.side)}</td>
             <td>${esc(p.qty)}</td>
             <td>${esc(p.avgCost)}</td>
             <td>${esc(p.closePrice)}</td>
+            <td class="small">${zhEsc(p.exitReason)}</td>
             <td>${numHtml(p.realizedPnl)}</td>
+            <td class="small">${esc(p.note)}</td>
             <td class="small mono">${fmtTime(p.closedAt)}</td>
           </tr>`).join("")
-        : `<tr class="empty-row"><td colspan="8">無資料</td></tr>`;
+        : `<tr class="empty-row"><td colspan="11">無資料</td></tr>`;
     } catch(e) { showErr("errBoxPos", `載入失敗：${e.message}`); }
   }
 
   $("p-openLoad").addEventListener("click", loadOpenPositions);
   $("p-histLoad").addEventListener("click", loadPositionHistory);
+  $("p-btnAdd").addEventListener("click", openAddModal);
 
   /* ─────────────────────────────────────────────
      PAGE: PnL
@@ -792,7 +1335,7 @@
   async function loadPnl() {
     clearErr("errBoxPnl");
     try {
-      const [summary, history] = await Promise.all([
+      const [summary] = await Promise.all([
         api("/api/pnl/summary?days=90"),
         loadPnlHistory()
       ]);
@@ -802,10 +1345,10 @@
 
   function renderPnlStats(s) {
     const stats = [
-      { label:"Total Realized", value: s.totalRealizedPnl, colored: true },
-      { label:"Avg Win Rate",   value: s.avgWinRate != null ? `${s.avgWinRate}%` : null },
-      { label:"Days",           value: s.days },
-      { label:"Unrealized",     value: s.totalUnrealizedPnl, colored: true }
+      { label:"總已實現損益", value: s.totalRealizedPnl, colored: true },
+      { label:"平均勝率",     value: s.avgWinRate != null ? `${s.avgWinRate}%` : null },
+      { label:"交易天數",     value: s.days },
+      { label:"未實現損益",   value: s.totalUnrealizedPnl, colored: true }
     ];
     $("pnl-statRow").innerHTML = stats.map(st => {
       const cls = st.colored && st.value != null
@@ -817,6 +1360,8 @@
     }).join("");
   }
 
+  let _pnlCache = {};   // id -> DailyPnlResponse
+
   async function loadPnlHistory() {
     clearErr("errBoxPnl");
     const from = $("pnl-from").value;
@@ -826,23 +1371,28 @@
     if (to)   params.set("dateTo", to);
     try {
       const data = await api(`/api/pnl/history?${params}`);
+      _pnlCache = {};
+      (data || []).forEach(r => { _pnlCache[r.id] = r; });
       $("pnl-body").innerHTML = (data || []).length
         ? (data || []).map(r => `<tr>
             <td class="mono">${fmtDate(r.tradingDate)}</td>
             <td>${numHtml(r.grossPnl)}</td>
-            <td>${esc(r.estimatedFeeAndTax)}</td>
+            <td class="quote-meta" style="font-size:13px">${esc(r.estimatedFeeAndTax)}</td>
             <td>${numHtml(r.netPnl)}</td>
             <td>${esc(r.tradeCount)}</td>
-            <td>${esc(r.winCount)}</td>
-            <td>${esc(r.lossCount)}</td>
+            <td class="${r.winCount ? 'num-pos' : ''}">${esc(r.winCount)}</td>
+            <td class="${r.lossCount ? 'num-neg' : ''}">${esc(r.lossCount)}</td>
             <td class="small">${esc(r.notes)}</td>
+            <td><button class="btn" style="padding:3px 10px;font-size:12px"
+              onclick="openPnlEditModal(${r.id})">編輯</button></td>
           </tr>`).join("")
-        : `<tr class="empty-row"><td colspan="8">無資料</td></tr>`;
+        : `<tr class="empty-row"><td colspan="9">無資料</td></tr>`;
       return data;
     } catch(e) { showErr("errBoxPnl", `載入失敗：${e.message}`); }
   }
 
   $("pnl-load").addEventListener("click", loadPnlHistory);
+  $("pnl-btnAdd").addEventListener("click", openPnlAddModal);
 
   /* ─────────────────────────────────────────────
      PAGE: Decisions
@@ -857,7 +1407,6 @@
         api("/api/notifications?limit=20")
       ]);
 
-      // Chart + table
       renderDecisionChart(history || []);
 
       $("dec-hourlyBody").innerHTML = (hourly || []).length
@@ -880,7 +1429,7 @@
       $("dec-notifBody").innerHTML = (notifs || []).length
         ? (notifs || []).map(n => `<tr>
             <td class="mono small">${fmtTime(n.eventTime)}</td>
-            <td>${esc(n.notificationType)}</td>
+            <td>${zhEsc(n.notificationType)}</td>
             <td>${esc(n.title)}</td>
             <td class="small">${esc(n.channel)}</td>
           </tr>`).join("")
@@ -890,7 +1439,7 @@
   }
 
   function renderDecisionChart(rows) {
-    const chart  = $("dec-chart");
+    const chart   = $("dec-chart");
     const summary = $("dec-summary");
     const tbody   = $("dec-tableBody");
     if (!rows.length) {
@@ -906,7 +1455,7 @@
       if (d==="ENTER") enter++;
       else if (d==="REST") rest++;
       else watch++;
-      const h = Math.max(8, Math.round(((i+1)/max)*110));
+      const h = Math.max(8, Math.round(((i+1)/max)*120));
       const cls = d==="ENTER"?"enter":d==="REST"?"rest":"watch";
       return `<div class="decision-col" title="${esc(r.tradingDate)} ${esc(d)}">
         <div class="decision-bar ${cls}" style="height:${h}px"></div>
@@ -914,9 +1463,9 @@
       </div>`;
     }).join("");
     summary.innerHTML = `
-      <span class="pill ok">ENTER ${enter}</span>
-      <span class="pill warn">WATCH ${watch}</span>
-      <span class="pill err">REST ${rest}</span>`;
+      <span class="pill ok">可進場 ${enter}</span>
+      <span class="pill warn">僅觀察 ${watch}</span>
+      <span class="pill err">建議休息 ${rest}</span>`;
     tbody.innerHTML = rows.slice(0,15).map(r => `<tr>
       <td class="mono">${fmtDate(r.tradingDate)}</td>
       <td>${decisionPill(r.decision)}</td>
@@ -931,6 +1480,10 @@
   ───────────────────────────────────────────── */
   async function loadAiResearch() {
     clearErr("errBoxAi");
+    // 預設今日
+    if (!$("ai-filterDate").value) {
+      $("ai-filterDate").value = new Date().toLocaleDateString("sv-SE");
+    }
     const date = $("ai-filterDate").value;
     const type = $("ai-filterType").value;
     const params = new URLSearchParams();
@@ -940,28 +1493,62 @@
       const data = await api(`/api/ai/research?${params}`);
       const el = $("ai-logsBody");
       if (!data || !data.length) {
-        el.innerHTML = `<div class="small" style="color:var(--muted)">無研究記錄</div>`;
+        el.innerHTML = `<div class="small" style="color:var(--muted);padding:16px 0">當日無研究記錄</div>`;
         return;
       }
-      el.innerHTML = (data || []).map(r => `
+      el.innerHTML = (data || []).map((r, i) => {
+        const content   = r.researchResult || r.responseContent || r.content || "(無內容)";
+        const tokens    = r.tokensUsed ?? r.totalTokens;
+        const dateLabel = r.tradingDate ? fmtDate(r.tradingDate) : "";
+        const timeLabel = r.createdAt   ? fmtTime(r.createdAt)   : dateLabel;
+        const id = `ai-body-${i}`;
+        const promptId = `ai-prompt-${i}`;
+        const hasPrompt = !!(r.promptSummary);
+        return `
         <div class="ai-log-item">
           <div class="ai-log-head">
-            <span>${esc(r.researchType)} — ${esc(r.symbol||"市場")} — ${fmtTime(r.createdAt)}</span>
-            <span class="small">${esc(r.model)} / ${esc(r.totalTokens)} tokens</span>
+            <span>
+              <span class="tag">${esc(r.researchType)}</span>
+              &nbsp;${esc(r.symbol || "市場")} — ${timeLabel}
+            </span>
+            <span class="small">${r.model && r.model !== "N/A" ? esc(r.model) + " / " : ""}${tokens != null ? tokens + " tokens" : ""}</span>
           </div>
-          <div class="ai-log-body">${esc(r.responseContent)}</div>
-        </div>`).join("");
+          ${hasPrompt ? `<div style="margin-bottom:6px"><span class="ai-log-toggle" onclick="toggleAiLog('${promptId}', this)" style="font-size:11px;color:var(--muted)">▶ 查看 Prompt</span><div class="ai-log-body" id="${promptId}" style="max-height:0;overflow:hidden;color:var(--muted)">${esc(r.promptSummary)}</div></div>` : ""}
+          <div class="ai-log-body" id="${id}">${esc(content)}</div>
+          <div class="ai-log-toggle" onclick="toggleAiLog('${id}', this)">▼ 展開全文</div>
+        </div>`;
+      }).join("");
     } catch(e) { showErr("errBoxAi", `載入失敗：${e.message}`); }
   }
 
+  function toggleAiLog(id, btn) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    // prompt 區塊用 max-height inline style 控制（初始 0）
+    if (el.style.maxHeight === "0px" || el.style.maxHeight === "0") {
+      el.style.maxHeight = "";
+      el.style.overflow  = "";
+      btn.textContent = btn.textContent.replace("▶","▼");
+    } else if (el.style.maxHeight === "none" || el.classList.contains("expanded")) {
+      el.classList.remove("expanded");
+      btn.textContent = "▼ 展開全文";
+    } else {
+      el.classList.add("expanded");
+      btn.textContent = "▲ 收合";
+    }
+  }
+
   async function triggerAi(url, body, label) {
-    $("ai-triggerStatus").textContent = `${label} 執行中...`;
+    $("ai-triggerStatus").textContent = `⏳ ${label} 執行中...`;
+    $("ai-triggerStatus").style.color = "var(--warn)";
     try {
       await api(url, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body||{}) });
-      $("ai-triggerStatus").textContent = `${label} 完成`;
+      $("ai-triggerStatus").textContent = `✅ ${label} 完成`;
+      $("ai-triggerStatus").style.color = "var(--ok)";
       await loadAiResearch();
     } catch(e) {
-      $("ai-triggerStatus").textContent = `${label} 失敗：${e.message}`;
+      $("ai-triggerStatus").textContent = `❌ ${label} 失敗：${e.message}`;
+      $("ai-triggerStatus").style.color = "var(--err)";
       showErr("errBoxAi", `${label} 失敗：${e.message}`);
     }
   }
@@ -981,6 +1568,36 @@
   });
   $("ai-loadLogs").addEventListener("click", loadAiResearch);
 
+  // 個股評估 & 匯入日期預設今日
+  const _todaySv = new Date().toLocaleDateString("sv-SE");
+  $("ai-date").value       = _todaySv;
+  $("ai-importDate").value = _todaySv;
+
+  $("ai-btnImport").addEventListener("click", async () => {
+    const type = $("ai-importType").value;
+    const date = $("ai-importDate").value || _todaySv;
+    const filePath = "/mnt/d/ai/stock/claude-research-latest.md";
+    const params = new URLSearchParams({ filePath, researchType: type, tradingDate: date });
+    $("ai-triggerStatus").textContent = "⏳ 匯入中...";
+    $("ai-triggerStatus").style.color = "var(--warn)";
+    try {
+      const r = await api(`/api/ai/research/import-file?${params}`, { method: "POST" });
+      if (r.success) {
+        $("ai-triggerStatus").textContent = `✅ 匯入完成（${r.contentLength} 字元，id=${r.id}）`;
+        $("ai-triggerStatus").style.color = "var(--ok)";
+        // 自動切到對應日期顯示
+        $("ai-filterDate").value = date;
+        await loadAiResearch();
+      } else {
+        throw new Error(r.error || "未知錯誤");
+      }
+    } catch(e) {
+      $("ai-triggerStatus").textContent = `❌ 匯入失敗：${e.message}`;
+      $("ai-triggerStatus").style.color = "var(--err)";
+      showErr("errBoxAi", `匯入失敗：${e.message}`);
+    }
+  });
+
   /* ─────────────────────────────────────────────
      PAGE: System
   ───────────────────────────────────────────── */
@@ -997,7 +1614,7 @@
     const data = await api("/api/system/migration/health");
     $("sys-migrationBody").innerHTML = (data.checks||[]).map(c => `<tr>
       <td class="mono">${esc(c.key)}</td>
-      <td>${statusPill(c.ok?"OK":"MISSING", c.ok)}</td>
+      <td>${statusPill(c.ok?"OK":"缺失", c.ok)}</td>
       <td class="small">${esc(c.detail)}</td>
     </tr>`).join("");
     renderSysAlerts(data);
@@ -1009,13 +1626,13 @@
     try {
       const params = new URLSearchParams({ liveLine: String(liveLine), liveClaude: String(liveClaude) });
       const p = await api(`/api/system/external/probe?${params}`);
-      $("sys-probeTaifex").innerHTML     = statusPill(p.taifex?.status,  p.taifex?.success);
-      $("sys-probeLine").innerHTML       = statusPill(p.line?.status,    p.line?.success);
-      $("sys-probeClaude").innerHTML     = statusPill(p.claude?.status,  p.claude?.success);
+      $("sys-probeTaifex").innerHTML = statusPill(p.taifex?.status, p.taifex?.success);
+      $("sys-probeLine").innerHTML   = statusPill(p.line?.status,   p.line?.success);
+      $("sys-probeClaude").innerHTML = statusPill(p.claude?.status, p.claude?.success);
       setText("sys-probeAt",         p.checkedAt);
       setText("sys-probeTaifexDate", p.taifexDate);
       await loadProbeHistory();
-    } catch(e) { showErr("errBoxSys", `Probe 失敗：${e.message}`); }
+    } catch(e) { showErr("errBoxSys", `探針失敗：${e.message}`); }
   }
 
   async function loadProbeHistory() {
@@ -1025,9 +1642,9 @@
     renderProbeHistTable();
     if (sysProbeHistData.length) {
       const p = sysProbeHistData[0];
-      $("sys-probeTaifex").innerHTML     = statusPill(p.taifex?.status,  p.taifex?.success);
-      $("sys-probeLine").innerHTML       = statusPill(p.line?.status,    p.line?.success);
-      $("sys-probeClaude").innerHTML     = statusPill(p.claude?.status,  p.claude?.success);
+      $("sys-probeTaifex").innerHTML = statusPill(p.taifex?.status, p.taifex?.success);
+      $("sys-probeLine").innerHTML   = statusPill(p.line?.status,   p.line?.success);
+      $("sys-probeClaude").innerHTML = statusPill(p.claude?.status, p.claude?.success);
       setText("sys-probeAt",         p.checkedAt);
       setText("sys-probeTaifexDate", p.taifexDate);
     }
@@ -1049,9 +1666,9 @@
           const cls = hasErr?"row-err":hasWarn?"row-warn":"";
           return `<tr class="${cls}">
             <td class="mono small">${fmtTime(r.checkedAt)}</td>
-            <td>${statusPill(r.taifex?.status,  r.taifex?.success)}</td>
-            <td>${statusPill(r.line?.status,    r.line?.success)}</td>
-            <td>${statusPill(r.claude?.status,  r.claude?.success)}</td>
+            <td>${statusPill(r.taifex?.status, r.taifex?.success)}</td>
+            <td>${statusPill(r.line?.status,   r.line?.success)}</td>
+            <td>${statusPill(r.claude?.status, r.claude?.success)}</td>
           </tr>`;
         }).join("")
       : `<tr class="empty-row"><td colspan="4">無記錄</td></tr>`;
@@ -1061,7 +1678,7 @@
     const alerts = [];
     if (migration && !migration.ok) {
       (migration.checks||[]).filter(c => !c.ok).forEach(c => {
-        alerts.push({ level:"err", head:"Migration Health", body:`${c.key} → ${c.detail}` });
+        alerts.push({ level:"err", head:"Migration 健康", body:`${c.key} → ${c.detail}` });
       });
     }
     sysProbeHistData.slice(0,5).forEach(p => {
@@ -1069,7 +1686,7 @@
         if (!item) return;
         const s = (item.status||"").toUpperCase();
         if (s==="SKIPPED" || item.success===true) return;
-        alerts.push({ level:s==="WARN"?"warn":"err", head:`Probe ${name}`, body:`${fmtTime(p.checkedAt)} ${s} ${item.detail||""}` });
+        alerts.push({ level:s==="WARN"?"warn":"err", head:`探針 ${name}`, body:`${fmtTime(p.checkedAt)} ${s} ${item.detail||""}` });
       });
     });
     const body = $("sys-alertsBody");
@@ -1093,6 +1710,332 @@
   $("sys-probeHistLoad").addEventListener("click", loadProbeHistory);
 
   /* ─────────────────────────────────────────────
+     Live Quotes（即時報價輪詢）
+  ───────────────────────────────────────────── */
+  const _liveCache = {};          // { symbol -> lastPrice }
+  let   _liveTimer = null;
+
+  function fmtPrice(v) {
+    if (v == null) return "-";
+    return Number(v).toLocaleString("zh-TW", { minimumFractionDigits:2, maximumFractionDigits:2 });
+  }
+  function fmtVol(v) {
+    if (v == null) return "-";
+    return Number(v).toLocaleString("zh-TW");
+  }
+  function changeClass(pct) {
+    if (pct == null) return "flat";
+    return pct > 0 ? "up" : pct < 0 ? "dn" : "flat";
+  }
+  function changeSign(v) {
+    if (v == null) return "-";
+    return (v > 0 ? "▲" : v < 0 ? "▼" : "") + Math.abs(v).toFixed(2);
+  }
+  function changePctText(pct) {
+    if (pct == null) return "";
+    return (pct > 0 ? "+" : "") + pct.toFixed(2) + "%";
+  }
+
+  function renderLiveRow(q, showPct) {
+    const cls = changeClass(q.changePercent);
+    const priceId = `lq-price-${q.symbol}`;
+    return `<tr id="lq-row-${q.symbol}">
+      <td class="mono">${esc(q.symbol)}</td>
+      <td>${esc(q.stockName)}</td>
+      <td id="${priceId}" class="quote-price ${cls === "up" ? "num-pos" : cls === "dn" ? "num-neg" : ""}">${fmtPrice(q.currentPrice)}</td>
+      <td class="quote-change ${cls}">${changeSign(q.changeAmount)} ${showPct ? changePctText(q.changePercent) : ""}</td>
+      ${showPct ? `<td class="quote-meta">${fmtPrice(q.open)}</td>` : ""}
+      <td class="quote-meta">${fmtPrice(q.dayHigh)}</td>
+      <td class="quote-meta">${fmtPrice(q.dayLow)}</td>
+      <td class="quote-meta">${fmtVol(q.volume)}</td>
+      ${showPct ? `<td class="quote-meta">${fmtPrice(q.prevClose)}</td>` : ""}
+      ${showPct ? `<td class="quote-meta" style="font-size:11px">${q.tradeTime || "--"}</td>` : ""}
+    </tr>`;
+  }
+
+  function applyFlash(symbol, newPrice) {
+    const prev = _liveCache[symbol];
+    if (prev == null || newPrice == null) return;
+    const el = document.getElementById(`lq-price-${symbol}`);
+    if (!el) return;
+    if (newPrice > prev) {
+      el.classList.remove("price-flash-down");
+      void el.offsetWidth;
+      el.classList.add("price-flash-up");
+    } else if (newPrice < prev) {
+      el.classList.remove("price-flash-up");
+      void el.offsetWidth;
+      el.classList.add("price-flash-down");
+    }
+    setTimeout(() => { el.classList.remove("price-flash-up","price-flash-down"); }, 950);
+  }
+
+  function setLiveStatus(dotId, statusId, text, state) {
+    const dot = $(dotId);
+    const st  = $(statusId);
+    if (!dot || !st) return;
+    dot.className = "live-dot" + (state === "ok" ? " active" : state === "err" ? " err" : "");
+    st.textContent = text;
+  }
+
+  async function fetchLiveQuotes() {
+    try {
+      const data = await api("/api/candidates/live-quotes");
+      if (!data || !data.length) {
+        setLiveStatus("d-liveDot","d-liveStatus","無候選股","");
+        setLiveStatus("c-liveDot","c-liveStatus","無候選股","");
+        return;
+      }
+
+      const anyLive = data.some(q => q.available);
+      const now = new Date().toLocaleTimeString("zh-TW");
+      const statusText = anyLive ? `盤中 ${now}` : `盤外 ${now}`;
+      const dotState   = anyLive ? "ok" : "";
+
+      setLiveStatus("d-liveDot","d-liveStatus", statusText, dotState);
+      setLiveStatus("c-liveDot","c-liveStatus", statusText, dotState);
+
+      // Dashboard 精簡版（無開盤/昨收/更新欄）
+      const dBody = $("d-liveBody");
+      if (dBody) {
+        dBody.innerHTML = data.map(q => renderLiveRow(q, false)).join("");
+      }
+
+      // Candidates 完整版（含所有欄位）
+      const cBody = $("c-liveBody");
+      if (cBody) {
+        // 若 tbody 已有資料（非首次），逐行更新避免閃爍
+        if (cBody.children.length === data.length) {
+          data.forEach(q => {
+            applyFlash(q.symbol, q.currentPrice);
+            const row = document.getElementById(`lq-row-${q.symbol}`);
+            if (row) {
+              const cls = changeClass(q.changePercent);
+              const priceEl = document.getElementById(`lq-price-${q.symbol}`);
+              if (priceEl) {
+                priceEl.textContent = fmtPrice(q.currentPrice);
+                priceEl.className = `quote-price ${cls === "up" ? "num-pos" : cls === "dn" ? "num-neg" : ""}`;
+              }
+              const cells = row.querySelectorAll("td");
+              if (cells.length >= 4) {
+                cells[3].className = `quote-change ${cls}`;
+                cells[3].textContent = changeSign(q.changeAmount) + " " + changePctText(q.changePercent);
+              }
+            }
+          });
+        } else {
+          cBody.innerHTML = data.map(q => renderLiveRow(q, true)).join("");
+        }
+      }
+
+      // 更新快取
+      data.forEach(q => { if (q.currentPrice != null) _liveCache[q.symbol] = q.currentPrice; });
+
+    } catch(e) {
+      setLiveStatus("d-liveDot","d-liveStatus","連線失敗","err");
+      setLiveStatus("c-liveDot","c-liveStatus","連線失敗","err");
+    }
+  }
+
+  function startLivePolling() {
+    fetchLiveQuotes();
+    if (_liveTimer) clearInterval(_liveTimer);
+    _liveTimer = setInterval(fetchLiveQuotes, 8000);   // 每 8 秒刷新
+  }
+  function stopLivePolling() {
+    if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; }
+    setLiveStatus("d-liveDot","d-liveStatus","已停止","");
+    setLiveStatus("c-liveDot","c-liveStatus","已停止","");
+  }
+
+  /* ─────────────────────────────────────────────
+     Position Modals
+  ───────────────────────────────────────────── */
+  function closeModal(id) {
+    const el = $(id); if (el) el.style.display = "none";
+  }
+
+  function openAddModal() {
+    ["ma-symbol","ma-stockName","ma-qty","ma-avgCost",
+     "ma-stopLoss","ma-tp1","ma-tp2","ma-note"].forEach(id => {
+      const el = $(id); if (el) el.value = "";
+    });
+    $("ma-side").value      = "LONG";
+    $("ma-openedAt").value  = new Date().toISOString().slice(0,16);
+    clearErr("ma-err");
+    $("modal-add-pos").style.display = "flex";
+  }
+
+  function openEditModal(id) {
+    const p = _openPosCache[id]; if (!p) return;
+    $("me-title").textContent = `${p.symbol}${p.stockName ? " " + p.stockName : ""}`;
+    $("me-qty").value      = p.qty           ?? "";
+    $("me-avgCost").value  = p.avgCost        ?? "";
+    $("me-stopLoss").value = p.stopLossPrice  ?? "";
+    $("me-tp1").value      = p.takeProfit1    ?? "";
+    $("me-tp2").value      = p.takeProfit2    ?? "";
+    $("me-note").value     = p.note           ?? "";
+    clearErr("me-err");
+    $("me-submitBtn").onclick = () => submitEditPosition(id);
+    $("modal-edit-pos").style.display = "flex";
+  }
+
+  function openCloseModal(id) {
+    const p = _openPosCache[id]; if (!p) return;
+    $("mc-title").textContent = `${p.symbol}${p.stockName ? " " + p.stockName : ""}（均價 ${p.avgCost}）`;
+    $("mc-closePrice").value = "";
+    $("mc-exitReason").value = "";
+    $("mc-closedAt").value   = new Date().toISOString().slice(0,16);
+    $("mc-note").value       = "";
+    clearErr("mc-err");
+    $("mc-submitBtn").onclick = () => submitClosePosition(id);
+    $("modal-close-pos").style.display = "flex";
+  }
+
+  async function submitAddPosition() {
+    clearErr("ma-err");
+    const symbol  = $("ma-symbol").value.trim();
+    const qty     = $("ma-qty").value;
+    const avgCost = $("ma-avgCost").value;
+    if (!symbol || !qty || !avgCost) {
+      showErr("ma-err", "代號、股數、均價為必填"); return;
+    }
+    const body = {
+      symbol,
+      stockName:     $("ma-stockName").value.trim() || null,
+      side:          $("ma-side").value,
+      qty:           Number(qty),
+      avgCost:       Number(avgCost),
+      stopLossPrice: $("ma-stopLoss").value ? Number($("ma-stopLoss").value) : null,
+      takeProfit1:   $("ma-tp1").value      ? Number($("ma-tp1").value)      : null,
+      takeProfit2:   $("ma-tp2").value      ? Number($("ma-tp2").value)      : null,
+      openedAt:      $("ma-openedAt").value ? $("ma-openedAt").value + ":00" : null,
+      note:          $("ma-note").value.trim() || null,
+    };
+    try {
+      await api("/api/positions", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
+      closeModal("modal-add-pos");
+      await loadOpenPositions();
+    } catch(e) { showErr("ma-err", e.message); }
+  }
+
+  async function submitEditPosition(id) {
+    clearErr("me-err");
+    const body = {};
+    const qty      = $("me-qty").value;
+    const avgCost  = $("me-avgCost").value;
+    const stopLoss = $("me-stopLoss").value;
+    const tp1      = $("me-tp1").value;
+    const tp2      = $("me-tp2").value;
+    const note     = $("me-note").value.trim();
+    if (qty)      body.qty           = Number(qty);
+    if (avgCost)  body.avgCost       = Number(avgCost);
+    if (stopLoss) body.stopLossPrice = Number(stopLoss);
+    if (tp1)      body.takeProfit1   = Number(tp1);
+    if (tp2)      body.takeProfit2   = Number(tp2);
+    if (note)     body.note          = note;
+    try {
+      await api(`/api/positions/${id}`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
+      closeModal("modal-edit-pos");
+      await loadOpenPositions();
+    } catch(e) { showErr("me-err", e.message); }
+  }
+
+  async function submitClosePosition(id) {
+    clearErr("mc-err");
+    const closePrice = $("mc-closePrice").value;
+    if (!closePrice) { showErr("mc-err", "出清價為必填"); return; }
+    const body = {
+      closePrice:  Number(closePrice),
+      exitReason:  $("mc-exitReason").value || null,
+      closedAt:    $("mc-closedAt").value ? $("mc-closedAt").value + ":00" : null,
+      note:        $("mc-note").value.trim() || null,
+    };
+    try {
+      await api(`/api/positions/${id}/close`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
+      closeModal("modal-close-pos");
+      await Promise.all([loadOpenPositions(), loadPositionHistory()]);
+    } catch(e) { showErr("mc-err", e.message); }
+  }
+
+  /* ─────────────────────────────────────────────
+     PnL Modals
+  ───────────────────────────────────────────── */
+  function openPnlAddModal() {
+    const today = new Date().toLocaleDateString("sv-SE");
+    $("pnl-ma-date").value    = today;
+    $("pnl-ma-gross").value   = "";
+    $("pnl-ma-fee").value     = "";
+    $("pnl-ma-net").value     = "";
+    $("pnl-ma-count").value   = "";
+    $("pnl-ma-win").value     = "";
+    $("pnl-ma-loss").value    = "";
+    $("pnl-ma-notes").value   = "";
+    clearErr("pnl-ma-err");
+    $("modal-pnl-add").style.display = "flex";
+  }
+
+  function openPnlEditModal(id) {
+    const r = _pnlCache[id]; if (!r) return;
+    $("pnl-me-title").textContent = fmtDate(r.tradingDate);
+    $("pnl-me-gross").value   = r.grossPnl          ?? "";
+    $("pnl-me-fee").value     = r.estimatedFeeAndTax ?? "";
+    $("pnl-me-net").value     = r.netPnl             ?? "";
+    $("pnl-me-count").value   = r.tradeCount         ?? "";
+    $("pnl-me-win").value     = r.winCount           ?? "";
+    $("pnl-me-loss").value    = r.lossCount          ?? "";
+    $("pnl-me-notes").value   = r.notes              ?? "";
+    clearErr("pnl-me-err");
+    $("pnl-me-submitBtn").onclick = () => submitPnlEdit(id);
+    $("modal-pnl-edit").style.display = "flex";
+  }
+
+  async function submitPnlAdd() {
+    clearErr("pnl-ma-err");
+    const date = $("pnl-ma-date").value;
+    if (!date) { showErr("pnl-ma-err", "日期為必填"); return; }
+    const body = {
+      tradingDate:       date,
+      grossPnl:          $("pnl-ma-gross").value  ? Number($("pnl-ma-gross").value)  : null,
+      estimatedFeeAndTax:$("pnl-ma-fee").value    ? Number($("pnl-ma-fee").value)    : null,
+      netPnl:            $("pnl-ma-net").value     ? Number($("pnl-ma-net").value)    : null,
+      tradeCount:        $("pnl-ma-count").value  ? Number($("pnl-ma-count").value)  : null,
+      winCount:          $("pnl-ma-win").value    ? Number($("pnl-ma-win").value)    : null,
+      lossCount:         $("pnl-ma-loss").value   ? Number($("pnl-ma-loss").value)   : null,
+      notes:             $("pnl-ma-notes").value.trim() || null,
+    };
+    try {
+      await api("/api/pnl/daily", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
+      closeModal("modal-pnl-add");
+      await loadPnlHistory();
+    } catch(e) { showErr("pnl-ma-err", e.message); }
+  }
+
+  async function submitPnlEdit(id) {
+    clearErr("pnl-me-err");
+    const body = {};
+    const gross = $("pnl-me-gross").value;
+    const fee   = $("pnl-me-fee").value;
+    const net   = $("pnl-me-net").value;
+    const count = $("pnl-me-count").value;
+    const win   = $("pnl-me-win").value;
+    const loss  = $("pnl-me-loss").value;
+    const notes = $("pnl-me-notes").value.trim();
+    if (gross) body.grossPnl           = Number(gross);
+    if (fee)   body.estimatedFeeAndTax = Number(fee);
+    if (net)   body.netPnl             = Number(net);
+    if (count) body.tradeCount         = Number(count);
+    if (win)   body.winCount           = Number(win);
+    if (loss)  body.lossCount          = Number(loss);
+    if (notes) body.notes              = notes;
+    try {
+      await api(`/api/pnl/daily/${id}`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
+      closeModal("modal-pnl-edit");
+      await loadPnlHistory();
+    } catch(e) { showErr("pnl-me-err", e.message); }
+  }
+
+  /* ─────────────────────────────────────────────
      Page router
   ───────────────────────────────────────────── */
   function loadPageData(pageId) {
@@ -1107,6 +2050,18 @@
     }
   }
 
+  // 切換到有即時報價的頁面時啟動，離開時停止
+  document.querySelectorAll(".nav-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const pg = btn.dataset.page;
+      if (pg === "pageDashboard" || pg === "pageCandidates") {
+        startLivePolling();
+      } else {
+        stopLivePolling();
+      }
+    });
+  });
+
   /* ─────────────────────────────────────────────
      Global refresh
   ───────────────────────────────────────────── */
@@ -1120,6 +2075,7 @@
 
   // Init
   loadDashboard();
+  startLivePolling();   // Dashboard 一開始就啟動即時報價
   $("navMeta").textContent = `更新：${new Date().toLocaleTimeString("zh-TW")}`;
   setInterval(refreshCurrent, 60000);
 </script>

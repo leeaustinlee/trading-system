@@ -9,12 +9,14 @@ import java.time.LocalDateTime;
 
 public record PositionCreateRequest(
         @NotBlank String symbol,
+        String stockName,
         @NotBlank String side,
         @NotNull @DecimalMin("0.0001") BigDecimal qty,
         @NotNull @DecimalMin("0.0001") BigDecimal avgCost,
-        @NotBlank String status,
+        BigDecimal stopLossPrice,
+        BigDecimal takeProfit1,
+        BigDecimal takeProfit2,
         LocalDateTime openedAt,
-        LocalDateTime closedAt,
+        String note,
         String payloadJson
-) {
-}
+) {}

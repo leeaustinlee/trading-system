@@ -1,18 +1,16 @@
 package com.austin.trading.controller;
 
 import com.austin.trading.dto.request.DailyPnlCreateRequest;
+import com.austin.trading.dto.request.DailyPnlUpdateRequest;
 import com.austin.trading.dto.response.DailyPnlResponse;
 import com.austin.trading.dto.response.PnlSummaryResponse;
 import com.austin.trading.service.PnlService;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -60,5 +58,14 @@ public class PnlController {
     @PostMapping("/daily")
     public DailyPnlResponse createDaily(@Valid @RequestBody DailyPnlCreateRequest request) {
         return pnlService.create(request);
+    }
+
+    /** 手動覆蓋損益（券商對帳後補入實際費稅/淨損益） */
+    @PatchMapping("/daily/{id}")
+    public DailyPnlResponse updateDaily(
+            @PathVariable Long id,
+            @RequestBody DailyPnlUpdateRequest request
+    ) {
+        return pnlService.updateDaily(id, request);
     }
 }
