@@ -11,9 +11,15 @@ if [ -f "$PROJECT_DIR/.env" ]; then
   set +a
 fi
 
-if [ "${LINE_ENABLED:-false}" = "true" ] && [ -z "${LINE_TOKEN:-}" ]; then
-  echo "[run-local] 錯誤：LINE_ENABLED=true 但 LINE_TOKEN 未設定"
-  exit 1
+if [ "${LINE_ENABLED:-false}" = "true" ]; then
+  if [ -z "${LINE_CHANNEL_ACCESS_TOKEN:-${LINE_TOKEN:-}}" ]; then
+    echo "[run-local] 錯誤：LINE_ENABLED=true 但 LINE_CHANNEL_ACCESS_TOKEN 未設定"
+    exit 1
+  fi
+  if [ -z "${LINE_TO:-}" ]; then
+    echo "[run-local] 錯誤：LINE_ENABLED=true 但 LINE_TO 未設定"
+    exit 1
+  fi
 fi
 
 cd "$PROJECT_DIR"

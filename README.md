@@ -22,10 +22,14 @@
 所有 LINE 參數都由 `.env` 控制（勿寫死在程式）：
 
 - `LINE_ENABLED=false|true`
-- `LINE_TOKEN=...`
-- `LINE_NOTIFY_URL=https://notify-api.line.me/api/notify`
+- `LINE_CHANNEL_ACCESS_TOKEN=...`
+- `LINE_TO=...`
+- `LINE_PUSH_URL=https://api.line.me/v2/bot/message/push`
 
-若 `LINE_ENABLED=true` 且 `LINE_TOKEN` 空白，`run-local` / `run-prod` 會直接中止啟動。
+若 `LINE_ENABLED=true` 且 `LINE_CHANNEL_ACCESS_TOKEN` / `LINE_TO` 缺值，`run-local` / `run-prod` 會直接中止啟動。
+
+外部探針驗證（服務啟動後）：
+`./scripts/probe-external.sh`
 
 ## 目標
 

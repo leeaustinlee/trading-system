@@ -2,125 +2,81 @@
 
 ## 0. 實作進度（截至 2026-04-17）
 ### 0.1 已完成
-- Phase 1：Spring Boot 專案骨架、MySQL schema（V1~V3）、核心 Entity/Repository（`market_snapshot`、`trading_state`、`notification_log`）
-- API（可用）：
+
+**Phase 1 — 骨架**
+- Spring Boot 專案、MySQL schema V1~V3、核心 Entity/Repository
+- Local seed：`sql/local-seed-phase2.sql` + `scripts/load-local-seed.sh`
+
+**Phase 2 — 決策引擎**
+- `MarketGateEngine`、`HourlyGateEngine`、`MonitorDecisionEngine`、`FinalDecisionEngine`
+- Scheduler skeleton：`HourlyIntradayGateJob`、`FiveMinuteMonitorJob`、`FinalDecision0930Job`
+- 落表：`hourly_gate_decision`、`monitor_decision`、`final_decision`、`scheduler_execution_log`
+
+**Phase 3 — 估值 / 外部 client / 全排程**
+- `StockEvaluationEngine`、`PositionSizingEngine`、`StopLossTakeProfitEngine`、`ReviewScoringEngine`、`ChasedHighEntryEngine`
+- `PATCH /api/positions/{id}/close`：自動計算 realizedPnl（V4 migration）
+- LINE 通知基礎設施：`LineSender`（LINE Push API）、`LineMessageBuilder`、`LineTemplateService`
+- 外部 client：`TwseMisClient`、`TwseInstitutionalClient`、`TaifexClient`（多欄位 fallback）、`TpexClient`、`MarketBreadthClient`
+- 全排程補完（共 13 個 Job，全部可開關）：
+  - `PremarketDataPrepJob`（08:10）、`PremarketNotifyJob`（08:30）
+  - `OpenDataPrepJob`（09:01）、`FinalDecision0930Job`（09:30）
+  - `HourlyIntradayGateJob`（10:05-13:05）、`FiveMinuteMonitorJob`（每5分鐘）
+  - `MiddayReviewJob`（11:00）、`AftermarketReview1400Job`（14:00）
+  - `PostmarketDataPrepJob`（15:05）、`PostmarketAnalysis1530Job`（15:30）
+  - `T86DataPrepJob`（18:10）、`TomorrowPlan1800Job`（18:30）
+  - `ExternalProbeHealthJob`（08:25/15:25）
+- `AftermarketReview1400Job`：chasedHighEntry 自動推算（進場均價 vs MIS 日高，0.5% 門檻）
+- V4 migration：`close_price`、`realized_pnl`（已確認存在 DB）
+
+**Phase 4 — UI**
+- 七頁分頁 SPA（`src/main/resources/static/index.html`）：
+  - 總覽 / 候選股 / 持倉 / 損益 / 決策歷史 / AI 研究 / 系統
+  - 60 秒自動刷新當前頁
+
+**Phase 5 — AI Adapter**
+- `AiClaudeClient`：Anthropic Messages API，返回 `AiResponse(content, model, tokens)`
+- `AiCodexClient`：研究結果寫入 `claude-research-latest.md`
+- Prompt builders：`PremarketPromptBuilder`、`StockEvaluationPromptBuilder`、`FinalDecisionPromptBuilder`、`HourlyGatePromptBuilder`、`MonitorPromptBuilder`
+- `AiFacade`、`AiResearchService`：研究 → 落表 → 可選寫檔
+- Migration V5：`ai_research_log`；V6：`external_probe_log`
+- `SystemController`：`/api/system/external/probe`（dry-run/live）、`/api/system/external/probe/history`、`/api/system/migration/health`
+- `MigrationHealthService`：Flyway 停用時正確回報 `flyway.disabled=true`
+
+**API（全部可用）**
 - `GET /api/dashboard/current`
-- `GET /api/market/current`
-- `GET /api/market/history`
-- `GET /api/monitor/current`
-- `GET /api/monitor/history`
-- `GET /api/monitor/decisions/current`
-- `GET /api/monitor/decisions/history`
-- `GET /api/notifications`
-- `GET /api/notifications/{id}`
-- `POST /api/notifications`
-- `POST /api/monitor/state`
-- `GET /api/candidates/current`
-- `GET /api/candidates/history`
-- `GET /api/decisions/current`
-- `GET /api/decisions/history`
-- `GET /api/decisions/hourly-gate/current`
-- `GET /api/decisions/hourly-gate/history`
-- `POST /api/decisions/market-gate/evaluate`
-- `POST /api/decisions/hourly-gate/evaluate`
-- `POST /api/decisions/final/evaluate`
-- `POST /api/decisions/position-sizing/evaluate`
-- `POST /api/decisions/stoploss-takeprofit/evaluate`
-- `POST /api/decisions/stock/evaluate`  ← Phase 3 新增
-- `GET /api/positions/open` （支援 symbol/page/size）
-- `GET /api/positions/history` （支援 symbol/dateFrom/dateTo/page/size）
-- `POST /api/positions`
-- `GET /api/pnl/daily`
-- `GET /api/pnl/history` （支援 dateFrom/dateTo/page/limit）
-- `GET /api/pnl/summary`
-- `POST /api/pnl/daily`
-- Phase 2（第一版）：`MarketGateEngine`、`HourlyGateEngine`、`MonitorDecisionEngine`、`FinalDecisionEngine`
-- Phase 3（完成）：
-- `StockEvaluationEngine`：valuationMode 分類、SL/TP 計算、RR 計算、includeInFinalPlan 判斷
-- `StockEvaluationService`：批次評估並寫入 `stock_evaluation` 表
-- `PositionSizingEngine` + `StopLossTakeProfitEngine` 串入 `FinalDecisionService`：09:30 決策自動輸出 suggestedPositionSize / positionMultiplier
-- `FinalDecisionSelectedStockResponse` 新增 `suggestedPositionSize`、`positionMultiplier` 欄位
-- Position 進階查詢（symbol/dateFrom/dateTo/page/size）
-- PnL 進階查詢（dateFrom/dateTo/page/limit）
-- Position 關閉流程：`PATCH /api/positions/{id}/close`（自動計算 realizedPnl，V4 migration 加 close_price/realized_pnl）
-- LINE 通知基礎設施：`LineNotifyConfig`、`LineSender`、`LineMessageBuilder`、`LineTemplateService`
-- Scheduler 補完：`PremarketNotifyJob`（08:30）、`AftermarketReview1400Job`（14:00）、`PostmarketAnalysis1530Job`（15:30）
-- `ReviewScoringEngine`：盤型/停損/合規/分數/修正建議
-- `FinalDecision0930Job`、`HourlyIntradayGateJob` 整合 `LineTemplateService`
-- Scheduler Skeleton（可開關）：
-- `HourlyIntradayGateJob`
-- `FiveMinuteMonitorJob`
-- `FinalDecision0930Job`
-- Dashboard API 已整合最新：
-- market
-- tradingState
-- finalDecision
-- latest hourlyGateDecision
-- latest monitorDecision
-- latestNotification
-- top candidates
-- 排程執行落表：`scheduler_execution_log`
-- 決策落表：
-- `hourly_gate_decision`
-- `monitor_decision`
-- `final_decision`
-- Local 連線：MySQL `localhost:3330`、`trading_system` schema 已建立
-- Local seed：`sql/local-seed-phase2.sql` 與 `scripts/load-local-seed.sh`
+- `GET|POST /api/notifications`、`GET /api/notifications/{id}`
+- `GET /api/market/current|history`
+- `GET /api/monitor/current|history`、`GET /api/monitor/decisions/current|history`、`POST /api/monitor/state`
+- `GET /api/candidates/current|history`
+- `GET /api/decisions/current|history`、`GET /api/decisions/hourly-gate/current|history`
+- `POST /api/decisions/market-gate/evaluate`、`POST /api/decisions/hourly-gate/evaluate`
+- `POST /api/decisions/final/evaluate`、`POST /api/decisions/stock/evaluate`
+- `POST /api/decisions/position-sizing/evaluate`、`POST /api/decisions/stoploss-takeprofit/evaluate`
+- `GET /api/positions/open`、`GET /api/positions/history`、`POST /api/positions`、`PATCH /api/positions/{id}/close`
+- `GET /api/pnl/daily|history|summary`、`POST /api/pnl/daily`
+- `GET /api/ai/research`、`POST /api/ai/research/premarket|stock/{symbol}|final-decision`
+- `GET /api/system/external/probe|probe/history|migration/health`
 
-- 外部 client 實作（Phase 3）：
-  - `TwseMisClient`：TWSE MIS 即時報價（上市 `tse_` + 上櫃 `otc_` 前綴）
-  - `TwseInstitutionalClient`：T86 三大法人買賣超（每日盤後）
-  - `TaifexClient`：TAIFEX Open API 台指期近月（URL 可設定）
-  - `TpexClient`：委派至 TwseMisClient 的 OTC wrapper
-  - `MarketBreadthClient`：TWSE MI_INDEX 漲跌家數（盤後）
-  - `WebClientConfig`：Netty HttpClient，含 10s 連線 / 15s 回應 timeout + UA header
-- 新 Scheduler（可開關）：
-  - `PremarketDataPrepJob`（08:10）：抓台指期 + 昨日候選昨收，建 PREMARKET snapshot
-  - `PostmarketDataPrepJob`（15:05）：抓大盤漲跌家數 + 候選收盤報價，更新 payload
-  - `T86DataPrepJob`（18:10）：抓 T86，更新候選 payload（外資/投信/自營淨買）
-- `FiveMinuteMonitorJob` 改用 `LineTemplateService.notifyMonitor()`（與 HourlyGate 一致）
-- `AftermarketReview1400Job` 串接真實 PnL：hadLoss / exceededDailyLoss 讀取當日關閉持倉
-- `AftermarketReview1400Job` 新增 chasedHighEntry 自動推算（依當日持倉進場均價 vs MIS 日高，0.5% 門檻）
-- `PositionRepository` 新增 `findClosedBetween` / `sumRealizedPnlBetween` 查詢
+**測試（62 tests pass，4 skipped）**
+- 單元測試：engine 層 27 tests（含 ChasedHighEntryEngine 3 情境）
+- 整合測試（`ApiIntegrationTests`）：3 tests，E2E 骨架
+- 整合測試（`FullApiIntegrationTests`）：25 tests，涵蓋所有主要 API happy path + V4 欄位確認
+- TAIFEX live（`TaifexClientLiveTest`）：4 tests，加 `-Dlive.taifex=true` 跑實機（2026-04-17 已驗證通過）
 
-- Phase 5（AI Adapter 完成）：
-  - `AiClaudeConfig`：Anthropic API 設定（api-key, model, max-tokens, research-output-path）
-  - `AiClaudeClient`：Anthropic Messages API 客戶端，返回 `AiResponse(content, model, tokens)`
-  - `AiCodexClient`：將研究結果寫入 `claude-research-latest.md`（路徑可設定）
-  - Prompt builders：`PremarketPromptBuilder`、`StockEvaluationPromptBuilder`、`FinalDecisionPromptBuilder`、`HourlyGatePromptBuilder`、`MonitorPromptBuilder`
-  - `AiResearchService`：執行研究 → 落表 → 可選寫檔
-  - `AiFacade`：`doPremarketResearch` / `doStockEvaluation` / `doFinalDecisionResearch` / `doHourlyGateResearch`
-  - `AiResearchLogEntity` + Migration V5 `ai_research_log`
-- `AiController`：`GET /api/ai/research`, `POST /api/ai/research/premarket`, `POST /api/ai/research/stock/{symbol}`, `POST /api/ai/research/final-decision`
-- `SystemController`：`GET /api/system/external/probe`（TAIFEX / LINE / Claude 探針，支援 dry-run/live）
-- `SystemController`：`GET /api/system/external/probe/history`（探針歷史查詢）
-- `SystemController`：`GET /api/system/migration/health`（V4/V5/V6 關鍵 migration 健康檢查）
-- Migration V6：`external_probe_log`（保存每次探針結果與明細）
-- `ExternalProbeHealthJob`（08:25/15:25 可開關）：dry-run 探針，異常時發 SYSTEM_ALERT
-- `TaifexClient` 欄位映射容錯加強（Close/PrevClose/Change/Volume 多欄位 fallback）
-- 剩餘 Scheduler 全部補完：
-  - `MiddayReviewJob`（11:00）：市場狀態 + 持倉摘要 LINE 通知
-  - `TomorrowPlan1800Job`（18:30）：整合 T86 後的明日候選計畫
-  - `OpenDataPrepJob`（09:01）：開盤後 1 分鐘抓候選股開盤價，補 gap_pct 至 payload
+**部署 / 設定**
+- `application-prod.yml`：Flyway 啟用、`ddl-auto:validate`、所有排程開啟
+- `application-local.yml`：Flyway 停用、`ddl-auto:update`、部分排程開啟（開發用）
+- `application-integration.yml`：Flyway 停用、獨立 DB `trading_system_it`、所有排程關閉
+- `.env.example`：所有環境變數說明
+- `scripts/run-local.sh`、`scripts/run-prod.sh`（含必填欄位驗證）
 
-### 0.2 未完成
-- LINE 實際 token 設定與 end-to-end 測試（LineSender 框架已備，需設 `trading.line.token`）
-- `AiClaudeClient` 實際呼叫 end-to-end 測試（需設 `trading.ai.claude.api-key`）
+### 0.2 未完成（需外部 credentials）
+- Claude API key 實機測試：設 `CLAUDE_ENABLED=true` + `CLAUDE_API_KEY=xxx`，呼叫 `GET /api/system/external/probe?liveClaude=true`
 
-### 0.2.2 已完成（本輪 2026-04-17）
-- V4 migration 欄位確認：integration test 驗證 `position.close_price` / `position.realized_pnl` 存在
-- Production profile（`application-prod.yml`）：Flyway 啟用、ddl-auto:validate、所有排程開啟
-- `MigrationHealthService` 改善：Flyway 停用時回報 flyway.disabled=true，不誤判為失敗
-- `.env.example` 補全說明、新增 `scripts/run-prod.sh` 正式環境啟動腳本（含必填欄位驗證）
-
-### 0.2.1 已完成（本輪 2026-04-17）
-- Dashboard 與各頁 UI（Phase 4）：七頁分頁 SPA（總覽/候選股/持倉/損益/決策歷史/AI研究/系統）
-- 完整整合測試（FullApiIntegrationTests）：25 tests 涵蓋所有主要 API 端點 happy path
-  - Market Gate / Hourly Gate / Final Decision / Stock Eval / Position Sizing / SL-TP evaluate
-  - Notification CRUD、Position 開倉/關倉/損益計算、PnL 建立與查詢
-  - External Probe dry-run、Migration Health、AI Research list
-- TAIFEX end-to-end 驗證框架（TaifexClientLiveTest）：4 tests，加 `-Dlive.taifex=true` 跑實機
-  - 欄位 fallback 驗證、非交易日 empty 驗證、null date 不報錯
+### 0.2.1 已完成外部實機驗證
+- LINE Push API（`LINE_CHANNEL_ACCESS_TOKEN` + `LINE_TO`）已於 2026-04-17 22:12（Asia/Taipei）驗證成功：
+  - `GET /api/system/external/probe?liveLine=true&liveClaude=false`
+  - 回傳：`line.status=OK`、`line.success=true`、`line.detail=LINE 實際發送成功`
 
 ### 0.3 更新規則
 - 每次完成一個功能切片（engine/API/scheduler）後，必須同步更新本章節。

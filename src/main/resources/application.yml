@@ -23,7 +23,9 @@ trading:
   line:
     enabled: ${LINE_ENABLED:false}
     token: ${LINE_TOKEN:}
-    notify-url: ${LINE_NOTIFY_URL:https://notify-api.line.me/api/notify}
+    channel-access-token: ${LINE_CHANNEL_ACCESS_TOKEN:${LINE_TOKEN:}}
+    to: ${LINE_TO:}
+    push-url: ${LINE_PUSH_URL:https://api.line.me/v2/bot/message/push}
   scheduler:
     hourly-gate:
       enabled: false

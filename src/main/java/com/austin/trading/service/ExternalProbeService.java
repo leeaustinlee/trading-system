@@ -89,8 +89,11 @@ public class ExternalProbeService {
         if (!lineNotifyConfig.isEnabled()) {
             return new ExternalProbeItemResponse("SKIPPED", false, "LINE 未啟用（trading.line.enabled=false）");
         }
-        if (lineNotifyConfig.getToken() == null || lineNotifyConfig.getToken().isBlank()) {
-            return new ExternalProbeItemResponse("WARN", false, "LINE token 未設定");
+        if (lineNotifyConfig.resolveAccessToken() == null || lineNotifyConfig.resolveAccessToken().isBlank()) {
+            return new ExternalProbeItemResponse("WARN", false, "LINE channel access token 未設定");
+        }
+        if (lineNotifyConfig.getTo() == null || lineNotifyConfig.getTo().isBlank()) {
+            return new ExternalProbeItemResponse("WARN", false, "LINE to（群組/使用者 ID）未設定");
         }
         if (!live) {
             return new ExternalProbeItemResponse("OK", true, "LINE 設定已就緒（dry-run）");
