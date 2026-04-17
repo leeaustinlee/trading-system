@@ -6,7 +6,7 @@
 
 1. 準備 Java 17 與 MySQL 8+
 2. 建立 DB：`trading_system`（local MySQL port 預設 `3330`）
-3. 設定 `src/main/resources/application-local.yml`
+3. 以環境變數設定敏感資訊（可參考 `.env.example`）
 4. 啟動：`./scripts/run-local.sh`
 
 本地 UI Console：`http://localhost:8080/`
