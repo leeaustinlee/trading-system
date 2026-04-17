@@ -77,3 +77,5 @@ trading:
       model: ${CLAUDE_MODEL:claude-sonnet-4-6}
       max-tokens: ${CLAUDE_MAX_TOKENS:4096}
       research-output-path: ${CLAUDE_RESEARCH_OUTPUT_PATH:}
+      # 無 API Key 模式：Java 排程寫出 context，由 Claude Code 排程 Agent 讀取分析
+      request-output-path: ${CLAUDE_REQUEST_OUTPUT_PATH:}

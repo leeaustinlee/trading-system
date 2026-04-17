@@ -31,6 +31,9 @@ public class AiClaudeConfig {
     /** 研究輸出的 Markdown 檔案路徑（選填，空字串表示不寫檔）*/
     private String researchOutputPath = "";
 
+    /** Claude Code 研究請求 JSON 路徑（無 API Key 模式：Java 寫請求，Claude Code 排程讀取並分析）*/
+    private String requestOutputPath = "";
+
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
@@ -46,5 +49,10 @@ public class AiClaudeConfig {
     public String getResearchOutputPath() { return researchOutputPath; }
     public void setResearchOutputPath(String researchOutputPath) {
         this.researchOutputPath = researchOutputPath;
+    }
+
+    public String getRequestOutputPath() { return requestOutputPath; }
+    public void setRequestOutputPath(String requestOutputPath) {
+        this.requestOutputPath = requestOutputPath;
     }
 }

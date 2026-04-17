@@ -10,6 +10,7 @@ import com.austin.trading.entity.MarketSnapshotEntity;
 import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.MarketSnapshotRepository;
 import com.austin.trading.service.CandidateScanService;
+import com.austin.trading.service.ClaudeCodeRequestWriterService;
 import com.austin.trading.service.SchedulerLogService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,12 +42,13 @@ public class PostmarketDataPrepJob {
 
     private static final Logger log = LoggerFactory.getLogger(PostmarketDataPrepJob.class);
 
-    private final MarketBreadthClient      marketBreadthClient;
-    private final TwseMisClient            twseMisClient;
-    private final CandidateScanService     candidateScanService;
-    private final CandidateStockRepository candidateStockRepository;
-    private final MarketSnapshotRepository marketSnapshotRepository;
-    private final SchedulerLogService      schedulerLogService;
+    private final MarketBreadthClient             marketBreadthClient;
+    private final TwseMisClient                   twseMisClient;
+    private final CandidateScanService            candidateScanService;
+    private final CandidateStockRepository        candidateStockRepository;
+    private final MarketSnapshotRepository        marketSnapshotRepository;
+    private final SchedulerLogService             schedulerLogService;
+    private final ClaudeCodeRequestWriterService  requestWriterService;
 
     public PostmarketDataPrepJob(
             MarketBreadthClient marketBreadthClient,
@@ -54,7 +56,8 @@ public class PostmarketDataPrepJob {
             CandidateScanService candidateScanService,
             CandidateStockRepository candidateStockRepository,
             MarketSnapshotRepository marketSnapshotRepository,
-            SchedulerLogService schedulerLogService
+            SchedulerLogService schedulerLogService,
+            ClaudeCodeRequestWriterService requestWriterService
     ) {
         this.marketBreadthClient      = marketBreadthClient;
         this.twseMisClient            = twseMisClient;
@@ -62,6 +65,7 @@ public class PostmarketDataPrepJob {
         this.candidateStockRepository = candidateStockRepository;
         this.marketSnapshotRepository = marketSnapshotRepository;
         this.schedulerLogService      = schedulerLogService;
+        this.requestWriterService     = requestWriterService;
     }
 
     @Scheduled(cron = "${trading.scheduler.postmarket-data-prep-cron:0 5 15 * * MON-FRI}",
@@ -104,6 +108,14 @@ public class PostmarketDataPrepJob {
 
             // 4. 儲存收盤市場快照
             breadth.ifPresent(b -> saveCloseSnapshot(today, b));
+
+            // 寫出研究請求給 Claude Code 排程 Agent（15:20 執行）
+            String breadthContext = breadth.map(b ->
+                    String.format("{\"advances\":%d,\"declines\":%d,\"index_change\":%s}",
+                            b.advances(), b.declines(),
+                            b.indexChangePercent() == null ? "null" : b.indexChangePercent().toString())
+            ).orElse(null);
+            requestWriterService.writeRequest("POSTMARKET", today, symbols, breadthContext);
 
             String msg = String.format("breadth=%s candidates=%d updated=%d",
                     breadth.map(b -> b.advances() + "/" + b.declines()).orElse("N/A"),

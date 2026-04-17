@@ -8,6 +8,7 @@ import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.entity.MarketSnapshotEntity;
 import com.austin.trading.repository.MarketSnapshotRepository;
 import com.austin.trading.service.CandidateScanService;
+import com.austin.trading.service.ClaudeCodeRequestWriterService;
 import com.austin.trading.service.SchedulerLogService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,24 +37,27 @@ public class PremarketDataPrepJob {
 
     private static final Logger log = LoggerFactory.getLogger(PremarketDataPrepJob.class);
 
-    private final TaifexClient               taifexClient;
-    private final TwseMisClient              twseMisClient;
-    private final CandidateScanService       candidateScanService;
-    private final MarketSnapshotRepository   marketSnapshotRepository;
-    private final SchedulerLogService        schedulerLogService;
+    private final TaifexClient                    taifexClient;
+    private final TwseMisClient                   twseMisClient;
+    private final CandidateScanService            candidateScanService;
+    private final MarketSnapshotRepository        marketSnapshotRepository;
+    private final SchedulerLogService             schedulerLogService;
+    private final ClaudeCodeRequestWriterService  requestWriterService;
 
     public PremarketDataPrepJob(
             TaifexClient taifexClient,
             TwseMisClient twseMisClient,
             CandidateScanService candidateScanService,
             MarketSnapshotRepository marketSnapshotRepository,
-            SchedulerLogService schedulerLogService
+            SchedulerLogService schedulerLogService,
+            ClaudeCodeRequestWriterService requestWriterService
     ) {
         this.taifexClient            = taifexClient;
         this.twseMisClient           = twseMisClient;
         this.candidateScanService    = candidateScanService;
         this.marketSnapshotRepository = marketSnapshotRepository;
         this.schedulerLogService     = schedulerLogService;
+        this.requestWriterService    = requestWriterService;
     }
 
     @Scheduled(cron = "${trading.scheduler.premarket-data-prep-cron:0 10 8 * * MON-FRI}",
@@ -89,6 +93,9 @@ public class PremarketDataPrepJob {
             // 3. 建立 PREMARKET 市場快照（grade 留空，等 09:30 決策後再補）
             String payload = buildPayload(txf.orElse(null), quoteSummary);
             saveOrUpdateSnapshot(today, payload);
+
+            // 寫出研究請求給 Claude Code 排程 Agent（08:20 執行）
+            requestWriterService.writeRequest("PREMARKET", today, symbols, buildPayload(txf.orElse(null), quoteSummary));
 
             String msg = "txf=" + txfSummary + " candidates=" + candidates.size();
             log.info("[PremarketDataPrepJob] {}", msg);
