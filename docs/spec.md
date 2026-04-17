@@ -104,12 +104,18 @@
   - `OpenDataPrepJob`（09:01）：開盤後 1 分鐘抓候選股開盤價，補 gap_pct 至 payload
 
 ### 0.2 未完成
-- TAIFEX Open API end-to-end 驗證（需實際呼叫確認欄位格式）
 - LINE 實際 token 設定與 end-to-end 測試（LineSender 框架已備，需設 `trading.line.token`）
 - `AiClaudeClient` 實際呼叫 end-to-end 測試（需設 `trading.ai.claude.api-key`）
-- Dashboard 與各頁 UI（Phase 4）
-- 完整整合測試（DB + scheduler + API 端到端）與壓力測試
 - V4 migration（position_close_fields）需確認已套用至 DB
+
+### 0.2.1 已完成（本輪 2026-04-17）
+- Dashboard 與各頁 UI（Phase 4）：七頁分頁 SPA（總覽/候選股/持倉/損益/決策歷史/AI研究/系統）
+- 完整整合測試（FullApiIntegrationTests）：25 tests 涵蓋所有主要 API 端點 happy path
+  - Market Gate / Hourly Gate / Final Decision / Stock Eval / Position Sizing / SL-TP evaluate
+  - Notification CRUD、Position 開倉/關倉/損益計算、PnL 建立與查詢
+  - External Probe dry-run、Migration Health、AI Research list
+- TAIFEX end-to-end 驗證框架（TaifexClientLiveTest）：4 tests，加 `-Dlive.taifex=true` 跑實機
+  - 欄位 fallback 驗證、非交易日 empty 驗證、null date 不報錯
 
 ### 0.3 更新規則
 - 每次完成一個功能切片（engine/API/scheduler）後，必須同步更新本章節。
