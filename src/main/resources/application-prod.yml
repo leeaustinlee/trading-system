@@ -29,6 +29,7 @@ trading:
   line:
     enabled: ${LINE_ENABLED:true}
     token: ${LINE_TOKEN}
+    notify-url: ${LINE_NOTIFY_URL:https://notify-api.line.me/api/notify}
   scheduler:
     hourly-gate:
       enabled: true

@@ -16,14 +16,13 @@ import org.springframework.web.reactive.function.client.WebClient;
 public class LineSender {
 
     private static final Logger log = LoggerFactory.getLogger(LineSender.class);
-    private static final String LINE_NOTIFY_URL = "https://notify-api.line.me/api/notify";
 
     private final LineNotifyConfig config;
     private final WebClient webClient;
 
     public LineSender(LineNotifyConfig config, WebClient.Builder webClientBuilder) {
         this.config = config;
-        this.webClient = webClientBuilder.baseUrl(LINE_NOTIFY_URL).build();
+        this.webClient = webClientBuilder.build();
     }
 
     /**
@@ -40,11 +39,17 @@ public class LineSender {
             log.warn("[LineSender] LINE token not set, skip sending.");
             return false;
         }
+        String notifyUrl = config.getNotifyUrl();
+        if (notifyUrl == null || notifyUrl.isBlank()) {
+            log.warn("[LineSender] LINE notifyUrl not set, skip sending.");
+            return false;
+        }
 
         String truncated = message.length() > 1000 ? message.substring(0, 997) + "..." : message;
 
         try {
             webClient.post()
+                    .uri(notifyUrl.trim())
                     .header("Authorization", "Bearer " + token)
                     .body(BodyInserters.fromFormData("message", truncated))
                     .retrieve()

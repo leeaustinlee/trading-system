@@ -17,6 +17,16 @@
 本地 Phase2/3 測資可直接載入：
 `./scripts/load-local-seed.sh`
 
+## LINE 設定
+
+所有 LINE 參數都由 `.env` 控制（勿寫死在程式）：
+
+- `LINE_ENABLED=false|true`
+- `LINE_TOKEN=...`
+- `LINE_NOTIFY_URL=https://notify-api.line.me/api/notify`
+
+若 `LINE_ENABLED=true` 且 `LINE_TOKEN` 空白，`run-local` / `run-prod` 會直接中止啟動。
+
 ## 目標
 
 - 固化市場資料收集與決策流程
