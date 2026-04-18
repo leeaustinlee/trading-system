@@ -9,14 +9,8 @@ spring:
       idle-timeout: 600000
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     open-in-view: false
-  flyway:
-    enabled: true
-    locations: classpath:db/migration
-    baseline-on-migrate: false
-    validate-on-migrate: true
-    out-of-order: false
 
 logging:
   level:
@@ -78,8 +72,5 @@ trading:
 
   ai:
     claude:
-      enabled: ${CLAUDE_ENABLED:true}
-      api-key: ${CLAUDE_API_KEY}
-      model: ${CLAUDE_MODEL:claude-sonnet-4-6}
-      max-tokens: ${CLAUDE_MAX_TOKENS:4096}
       research-output-path: ${CLAUDE_RESEARCH_OUTPUT_PATH:}
+      request-output-path: ${CLAUDE_REQUEST_OUTPUT_PATH:}

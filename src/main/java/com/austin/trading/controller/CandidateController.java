@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -136,18 +137,20 @@ public class CandidateController {
     ) {
         try {
             StockEvaluationEntity updated = stockEvaluationService.updateAiScores(symbol, req);
-            return ResponseEntity.ok(Map.of(
-                    "success",        true,
-                    "symbol",         symbol,
-                    "tradingDate",    updated.getTradingDate(),
-                    "claudeScore",    updated.getClaudeScore(),
-                    "codexScore",     updated.getCodexScore(),
-                    "aiWeightedScore",updated.getAiWeightedScore(),
-                    "finalRankScore", updated.getFinalRankScore(),
-                    "isVetoed",       updated.getIsVetoed()
-            ));
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("success",         true);
+            body.put("symbol",          symbol);
+            body.put("tradingDate",     updated.getTradingDate());
+            body.put("claudeScore",     updated.getClaudeScore());
+            body.put("codexScore",      updated.getCodexScore());
+            body.put("aiWeightedScore", updated.getAiWeightedScore());
+            body.put("consensusScore",  updated.getConsensusScore());
+            body.put("finalRankScore",  updated.getFinalRankScore());
+            body.put("isVetoed",        Boolean.TRUE.equals(updated.getIsVetoed()));
+            return ResponseEntity.ok(body);
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "error", e.getMessage()));
+            return ResponseEntity.badRequest().body(Map.of("success", false,
+                    "error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
         }
     }
 

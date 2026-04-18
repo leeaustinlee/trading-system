@@ -1,10 +1,7 @@
 package com.austin.trading.service;
 
-import com.austin.trading.client.AiClaudeClient;
-import com.austin.trading.client.AiClaudeClient.AiResponse;
 import com.austin.trading.client.TaifexClient;
 import com.austin.trading.client.dto.FuturesQuote;
-import com.austin.trading.config.AiClaudeConfig;
 import com.austin.trading.config.LineNotifyConfig;
 import com.austin.trading.dto.response.ExternalProbeHistoryResponse;
 import com.austin.trading.dto.response.ExternalProbeItemResponse;
@@ -26,23 +23,17 @@ public class ExternalProbeService {
     private final TaifexClient taifexClient;
     private final LineSender lineSender;
     private final LineNotifyConfig lineNotifyConfig;
-    private final AiClaudeClient aiClaudeClient;
-    private final AiClaudeConfig aiClaudeConfig;
     private final ExternalProbeLogRepository externalProbeLogRepository;
 
     public ExternalProbeService(
             TaifexClient taifexClient,
             LineSender lineSender,
             LineNotifyConfig lineNotifyConfig,
-            AiClaudeClient aiClaudeClient,
-            AiClaudeConfig aiClaudeConfig,
             ExternalProbeLogRepository externalProbeLogRepository
     ) {
         this.taifexClient = taifexClient;
         this.lineSender = lineSender;
         this.lineNotifyConfig = lineNotifyConfig;
-        this.aiClaudeClient = aiClaudeClient;
-        this.aiClaudeConfig = aiClaudeConfig;
         this.externalProbeLogRepository = externalProbeLogRepository;
     }
 
@@ -105,29 +96,7 @@ public class ExternalProbeService {
     }
 
     private ExternalProbeItemResponse probeClaude(boolean live) {
-        if (!aiClaudeConfig.isEnabled()) {
-            return new ExternalProbeItemResponse("SKIPPED", false, "Claude 未啟用（trading.ai.claude.enabled=false）");
-        }
-        if (aiClaudeConfig.getApiKey() == null || aiClaudeConfig.getApiKey().isBlank()) {
-            return new ExternalProbeItemResponse("WARN", false, "Claude API key 未設定");
-        }
-        if (!live) {
-            return new ExternalProbeItemResponse("OK", true, "Claude 設定已就緒（dry-run）");
-        }
-
-        AiResponse response = aiClaudeClient.sendMessage(
-                "Reply exactly with: OK",
-                "You are a health probe. Reply exactly with OK."
-        );
-        if (response == null) {
-            return new ExternalProbeItemResponse("ERROR", false, "Claude 呼叫失敗或無回應");
-        }
-        String normalized = response.content() == null ? "" : response.content().trim().toUpperCase();
-        boolean ok = normalized.contains("OK");
-        String detail = String.format("model=%s tokens=%d", response.model(), response.totalTokens());
-        return ok
-                ? new ExternalProbeItemResponse("OK", true, detail)
-                : new ExternalProbeItemResponse("WARN", false, "Claude 有回覆但格式非 OK, " + detail);
+        return new ExternalProbeItemResponse("SKIPPED", false, "Claude 直接 API 已停用（使用 Claude Code Agent 檔案模式）");
     }
 
     private String nullable(Object value) {

@@ -90,6 +90,14 @@ public class StockEvaluationEntity {
     @Column(name = "score_dispersion", precision = 6, scale = 3)
     private BigDecimal scoreDispersion;
 
+    /** 共識分：三 AI 最低分 - 分歧懲罰（v2.0 BC Sniper） */
+    @Column(name = "consensus_score", precision = 6, scale = 3)
+    private BigDecimal consensusScore;
+
+    /** 分歧懲罰：各 AI 分數間差異加總（v2.0 BC Sniper） */
+    @Column(name = "disagreement_penalty", precision = 6, scale = 3)
+    private BigDecimal disagreementPenalty;
+
     /** 是否被 VetoEngine 淘汰 */
     @Column(name = "is_vetoed")
     private Boolean isVetoed;
@@ -163,6 +171,10 @@ public class StockEvaluationEntity {
     public void setFinalRankScore(BigDecimal finalRankScore) { this.finalRankScore = finalRankScore; }
     public BigDecimal getScoreDispersion() { return scoreDispersion; }
     public void setScoreDispersion(BigDecimal scoreDispersion) { this.scoreDispersion = scoreDispersion; }
+    public BigDecimal getConsensusScore() { return consensusScore; }
+    public void setConsensusScore(BigDecimal consensusScore) { this.consensusScore = consensusScore; }
+    public BigDecimal getDisagreementPenalty() { return disagreementPenalty; }
+    public void setDisagreementPenalty(BigDecimal disagreementPenalty) { this.disagreementPenalty = disagreementPenalty; }
     public Boolean getIsVetoed() { return isVetoed; }
     public void setIsVetoed(Boolean isVetoed) { this.isVetoed = isVetoed; }
     public String getVetoReasonsJson() { return vetoReasonsJson; }

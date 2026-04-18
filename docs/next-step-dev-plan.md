@@ -17,7 +17,7 @@
   - `src/test/java/com/austin/trading/integration/*`
   - `src/test/resources/application-test.yml`（若尚未建立）
 - 實作要點：
-  - 建立 SpringBoot + DB 測試 profile，啟用 Flyway migration
+  - 建立 SpringBoot + DB 測試 profile（ddl-auto:update）
   - 新增 3 條最小 E2E 測試路徑：
     - `POST /api/decisions/final/evaluate`（含候選輸入）
     - `GET /api/dashboard/current`（檢查組裝欄位）
@@ -52,15 +52,20 @@
   - 至少 3 個測試情境：追高 / 非追高 / 資料不足
   - API response 可查得欄位結果
 
-## 4. 唯一剩餘任務
+## 4. 已完成（無剩餘任務）
 
-### Slice D：Claude API key 實機驗證（P1）
-- 設定：`CLAUDE_ENABLED=true`、`CLAUDE_API_KEY=<your_key>`
-- 呼叫：`GET /api/system/external/probe?liveClaude=true`
-- 驗收：
-  - 回傳 `claude.status=OK`、`claude.success=true`
-  - `ai_research_log` 新增一筆研究紀錄
-  - 失敗情境（錯誤 key）不中斷 scheduler
+### ~~Slice D：Claude API key 實機驗證~~ → 已移除
+- 直接 Claude API（`AiClaudeClient`、`AiFacade`、PromptBuilders）已於 2026-04-19 刪除
+- 系統改為 Claude Code Agent 檔案模式（`ClaudeCodeRequestWriterService` + `AiResearchService`）
+- probe 端點回傳 `claude.status=SKIPPED`
+
+### 2026-04-19 新增完成項目
+- BC Sniper v2.0 評分管線全部落地（Consensus/Weighted/Veto/FinalRank）
+- PremarketWorkflowService Phase 2（題材 context + Java 結構評分）
+- PostmarketWorkflowService Phase 2（每日損益彙總 + 題材評分）
+- Flyway 完全移除，所有 profile 統一 `ddl-auto:update`
+- `StockEvaluationService.updateAiScores` 修復 consensus 即時重算
+- 整合測試 93 pass / 4 skipped
 
 ## 5. 每次提交前固定檢查
 ```bash

@@ -1,4 +1,4 @@
-# API Spec (v1)
+# API Spec (v2 — BC Sniper)
 
 ## Dashboard
 - GET `/api/dashboard/current`
@@ -10,6 +10,22 @@
 ## Candidates
 - GET `/api/candidates/current`
 - GET `/api/candidates/history`
+- POST `/api/candidates/batch`
+- PUT `/api/candidates/{symbol}/ai-scores`  ← **Claude / Codex 評分回填**
+- PUT `/api/candidates/{symbol}/toggle-include`
+
+## Score Config
+- GET `/api/score-config`
+- GET `/api/score-config/{key}`
+- PUT `/api/score-config/{key}`
+
+## Themes
+- GET `/api/themes/snapshots?date=`
+- GET `/api/themes/mappings`
+- GET `/api/themes/mappings?symbol=`
+- GET `/api/themes/mappings?theme=`
+- POST `/api/themes/mappings`
+- PUT `/api/themes/snapshots/{themeTag}/claude-scores`  ← **Claude 題材評分回填**
 
 ## Decisions
 - GET `/api/decisions/current`
@@ -18,10 +34,10 @@
 - GET `/api/decisions/hourly-gate/history`
 - POST `/api/decisions/market-gate/evaluate`
 - POST `/api/decisions/hourly-gate/evaluate`
-- POST `/api/decisions/final/evaluate`
+- POST `/api/decisions/final/evaluate`     ← **觸發完整評分管線**
 - POST `/api/decisions/position-sizing/evaluate`
 - POST `/api/decisions/stoploss-takeprofit/evaluate`
-- POST `/api/decisions/stock/evaluate`  ← **新增 (Phase 3)**
+- POST `/api/decisions/stock/evaluate`
 
 ## Monitor
 - GET `/api/monitor/current`
@@ -41,11 +57,18 @@
 - GET `/api/notifications/{id}`
 - POST `/api/notifications`
 
-## AI Research
+## AI Research（檔案模式，直接 Claude API 已移除）
 - GET  `/api/ai/research`  `?date=&type=`
-- POST `/api/ai/research/premarket`  `?txfSummary=&globalSummary=`
-- POST `/api/ai/research/stock/{symbol}`  `?date=`
-- POST `/api/ai/research/final-decision`  `?date=`
+- POST `/api/ai/research/write-request`  寫出 Claude 研究請求 JSON
+- POST `/api/ai/research/import-file`  匯入 Claude 研究結果
+
+## Watchlist
+- GET  `/api/watchlist/current`  TRACKING + READY 觀察股
+- GET  `/api/watchlist/ready`    只取 READY 股
+- GET  `/api/watchlist/history`  含 DROPPED / EXPIRED / ENTERED
+- POST `/api/watchlist/rebuild`  `?date=`  手動觸發 watchlist 刷新
+- PATCH `/api/watchlist/{symbol}/status`  手動調整狀態
+- POST `/api/watchlist/position-review/trigger`  手動觸發持倉 review
 
 ## System
 - GET `/api/system/external/probe` `?taifexDate=&liveLine=&liveClaude=`
@@ -133,11 +156,9 @@ Response: `StockEvaluateResult`（含 valuationMode, entryPriceZone, stopLossPri
 ```
 
 ### GET /api/system/migration/health
-檢查 migration 關鍵落地狀態（表/欄位/Flyway 版本）。
+檢查 DB schema 關鍵落地狀態（核心表與欄位存在性，無 Flyway 依賴）。
 
 目前檢查：
 - `position.close_price`
 - `position.realized_pnl`
-- `ai_research_log`
-- `external_probe_log`
-- Flyway `V4 / V5 / V6`
+- 核心表：`position`、`ai_research_log`、`external_probe_log`

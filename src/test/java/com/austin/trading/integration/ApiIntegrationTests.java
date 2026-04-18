@@ -42,7 +42,7 @@ class ApiIntegrationTests {
                       "stockName": "TSMC",
                       "valuationMode": "VALUE_GROWTH",
                       "entryType": "BREAKOUT",
-                      "riskRewardRatio": 2.4,
+                      "riskRewardRatio": 2.5,
                       "includeInFinalPlan": true,
                       "mainStream": true,
                       "falseBreakout": false,
@@ -54,7 +54,10 @@ class ApiIntegrationTests {
                       "entryPriceZone": "998.00-1002.00",
                       "stopLossPrice": 980.0,
                       "takeProfit1": 1030.0,
-                      "takeProfit2": 1060.0
+                      "takeProfit2": 1060.0,
+                      "finalRankScore": 9.0,
+                      "isVetoed": false,
+                      "entryTriggered": true
                     }
                   ]
                 }

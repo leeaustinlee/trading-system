@@ -63,35 +63,40 @@
 - 七頁分頁 SPA（`src/main/resources/static/index.html`）：總覽 / 候選股 / 持倉 / 損益 / 決策歷史 / AI 研究 / 系統
 - 60 秒自動刷新當前頁
 
-**Phase 5 — AI Adapter**
-- `AiClaudeClient`（Anthropic Messages API）、`AiCodexClient`
-- Prompt builders（5 種）、`AiFacade`、`AiResearchService`
+**Phase 5 — AI Adapter（已重構為檔案模式）**
+- 直接 Claude API（`AiClaudeClient`、`AiFacade`、5 個 PromptBuilder）已移除
+- 保留 `ClaudeCodeRequestWriterService`（寫出 JSON 研究請求）+ `AiResearchService`（讀取/匯入研究結果）
+- `AiClaudeConfig`：僅保留 `researchOutputPath` + `requestOutputPath`
 - Migration V5：`ai_research_log`；V6：`external_probe_log`
 - `SystemController`：`/api/system/external/probe`（dry-run/live）、probe history、migration health
-- `MigrationHealthService`：Flyway 停用時正確回報 `flyway.disabled=true`
+- `MigrationHealthService`：檢查核心表與 V4 欄位存在性（無 Flyway 依賴）
+
+**Phase 6 — BC Sniper v2.0 評分管線**
+- `ConsensusScoringEngine`、`WeightedScoringEngine`、`VetoEngine`（14 條規則）
+- `FinalDecisionService.applyScoringPipeline()`：JavaStructure → Consensus → Veto → Weighted → FinalRank
+- `CandidateResponse` 22 欄位（含 aiWeightedScore、consensusScore、disagreementPenalty）
+- UI 等級徽章 A+/A/B/C + 新分數欄位
+- PremarketWorkflowService Phase 2（題材 context + Java 結構評分）
+- PostmarketWorkflowService Phase 2（每日損益彙總 + 題材評分）
 
 **測試**
-- 62 tests pass，4 skipped（TAIFEX live，需 `-Dlive.taifex=true`）
-- 單元測試：27 tests（含 `ChasedHighEntryEngine` 3 情境）
-- 整合測試 `FullApiIntegrationTests`：25 tests，覆蓋所有主要 API happy path + V4 欄位確認
+- 93 tests pass，4 skipped（TAIFEX live，需 `-Dlive.taifex=true`）
+- 單元測試：含 ConsensusScoringEngine 6 情境、VetoEngine 17 情境、ThemeSelectionEngine 6 情境
+- 整合測試 `FullApiIntegrationTests`：26 tests，涵蓋所有主要 API happy path + AI 評分回填 consensus 驗證
 
 **外部實機驗證**
 - LINE Push API：2026-04-17 驗證成功（`GET /api/system/external/probe?liveLine=true`）
 - TAIFEX Open API：`TaifexClientLiveTest` 2026-04-17 驗證通過（加 `-Dlive.taifex=true`）
-- Claude API key：待驗證（設 `CLAUDE_ENABLED=true` + `CLAUDE_API_KEY=xxx`，呼叫 `?liveClaude=true`）
+- Claude：直接 API 已停用，改用 Claude Code Agent 檔案模式（probe 回傳 SKIPPED）
 
 **部署 / 設定**
-- `application-prod.yml`：Flyway 啟用、`ddl-auto:validate`、所有排程開啟
-- `application-local.yml`：Flyway 停用、`ddl-auto:update`、部分排程開啟
-- `application-integration.yml`：Flyway 停用、獨立 DB `trading_system_it`、所有排程關閉
+- `application-prod.yml`：`ddl-auto:update`、所有排程開啟（無 Flyway）
+- `application-local.yml`：`ddl-auto:update`、部分排程開啟
+- `application-integration.yml`：獨立 DB `trading_system_it`、所有排程關閉
 - `.env.example`、`scripts/run-local.sh`、`scripts/run-prod.sh`
 
-## 6. 尚未完成（唯一剩餘項目）
-- **Claude API key 實機測試**：設 `CLAUDE_ENABLED=true` + `CLAUDE_API_KEY=xxx`，呼叫：
-  ```
-  GET /api/system/external/probe?liveClaude=true
-  ```
-  驗收：回傳 `claude.status=OK`，`ai_research_log` 有新增一筆。
+## 6. 已完成（無剩餘任務）
+所有 Phase 1~6 功能已落地，測試通過，無阻塞性待辦。
 
 ## 7. 重要程式入口
 - 決策 API：`src/main/java/com/austin/trading/controller/DecisionController.java`
@@ -112,8 +117,8 @@ mvn -Dmaven.repo.local=/tmp/m2 test -q
   - `docs/spec.md` 的 0.x 進度區塊
 
 ## 9. 交付前檢查清單
-- [ ] 編譯與測試通過（62+ tests）
-- [ ] migration 與 entity 欄位一致
+- [ ] 編譯與測試通過（93+ tests）
+- [ ] entity 欄位與 DB schema 一致（ddl-auto:update 自動同步）
 - [ ] API 文件已更新
 - [ ] `docs/spec.md` 進度已更新
 - [ ] 本地啟動可驗證主要 API

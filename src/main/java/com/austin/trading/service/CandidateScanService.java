@@ -8,8 +8,10 @@ import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.dto.response.LiveQuoteResponse;
 import com.austin.trading.entity.CandidateStockEntity;
 import com.austin.trading.entity.StockEvaluationEntity;
+import com.austin.trading.entity.ThemeSnapshotEntity;
 import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.StockEvaluationRepository;
+import com.austin.trading.repository.ThemeSnapshotRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,15 +30,18 @@ public class CandidateScanService {
 
     private final CandidateStockRepository candidateStockRepository;
     private final StockEvaluationRepository stockEvaluationRepository;
+    private final ThemeSnapshotRepository themeSnapshotRepository;
     private final TwseMisClient twseMisClient;
 
     public CandidateScanService(
             CandidateStockRepository candidateStockRepository,
             StockEvaluationRepository stockEvaluationRepository,
+            ThemeSnapshotRepository themeSnapshotRepository,
             TwseMisClient twseMisClient
     ) {
         this.candidateStockRepository = candidateStockRepository;
         this.stockEvaluationRepository = stockEvaluationRepository;
+        this.themeSnapshotRepository = themeSnapshotRepository;
         this.twseMisClient = twseMisClient;
     }
 
@@ -189,8 +194,15 @@ public class CandidateScanService {
             evaluationBySymbol.put(e.getSymbol(), e);
         }
 
+        // 預先載入當日所有題材快照（依排名順序），供 themeRank 查詢
+        Map<String, ThemeSnapshotEntity> themeByTag = new HashMap<>();
+        for (ThemeSnapshotEntity t : themeSnapshotRepository.findByTradingDateOrderByRankingOrderAsc(tradingDate)) {
+            themeByTag.put(t.getThemeTag(), t);
+        }
+
         return candidates.stream()
-                .map(c -> toFinalDecisionCandidate(c, evaluationBySymbol.get(c.getSymbol())))
+                .map(c -> toFinalDecisionCandidate(c, evaluationBySymbol.get(c.getSymbol()),
+                        c.getThemeTag() != null ? themeByTag.get(c.getThemeTag()) : null))
                 .toList();
     }
 
@@ -271,7 +283,10 @@ public class CandidateScanService {
                             eval == null ? null : eval.getClaudeScore(),
                             eval == null ? null : eval.getCodexScore(),
                             eval == null ? null : eval.getFinalRankScore(),
-                            eval == null ? null : eval.getIsVetoed()
+                            eval == null ? null : eval.getIsVetoed(),
+                            eval == null ? null : eval.getAiWeightedScore(),
+                            eval == null ? null : eval.getConsensusScore(),
+                            eval == null ? null : eval.getDisagreementPenalty()
                     );
                 })
                 .toList();
@@ -279,7 +294,8 @@ public class CandidateScanService {
 
     private FinalDecisionCandidateRequest toFinalDecisionCandidate(
             CandidateStockEntity candidate,
-            StockEvaluationEntity eval
+            StockEvaluationEntity eval,
+            ThemeSnapshotEntity themeSnapshot
     ) {
         BigDecimal rr = eval == null ? BigDecimal.ZERO : nullSafe(eval.getRiskRewardRatio(), BigDecimal.ZERO);
         boolean includePlan = eval != null && Boolean.TRUE.equals(eval.getIncludeInFinalPlan());
@@ -296,6 +312,10 @@ public class CandidateScanService {
         BigDecimal existingCodexScore  = eval == null ? null : eval.getCodexScore();
         BigDecimal existingFinalRank   = eval == null ? null : eval.getFinalRankScore();
         Boolean    existingIsVetoed    = eval == null ? null : eval.getIsVetoed();
+
+        // 從 theme snapshot 取題材排名與分數（BC Sniper v2.0）
+        Integer    themeRank       = themeSnapshot != null ? themeSnapshot.getRankingOrder() : null;
+        BigDecimal finalThemeScore = themeSnapshot != null ? themeSnapshot.getFinalThemeScore() : null;
 
         return new FinalDecisionCandidateRequest(
                 candidate.getSymbol(),
@@ -321,7 +341,15 @@ public class CandidateScanService {
                 existingFinalRank,
                 existingIsVetoed,
                 candidate.getScore(),                          // baseScore
-                candidate.getThemeTag() != null                // hasTheme
+                candidate.getThemeTag() != null,               // hasTheme
+                themeRank,                                     // themeRank
+                finalThemeScore,                               // finalThemeScore
+                eval == null ? null : eval.getConsensusScore(),        // consensusScore
+                eval == null ? null : eval.getDisagreementPenalty(),   // disagreementPenalty
+                null,                                          // volumeSpike
+                null,                                          // priceNotBreakHigh
+                null,                                          // entryTooExtended
+                null                                           // entryTriggered（由外部資料補充）
         );
     }
 
@@ -367,7 +395,8 @@ public class CandidateScanService {
                 eval.getTakeProfit1(), eval.getTakeProfit2(),
                 cand.getThemeTag(), cand.getSector(),
                 eval.getJavaStructureScore(), eval.getClaudeScore(),
-                eval.getCodexScore(), eval.getFinalRankScore(), eval.getIsVetoed()
+                eval.getCodexScore(), eval.getFinalRankScore(), eval.getIsVetoed(),
+                eval.getAiWeightedScore(), eval.getConsensusScore(), eval.getDisagreementPenalty()
         );
     }
 
@@ -412,7 +441,8 @@ public class CandidateScanService {
                 eval.getTakeProfit1(), eval.getTakeProfit2(),
                 cand.getThemeTag(), cand.getSector(),
                 eval.getJavaStructureScore(), eval.getClaudeScore(),
-                eval.getCodexScore(), eval.getFinalRankScore(), eval.getIsVetoed()
+                eval.getCodexScore(), eval.getFinalRankScore(), eval.getIsVetoed(),
+                eval.getAiWeightedScore(), eval.getConsensusScore(), eval.getDisagreementPenalty()
         );
     }
 

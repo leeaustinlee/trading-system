@@ -1,6 +1,5 @@
 package com.austin.trading.controller;
 
-import com.austin.trading.ai.AiFacade;
 import com.austin.trading.dto.response.AiResearchResponse;
 import com.austin.trading.service.AiResearchService;
 import com.austin.trading.service.CandidateScanService;
@@ -14,33 +13,28 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * AI 研究記錄 API。
+ * AI 研究記錄 API（Claude Code Agent 檔案模式）。
  *
  * <ul>
- *   <li>GET  /api/ai/research?date=2026-04-17&type=PREMARKET       查詢研究記錄</li>
- *   <li>POST /api/ai/research/premarket                             觸發盤前研究（直接呼叫 Claude API）</li>
- *   <li>POST /api/ai/research/stock/{symbol}                        觸發個股研究</li>
- *   <li>POST /api/ai/research/final-decision                        觸發最終決策研究</li>
- *   <li>POST /api/ai/research/write-request                         寫入研究請求檔（Claude Code Agent 模式）</li>
+ *   <li>GET  /api/ai/research?date=&type=       查詢研究記錄</li>
+ *   <li>POST /api/ai/research/write-request     寫出研究請求 JSON，供 Claude Code Agent 讀取</li>
+ *   <li>POST /api/ai/research/import-file       從 Markdown 匯入 Agent 研究結果到 DB</li>
  * </ul>
  */
 @RestController
 @RequestMapping("/api/ai")
 public class AiController {
 
-    private final AiResearchService          aiResearchService;
-    private final AiFacade                   aiFacade;
+    private final AiResearchService              aiResearchService;
     private final ClaudeCodeRequestWriterService requestWriterService;
-    private final CandidateScanService       candidateScanService;
+    private final CandidateScanService           candidateScanService;
 
     public AiController(
             AiResearchService aiResearchService,
-            AiFacade aiFacade,
             ClaudeCodeRequestWriterService requestWriterService,
             CandidateScanService candidateScanService
     ) {
         this.aiResearchService    = aiResearchService;
-        this.aiFacade             = aiFacade;
         this.requestWriterService = requestWriterService;
         this.candidateScanService = candidateScanService;
     }
@@ -59,38 +53,10 @@ public class AiController {
         return aiResearchService.getByDate(queryDate);
     }
 
-    // ── 觸發研究（手動呼叫 / 排程備用）──────────────────────────────────────────
-
-    @PostMapping("/research/premarket")
-    public AiResearchResponse triggerPremarket(
-            @RequestParam(required = false) String txfSummary,
-            @RequestParam(required = false) String globalSummary
-    ) {
-        return aiFacade.doPremarketResearch(LocalDate.now(), txfSummary, globalSummary);
-    }
-
-    @PostMapping("/research/stock/{symbol}")
-    public AiResearchResponse triggerStockEval(
-            @PathVariable String symbol,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
-    ) {
-        return aiFacade.doStockEvaluation(date != null ? date : LocalDate.now(), symbol);
-    }
-
-    @PostMapping("/research/final-decision")
-    public AiResearchResponse triggerFinalDecision(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
-    ) {
-        return aiFacade.doFinalDecisionResearch(date != null ? date : LocalDate.now());
-    }
+    // ── 寫出研究請求（Claude Code Agent 模式）────────────────────────────────
 
     /**
-     * 寫入研究請求檔，供 Claude Code Agent 讀取後執行研究。
-     * <p>
-     * 無 API Key 模式下的觸發方式：Java 整理候選股清單 → 寫出 JSON 請求 →
-     * Claude Code 讀取並分析 → 寫回 claude-research-latest.md →
-     * 使用者點「匯入最新研究報告」補入 DB。
-     * </p>
+     * 寫入研究請求 JSON，供 Claude Code Agent 讀取後執行分析。
      * <pre>
      * POST /api/ai/research/write-request
      *   ?type=PREMARKET          （PREMARKET / FINAL_DECISION / STOCK_EVAL / POSTMARKET / MIDDAY）
@@ -119,16 +85,15 @@ public class AiController {
                       "candidateCount", symbols.size(), "message", msg);
     }
 
+    // ── 匯入研究結果 ──────────────────────────────────────────────────────────
+
     /**
      * 從本機 Markdown 檔案匯入研究結果到 DB。
-     * <p>
-     * 用途：把 Claude Code 排程 Agent 已寫好的研究檔補入資料庫。
-     * </p>
      * <pre>
      * POST /api/ai/research/import-file
      *   ?filePath=/mnt/d/ai/stock/claude-research-latest.md
-     *   &researchType=T86_TOMORROW
-     *   &tradingDate=2026-04-17          （選填，預設今日）
+     *   &researchType=POSTMARKET
+     *   &tradingDate=2026-04-18    （選填，預設今日）
      * </pre>
      */
     @PostMapping("/research/import-file")

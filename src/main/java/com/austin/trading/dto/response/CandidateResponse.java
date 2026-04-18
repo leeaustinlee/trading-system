@@ -23,6 +23,10 @@ public record CandidateResponse(
         BigDecimal claudeScore,
         BigDecimal codexScore,
         BigDecimal finalRankScore,
-        Boolean isVetoed
+        Boolean isVetoed,
+        // ── BC Sniper v2.0 新增欄位 ──────────────────────────
+        BigDecimal aiWeightedScore,
+        BigDecimal consensusScore,
+        BigDecimal disagreementPenalty
 ) {
 }

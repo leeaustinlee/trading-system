@@ -80,6 +80,25 @@ public class LineTemplateService {
         sendAndLog("SYSTEM_ALERT", title, message);
     }
 
+    /** 持倉監控警報（WEAKEN / EXIT / TRAIL_UP 時發送） */
+    public void notifyPositionAlert(String symbol, String status, String reason,
+                                     Double currentPrice, Double entryPrice, Double pnlPct) {
+        String priceStr = currentPrice != null ? String.format("%.2f", currentPrice) : "N/A";
+        String entryStr = entryPrice != null ? String.format("%.2f", entryPrice) : "N/A";
+        String pnlStr = pnlPct != null ? String.format("%+.2f%%", pnlPct) : "N/A";
+
+        String message = String.join("\n",
+                "--- 持倉警報 ---",
+                "標的：" + symbol,
+                "狀態：" + status,
+                "現價：" + priceStr + "  成本：" + entryStr,
+                "損益：" + pnlStr,
+                "原因：" + reason,
+                "來源：Codex"
+        );
+        sendAndLog("POSITION_ALERT", "持倉警報 " + symbol + " " + status, message);
+    }
+
     // ── 私有方法 ───────────────────────────────────────────────────────────────
 
     private void sendAndLog(String type, String title, String message) {

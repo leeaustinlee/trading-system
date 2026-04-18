@@ -558,6 +558,48 @@ class FullApiIntegrationTests {
     }
 
     // ─────────────────────────────────────────────────────────────────
+    // Candidates – AI score backfill (BC Sniper v2.0)
+    // ─────────────────────────────────────────────────────────────────
+
+    @Test
+    void aiScoreBackfill_shouldRecalculateConsensusAndFinalRank() throws Exception {
+        // PUT 直接回填 Claude + Codex 評分；updateAiScores 在無紀錄時會自動建立 stock_evaluation
+        String aiReq = """
+                {
+                  "tradingDate": "%s",
+                  "claudeScore": 7.0,
+                  "claudeConfidence": 0.8,
+                  "claudeThesis": "AI 族群籌碼面強勢",
+                  "claudeRiskFlags": ["接近前波高點"],
+                  "codexScore": 7.5
+                }
+                """.formatted(LocalDate.now());
+
+        MvcResult result = mockMvc.perform(put("/api/candidates/IT001/ai-scores")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(aiReq))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.claudeScore").value(7.0))
+                .andExpect(jsonPath("$.codexScore").value(7.5))
+                .andExpect(jsonPath("$.aiWeightedScore").isNumber())
+                .andExpect(jsonPath("$.consensusScore").isNumber())
+                .andExpect(jsonPath("$.finalRankScore").isNumber())
+                .andReturn();
+
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+
+        // v2.0 核心不變式：finalRankScore = min(aiWeightedScore, consensusScore)
+        double aiWeighted   = body.path("aiWeightedScore").asDouble();
+        double consensusScr = body.path("consensusScore").asDouble();
+        double finalRank    = body.path("finalRankScore").asDouble();
+        assertThat(aiWeighted).isGreaterThan(0.0);
+        assertThat(consensusScr).isGreaterThan(0.0);
+        assertThat(finalRank).isLessThanOrEqualTo(aiWeighted + 0.001);
+        assertThat(finalRank).isLessThanOrEqualTo(consensusScr + 0.001);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
     // AI Research – read only (trigger disabled in integration profile)
     // ─────────────────────────────────────────────────────────────────
 

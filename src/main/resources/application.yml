@@ -9,8 +9,6 @@ spring:
     hibernate:
       ddl-auto: update
     open-in-view: false
-  flyway:
-    enabled: false
 
 management:
   endpoints:
@@ -66,16 +64,14 @@ trading:
     external-probe-health:
       enabled: false
     external-probe-health-cron: "0 25 8,15 * * MON-FRI"
+    watchlist-refresh:
+      enabled: false
+    watchlist-refresh-cron: "0 35 15 * * MON-FRI"
 
   taifex:
     base-url: ${TAIFEX_BASE_URL:https://openapi.taifex.com.tw}
 
   ai:
     claude:
-      enabled: ${CLAUDE_ENABLED:false}
-      api-key: ${CLAUDE_API_KEY:}
-      model: ${CLAUDE_MODEL:claude-sonnet-4-6}
-      max-tokens: ${CLAUDE_MAX_TOKENS:4096}
       research-output-path: ${CLAUDE_RESEARCH_OUTPUT_PATH:}
-      # 無 API Key 模式：Java 排程寫出 context，由 Claude Code 排程 Agent 讀取分析
       request-output-path: ${CLAUDE_REQUEST_OUTPUT_PATH:}

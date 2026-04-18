@@ -1,15 +1,26 @@
 package com.austin.trading.workflow;
 
+import com.austin.trading.dto.request.DailyPnlCreateRequest;
 import com.austin.trading.dto.response.CandidateResponse;
+import com.austin.trading.dto.response.LiveQuoteResponse;
+import com.austin.trading.engine.ThemeSelectionEngine;
+import com.austin.trading.entity.StockThemeMappingEntity;
+import com.austin.trading.entity.ThemeSnapshotEntity;
 import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.repository.DailyPnlRepository;
+import com.austin.trading.repository.PositionRepository;
+import com.austin.trading.repository.StockThemeMappingRepository;
 import com.austin.trading.service.CandidateScanService;
 import com.austin.trading.service.ClaudeCodeRequestWriterService;
+import com.austin.trading.service.PnlService;
 import com.austin.trading.service.ScoreConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -17,10 +28,10 @@ import java.util.stream.Collectors;
  * 盤後工作流編排器（15:30 觸發）。
  *
  * <pre>
- * Step 1: TODO Phase 2 - 整理當日倉位損益
- * Step 2: TODO Phase 2 - 全市場盤後強勢股掃描 → ThemeSelectionEngine
+ * Step 1: 整理當日倉位損益 → upsert daily_pnl
+ * Step 2: 全市場題材強弱掃描 → ThemeSelectionEngine.computeAndSaveAllThemes()
  * Step 3: 以今日候選股為基礎，寫出明日 Claude 研究請求
- * Step 4: LINE 盤後通知（scheduling.line_notify_enabled = true 時）
+ * Step 4: LINE 盤後通知
  * </pre>
  */
 @Service
@@ -29,30 +40,48 @@ public class PostmarketWorkflowService {
     private static final Logger log = LoggerFactory.getLogger(PostmarketWorkflowService.class);
 
     private final CandidateScanService           candidateScanService;
+    private final ThemeSelectionEngine           themeSelectionEngine;
+    private final StockThemeMappingRepository    stockThemeMappingRepository;
+    private final PositionRepository             positionRepository;
+    private final DailyPnlRepository             dailyPnlRepository;
+    private final PnlService                     pnlService;
     private final ClaudeCodeRequestWriterService requestWriterService;
     private final LineTemplateService            lineTemplateService;
     private final ScoreConfigService             config;
 
     public PostmarketWorkflowService(
             CandidateScanService candidateScanService,
+            ThemeSelectionEngine themeSelectionEngine,
+            StockThemeMappingRepository stockThemeMappingRepository,
+            PositionRepository positionRepository,
+            DailyPnlRepository dailyPnlRepository,
+            PnlService pnlService,
             ClaudeCodeRequestWriterService requestWriterService,
             LineTemplateService lineTemplateService,
             ScoreConfigService config
     ) {
-        this.candidateScanService = candidateScanService;
-        this.requestWriterService = requestWriterService;
-        this.lineTemplateService  = lineTemplateService;
-        this.config               = config;
+        this.candidateScanService       = candidateScanService;
+        this.themeSelectionEngine       = themeSelectionEngine;
+        this.stockThemeMappingRepository = stockThemeMappingRepository;
+        this.positionRepository         = positionRepository;
+        this.dailyPnlRepository         = dailyPnlRepository;
+        this.pnlService                 = pnlService;
+        this.requestWriterService       = requestWriterService;
+        this.lineTemplateService        = lineTemplateService;
+        this.config                     = config;
     }
 
     public void execute(LocalDate tradingDate) {
         log.info("[PostmarketWorkflow] 開始 tradingDate={}", tradingDate);
 
-        // Step 1: TODO Phase 2 - 整理當日倉位損益
-        // Step 2: TODO Phase 2 - 全市場盤後強勢股掃描 → ThemeSelectionEngine
+        // Step 1: 整理當日倉位損益
+        consolidateDailyPnl(tradingDate);
+
+        // Step 2: 全市場題材強弱掃描
+        computeThemeScores(tradingDate);
 
         // Step 3: 以今日候選股為基礎，寫出明日 Claude 研究請求
-        int researchMax = config.getInt("candidate.research.maxCount", 5);
+        int researchMax = config.getInt("candidate.research.maxCount", 3);
         List<CandidateResponse> candidates = candidateScanService.getCurrentCandidates(researchMax);
         List<String> symbols = candidates.stream().map(CandidateResponse::symbol).toList();
 
@@ -61,16 +90,102 @@ public class PostmarketWorkflowService {
             log.info("[PostmarketWorkflow] Claude 研究請求寫出={}, symbols={}", written, symbols);
         }
 
-        // Step 4: LINE 盤後通知（由 scheduling.line_notify_enabled 控制）
+        // Step 4: LINE 盤後通知
         boolean lineEnabled = config.getBoolean("scheduling.line_notify_enabled", false);
         if (lineEnabled) {
-            int notifyMax = config.getInt("candidate.notify.maxCount", 10);
+            int notifyMax = config.getInt("candidate.notify.maxCount", 5);
             List<CandidateResponse> notifyList = candidateScanService.getCurrentCandidates(notifyMax);
             String candidateText = formatCandidates(notifyList);
             lineTemplateService.notifyPostmarket(candidateText, tradingDate);
             log.info("[PostmarketWorkflow] LINE 盤後通知已發送，候選股={} 檔", notifyList.size());
         } else {
             log.info("[PostmarketWorkflow] LINE 通知未啟用（scheduling.line_notify_enabled=false）");
+        }
+    }
+
+    // ── 私有方法 ──────────────────────────────────────────────────────────────
+
+    /**
+     * Step 1：整理當日已實現損益。
+     * <p>
+     * 持倉出清時 {@link PnlService#recordClosedPosition} 已即時更新 daily_pnl，
+     * 此處做盤後確認：若今日無記錄但有已關閉持倉，則建立彙總記錄。
+     * </p>
+     */
+    private void consolidateDailyPnl(LocalDate tradingDate) {
+        try {
+            boolean alreadyExists = dailyPnlRepository.findByTradingDate(tradingDate).isPresent();
+            if (alreadyExists) {
+                log.info("[PostmarketWorkflow] daily_pnl 已存在（持倉出清時已自動更新），跳過重建");
+                return;
+            }
+
+            // 查詢今日已關閉持倉的已實現損益加總
+            LocalDateTime start = tradingDate.atStartOfDay();
+            LocalDateTime end   = tradingDate.plusDays(1).atStartOfDay();
+            BigDecimal totalPnl = positionRepository.sumRealizedPnlBetween(start, end);
+
+            if (totalPnl == null) {
+                log.info("[PostmarketWorkflow] 今日無已關閉持倉，不建立 daily_pnl");
+                return;
+            }
+
+            // 統計交易筆數
+            int tradeCount = positionRepository.findClosedBetween(start, end).size();
+
+            pnlService.create(new DailyPnlCreateRequest(
+                    tradingDate, totalPnl, null, null,
+                    tradeCount, null, null,
+                    "Auto: postmarket workflow 盤後確認",
+                    null, null, null, null
+            ));
+            log.info("[PostmarketWorkflow] daily_pnl 建立完成 tradingDate={} grossPnl={}", tradingDate, totalPnl);
+
+        } catch (Exception e) {
+            log.warn("[PostmarketWorkflow] consolidateDailyPnl 失敗: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Step 2：取得題材成員股票的即時收盤報價，計算並儲存各題材分數。
+     */
+    private void computeThemeScores(LocalDate tradingDate) {
+        try {
+            // 取所有啟用題材的成員股代號（去重）
+            List<String> themeSymbols = stockThemeMappingRepository
+                    .findAllByOrderBySymbolAscThemeTagAsc()
+                    .stream()
+                    .filter(m -> Boolean.TRUE.equals(m.getIsActive()))
+                    .map(StockThemeMappingEntity::getSymbol)
+                    .distinct()
+                    .toList();
+
+            if (themeSymbols.isEmpty()) {
+                log.info("[PostmarketWorkflow] 無啟用題材成員，跳過題材評分");
+                return;
+            }
+
+            // 取得即時報價（盤後會是收盤價）
+            List<LiveQuoteResponse> quotes = candidateScanService.getLiveQuotesBySymbols(themeSymbols);
+
+            // 轉換為 StockQuoteInput
+            List<ThemeSelectionEngine.StockQuoteInput> quoteInputs = quotes.stream()
+                    .filter(q -> q.changePercent() != null || q.currentPrice() != null)
+                    .map(q -> new ThemeSelectionEngine.StockQuoteInput(
+                            q.symbol(), q.changePercent(), q.volume(), q.currentPrice()))
+                    .toList();
+
+            if (quoteInputs.isEmpty()) {
+                log.info("[PostmarketWorkflow] 題材成員均無報價，跳過題材評分");
+                return;
+            }
+
+            List<ThemeSnapshotEntity> results =
+                    themeSelectionEngine.computeAndSaveAllThemes(tradingDate, quoteInputs);
+            log.info("[PostmarketWorkflow] 題材評分完成，共更新 {} 個題材", results.size());
+
+        } catch (Exception e) {
+            log.warn("[PostmarketWorkflow] computeThemeScores 失敗: {}", e.getMessage());
         }
     }
 

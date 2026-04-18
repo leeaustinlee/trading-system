@@ -31,6 +31,15 @@ public record FinalDecisionCandidateRequest(
         Boolean    isVetoed,             // 是否已被 VetoEngine 淘汰
         // ── Java 結構評分輸入（Phase 2 補充）────────────────────
         BigDecimal baseScore,            // 候選股原始分（CandidateStockEntity.score）
-        Boolean    hasTheme              // 是否有題材標籤
+        Boolean    hasTheme,             // 是否有題材標籤
+        // ── BC Sniper v2.0 新增欄位 ──────────────────────────
+        Integer    themeRank,            // 題材排名（ThemeSnapshot.rankingOrder）
+        BigDecimal finalThemeScore,      // 題材最終分（ThemeSnapshot.finalThemeScore）
+        BigDecimal consensusScore,       // 共識分（ConsensusScoringEngine 計算）
+        BigDecimal disagreementPenalty,  // 分歧懲罰（ConsensusScoringEngine 計算）
+        Boolean    volumeSpike,          // 爆量但未突破
+        Boolean    priceNotBreakHigh,    // 價格未突破近期高點
+        Boolean    entryTooExtended,     // 進場位置距突破點太遠
+        Boolean    entryTriggered        // 是否已觸發明確進場訊號（突破/回測確認）
 ) {
 }

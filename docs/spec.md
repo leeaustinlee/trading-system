@@ -33,14 +33,39 @@
   - 總覽 / 候選股 / 持倉 / 損益 / 決策歷史 / AI 研究 / 系統
   - 60 秒自動刷新當前頁
 
-**Phase 5 — AI Adapter**
-- `AiClaudeClient`：Anthropic Messages API，返回 `AiResponse(content, model, tokens)`
-- `AiCodexClient`：研究結果寫入 `claude-research-latest.md`
-- Prompt builders：`PremarketPromptBuilder`、`StockEvaluationPromptBuilder`、`FinalDecisionPromptBuilder`、`HourlyGatePromptBuilder`、`MonitorPromptBuilder`
-- `AiFacade`、`AiResearchService`：研究 → 落表 → 可選寫檔
+**Phase 5 — AI Adapter（已重構為檔案模式）**
+- 直接 Claude API（`AiClaudeClient`、`AiFacade`、5 個 PromptBuilder）已移除
+- 保留 `ClaudeCodeRequestWriterService`（寫出 JSON 研究請求）+ `AiResearchService`（讀取/匯入研究結果）
+- `AiClaudeConfig`：僅保留 `researchOutputPath` + `requestOutputPath`
 - Migration V5：`ai_research_log`；V6：`external_probe_log`
-- `SystemController`：`/api/system/external/probe`（dry-run/live）、`/api/system/external/probe/history`、`/api/system/migration/health`
-- `MigrationHealthService`：Flyway 停用時正確回報 `flyway.disabled=true`
+- `SystemController`：`/api/system/external/probe`（dry-run/live）、probe history、migration health
+- `MigrationHealthService`：檢查核心表與 V4 欄位（無 Flyway 依賴）
+
+**Phase 6 — BC Sniper v2.0 評分管線**
+- `ConsensusScoringEngine`、`WeightedScoringEngine`、`VetoEngine`（14 條規則）
+- `FinalDecisionService.applyScoringPipeline()`：JavaStructure → Consensus → Veto → Weighted → FinalRank
+- `PUT /api/candidates/{symbol}/ai-scores`：AI 評分回填時同步重算 consensus + final_rank
+- PremarketWorkflowService Phase 2（題材 context + Java 結構評分）
+- PostmarketWorkflowService Phase 2（每日損益彙總 + 題材評分）
+
+**Phase 7 — Position Layer + Watchlist Layer（v1.1 完成）**
+- `PositionDecisionEngine`：持股每日/盤中決策（STRONG/HOLD/WEAKEN/EXIT/TRAIL_UP）
+  - 時間衰退（stale_days_without_momentum）、isExtended 分級（NONE/MILD/EXTREME）
+  - failedBreakout 快速 EXIT、trailing stop 三階段
+  - **Drawdown 機制**：從持倉期間高點回撤 ≥ 3% WEAKEN / ≥ 5% EXIT
+- `WatchlistEngine`：觀察名單狀態轉換（ADD/KEEP/PROMOTE_READY/DROP/EXPIRE）
+  - decay 機制（觀察天數衰退，momentumStrong 豁免）、READY 門檻更嚴
+  - **MarketGrade 過濾**：C 級擋 ADD/PROMOTE；B 級提高 READY 門檻
+- 新表：`watchlist_stock`（UNIQUE symbol）、`position_review_log`
+- `PositionEntity` 新增：updatedAt, lastReviewedAt, trailingStopPrice, reviewStatus
+- `CooldownService`：symbol + theme 維度冷卻
+- `FiveMinuteMonitorJob` 整合持倉監控
+- `WatchlistWorkflowService` + `WatchlistRefreshJob`（盤後刷新）
+- `FinalDecisionService`：watchlist READY 優先、滿倉禁止、score gap 保護 STRONG 持股
+  - **Entry trigger**：需有明確進場訊號（decision.require_entry_trigger）
+  - **Market-level cooldown**：連續虧損 N 筆或當日虧損超限 → 禁止新倉
+- `MarketCooldownService`：連續虧損筆數 + 當日累計虧損檢查
+- 40+ config keys（position.review.* / position.trailing.* / watchlist.* / trading.cooldown.* / portfolio.* / decision.*）
 
 **API（全部可用）**
 - `GET /api/dashboard/current`
@@ -54,29 +79,26 @@
 - `POST /api/decisions/position-sizing/evaluate`、`POST /api/decisions/stoploss-takeprofit/evaluate`
 - `GET /api/positions/open`、`GET /api/positions/history`、`POST /api/positions`、`PATCH /api/positions/{id}/close`
 - `GET /api/pnl/daily|history|summary`、`POST /api/pnl/daily`
-- `GET /api/ai/research`、`POST /api/ai/research/premarket|stock/{symbol}|final-decision`
+- `GET /api/ai/research`、`POST /api/ai/research/write-request|import-file`
 - `GET /api/system/external/probe|probe/history|migration/health`
 
-**測試（62 tests pass，4 skipped）**
-- 單元測試：engine 層 27 tests（含 ChasedHighEntryEngine 3 情境）
+**測試（115 tests pass，4 skipped）**
+- 單元測試：engine 層含 ConsensusScoringEngine 6、VetoEngine 17、ThemeSelectionEngine 6 等
 - 整合測試（`ApiIntegrationTests`）：3 tests，E2E 骨架
-- 整合測試（`FullApiIntegrationTests`）：25 tests，涵蓋所有主要 API happy path + V4 欄位確認
-- TAIFEX live（`TaifexClientLiveTest`）：4 tests，加 `-Dlive.taifex=true` 跑實機（2026-04-17 已驗證通過）
+- 整合測試（`FullApiIntegrationTests`）：26 tests，涵蓋所有主要 API + AI 評分回填 consensus 驗證
+- TAIFEX live（`TaifexClientLiveTest`）：4 tests，加 `-Dlive.taifex=true` 跑實機
 
 **部署 / 設定**
-- `application-prod.yml`：Flyway 啟用、`ddl-auto:validate`、所有排程開啟
-- `application-local.yml`：Flyway 停用、`ddl-auto:update`、部分排程開啟（開發用）
-- `application-integration.yml`：Flyway 停用、獨立 DB `trading_system_it`、所有排程關閉
-- `.env.example`：所有環境變數說明
+- `application-prod.yml`：`ddl-auto:update`、所有排程開啟（無 Flyway）
+- `application-local.yml`：`ddl-auto:update`、部分排程開啟（開發用）
+- `application-integration.yml`：獨立 DB `trading_system_it`、所有排程關閉
+- `.env.example`：所有環境變數說明（Claude 部分僅保留檔案路徑，API key 已移除）
 - `scripts/run-local.sh`、`scripts/run-prod.sh`（含必填欄位驗證）
 
-### 0.2 未完成（需外部 credentials）
-- Claude API key 實機測試：設 `CLAUDE_ENABLED=true` + `CLAUDE_API_KEY=xxx`，呼叫 `GET /api/system/external/probe?liveClaude=true`
-
-### 0.2.1 已完成外部實機驗證
-- LINE Push API（`LINE_CHANNEL_ACCESS_TOKEN` + `LINE_TO`）已於 2026-04-17 22:12（Asia/Taipei）驗證成功：
-  - `GET /api/system/external/probe?liveLine=true&liveClaude=false`
-  - 回傳：`line.status=OK`、`line.success=true`、`line.detail=LINE 實際發送成功`
+### 0.2 外部實機驗證（已完成）
+- LINE Push API：2026-04-17 驗證成功
+- TAIFEX Open API：2026-04-17 驗證通過
+- Claude：直接 API 已停用，改用 Claude Code Agent 檔案模式（probe 回傳 SKIPPED）
 
 ### 0.3 更新規則
 - 每次完成一個功能切片（engine/API/scheduler）後，必須同步更新本章節。
@@ -380,5 +402,9 @@ Trading Decision Platform
 - Dashboard 基本 UI
 
 ### Phase 5
-- Claude/Codex adapter
+- Claude Code Agent 檔案模式（直接 API 已移除）
 - 盤前/盤後研究摘要整合
+
+### Phase 6
+- BC Sniper v2.0 評分管線（Consensus / Weighted / Veto / FinalRank）
+- PremarketWorkflowService / PostmarketWorkflowService Phase 2

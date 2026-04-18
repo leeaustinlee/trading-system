@@ -64,6 +64,12 @@ public class PositionService {
     }
 
     public PositionResponse create(PositionCreateRequest request) {
+        // 重複持倉防護：同 symbol 不可有多個 OPEN position
+        positionRepository.findTopBySymbolAndStatus(request.symbol(), "OPEN").ifPresent(existing -> {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "已有 OPEN 持倉: " + request.symbol() + " (id=" + existing.getId() + ")");
+        });
+
         PositionEntity entity = new PositionEntity();
         entity.setSymbol(request.symbol());
         entity.setStockName(request.stockName());

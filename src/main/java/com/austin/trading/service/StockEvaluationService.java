@@ -3,6 +3,7 @@ package com.austin.trading.service;
 import com.austin.trading.dto.request.AiScoreUpdateRequest;
 import com.austin.trading.dto.request.StockEvaluateRequest;
 import com.austin.trading.dto.response.StockEvaluateResult;
+import com.austin.trading.engine.ConsensusScoringEngine;
 import com.austin.trading.engine.StockEvaluationEngine;
 import com.austin.trading.engine.WeightedScoringEngine;
 import com.austin.trading.entity.StockEvaluationEntity;
@@ -26,17 +27,20 @@ public class StockEvaluationService {
 
     private final StockEvaluationEngine     stockEvaluationEngine;
     private final WeightedScoringEngine     weightedScoringEngine;
+    private final ConsensusScoringEngine    consensusScoringEngine;
     private final StockEvaluationRepository stockEvaluationRepository;
     private final ObjectMapper              objectMapper;
 
     public StockEvaluationService(
             StockEvaluationEngine stockEvaluationEngine,
             WeightedScoringEngine weightedScoringEngine,
+            ConsensusScoringEngine consensusScoringEngine,
             StockEvaluationRepository stockEvaluationRepository,
             ObjectMapper objectMapper
     ) {
         this.stockEvaluationEngine     = stockEvaluationEngine;
         this.weightedScoringEngine     = weightedScoringEngine;
+        this.consensusScoringEngine    = consensusScoringEngine;
         this.stockEvaluationRepository = stockEvaluationRepository;
         this.objectMapper              = objectMapper;
     }
@@ -100,20 +104,28 @@ public class StockEvaluationService {
             eval.setCodexReviewIssues(toJson(req.codexReviewIssues()));
         }
 
-        // 重算加權評分與最終排序分
+        // 重算共識分、加權分與最終排序分（v2.0：final = min(weighted, consensus)）
         BigDecimal javaScore   = eval.getJavaStructureScore();
         BigDecimal claudeScore = eval.getClaudeScore();
         BigDecimal codexScore  = eval.getCodexScore();
-        BigDecimal aiWeighted  = weightedScoringEngine.computeAiWeightedScore(javaScore, claudeScore, codexScore);
-        boolean    isVetoed    = Boolean.TRUE.equals(eval.getIsVetoed());
-        BigDecimal finalRank   = weightedScoringEngine.computeFinalRankScore(aiWeighted, isVetoed);
+
+        ConsensusScoringEngine.ConsensusResult consensusResult = consensusScoringEngine.compute(
+                new ConsensusScoringEngine.ConsensusInput(javaScore, claudeScore, codexScore));
+        eval.setConsensusScore(consensusResult.consensusScore());
+        eval.setDisagreementPenalty(consensusResult.disagreementPenalty());
+
+        BigDecimal aiWeighted = weightedScoringEngine.computeAiWeightedScore(javaScore, claudeScore, codexScore);
+        boolean    isVetoed   = Boolean.TRUE.equals(eval.getIsVetoed());
+        BigDecimal finalRank  = weightedScoringEngine.computeFinalRankScore(
+                aiWeighted, consensusResult.consensusScore(), isVetoed);
 
         eval.setAiWeightedScore(aiWeighted);
         eval.setFinalRankScore(finalRank);
 
         StockEvaluationEntity saved = stockEvaluationRepository.save(eval);
-        log.info("[StockEvalService] AI score updated: symbol={}, date={}, java={}, claude={}, codex={}, finalRank={}",
-                symbol, date, javaScore, claudeScore, codexScore, finalRank);
+        log.info("[StockEvalService] AI score updated: symbol={}, date={}, java={}, claude={}, codex={}, consensus={}, finalRank={}",
+                symbol, date, javaScore, claudeScore, codexScore,
+                consensusResult.consensusScore(), finalRank);
         return saved;
     }
 

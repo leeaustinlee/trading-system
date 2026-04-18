@@ -539,6 +539,9 @@
             <th title="Claude研究評分 0-10">Claude分</th>
             <th title="Codex研究評分 0-10">Codex分</th>
             <th title="最終排序分（veto後）">最終分</th>
+            <th title="A+/A/B/C等級（A+才可交易）">等級</th>
+            <th title="三AI共識分">共識分</th>
+            <th title="分歧懲罰值">分歧罰</th>
             <th title="是否被硬性淘汰">淘汰</th>
             <th>風報比</th><th>估值模式</th><th>進場區間</th>
             <th>停損</th><th>停利1</th><th>停利2</th>
@@ -1428,6 +1431,25 @@
             const fScoreCell = c.finalRankScore != null
               ? `<span class="score-badge" style="background:${scoreBg(c.finalRankScore)};font-weight:700">${fScore}</span>`
               : `<span class="quote-meta">–</span>`;
+            // 等級徽章
+            let gradeCell = `<span class="quote-meta">–</span>`;
+            if (c.isVetoed) {
+              gradeCell = `<span class="pill err">✗ 淘汰</span>`;
+            } else if (c.finalRankScore != null) {
+              const fs = Number(c.finalRankScore);
+              if (fs >= 8.8)      gradeCell = `<span class="pill ok" style="background:#d0f0e8;color:#065c3a;font-weight:700">A+</span>`;
+              else if (fs >= 8.2) gradeCell = `<span class="pill ok">A</span>`;
+              else if (fs >= 7.4) gradeCell = `<span class="pill warn">B</span>`;
+              else                gradeCell = `<span class="pill muted">C</span>`;
+            }
+            const csScore = c.consensusScore        != null ? Number(c.consensusScore).toFixed(1)        : "–";
+            const dpScore = c.disagreementPenalty   != null ? Number(c.disagreementPenalty).toFixed(2)   : "–";
+            const csCell  = c.consensusScore        != null
+              ? `<span class="score-badge" style="background:${scoreBg(c.consensusScore)}">${csScore}</span>`
+              : `<span class="quote-meta">–</span>`;
+            const dpCell  = c.disagreementPenalty   != null
+              ? `<span class="mono" style="color:${c.disagreementPenalty > 1 ? 'var(--err)' : 'var(--muted)'}">${dpScore}</span>`
+              : `<span class="quote-meta">–</span>`;
             return `<tr>
               <td class="mono">${esc(c.symbol)}</td>
               <td>${esc(c.stockName)}</td>
@@ -1436,6 +1458,9 @@
               <td style="text-align:center">${clScoreCell}</td>
               <td style="text-align:center">${cxScoreCell}</td>
               <td style="text-align:center">${fScoreCell}</td>
+              <td style="text-align:center">${gradeCell}</td>
+              <td style="text-align:center">${csCell}</td>
+              <td style="text-align:center">${dpCell}</td>
               <td style="text-align:center">${vetoCell}</td>
               <td>${esc(c.riskRewardRatio)}</td>
               <td>${zhEsc(c.valuationMode)}</td>
@@ -1454,7 +1479,7 @@
               </td>
             </tr>`;
           }).join("")
-        : `<tr class="empty-row"><td colspan="16">目前無候選股</td></tr>`;
+        : `<tr class="empty-row"><td colspan="19">目前無候選股</td></tr>`;
     } catch(e) { showErr("errBoxCand", `載入失敗：${e.message}`); }
   }
 

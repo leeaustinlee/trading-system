@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface PositionRepository extends JpaRepository<PositionEntity, Long> {
 
@@ -56,4 +57,23 @@ public interface PositionRepository extends JpaRepository<PositionEntity, Long> 
     BigDecimal sumRealizedPnlBetween(
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end);
+
+    /** 查詢指定 symbol 是否有指定狀態的持倉 */
+    Optional<PositionEntity> findTopBySymbolAndStatus(String symbol, String status);
+
+    /** 查詢指定 symbol 最近關閉的持倉（用於 cooldown 判斷） */
+    @Query("SELECT p FROM PositionEntity p WHERE p.symbol = :symbol AND p.status = 'CLOSED' " +
+           "AND p.closedAt >= :since ORDER BY p.closedAt DESC")
+    List<PositionEntity> findRecentlyClosedBySymbol(
+            @Param("symbol") String symbol,
+            @Param("since") LocalDateTime since);
+
+    /** 查詢指定題材最近關閉的持倉（用於 theme cooldown） */
+    @Query("SELECT p FROM PositionEntity p WHERE p.status = 'CLOSED' " +
+           "AND p.closedAt >= :since " +
+           "AND p.payloadJson LIKE CONCAT('%', :themeTag, '%') " +
+           "ORDER BY p.closedAt DESC")
+    List<PositionEntity> findRecentlyClosedByTheme(
+            @Param("themeTag") String themeTag,
+            @Param("since") LocalDateTime since);
 }

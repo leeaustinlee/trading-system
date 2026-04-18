@@ -35,11 +35,11 @@ public class WeightedScoringEngine {
      * @return 加權後分數，精度 3 位小數
      */
     public BigDecimal computeAiWeightedScore(BigDecimal javaScore, BigDecimal claudeScore, BigDecimal codexScore) {
-        BigDecimal jw = config.getDecimal("scoring.java_weight",   new BigDecimal("0.50"));
+        BigDecimal jw = config.getDecimal("scoring.java_weight",   new BigDecimal("0.40"));
         BigDecimal cw = config.getDecimal("scoring.claude_weight", new BigDecimal("0.35"));
-        BigDecimal xw = config.getDecimal("scoring.codex_weight",  new BigDecimal("0.15"));
+        BigDecimal xw = config.getDecimal("scoring.codex_weight",  new BigDecimal("0.25"));
 
-        boolean codexEnabled = config.getBoolean("scoring.enable_codex_review", false);
+        boolean codexEnabled = config.getBoolean("scoring.enable_codex_review", true);
 
         // 若 Codex 未啟用或無分數，其權重按比例分給 java & claude
         BigDecimal totalWeight;
@@ -82,9 +82,17 @@ public class WeightedScoringEngine {
     }
 
     /**
-     * 計算最終排序分：若已被 veto，回傳 0；否則回傳 ai_weighted_score。
+     * 計算最終排序分（BC Sniper v2.0）。
+     * <p>
+     * 若已被 veto → 0；
+     * 否則 final_rank_score = min(ai_weighted_score, consensus_score)。
+     * 若 consensusScore 為 null（尚未計算），直接用 ai_weighted_score。
+     * </p>
      */
-    public BigDecimal computeFinalRankScore(BigDecimal aiWeightedScore, boolean isVetoed) {
-        return isVetoed ? BigDecimal.ZERO : (aiWeightedScore != null ? aiWeightedScore : BigDecimal.ZERO);
+    public BigDecimal computeFinalRankScore(BigDecimal aiWeightedScore, BigDecimal consensusScore, boolean isVetoed) {
+        if (isVetoed) return BigDecimal.ZERO;
+        BigDecimal weighted = aiWeightedScore != null ? aiWeightedScore : BigDecimal.ZERO;
+        if (consensusScore == null) return weighted;
+        return weighted.min(consensusScore);
     }
 }

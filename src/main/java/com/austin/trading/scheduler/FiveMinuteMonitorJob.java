@@ -6,10 +6,15 @@ import com.austin.trading.dto.response.MarketCurrentResponse;
 import com.austin.trading.dto.response.MonitorDecisionResponse;
 import com.austin.trading.dto.response.TradingStateResponse;
 import com.austin.trading.engine.MonitorDecisionEngine;
+import com.austin.trading.engine.PositionDecisionEngine.PositionDecisionResult;
+import com.austin.trading.engine.PositionDecisionEngine.PositionStatus;
 import com.austin.trading.notify.LineTemplateService;
 import com.austin.trading.service.MarketDataService;
 import com.austin.trading.service.MonitorDecisionService;
+import com.austin.trading.service.PositionReviewService;
+import com.austin.trading.service.PositionReviewService.ReviewResult;
 import com.austin.trading.service.SchedulerLogService;
+import com.austin.trading.service.ScoreConfigService;
 import com.austin.trading.service.TradingStateService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +25,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 
 
 @Component
@@ -32,23 +38,29 @@ public class FiveMinuteMonitorJob {
     private final TradingStateService tradingStateService;
     private final MonitorDecisionEngine monitorDecisionEngine;
     private final MonitorDecisionService monitorDecisionService;
+    private final PositionReviewService positionReviewService;
     private final LineTemplateService lineTemplateService;
     private final SchedulerLogService schedulerLogService;
+    private final ScoreConfigService scoreConfig;
 
     public FiveMinuteMonitorJob(
             MarketDataService marketDataService,
             TradingStateService tradingStateService,
             MonitorDecisionEngine monitorDecisionEngine,
             MonitorDecisionService monitorDecisionService,
+            PositionReviewService positionReviewService,
             LineTemplateService lineTemplateService,
-            SchedulerLogService schedulerLogService
+            SchedulerLogService schedulerLogService,
+            ScoreConfigService scoreConfig
     ) {
         this.marketDataService = marketDataService;
         this.tradingStateService = tradingStateService;
         this.monitorDecisionEngine = monitorDecisionEngine;
         this.monitorDecisionService = monitorDecisionService;
+        this.positionReviewService = positionReviewService;
         this.lineTemplateService = lineTemplateService;
         this.schedulerLogService = schedulerLogService;
+        this.scoreConfig = scoreConfig;
     }
 
     @Scheduled(cron = "${trading.scheduler.five-minute-monitor-cron:0 */5 9-13 * * MON-FRI}", zone = "${trading.timezone:Asia/Taipei}")
@@ -92,6 +104,25 @@ public class FiveMinuteMonitorJob {
             ));
 
             lineTemplateService.notifyMonitor(decision, LocalTime.now());
+
+            // ── 持倉監控（新增）──────────────────────────────────────────
+            try {
+                var reviews = positionReviewService.reviewAllOpenPositions("INTRADAY");
+                boolean lineEnabled = scoreConfig.getBoolean("scheduling.line_notify_enabled", false);
+                for (ReviewResult r : reviews) {
+                    PositionStatus s = r.decision().status();
+                    if (lineEnabled && (s == PositionStatus.WEAKEN || s == PositionStatus.EXIT || s == PositionStatus.TRAIL_UP)) {
+                        lineTemplateService.notifyPositionAlert(
+                                r.position().getSymbol(), s.name(), r.decision().reason(),
+                                r.position().getAvgCost() != null ? r.position().getAvgCost().doubleValue() : null,
+                                r.position().getAvgCost() != null ? r.position().getAvgCost().doubleValue() : null,
+                                null);
+                    }
+                }
+                log.info("[FiveMinuteMonitorJob] 持倉監控完成，共 {} 筆", reviews.size());
+            } catch (Exception pe) {
+                log.warn("[FiveMinuteMonitorJob] 持倉監控失敗: {}", pe.getMessage());
+            }
 
             log.info("[FiveMinuteMonitorJob] {}", decision.summaryForLog());
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), decision.summaryForLog());

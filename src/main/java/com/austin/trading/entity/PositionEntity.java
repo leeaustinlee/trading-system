@@ -61,6 +61,18 @@ public class PositionEntity {
     @Column(name = "payload_json", columnDefinition = "json")
     private String payloadJson;
 
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @Column(name = "last_reviewed_at")
+    private LocalDateTime lastReviewedAt;
+
+    @Column(name = "trailing_stop_price", precision = 12, scale = 4)
+    private BigDecimal trailingStopPrice;
+
+    @Column(name = "review_status", length = 20)
+    private String reviewStatus;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -97,5 +109,13 @@ public class PositionEntity {
     public void setNote(String note) { this.note = note; }
     public String getPayloadJson() { return payloadJson; }
     public void setPayloadJson(String payloadJson) { this.payloadJson = payloadJson; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public LocalDateTime getLastReviewedAt() { return lastReviewedAt; }
+    public void setLastReviewedAt(LocalDateTime lastReviewedAt) { this.lastReviewedAt = lastReviewedAt; }
+    public BigDecimal getTrailingStopPrice() { return trailingStopPrice; }
+    public void setTrailingStopPrice(BigDecimal trailingStopPrice) { this.trailingStopPrice = trailingStopPrice; }
+    public String getReviewStatus() { return reviewStatus; }
+    public void setReviewStatus(String reviewStatus) { this.reviewStatus = reviewStatus; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }
