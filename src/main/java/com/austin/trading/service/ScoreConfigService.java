@@ -46,6 +46,7 @@ public class ScoreConfigService {
         DEFAULTS.put("scoring.rr_min_grade_b",          new String[]{"2.0",   "DECIMAL", "B 級市場最低風報比"});
         DEFAULTS.put("scoring.enable_codex_review",     new String[]{"false", "BOOLEAN", "是否啟用 Codex review 層"});
         DEFAULTS.put("scoring.late_stop_market_grade",  new String[]{"A",     "STRING",  "10:30 後允許進場的最低市場等級"});
+        DEFAULTS.put("scoring.java_rr_multiplier",       new String[]{"1.5",   "DECIMAL", "RR 換算為 Java 結構分的乘數（RR*乘數，上限4）"});
         DEFAULTS.put("scoring.theme_weight_in_java",    new String[]{"0.30",  "DECIMAL", "題材分在 Java 結構評分中的佔比"});
         DEFAULTS.put("scheduling.line_notify_enabled",  new String[]{"false", "BOOLEAN", "是否啟用 Java 直接發 LINE"});
         DEFAULTS.put("scoring.cooldown_minutes",        new String[]{"30",    "INTEGER", "每筆交易後的冷卻期（分鐘）"});

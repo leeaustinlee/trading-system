@@ -318,7 +318,9 @@ public class CandidateScanService {
                 existingClaudeScore,
                 existingCodexScore,
                 existingFinalRank,
-                existingIsVetoed
+                existingIsVetoed,
+                candidate.getScore(),                          // baseScore
+                candidate.getThemeTag() != null                // hasTheme
         );
     }
 

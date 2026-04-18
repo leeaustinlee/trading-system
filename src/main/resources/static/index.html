@@ -904,6 +904,41 @@
   </div>
 </div>
 
+<!-- ══════════════ MODAL: 新增題材對應 ══════════════ -->
+<div class="modal-overlay" id="modal-theme-add" style="display:none" onclick="if(event.target===this)closeModal('modal-theme-add')">
+  <div class="modal-box" style="max-width:480px">
+    <h3>新增題材對應</h3>
+    <div id="theme-add-err" class="err-msg" style="display:none"></div>
+    <div class="form-grid">
+      <div class="form-field">
+        <label>股票代號 *</label>
+        <input id="ta-symbol" type="text" placeholder="2330" maxlength="10">
+      </div>
+      <div class="form-field">
+        <label>股票名稱</label>
+        <input id="ta-name" type="text" placeholder="台積電">
+      </div>
+      <div class="form-field form-full">
+        <label>題材標籤 *</label>
+        <input id="ta-theme" type="text" placeholder="AI算力、CoWoS、散熱…">
+      </div>
+      <div class="form-field">
+        <label>來源</label>
+        <select id="ta-source">
+          <option value="MANUAL">MANUAL（手工）</option>
+          <option value="CODEX">CODEX</option>
+          <option value="CLAUDE">CLAUDE</option>
+          <option value="AUTO">AUTO</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn primary" onclick="submitThemeAdd()">新增</button>
+      <button class="btn" style="background:var(--bg3)" onclick="closeModal('modal-theme-add')">取消</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════ MODAL: 手動新增損益 ══════════════ -->
 <div class="modal-overlay" id="modal-pnl-add" style="display:none" onclick="if(event.target===this)closeModal('modal-pnl-add')">
   <div class="modal-box">
@@ -2695,6 +2730,36 @@
   }
 
   $("stm-load")?.addEventListener("click", loadThemeMappings);
+
+  $("stm-btnAdd")?.addEventListener("click", () => {
+    $("ta-symbol").value = "";
+    $("ta-name").value = "";
+    $("ta-theme").value = "";
+    $("ta-source").value = "MANUAL";
+    clearErr("theme-add-err");
+    $("modal-theme-add").style.display = "flex";
+  });
+
+  async function submitThemeAdd() {
+    const symbol = $("ta-symbol").value.trim();
+    const themeTag = $("ta-theme").value.trim();
+    if (!symbol || !themeTag) { showErr("theme-add-err", "代號與題材標籤為必填"); return; }
+    clearErr("theme-add-err");
+    try {
+      await api("/api/themes/mappings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol,
+          stockName: $("ta-name").value.trim() || null,
+          themeTag,
+          source: $("ta-source").value
+        })
+      });
+      closeModal("modal-theme-add");
+      await loadThemeMappings();
+    } catch(e) { showErr("theme-add-err", e.message); }
+  }
 
   /* .score-badge 樣式（動態注入） */
   (function injectScoreBadgeCss() {

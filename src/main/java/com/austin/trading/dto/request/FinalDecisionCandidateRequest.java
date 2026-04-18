@@ -28,6 +28,9 @@ public record FinalDecisionCandidateRequest(
         BigDecimal claudeScore,          // Claude 研究評分（0-10，可 null）
         BigDecimal codexScore,           // Codex 審核評分（0-10，可 null）
         BigDecimal finalRankScore,       // 最終排序分（0-10；veto=0）
-        Boolean    isVetoed              // 是否已被 VetoEngine 淘汰
+        Boolean    isVetoed,             // 是否已被 VetoEngine 淘汰
+        // ── Java 結構評分輸入（Phase 2 補充）────────────────────
+        BigDecimal baseScore,            // 候選股原始分（CandidateStockEntity.score）
+        Boolean    hasTheme              // 是否有題材標籤
 ) {
 }

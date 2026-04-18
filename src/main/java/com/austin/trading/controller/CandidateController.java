@@ -1,9 +1,12 @@
 package com.austin.trading.controller;
 
+import com.austin.trading.dto.request.AiScoreUpdateRequest;
 import com.austin.trading.dto.request.CandidateBatchItemRequest;
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.dto.response.LiveQuoteResponse;
+import com.austin.trading.entity.StockEvaluationEntity;
 import com.austin.trading.service.CandidateScanService;
+import com.austin.trading.service.StockEvaluationService;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -27,10 +30,13 @@ import java.util.Map;
 @RequestMapping("/api/candidates")
 public class CandidateController {
 
-    private final CandidateScanService candidateScanService;
+    private final CandidateScanService    candidateScanService;
+    private final StockEvaluationService stockEvaluationService;
 
-    public CandidateController(CandidateScanService candidateScanService) {
-        this.candidateScanService = candidateScanService;
+    public CandidateController(CandidateScanService candidateScanService,
+                               StockEvaluationService stockEvaluationService) {
+        this.candidateScanService    = candidateScanService;
+        this.stockEvaluationService  = stockEvaluationService;
     }
 
     @GetMapping("/current")
@@ -103,6 +109,46 @@ public class CandidateController {
                 "currentDayCandidates", saved.size(),
                 "candidates", saved
         ));
+    }
+
+    /**
+     * AI 評分回填（Claude / Codex 研究完成後呼叫）。
+     * <p>
+     * 更新 stock_evaluation 的 claude_score / codex_score 等欄位，
+     * 並自動重算 ai_weighted_score 與 final_rank_score。
+     * </p>
+     *
+     * <pre>
+     * PUT /api/candidates/{symbol}/ai-scores
+     * {
+     *   "tradingDate": "2026-04-18",
+     *   "claudeScore": 7.5,
+     *   "claudeThesis": "AI PCB族群延續，法人持續買超",
+     *   "claudeRiskFlags": ["接近前波高點", "大盤若轉弱優先出場"],
+     *   "codexScore": 8.0
+     * }
+     * </pre>
+     */
+    @PutMapping("/{symbol}/ai-scores")
+    public ResponseEntity<?> updateAiScores(
+            @PathVariable String symbol,
+            @RequestBody AiScoreUpdateRequest req
+    ) {
+        try {
+            StockEvaluationEntity updated = stockEvaluationService.updateAiScores(symbol, req);
+            return ResponseEntity.ok(Map.of(
+                    "success",        true,
+                    "symbol",         symbol,
+                    "tradingDate",    updated.getTradingDate(),
+                    "claudeScore",    updated.getClaudeScore(),
+                    "codexScore",     updated.getCodexScore(),
+                    "aiWeightedScore",updated.getAiWeightedScore(),
+                    "finalRankScore", updated.getFinalRankScore(),
+                    "isVetoed",       updated.getIsVetoed()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "error", e.getMessage()));
+        }
     }
 
     /** 切換今日候選股「納入最終計畫」狀態（toggle） */

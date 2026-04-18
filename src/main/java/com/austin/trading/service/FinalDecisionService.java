@@ -304,8 +304,8 @@ public class FinalDecisionService {
                             c.stopLossPrice() == null ? null : BigDecimal.valueOf(c.stopLossPrice()),
                             c.valuationMode(),
                             c.entryType(),
-                            null,   // baseScore 目前 toFinalDecisionCandidate 未傳入
-                            false   // hasTheme 未傳入
+                            c.baseScore(),
+                            Boolean.TRUE.equals(c.hasTheme())
                     )
             );
 
@@ -343,7 +343,8 @@ public class FinalDecisionService {
                     c.nearDayHigh(), c.stopLossReasonable(),
                     c.rationale(), c.entryPriceZone(),
                     c.stopLossPrice(), c.takeProfit1(), c.takeProfit2(),
-                    javaScore, claudeScore, codexScore, finalRank, veto.vetoed()
+                    javaScore, claudeScore, codexScore, finalRank, veto.vetoed(),
+                    c.baseScore(), c.hasTheme()
             ));
         }
         return result;

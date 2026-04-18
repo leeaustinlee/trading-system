@@ -1,11 +1,18 @@
 package com.austin.trading.service;
 
+import com.austin.trading.dto.request.AiScoreUpdateRequest;
 import com.austin.trading.dto.request.StockEvaluateRequest;
 import com.austin.trading.dto.response.StockEvaluateResult;
 import com.austin.trading.engine.StockEvaluationEngine;
+import com.austin.trading.engine.WeightedScoringEngine;
 import com.austin.trading.entity.StockEvaluationEntity;
 import com.austin.trading.repository.StockEvaluationRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -15,15 +22,23 @@ import java.util.List;
 @Service
 public class StockEvaluationService {
 
-    private final StockEvaluationEngine stockEvaluationEngine;
+    private static final Logger log = LoggerFactory.getLogger(StockEvaluationService.class);
+
+    private final StockEvaluationEngine     stockEvaluationEngine;
+    private final WeightedScoringEngine     weightedScoringEngine;
     private final StockEvaluationRepository stockEvaluationRepository;
+    private final ObjectMapper              objectMapper;
 
     public StockEvaluationService(
             StockEvaluationEngine stockEvaluationEngine,
-            StockEvaluationRepository stockEvaluationRepository
+            WeightedScoringEngine weightedScoringEngine,
+            StockEvaluationRepository stockEvaluationRepository,
+            ObjectMapper objectMapper
     ) {
-        this.stockEvaluationEngine = stockEvaluationEngine;
+        this.stockEvaluationEngine     = stockEvaluationEngine;
+        this.weightedScoringEngine     = weightedScoringEngine;
         this.stockEvaluationRepository = stockEvaluationRepository;
+        this.objectMapper              = objectMapper;
     }
 
     /**
@@ -49,6 +64,57 @@ public class StockEvaluationService {
     /** 取得指定日期所有評估紀錄。 */
     public List<StockEvaluationEntity> getByDate(LocalDate tradingDate) {
         return stockEvaluationRepository.findByTradingDate(tradingDate);
+    }
+
+    /**
+     * 回填 AI 評分（Claude / Codex），並自動重算 ai_weighted_score 與 final_rank_score。
+     * 若當日尚無評估紀錄，建立空殼紀錄再寫入。
+     *
+     * @return 更新後的 StockEvaluationEntity
+     */
+    @Transactional
+    public StockEvaluationEntity updateAiScores(String symbol, AiScoreUpdateRequest req) {
+        LocalDate date = req.tradingDate() != null ? req.tradingDate() : LocalDate.now();
+
+        StockEvaluationEntity eval = stockEvaluationRepository
+                .findByTradingDateAndSymbol(date, symbol)
+                .orElseGet(() -> {
+                    StockEvaluationEntity e = new StockEvaluationEntity();
+                    e.setTradingDate(date);
+                    e.setSymbol(symbol);
+                    return e;
+                });
+
+        // 更新 Claude 欄位
+        if (req.claudeScore()      != null) eval.setClaudeScore(req.claudeScore());
+        if (req.claudeConfidence() != null) eval.setClaudeConfidence(req.claudeConfidence());
+        if (req.claudeThesis()     != null) eval.setClaudeThesis(req.claudeThesis());
+        if (req.claudeRiskFlags()  != null && !req.claudeRiskFlags().isEmpty()) {
+            eval.setClaudeRiskFlags(toJson(req.claudeRiskFlags()));
+        }
+
+        // 更新 Codex 欄位
+        if (req.codexScore()        != null) eval.setCodexScore(req.codexScore());
+        if (req.codexConfidence()   != null) eval.setCodexConfidence(req.codexConfidence());
+        if (req.codexReviewIssues() != null && !req.codexReviewIssues().isEmpty()) {
+            eval.setCodexReviewIssues(toJson(req.codexReviewIssues()));
+        }
+
+        // 重算加權評分與最終排序分
+        BigDecimal javaScore   = eval.getJavaStructureScore();
+        BigDecimal claudeScore = eval.getClaudeScore();
+        BigDecimal codexScore  = eval.getCodexScore();
+        BigDecimal aiWeighted  = weightedScoringEngine.computeAiWeightedScore(javaScore, claudeScore, codexScore);
+        boolean    isVetoed    = Boolean.TRUE.equals(eval.getIsVetoed());
+        BigDecimal finalRank   = weightedScoringEngine.computeFinalRankScore(aiWeighted, isVetoed);
+
+        eval.setAiWeightedScore(aiWeighted);
+        eval.setFinalRankScore(finalRank);
+
+        StockEvaluationEntity saved = stockEvaluationRepository.save(eval);
+        log.info("[StockEvalService] AI score updated: symbol={}, date={}, java={}, claude={}, codex={}, finalRank={}",
+                symbol, date, javaScore, claudeScore, codexScore, finalRank);
+        return saved;
     }
 
     // ── 私有方法 ───────────────────────────────────────────────────────────────
@@ -90,5 +156,13 @@ public class StockEvaluationService {
 
     private String escapeJson(String s) {
         return s == null ? "" : s.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private String toJson(Object obj) {
+        try {
+            return objectMapper.writeValueAsString(obj);
+        } catch (JsonProcessingException e) {
+            return "[]";
+        }
     }
 }
