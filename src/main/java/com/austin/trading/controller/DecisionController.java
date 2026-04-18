@@ -23,6 +23,7 @@ import com.austin.trading.engine.StopLossTakeProfitEngine;
 import com.austin.trading.service.FinalDecisionService;
 import com.austin.trading.service.HourlyGateDecisionService;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -76,6 +78,18 @@ public class DecisionController {
     @GetMapping("/history")
     public List<FinalDecisionRecordResponse> getHistory(@RequestParam(defaultValue = "50") int limit) {
         return finalDecisionService.getHistory(limit);
+    }
+
+    /**
+     * 手動觸發今日（或指定日）最終決策評估並寫入 DB。
+     * POST /api/decisions/final/evaluate-persist?date=2026-04-18
+     */
+    @PostMapping("/final/evaluate-persist")
+    public FinalDecisionResponse evaluateAndPersist(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+    ) {
+        return finalDecisionService.evaluateAndPersist(date != null ? date : LocalDate.now());
     }
 
     @GetMapping("/hourly-gate/current")

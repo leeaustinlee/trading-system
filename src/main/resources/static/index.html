@@ -646,12 +646,14 @@
     <div class="grid">
 
       <section class="card span-8">
-        <h2>最終決策趨勢</h2>
+        <h2>最終決策趨勢
+          <button class="btn primary" id="dec-btnEvaluate" style="margin-left:auto;padding:5px 14px;font-size:13px">▶ 執行今日最終決策</button>
+        </h2>
         <div id="dec-chart" class="decision-chart"></div>
         <div id="dec-summary" class="decision-summary"></div>
         <table style="margin-top:12px">
           <thead><tr>
-            <th>日期</th><th>決策</th><th>摘要</th><th>市場等級</th><th>評分</th>
+            <th>日期</th><th>決策</th><th>入選</th><th>排除</th><th>摘要</th>
           </tr></thead>
           <tbody id="dec-tableBody"></tbody>
         </table>
@@ -1683,13 +1685,61 @@
       <span class="pill ok">可進場 ${enter}</span>
       <span class="pill warn">僅觀察 ${watch}</span>
       <span class="pill err">建議休息 ${rest}</span>`;
-    tbody.innerHTML = rows.slice(0,15).map(r => `<tr>
-      <td class="mono">${fmtDate(r.tradingDate)}</td>
-      <td>${decisionPill(r.decision)}</td>
-      <td class="small">${esc(r.summary)}</td>
-      <td>${esc(r.marketGrade)}</td>
-      <td>${esc(r.totalScore)}</td>
-    </tr>`).join("");
+    tbody.innerHTML = rows.slice(0,15).map(r => {
+      let payload = {};
+      try { payload = JSON.parse(r.payloadJson || "{}"); } catch(_) {}
+      const selCount  = payload.selected_count ?? "–";
+      const rejCount  = payload.rejected_count ?? "–";
+      const selStocks = payload.selected_stocks;
+      const rowId     = `dec-row-${r.id}`;
+      const detailId  = `dec-detail-${r.id}`;
+      const hasDetail = selStocks && selStocks.length > 0;
+      const detail = hasDetail ? `<tr id="${detailId}" style="display:none;background:var(--bg2)">
+        <td colspan="5" style="padding:8px 12px">
+          <table style="width:100%;font-size:12px">
+            <thead><tr><th>代號</th><th>名稱</th><th>進場類型</th><th>進場區間</th><th>停損</th><th>停利1</th><th>停利2</th><th>倉位建議(元)</th><th>理由</th></tr></thead>
+            <tbody>${selStocks.map(s => `<tr>
+              <td class="mono">${esc(s.stockCode)}</td>
+              <td>${esc(s.stockName)}</td>
+              <td>${esc(s.entryType)}</td>
+              <td>${esc(s.entryPriceZone)}</td>
+              <td class="num-neg">${s.stopLossPrice ?? "–"}</td>
+              <td class="num-pos">${s.takeProfit1 ?? "–"}</td>
+              <td class="num-pos">${s.takeProfit2 ?? "–"}</td>
+              <td>${s.suggestedPositionSize != null ? fmtPrice(s.suggestedPositionSize) : "–"}</td>
+              <td class="small">${esc(s.rationale)}</td>
+            </tr>`).join("")}</tbody>
+          </table>
+        </td>
+      </tr>` : "";
+      return `<tr id="${rowId}" style="cursor:${hasDetail?'pointer':'default'}"
+        ${hasDetail ? `onclick="const d=document.getElementById('${detailId}');d.style.display=d.style.display==='none'?'table-row':'none'"` : ""}>
+        <td class="mono">${fmtDate(r.tradingDate)}</td>
+        <td>${decisionPill(r.decision)}</td>
+        <td>${selCount}</td>
+        <td>${rejCount}</td>
+        <td class="small">${esc(r.summary)}</td>
+      </tr>${detail}`;
+    }).join("");
+  }
+
+  async function runFinalDecisionEvaluate() {
+    const btn = $("dec-btnEvaluate");
+    const origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "執行中…";
+    clearErr("errBoxDec");
+    try {
+      const res = await api("/api/decisions/final/evaluate-persist", { method: "POST" });
+      await loadDecisions();
+      const sel = res?.selectedStocks?.length ?? 0;
+      btn.textContent = `✓ 完成（入選 ${sel} 檔）`;
+      setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 3000);
+    } catch(e) {
+      showErr("errBoxDec", `執行失敗：${e.message}`);
+      btn.textContent = origText;
+      btn.disabled = false;
+    }
   }
 
   /* ─────────────────────────────────────────────
@@ -2437,6 +2487,7 @@
   }
 
   $("btnRefreshNav").addEventListener("click", refreshCurrent);
+  $("dec-btnEvaluate").addEventListener("click", runFinalDecisionEvaluate);
 
   // Init
   loadDashboard();
