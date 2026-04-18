@@ -14,6 +14,7 @@ import com.austin.trading.dto.response.TradingStateResponse;
 import com.austin.trading.engine.FinalDecisionEngine;
 import com.austin.trading.engine.PositionSizingEngine;
 import com.austin.trading.engine.StopLossTakeProfitEngine;
+import com.austin.trading.entity.CapitalConfigEntity;
 import com.austin.trading.entity.FinalDecisionEntity;
 import com.austin.trading.repository.FinalDecisionRepository;
 import org.springframework.data.domain.PageRequest;
@@ -28,7 +29,7 @@ import java.util.stream.Collectors;
 @Service
 public class FinalDecisionService {
 
-    // 預設資金參數（可未來從 capital-summary 讀取）
+    // 資金參數回退值（capital_config 未設定時使用）
     private static final double DEFAULT_BASE_CAPITAL     = 50_000.0;
     private static final double DEFAULT_MAX_SINGLE       = 50_000.0;
     private static final double DEFAULT_RISK_BUDGET_RATIO = 1.0;
@@ -45,6 +46,7 @@ public class FinalDecisionService {
     private final MarketDataService marketDataService;
     private final TradingStateService tradingStateService;
     private final CandidateScanService candidateScanService;
+    private final CapitalService capitalService;
 
     public FinalDecisionService(
             FinalDecisionEngine finalDecisionEngine,
@@ -53,7 +55,8 @@ public class FinalDecisionService {
             FinalDecisionRepository finalDecisionRepository,
             MarketDataService marketDataService,
             TradingStateService tradingStateService,
-            CandidateScanService candidateScanService
+            CandidateScanService candidateScanService,
+            CapitalService capitalService
     ) {
         this.finalDecisionEngine = finalDecisionEngine;
         this.positionSizingEngine = positionSizingEngine;
@@ -62,6 +65,7 @@ public class FinalDecisionService {
         this.marketDataService = marketDataService;
         this.tradingStateService = tradingStateService;
         this.candidateScanService = candidateScanService;
+        this.capitalService = capitalService;
     }
 
     public FinalDecisionResponse evaluateAndPersist(LocalDate tradingDate) {
@@ -87,9 +91,20 @@ public class FinalDecisionService {
         Map<String, FinalDecisionCandidateRequest> candidateMap = candidates.stream()
                 .collect(Collectors.toMap(FinalDecisionCandidateRequest::stockCode, c -> c, (a, b) -> a));
 
+        // 從 capital_config 取得可動用現金，計算倉位上限
+        CapitalConfigEntity capitalCfg = capitalService.getConfig();
+        double availCash = capitalCfg.getAvailableCash() != null
+                ? capitalCfg.getAvailableCash().doubleValue() : 0.0;
+        double baseCapital = availCash > 0 ? availCash : DEFAULT_BASE_CAPITAL;
+        // Level 4 規則：單檔最多 3-5 萬，且不超過可動用現金 35%
+        double maxSingle = availCash > 0
+                ? Math.min(availCash * 0.35, 50_000.0)
+                : DEFAULT_MAX_SINGLE;
+
         // 為每檔入選股補上倉位建議與停損停利
         List<FinalDecisionSelectedStockResponse> enriched = decision.selectedStocks().stream()
-                .map(s -> enrichWithSizing(s, marketGrade, candidateMap.get(s.stockCode())))
+                .map(s -> enrichWithSizing(s, marketGrade, candidateMap.get(s.stockCode()),
+                        baseCapital, maxSingle))
                 .toList();
 
         FinalDecisionResponse enrichedDecision = new FinalDecisionResponse(
@@ -124,7 +139,9 @@ public class FinalDecisionService {
     private FinalDecisionSelectedStockResponse enrichWithSizing(
             FinalDecisionSelectedStockResponse stock,
             String marketGrade,
-            FinalDecisionCandidateRequest candidate
+            FinalDecisionCandidateRequest candidate,
+            double baseCapital,
+            double maxSingle
     ) {
         String valuationMode = candidate == null ? "VALUE_STORY" : safe(candidate.valuationMode(), "VALUE_STORY");
         boolean nearHigh     = candidate != null && Boolean.TRUE.equals(candidate.nearDayHigh());
@@ -139,13 +156,13 @@ public class FinalDecisionService {
         Double finalTp1 = tp1 == 0.0 ? stock.takeProfit1()    : tp1;
         Double finalTp2 = tp2 == 0.0 ? stock.takeProfit2()    : tp2;
 
-        // 倉位建議
+        // 倉位建議（使用真實可動用現金）
         PositionSizingResponse sizing = positionSizingEngine.evaluate(
                 new PositionSizingEvaluateRequest(
                         marketGrade,
                         valuationMode,
-                        DEFAULT_BASE_CAPITAL,
-                        DEFAULT_MAX_SINGLE,
+                        baseCapital,
+                        maxSingle,
                         DEFAULT_RISK_BUDGET_RATIO,
                         nearHigh
                 )

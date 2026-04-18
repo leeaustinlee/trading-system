@@ -12,6 +12,9 @@ public record CandidateResponse(
         String valuationMode,
         String entryPriceZone,
         BigDecimal riskRewardRatio,
-        Boolean includeInFinalPlan
+        Boolean includeInFinalPlan,
+        BigDecimal stopLossPrice,
+        BigDecimal takeProfit1,
+        BigDecimal takeProfit2
 ) {
 }

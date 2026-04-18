@@ -261,7 +261,10 @@ public class CandidateScanService {
                             eval == null ? null : eval.getValuationMode(),
                             eval == null ? null : eval.getEntryPriceZone(),
                             eval == null ? null : eval.getRiskRewardRatio(),
-                            eval == null ? null : eval.getIncludeInFinalPlan()
+                            eval == null ? null : eval.getIncludeInFinalPlan(),
+                            eval == null ? null : eval.getStopLossPrice(),
+                            eval == null ? null : eval.getTakeProfit1(),
+                            eval == null ? null : eval.getTakeProfit2()
                     );
                 })
                 .toList();
@@ -314,6 +317,77 @@ public class CandidateScanService {
             return "REVERSAL";
         }
         return "PULLBACK";
+    }
+
+    /**
+     * 切換今日候選股「納入最終計畫」狀態。
+     * 若 StockEvaluation 不存在，自動建立後設為 true。
+     */
+    @Transactional
+    public CandidateResponse toggleInclude(String symbol) {
+        LocalDate today = LocalDate.now();
+        StockEvaluationEntity eval = stockEvaluationRepository
+                .findByTradingDateAndSymbol(today, symbol)
+                .orElseGet(() -> {
+                    StockEvaluationEntity e = new StockEvaluationEntity();
+                    e.setTradingDate(today);
+                    e.setSymbol(symbol);
+                    return e;
+                });
+        eval.setIncludeInFinalPlan(!Boolean.TRUE.equals(eval.getIncludeInFinalPlan()));
+        stockEvaluationRepository.save(eval);
+
+        CandidateStockEntity cand = candidateStockRepository
+                .findByTradingDateAndSymbol(today, symbol).orElse(null);
+        return cand == null ? null : new CandidateResponse(
+                cand.getTradingDate(), cand.getSymbol(), cand.getStockName(),
+                cand.getScore(), cand.getReason(),
+                eval.getValuationMode(), eval.getEntryPriceZone(), eval.getRiskRewardRatio(),
+                eval.getIncludeInFinalPlan(), eval.getStopLossPrice(),
+                eval.getTakeProfit1(), eval.getTakeProfit2()
+        );
+    }
+
+    /**
+     * 更新今日候選股的評估欄位（僅更新非 null 的欄位）。
+     * 若 StockEvaluation 不存在，自動建立。
+     */
+    @Transactional
+    public CandidateResponse updateCandidate(String symbol, CandidateBatchItemRequest req) {
+        LocalDate today = LocalDate.now();
+        CandidateStockEntity cand = candidateStockRepository
+                .findByTradingDateAndSymbol(today, symbol)
+                .orElseThrow(() -> new RuntimeException("候選股不存在: " + symbol));
+
+        if (req.score()     != null) cand.setScore(req.score());
+        if (req.reason()    != null) cand.setReason(req.reason());
+        if (req.stockName() != null) cand.setStockName(req.stockName());
+        candidateStockRepository.save(cand);
+
+        StockEvaluationEntity eval = stockEvaluationRepository
+                .findByTradingDateAndSymbol(today, symbol)
+                .orElseGet(() -> {
+                    StockEvaluationEntity e = new StockEvaluationEntity();
+                    e.setTradingDate(today);
+                    e.setSymbol(symbol);
+                    return e;
+                });
+        if (req.valuationMode()     != null) eval.setValuationMode(req.valuationMode());
+        if (req.entryPriceZone()    != null) eval.setEntryPriceZone(req.entryPriceZone());
+        if (req.stopLossPrice()     != null) eval.setStopLossPrice(req.stopLossPrice());
+        if (req.takeProfit1()       != null) eval.setTakeProfit1(req.takeProfit1());
+        if (req.takeProfit2()       != null) eval.setTakeProfit2(req.takeProfit2());
+        if (req.riskRewardRatio()   != null) eval.setRiskRewardRatio(req.riskRewardRatio());
+        if (req.includeInFinalPlan()!= null) eval.setIncludeInFinalPlan(req.includeInFinalPlan());
+        stockEvaluationRepository.save(eval);
+
+        return new CandidateResponse(
+                cand.getTradingDate(), cand.getSymbol(), cand.getStockName(),
+                cand.getScore(), cand.getReason(),
+                eval.getValuationMode(), eval.getEntryPriceZone(), eval.getRiskRewardRatio(),
+                eval.getIncludeInFinalPlan(), eval.getStopLossPrice(),
+                eval.getTakeProfit1(), eval.getTakeProfit2()
+        );
     }
 
     private <T> T nullSafe(T value, T fallback) {

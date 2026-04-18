@@ -517,7 +517,7 @@
           <thead><tr>
             <th>代號</th><th>名稱</th><th>評分</th><th>風報比</th>
             <th>估值模式</th><th>進場區間</th><th>停損</th><th>停利1</th><th>停利2</th>
-            <th>納入計畫</th><th>排除原因</th>
+            <th>納入計畫</th><th>操作</th>
           </tr></thead>
           <tbody id="c-currentBody"></tbody>
         </table>
@@ -1247,10 +1247,14 @@
   /* ─────────────────────────────────────────────
      PAGE: Candidates
   ───────────────────────────────────────────── */
+  let _candidateCache = {};  // symbol -> CandidateResponse，供編輯 modal 使用
+
   async function loadCandidates() {
     clearErr("errBoxCand");
     try {
       const data = await api("/api/candidates/current");
+      _candidateCache = {};
+      (data || []).forEach(c => { _candidateCache[c.symbol] = c; });
       $("c-currentBody").innerHTML = (data || []).length
         ? (data || []).map(c => `<tr>
             <td class="mono">${esc(c.symbol)}</td>
@@ -1263,10 +1267,59 @@
             <td>${esc(c.takeProfit1)}</td>
             <td>${esc(c.takeProfit2)}</td>
             <td>${c.includeInFinalPlan ? pill("納入","ok") : pill("未納入","muted")}</td>
-            <td class="small">${esc(c.rejectReason)}</td>
+            <td style="white-space:nowrap">
+              <button class="btn" style="padding:2px 8px;font-size:12px"
+                onclick="toggleCandidateInclude('${esc(c.symbol)}')">${c.includeInFinalPlan ? "移除" : "納入"}</button>
+              <button class="btn" style="padding:2px 8px;font-size:12px;margin-left:4px"
+                onclick="openCandidateEditModal('${esc(c.symbol)}')">編輯</button>
+            </td>
           </tr>`).join("")
         : `<tr class="empty-row"><td colspan="11">目前無候選股</td></tr>`;
     } catch(e) { showErr("errBoxCand", `載入失敗：${e.message}`); }
+  }
+
+  async function toggleCandidateInclude(symbol) {
+    try {
+      await api(`/api/candidates/${encodeURIComponent(symbol)}/include`, { method: "PATCH" });
+      await loadCandidates();
+    } catch(e) { alert(`切換失敗：${e.message}`); }
+  }
+
+  function openCandidateEditModal(symbol) {
+    const c = _candidateCache[symbol]; if (!c) return;
+    $("cedit-symbol").textContent   = symbol;
+    $("cedit-score").value          = c.score          ?? "";
+    $("cedit-rr").value             = c.riskRewardRatio ?? "";
+    $("cedit-entryZone").value      = c.entryPriceZone  ?? "";
+    $("cedit-sl").value             = c.stopLossPrice   ?? "";
+    $("cedit-tp1").value            = c.takeProfit1     ?? "";
+    $("cedit-tp2").value            = c.takeProfit2     ?? "";
+    $("cedit-reason").value         = c.reason          ?? "";
+    clearErr("cedit-err");
+    $("modal-candidate-edit").style.display = "flex";
+  }
+
+  async function submitCandidateEdit() {
+    const symbol = $("cedit-symbol").textContent;
+    clearErr("cedit-err");
+    const body = {};
+    if ($("cedit-score").value    !== "") body.score          = Number($("cedit-score").value);
+    if ($("cedit-rr").value       !== "") body.riskRewardRatio= Number($("cedit-rr").value);
+    if ($("cedit-entryZone").value !== "") body.entryPriceZone = $("cedit-entryZone").value.trim();
+    if ($("cedit-sl").value       !== "") body.stopLossPrice  = Number($("cedit-sl").value);
+    if ($("cedit-tp1").value      !== "") body.takeProfit1    = Number($("cedit-tp1").value);
+    if ($("cedit-tp2").value      !== "") body.takeProfit2    = Number($("cedit-tp2").value);
+    if ($("cedit-reason").value   !== "") body.reason         = $("cedit-reason").value.trim();
+    body.symbol = symbol;
+    try {
+      await api(`/api/candidates/${encodeURIComponent(symbol)}`, {
+        method: "PATCH",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(body)
+      });
+      closeModal("modal-candidate-edit");
+      await loadCandidates();
+    } catch(e) { showErr("cedit-err", e.message); }
   }
 
   async function loadCandidateHistory() {
@@ -2216,6 +2269,50 @@
   $("navMeta").textContent = `更新：${new Date().toLocaleTimeString("zh-TW")}`;
   setInterval(refreshCurrent, 60000);
 </script>
+
+<!-- ══════════════════════════════════════════
+     Candidate Edit Modal
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-candidate-edit" style="display:none" onclick="if(event.target===this)closeModal('modal-candidate-edit')">
+  <div class="modal-box" style="max-width:480px">
+    <h3>編輯候選股 — <span id="cedit-symbol"></span></h3>
+    <div id="cedit-err" class="err-msg" style="display:none"></div>
+    <div class="form-grid">
+      <div class="form-field">
+        <label>評分</label>
+        <input id="cedit-score" type="number" step="0.1" placeholder="0-10">
+      </div>
+      <div class="form-field">
+        <label>風報比</label>
+        <input id="cedit-rr" type="number" step="0.1" placeholder="2.0">
+      </div>
+      <div class="form-field form-full">
+        <label>進場區間</label>
+        <input id="cedit-entryZone" type="text" placeholder="例：980-1000">
+      </div>
+      <div class="form-field">
+        <label>停損價</label>
+        <input id="cedit-sl" type="number" step="0.01">
+      </div>
+      <div class="form-field">
+        <label>停利1</label>
+        <input id="cedit-tp1" type="number" step="0.01">
+      </div>
+      <div class="form-field">
+        <label>停利2</label>
+        <input id="cedit-tp2" type="number" step="0.01">
+      </div>
+      <div class="form-field form-full">
+        <label>原因/備註</label>
+        <input id="cedit-reason" type="text" placeholder="研究摘要">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="submitCandidateEdit()">儲存</button>
+      <button class="btn" style="background:var(--bg3)" onclick="closeModal('modal-candidate-edit')">取消</button>
+    </div>
+  </div>
+</div>
 
 <!-- ══════════════════════════════════════════
      Capital Config Modal

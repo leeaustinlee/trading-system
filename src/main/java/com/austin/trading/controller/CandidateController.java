@@ -104,4 +104,33 @@ public class CandidateController {
                 "candidates", saved
         ));
     }
+
+    /** 切換今日候選股「納入最終計畫」狀態（toggle） */
+    @PatchMapping("/{symbol}/include")
+    public ResponseEntity<?> toggleInclude(@PathVariable String symbol) {
+        try {
+            CandidateResponse r = candidateScanService.toggleInclude(symbol);
+            return r != null ? ResponseEntity.ok(r)
+                    : ResponseEntity.notFound().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * 更新今日候選股的評估欄位（只更新有傳的欄位）。
+     * Body 格式與 batch 單項相同（symbol 可省略）。
+     */
+    @PatchMapping("/{symbol}")
+    public ResponseEntity<?> updateCandidate(
+            @PathVariable String symbol,
+            @RequestBody CandidateBatchItemRequest req
+    ) {
+        try {
+            CandidateResponse r = candidateScanService.updateCandidate(symbol, req);
+            return ResponseEntity.ok(r);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
 }
