@@ -12,19 +12,27 @@ import com.austin.trading.dto.response.PositionSizingResponse;
 import com.austin.trading.dto.response.StopLossTakeProfitResponse;
 import com.austin.trading.dto.response.TradingStateResponse;
 import com.austin.trading.engine.FinalDecisionEngine;
+import com.austin.trading.engine.JavaStructureScoringEngine;
 import com.austin.trading.engine.PositionSizingEngine;
 import com.austin.trading.engine.StopLossTakeProfitEngine;
+import com.austin.trading.engine.VetoEngine;
+import com.austin.trading.engine.WeightedScoringEngine;
 import com.austin.trading.entity.CapitalConfigEntity;
 import com.austin.trading.entity.FinalDecisionEntity;
+import com.austin.trading.entity.StockEvaluationEntity;
 import com.austin.trading.repository.FinalDecisionRepository;
+import com.austin.trading.repository.StockEvaluationRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -45,59 +53,78 @@ public class FinalDecisionService {
     private static final double DEFAULT_TP1_PCT = 8.0;
     private static final double DEFAULT_TP2_PCT = 13.0;
 
-    private final FinalDecisionEngine finalDecisionEngine;
-    private final PositionSizingEngine positionSizingEngine;
-    private final StopLossTakeProfitEngine stopLossTakeProfitEngine;
-    private final FinalDecisionRepository finalDecisionRepository;
-    private final MarketDataService marketDataService;
-    private final TradingStateService tradingStateService;
-    private final CandidateScanService candidateScanService;
-    private final CapitalService capitalService;
-    private final ObjectMapper objectMapper;
+    private final FinalDecisionEngine       finalDecisionEngine;
+    private final JavaStructureScoringEngine javaStructureScoringEngine;
+    private final VetoEngine                vetoEngine;
+    private final WeightedScoringEngine     weightedScoringEngine;
+    private final PositionSizingEngine      positionSizingEngine;
+    private final StopLossTakeProfitEngine  stopLossTakeProfitEngine;
+    private final FinalDecisionRepository   finalDecisionRepository;
+    private final StockEvaluationRepository stockEvaluationRepository;
+    private final MarketDataService         marketDataService;
+    private final TradingStateService       tradingStateService;
+    private final CandidateScanService      candidateScanService;
+    private final CapitalService            capitalService;
+    private final ObjectMapper              objectMapper;
 
     public FinalDecisionService(
             FinalDecisionEngine finalDecisionEngine,
+            JavaStructureScoringEngine javaStructureScoringEngine,
+            VetoEngine vetoEngine,
+            WeightedScoringEngine weightedScoringEngine,
             PositionSizingEngine positionSizingEngine,
             StopLossTakeProfitEngine stopLossTakeProfitEngine,
             FinalDecisionRepository finalDecisionRepository,
+            StockEvaluationRepository stockEvaluationRepository,
             MarketDataService marketDataService,
             TradingStateService tradingStateService,
             CandidateScanService candidateScanService,
             CapitalService capitalService,
             ObjectMapper objectMapper
     ) {
-        this.finalDecisionEngine = finalDecisionEngine;
-        this.positionSizingEngine = positionSizingEngine;
-        this.stopLossTakeProfitEngine = stopLossTakeProfitEngine;
-        this.finalDecisionRepository = finalDecisionRepository;
-        this.marketDataService = marketDataService;
-        this.tradingStateService = tradingStateService;
-        this.candidateScanService = candidateScanService;
-        this.capitalService = capitalService;
-        this.objectMapper = objectMapper;
+        this.finalDecisionEngine        = finalDecisionEngine;
+        this.javaStructureScoringEngine = javaStructureScoringEngine;
+        this.vetoEngine                 = vetoEngine;
+        this.weightedScoringEngine      = weightedScoringEngine;
+        this.positionSizingEngine       = positionSizingEngine;
+        this.stopLossTakeProfitEngine   = stopLossTakeProfitEngine;
+        this.finalDecisionRepository    = finalDecisionRepository;
+        this.stockEvaluationRepository  = stockEvaluationRepository;
+        this.marketDataService          = marketDataService;
+        this.tradingStateService        = tradingStateService;
+        this.candidateScanService       = candidateScanService;
+        this.capitalService             = capitalService;
+        this.objectMapper               = objectMapper;
     }
 
+    @Transactional
     public FinalDecisionResponse evaluateAndPersist(LocalDate tradingDate) {
         MarketCurrentResponse market = marketDataService.getCurrentMarket().orElse(null);
         TradingStateResponse state = tradingStateService.getCurrentState().orElse(null);
 
-        String marketGrade = market == null ? "B" : safe(market.marketGrade(), "B");
+        String marketGrade  = market == null ? "B" : safe(market.marketGrade(), "B");
+        String decisionLock = state == null ? "NONE" : safe(state.decisionLock(), "NONE");
+        String timeDecay    = state == null ? "EARLY" : safe(state.timeDecayStage(), "EARLY");
 
-        List<FinalDecisionCandidateRequest> candidates =
+        List<FinalDecisionCandidateRequest> rawCandidates =
                 candidateScanService.loadFinalDecisionCandidates(tradingDate, 10);
+
+        // ── 評分管線：JavaStructure → Veto → WeightedScore ────────────────────
+        List<FinalDecisionCandidateRequest> scoredCandidates =
+                applyScoringPipeline(rawCandidates, tradingDate, marketGrade, decisionLock, timeDecay);
 
         FinalDecisionEvaluateRequest request = new FinalDecisionEvaluateRequest(
                 marketGrade,
-                state == null ? "NONE" : safe(state.decisionLock(), "NONE"),
-                state == null ? "EARLY" : safe(state.timeDecayStage(), "EARLY"),
+                decisionLock,
+                timeDecay,
                 false,
-                candidates
+                scoredCandidates
         );
 
         FinalDecisionResponse decision = finalDecisionEngine.evaluate(request);
 
         // 建立 candidateMap 以便回查估值模式
-        Map<String, FinalDecisionCandidateRequest> candidateMap = candidates.stream()
+        Map<String, FinalDecisionCandidateRequest> candidateMap = scoredCandidates.stream()
                 .collect(Collectors.toMap(FinalDecisionCandidateRequest::stockCode, c -> c, (a, b) -> a));
 
         // 從 capital_config 取得可動用現金，計算倉位上限
@@ -252,6 +279,102 @@ public class FinalDecisionService {
                    "\"rejected_count\":" + decision.rejectedReasons().size() + "}";
         }
     }
+
+    // ── 評分管線 ───────────────────────────────────────────────────────────────
+
+    /**
+     * 對所有候選股套用 JavaStructure → Veto → WeightedScore 管線。
+     * 計算結果回寫 stock_evaluation（java_structure_score / is_vetoed / final_rank_score）。
+     *
+     * @return 攜帶完整分數欄位的新 request list
+     */
+    private List<FinalDecisionCandidateRequest> applyScoringPipeline(
+            List<FinalDecisionCandidateRequest> candidates,
+            LocalDate tradingDate,
+            String marketGrade, String decisionLock, String timeDecay
+    ) {
+        List<FinalDecisionCandidateRequest> result = new ArrayList<>();
+
+        for (FinalDecisionCandidateRequest c : candidates) {
+            // 1. Java 結構評分
+            BigDecimal javaScore = javaStructureScoringEngine.compute(
+                    new JavaStructureScoringEngine.JavaStructureInput(
+                            c.riskRewardRatio() == null ? null : BigDecimal.valueOf(c.riskRewardRatio()),
+                            c.includeInFinalPlan(),
+                            c.stopLossPrice() == null ? null : BigDecimal.valueOf(c.stopLossPrice()),
+                            c.valuationMode(),
+                            c.entryType(),
+                            null,   // baseScore 目前 toFinalDecisionCandidate 未傳入
+                            false   // hasTheme 未傳入
+                    )
+            );
+
+            // 讀取既有的 claudeScore（若 Claude 已研究過）
+            BigDecimal claudeScore = c.claudeScore();
+            BigDecimal codexScore  = c.codexScore();
+
+            // 2. Veto 評估
+            VetoEngine.VetoResult veto = vetoEngine.evaluate(
+                    new VetoEngine.VetoInput(
+                            marketGrade,
+                            decisionLock,
+                            timeDecay,
+                            c.riskRewardRatio() == null ? null : BigDecimal.valueOf(c.riskRewardRatio()),
+                            c.includeInFinalPlan(),
+                            c.stopLossPrice() == null ? null : BigDecimal.valueOf(c.stopLossPrice()),
+                            c.valuationMode()
+                    )
+            );
+
+            // 3. 加權評分與最終排序分
+            BigDecimal aiWeighted  = weightedScoringEngine.computeAiWeightedScore(javaScore, claudeScore, codexScore);
+            BigDecimal finalRank   = weightedScoringEngine.computeFinalRankScore(aiWeighted, veto.vetoed());
+
+            // 4. 回寫 stock_evaluation
+            persistScores(tradingDate, c.stockCode(), javaScore, claudeScore, codexScore,
+                    aiWeighted, finalRank, veto.vetoed(),
+                    veto.reasons().isEmpty() ? null : String.join(",", veto.reasons()));
+
+            // 5. 產生帶分數的新 request
+            result.add(new FinalDecisionCandidateRequest(
+                    c.stockCode(), c.stockName(), c.valuationMode(), c.entryType(),
+                    c.riskRewardRatio(), c.includeInFinalPlan(), c.mainStream(),
+                    c.falseBreakout(), c.belowOpen(), c.belowPrevClose(),
+                    c.nearDayHigh(), c.stopLossReasonable(),
+                    c.rationale(), c.entryPriceZone(),
+                    c.stopLossPrice(), c.takeProfit1(), c.takeProfit2(),
+                    javaScore, claudeScore, codexScore, finalRank, veto.vetoed()
+            ));
+        }
+        return result;
+    }
+
+    /** 將本次計算的評分回寫 stock_evaluation 表 */
+    private void persistScores(LocalDate date, String symbol,
+                               BigDecimal javaScore, BigDecimal claudeScore, BigDecimal codexScore,
+                               BigDecimal aiWeighted, BigDecimal finalRank,
+                               boolean isVetoed, String vetoReasons) {
+        try {
+            stockEvaluationRepository.findByTradingDateAndSymbol(date, symbol).ifPresent(eval -> {
+                eval.setJavaStructureScore(javaScore);
+                if (claudeScore  != null) eval.setClaudeScore(claudeScore);
+                if (codexScore   != null) eval.setCodexScore(codexScore);
+                eval.setAiWeightedScore(aiWeighted);
+                eval.setFinalRankScore(finalRank);
+                eval.setIsVetoed(isVetoed);
+                if (vetoReasons != null) {
+                    try {
+                        eval.setVetoReasonsJson("[\"" + vetoReasons.replace(",", "\",\"") + "\"]");
+                    } catch (Exception ignored) {}
+                }
+                stockEvaluationRepository.save(eval);
+            });
+        } catch (Exception e) {
+            log.warn("[FinalDecisionService] persistScores failed for {}: {}", symbol, e.getMessage());
+        }
+    }
+
+    // ── 工具 ──────────────────────────────────────────────────────────────────
 
     private String safe(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;

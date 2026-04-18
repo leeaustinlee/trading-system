@@ -43,7 +43,11 @@ public class FinalDecisionEngine {
             }
         }
 
-        qualified.sort(Comparator.comparing(FinalDecisionCandidateRequest::riskRewardRatio).reversed());
+        // 優先依 finalRankScore 降序；無分數時 fallback 至 riskRewardRatio
+        qualified.sort(Comparator.comparing((FinalDecisionCandidateRequest c) -> {
+            if (c.finalRankScore() != null) return c.finalRankScore().doubleValue();
+            return c.riskRewardRatio() == null ? 0.0 : c.riskRewardRatio();
+        }).reversed());
 
         int maxPick = "B".equals(marketGrade) ? 1 : 2;
         List<FinalDecisionSelectedStockResponse> selected = qualified.stream()

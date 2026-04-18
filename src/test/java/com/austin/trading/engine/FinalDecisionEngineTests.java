@@ -80,7 +80,9 @@ class FinalDecisionEngineTests {
                 "100-102",
                 98.0,
                 108.0,
-                115.0
+                115.0,
+                null, null, null,   // javaStructureScore, claudeScore, codexScore
+                null, null          // finalRankScore, isVetoed
         );
     }
 }

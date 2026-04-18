@@ -290,6 +290,12 @@ public class CandidateScanService {
         Double tp1 = eval == null || eval.getTakeProfit1() == null ? null : eval.getTakeProfit1().doubleValue();
         Double tp2 = eval == null || eval.getTakeProfit2() == null ? null : eval.getTakeProfit2().doubleValue();
 
+        // 從 eval 讀取既有的 AI 評分（Claude/Codex 可能已由外部回填）
+        BigDecimal existingClaudeScore = eval == null ? null : eval.getClaudeScore();
+        BigDecimal existingCodexScore  = eval == null ? null : eval.getCodexScore();
+        BigDecimal existingFinalRank   = eval == null ? null : eval.getFinalRankScore();
+        Boolean    existingIsVetoed    = eval == null ? null : eval.getIsVetoed();
+
         return new FinalDecisionCandidateRequest(
                 candidate.getSymbol(),
                 nullSafe(candidate.getStockName(), candidate.getSymbol()),
@@ -307,7 +313,12 @@ public class CandidateScanService {
                 entryZone,
                 stopLoss,
                 tp1,
-                tp2
+                tp2,
+                eval == null ? null : eval.getJavaStructureScore(),
+                existingClaudeScore,
+                existingCodexScore,
+                existingFinalRank,
+                existingIsVetoed
         );
     }
 
