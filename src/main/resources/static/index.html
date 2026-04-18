@@ -359,6 +359,13 @@
     }
     .btn.danger { background:#fff0f2; color:var(--err); border-color:#f3bcbe; }
     .btn.danger:hover { background:#ffe3e7; }
+    /* PnL bar chart */
+    .pnl-chart-wrap { display:flex; align-items:center; gap:4px; overflow-x:auto; padding:8px 0 4px; min-height:120px; }
+    .pnl-col { display:flex; flex-direction:column; align-items:center; gap:2px; min-width:22px; }
+    .pnl-bar-pos { width:18px; border-radius:4px 4px 2px 2px; background:linear-gradient(180deg,#4dd49a,#0a7a52); transition:.2s; }
+    .pnl-bar-neg { width:18px; border-radius:2px 2px 4px 4px; background:linear-gradient(0deg,#f07580,#a0192a); transition:.2s; }
+    .pnl-zero    { width:18px; height:3px; background:var(--line); border-radius:2px; }
+    .pnl-label   { font-size:9px; color:var(--muted); transform:rotate(-40deg) translateX(-4px); transform-origin:top left; white-space:nowrap; width:30px; }
     /* Market grade / decision button active states */
     .grade-btn.active-grade[id="mkt-grade-A"] { background:#d4f5e9; color:#0a6640; border-color:#0a6640; }
     .grade-btn.active-grade[id="mkt-grade-B"] { background:#fff3cc; color:#7a5000; border-color:#e8ca7a; }
@@ -521,7 +528,9 @@
       </section>
 
       <section class="card span-12">
-        <h2>目前候選股（研究資料）</h2>
+        <h2>目前候選股（研究資料）
+          <button class="btn primary" id="c-btnAdd" style="margin-left:auto;padding:5px 14px;font-size:13px">＋ 手動新增</button>
+        </h2>
         <table>
           <thead><tr>
             <th>代號</th><th>名稱</th><th>評分</th><th>風報比</th>
@@ -604,6 +613,11 @@
     <div class="stat-row" id="pnl-statRow"></div>
 
     <div class="grid">
+      <section class="card span-12">
+        <h2>損益趨勢（近 30 日）</h2>
+        <div class="pnl-chart-wrap" id="pnl-chart"></div>
+      </section>
+
       <section class="card span-12">
         <h2>每日損益
           <button class="btn primary" id="pnl-btnAdd" style="margin-left:auto;padding:5px 14px;font-size:13px">＋ 手動新增</button>
@@ -1297,6 +1311,48 @@
     } catch(e) { showErr("errBoxCand", `載入失敗：${e.message}`); }
   }
 
+  function openCandidateAddModal() {
+    $("cadd-symbol").value      = "";
+    $("cadd-stockName").value   = "";
+    $("cadd-score").value       = "";
+    $("cadd-rr").value          = "";
+    $("cadd-entryZone").value   = "";
+    $("cadd-sl").value          = "";
+    $("cadd-tp1").value         = "";
+    $("cadd-tp2").value         = "";
+    $("cadd-reason").value      = "";
+    $("cadd-include").checked   = true;
+    clearErr("cadd-err");
+    $("modal-candidate-add").style.display = "flex";
+  }
+
+  async function submitCandidateAdd() {
+    const symbol = $("cadd-symbol").value.trim();
+    if (!symbol) { showErr("cadd-err", "請輸入代號"); return; }
+    clearErr("cadd-err");
+    const item = { symbol };
+    if ($("cadd-stockName").value.trim()) item.stockName      = $("cadd-stockName").value.trim();
+    if ($("cadd-score").value)            item.score          = Number($("cadd-score").value);
+    if ($("cadd-rr").value)               item.riskRewardRatio= Number($("cadd-rr").value);
+    if ($("cadd-entryZone").value.trim()) item.entryPriceZone = $("cadd-entryZone").value.trim();
+    if ($("cadd-sl").value)               item.stopLossPrice  = Number($("cadd-sl").value);
+    if ($("cadd-tp1").value)              item.takeProfit1    = Number($("cadd-tp1").value);
+    if ($("cadd-tp2").value)              item.takeProfit2    = Number($("cadd-tp2").value);
+    if ($("cadd-reason").value.trim())    item.reason         = $("cadd-reason").value.trim();
+    item.includeInFinalPlan = $("cadd-include").checked;
+    try {
+      await api("/api/candidates/batch", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify([item])
+      });
+      closeModal("modal-candidate-add");
+      await loadCandidates();
+    } catch(e) { showErr("cadd-err", e.message); }
+  }
+
+  $("c-btnAdd").addEventListener("click", openCandidateAddModal);
+
   async function toggleCandidateInclude(symbol) {
     try {
       await api(`/api/candidates/${encodeURIComponent(symbol)}/include`, { method: "PATCH" });
@@ -1525,8 +1581,31 @@
               onclick="openPnlEditModal(${r.id})">編輯</button></td>
           </tr>`).join("")
         : `<tr class="empty-row"><td colspan="9">無資料</td></tr>`;
+      renderPnlChart(data || []);
       return data;
     } catch(e) { showErr("errBoxPnl", `載入失敗：${e.message}`); }
+  }
+
+  function renderPnlChart(rows) {
+    const chart = $("pnl-chart");
+    if (!chart) return;
+    const recent = [...rows].reverse().slice(-30);
+    if (!recent.length) { chart.innerHTML = `<div class="small" style="color:var(--muted);padding:8px">無損益記錄</div>`; return; }
+    const vals = recent.map(r => Number(r.netPnl ?? r.grossPnl ?? 0));
+    const maxAbs = Math.max(...vals.map(Math.abs), 1);
+    const MAX_H = 90;
+    chart.innerHTML = recent.map((r, i) => {
+      const v = vals[i];
+      const h = Math.max(4, Math.round((Math.abs(v) / maxAbs) * MAX_H));
+      const posBar = v >= 0 ? `<div class="pnl-bar-pos" style="height:${h}px" title="${v}"></div><div class="pnl-zero"></div>` : `<div style="height:${MAX_H - h}px"></div>`;
+      const negBar = v < 0  ? `<div class="pnl-zero"></div><div class="pnl-bar-neg" style="height:${h}px" title="${v}"></div>` : `<div style="height:${MAX_H - h}px"></div>`;
+      const label  = (r.tradingDate||"").slice(5); // MM-DD
+      return `<div class="pnl-col" title="${esc(r.tradingDate)} ${v}">
+        ${v >= 0 ? posBar : ""}
+        ${v < 0  ? negBar : ""}
+        <div class="pnl-label">${esc(label)}</div>
+      </div>`;
+    }).join("");
   }
 
   $("pnl-load").addEventListener("click", loadPnlHistory);
@@ -2406,6 +2485,61 @@
     <div class="modal-actions">
       <button class="btn" onclick="submitMarketSnapshot()">儲存</button>
       <button class="btn" style="background:var(--bg3)" onclick="closeModal('modal-market')">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     Candidate Add Modal
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-candidate-add" style="display:none" onclick="if(event.target===this)closeModal('modal-candidate-add')">
+  <div class="modal-box" style="max-width:480px">
+    <h3>手動新增候選股</h3>
+    <div id="cadd-err" class="err-msg" style="display:none"></div>
+    <div class="form-grid">
+      <div class="form-field">
+        <label>代號 <span style="color:var(--err)">*</span></label>
+        <input id="cadd-symbol" type="text" placeholder="例：2330" style="text-transform:uppercase">
+      </div>
+      <div class="form-field">
+        <label>名稱</label>
+        <input id="cadd-stockName" type="text" placeholder="台積電">
+      </div>
+      <div class="form-field">
+        <label>評分</label>
+        <input id="cadd-score" type="number" step="0.1" placeholder="0-10">
+      </div>
+      <div class="form-field">
+        <label>風報比</label>
+        <input id="cadd-rr" type="number" step="0.1" placeholder="2.0">
+      </div>
+      <div class="form-field form-full">
+        <label>進場區間</label>
+        <input id="cadd-entryZone" type="text" placeholder="例：980-1000">
+      </div>
+      <div class="form-field">
+        <label>停損價</label>
+        <input id="cadd-sl" type="number" step="0.01">
+      </div>
+      <div class="form-field">
+        <label>停利1</label>
+        <input id="cadd-tp1" type="number" step="0.01">
+      </div>
+      <div class="form-field">
+        <label>停利2</label>
+        <input id="cadd-tp2" type="number" step="0.01">
+      </div>
+      <div class="form-field form-full">
+        <label>原因/備註</label>
+        <input id="cadd-reason" type="text" placeholder="研究摘要">
+      </div>
+      <div class="form-field form-full">
+        <label><input type="checkbox" id="cadd-include" checked style="margin-right:6px">納入最終決策計畫</label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="submitCandidateAdd()">新增</button>
+      <button class="btn" style="background:var(--bg3)" onclick="closeModal('modal-candidate-add')">取消</button>
     </div>
   </div>
 </div>
