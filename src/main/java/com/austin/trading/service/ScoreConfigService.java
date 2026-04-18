@@ -51,6 +51,10 @@ public class ScoreConfigService {
         DEFAULTS.put("scheduling.line_notify_enabled",  new String[]{"false", "BOOLEAN", "是否啟用 Java 直接發 LINE"});
         DEFAULTS.put("scoring.cooldown_minutes",        new String[]{"30",    "INTEGER", "每筆交易後的冷卻期（分鐘）"});
         DEFAULTS.put("scoring.version",                 new String[]{"v1.0",  "STRING",  "目前評分規則版本號"});
+        DEFAULTS.put("theme.weight.market_behavior",    new String[]{"0.50",  "DECIMAL", "題材行為分（Java量化）佔 final_theme_score 權重"});
+        DEFAULTS.put("theme.weight.heat",               new String[]{"0.30",  "DECIMAL", "題材熱度分（Claude語意）佔 final_theme_score 權重"});
+        DEFAULTS.put("theme.weight.continuation",       new String[]{"0.20",  "DECIMAL", "題材延續分（Claude語意）佔 final_theme_score 權重"});
+        DEFAULTS.put("theme.strong_stock_threshold_pct",new String[]{"2.0",   "DECIMAL", "個股漲幅 >= 此值視為強勢股（計算 strongStockCount 用）"});
     }
 
     public ScoreConfigService(ScoreConfigRepository repository) {

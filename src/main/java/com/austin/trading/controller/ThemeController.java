@@ -1,9 +1,11 @@
 package com.austin.trading.controller;
 
+import com.austin.trading.dto.request.ClaudeThemeScoreRequest;
 import com.austin.trading.dto.response.StockThemeMappingResponse;
 import com.austin.trading.dto.response.ThemeSnapshotResponse;
 import com.austin.trading.service.ThemeService;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -51,5 +53,32 @@ public class ThemeController {
                 body.get("themeTag"),
                 body.get("source")
         );
+    }
+
+    /**
+     * Claude 題材評分回填（heat + continuation），自動重算 final_theme_score。
+     *
+     * <pre>
+     * PUT /api/themes/snapshots/{themeTag}/claude-scores
+     * {
+     *   "tradingDate":            "2026-04-18",
+     *   "themeHeatScore":         8.5,
+     *   "themeContinuationScore": 7.0,
+     *   "driverType":             "法說",
+     *   "riskSummary":            "高檔追價風險"
+     * }
+     * </pre>
+     */
+    @PutMapping("/snapshots/{themeTag}/claude-scores")
+    public ResponseEntity<?> updateClaudeScores(
+            @PathVariable String themeTag,
+            @RequestBody ClaudeThemeScoreRequest req
+    ) {
+        try {
+            ThemeSnapshotResponse result = themeService.mergeClaudeScores(themeTag, req);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 }

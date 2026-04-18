@@ -1,7 +1,9 @@
 package com.austin.trading.service;
 
+import com.austin.trading.dto.request.ClaudeThemeScoreRequest;
 import com.austin.trading.dto.response.StockThemeMappingResponse;
 import com.austin.trading.dto.response.ThemeSnapshotResponse;
+import com.austin.trading.engine.ThemeSelectionEngine;
 import com.austin.trading.entity.StockThemeMappingEntity;
 import com.austin.trading.entity.ThemeSnapshotEntity;
 import com.austin.trading.repository.StockThemeMappingRepository;
@@ -16,11 +18,14 @@ public class ThemeService {
 
     private final ThemeSnapshotRepository    snapshotRepo;
     private final StockThemeMappingRepository mappingRepo;
+    private final ThemeSelectionEngine       themeEngine;
 
     public ThemeService(ThemeSnapshotRepository snapshotRepo,
-                        StockThemeMappingRepository mappingRepo) {
+                        StockThemeMappingRepository mappingRepo,
+                        ThemeSelectionEngine themeEngine) {
         this.snapshotRepo = snapshotRepo;
         this.mappingRepo  = mappingRepo;
+        this.themeEngine  = themeEngine;
     }
 
     // ── 快照 ─────────────────────────────────────────────────────────────────
@@ -46,6 +51,21 @@ public class ThemeService {
         return mappingRepo.findAllByOrderBySymbolAscThemeTagAsc().stream()
                 .filter(e -> Boolean.TRUE.equals(e.getIsActive()))
                 .map(this::toMappingResponse).toList();
+    }
+
+    // ── Claude 評分回填 ───────────────────────────────────────────────────────
+
+    /**
+     * Claude 題材評分回填，並重算 final_theme_score。
+     */
+    public ThemeSnapshotResponse mergeClaudeScores(String themeTag, ClaudeThemeScoreRequest req) {
+        LocalDate date = req.tradingDate() != null ? req.tradingDate() : LocalDate.now();
+        ThemeSnapshotEntity saved = themeEngine.mergeClaudeThemeScores(
+                date, themeTag,
+                req.themeHeatScore(), req.themeContinuationScore(),
+                req.driverType(), req.riskSummary()
+        );
+        return toSnapshotResponse(saved);
     }
 
     // ── 新增對應 ─────────────────────────────────────────────────────────────
