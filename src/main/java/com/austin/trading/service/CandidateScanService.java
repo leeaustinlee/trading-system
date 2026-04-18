@@ -269,6 +269,7 @@ public class CandidateScanService {
                             c.getSector(),
                             eval == null ? null : eval.getJavaStructureScore(),
                             eval == null ? null : eval.getClaudeScore(),
+                            eval == null ? null : eval.getCodexScore(),
                             eval == null ? null : eval.getFinalRankScore(),
                             eval == null ? null : eval.getIsVetoed()
                     );
@@ -366,7 +367,7 @@ public class CandidateScanService {
                 eval.getTakeProfit1(), eval.getTakeProfit2(),
                 cand.getThemeTag(), cand.getSector(),
                 eval.getJavaStructureScore(), eval.getClaudeScore(),
-                eval.getFinalRankScore(), eval.getIsVetoed()
+                eval.getCodexScore(), eval.getFinalRankScore(), eval.getIsVetoed()
         );
     }
 
@@ -411,7 +412,7 @@ public class CandidateScanService {
                 eval.getTakeProfit1(), eval.getTakeProfit2(),
                 cand.getThemeTag(), cand.getSector(),
                 eval.getJavaStructureScore(), eval.getClaudeScore(),
-                eval.getFinalRankScore(), eval.getIsVetoed()
+                eval.getCodexScore(), eval.getFinalRankScore(), eval.getIsVetoed()
         );
     }
 

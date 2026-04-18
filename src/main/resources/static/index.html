@@ -537,6 +537,7 @@
             <th>代號</th><th>名稱</th><th>題材</th>
             <th title="Java結構評分 0-10">Java分</th>
             <th title="Claude研究評分 0-10">Claude分</th>
+            <th title="Codex研究評分 0-10">Codex分</th>
             <th title="最終排序分（veto後）">最終分</th>
             <th title="是否被硬性淘汰">淘汰</th>
             <th>風報比</th><th>估值模式</th><th>進場區間</th>
@@ -1410,6 +1411,7 @@
         ? (data || []).map(c => {
             const jScore  = c.javaStructureScore != null ? Number(c.javaStructureScore).toFixed(1) : "–";
             const clScore = c.claudeScore        != null ? Number(c.claudeScore).toFixed(1)        : "–";
+            const cxScore = c.codexScore         != null ? Number(c.codexScore).toFixed(1)         : "–";
             const fScore  = c.finalRankScore     != null ? Number(c.finalRankScore).toFixed(1)     : "–";
             const vetoCell = c.isVetoed
               ? `<span class="pill err" title="已被淘汰">✗</span>`
@@ -1420,6 +1422,9 @@
             const clScoreCell = c.claudeScore != null
               ? `<span class="score-badge" style="background:${scoreBg(c.claudeScore)}">${clScore}</span>`
               : `<span class="quote-meta">–</span>`;
+            const cxScoreCell = c.codexScore != null
+              ? `<span class="score-badge" style="background:${scoreBg(c.codexScore)}">${cxScore}</span>`
+              : `<span class="quote-meta">–</span>`;
             const fScoreCell = c.finalRankScore != null
               ? `<span class="score-badge" style="background:${scoreBg(c.finalRankScore)};font-weight:700">${fScore}</span>`
               : `<span class="quote-meta">–</span>`;
@@ -1429,6 +1434,7 @@
               <td class="small">${c.themeTag ? `<span class="pill warn">${esc(c.themeTag)}</span>` : "–"}</td>
               <td style="text-align:center">${jScoreCell}</td>
               <td style="text-align:center">${clScoreCell}</td>
+              <td style="text-align:center">${cxScoreCell}</td>
               <td style="text-align:center">${fScoreCell}</td>
               <td style="text-align:center">${vetoCell}</td>
               <td>${esc(c.riskRewardRatio)}</td>
@@ -1443,10 +1449,12 @@
                   onclick="toggleCandidateInclude('${esc(c.symbol)}')">${c.includeInFinalPlan ? "移除" : "納入"}</button>
                 <button class="btn" style="padding:2px 8px;font-size:12px;margin-left:4px"
                   onclick="openCandidateEditModal('${esc(c.symbol)}')">編輯</button>
+                <button class="btn" style="padding:2px 8px;font-size:12px;margin-left:4px;color:var(--accent)"
+                  onclick="openAiScoreModal('${esc(c.symbol)}')">AI回填</button>
               </td>
             </tr>`;
           }).join("")
-        : `<tr class="empty-row"><td colspan="15">目前無候選股</td></tr>`;
+        : `<tr class="empty-row"><td colspan="16">目前無候選股</td></tr>`;
     } catch(e) { showErr("errBoxCand", `載入失敗：${e.message}`); }
   }
 
@@ -2761,6 +2769,44 @@
     } catch(e) { showErr("theme-add-err", e.message); }
   }
 
+  /* ── AI Score 回填 ── */
+  let _aiScoreSymbol = "";
+
+  function openAiScoreModal(symbol) {
+    _aiScoreSymbol = symbol;
+    $("ais-symbol").textContent     = symbol;
+    $("ais-claudeScore").value      = "";
+    $("ais-codexScore").value       = "";
+    $("ais-claudeThesis").value     = "";
+    $("ais-claudeRiskFlags").value  = "";
+    clearErr("ais-err");
+    $("modal-ai-score").style.display = "flex";
+  }
+
+  async function submitAiScore() {
+    if (!_aiScoreSymbol) return;
+    const body = {};
+    const cl = $("ais-claudeScore").value;
+    const cx = $("ais-codexScore").value;
+    if (!cl && !cx) { showErr("ais-err", "至少填入 Claude 或 Codex 其中一項評分"); return; }
+    if (cl) body.claudeScore = Number(cl);
+    if (cx) body.codexScore  = Number(cx);
+    const thesis = $("ais-claudeThesis").value.trim();
+    if (thesis) body.claudeThesis = thesis;
+    const flags = $("ais-claudeRiskFlags").value.trim();
+    if (flags) body.claudeRiskFlags = flags.split(",").map(s => s.trim()).filter(Boolean);
+    clearErr("ais-err");
+    try {
+      const res = await api(`/api/candidates/${encodeURIComponent(_aiScoreSymbol)}/ai-scores`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      closeModal("modal-ai-score");
+      await loadCandidates();
+    } catch(e) { showErr("ais-err", e.message); }
+  }
+
   /* .score-badge 樣式（動態注入） */
   (function injectScoreBadgeCss() {
     const style = document.createElement("style");
@@ -2914,6 +2960,41 @@
     <div class="modal-actions">
       <button class="btn" onclick="submitCandidateEdit()">儲存</button>
       <button class="btn" style="background:var(--bg3)" onclick="closeModal('modal-candidate-edit')">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     AI Score 回填 Modal
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-ai-score" style="display:none" onclick="if(event.target===this)closeModal('modal-ai-score')">
+  <div class="modal-box" style="max-width:520px">
+    <h3>AI 評分回填 — <span id="ais-symbol" style="color:var(--accent);font-family:monospace"></span></h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">
+      填入後自動重算 ai_weighted_score 與 final_rank_score。只需填要更新的欄位。
+    </p>
+    <div id="ais-err" class="err-msg" style="display:none"></div>
+    <div class="form-grid">
+      <div class="form-field">
+        <label>Claude 評分 (0–10)</label>
+        <input id="ais-claudeScore" type="number" min="0" max="10" step="0.1" placeholder="例：7.5">
+      </div>
+      <div class="form-field">
+        <label>Codex 評分 (0–10)</label>
+        <input id="ais-codexScore" type="number" min="0" max="10" step="0.1" placeholder="例：8.0">
+      </div>
+      <div class="form-field form-full">
+        <label>Claude 研究論點</label>
+        <textarea id="ais-claudeThesis" rows="3" placeholder="簡述買進或觀望理由…"></textarea>
+      </div>
+      <div class="form-field form-full">
+        <label>Claude 風險標記（逗號分隔）</label>
+        <input id="ais-claudeRiskFlags" type="text" placeholder="例：接近前波高點, 大盤若轉弱優先出場">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn primary" onclick="submitAiScore()">回填並重算</button>
+      <button class="btn" style="background:var(--bg3)" onclick="closeModal('modal-ai-score')">取消</button>
     </div>
   </div>
 </div>

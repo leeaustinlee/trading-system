@@ -21,6 +21,7 @@ public record CandidateResponse(
         String sector,
         BigDecimal javaStructureScore,
         BigDecimal claudeScore,
+        BigDecimal codexScore,
         BigDecimal finalRankScore,
         Boolean isVetoed
 ) {

@@ -170,6 +170,6 @@ public class AiFacade {
     /** 當候選清單中找不到該股時，使用最小佔位符 */
     private CandidateResponse dummyCandidate(String symbol) {
         return new CandidateResponse(null, symbol, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 }
