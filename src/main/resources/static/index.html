@@ -359,6 +359,13 @@
     }
     .btn.danger { background:#fff0f2; color:var(--err); border-color:#f3bcbe; }
     .btn.danger:hover { background:#ffe3e7; }
+    /* Market grade / decision button active states */
+    .grade-btn.active-grade[id="mkt-grade-A"] { background:#d4f5e9; color:#0a6640; border-color:#0a6640; }
+    .grade-btn.active-grade[id="mkt-grade-B"] { background:#fff3cc; color:#7a5000; border-color:#e8ca7a; }
+    .grade-btn.active-grade[id="mkt-grade-C"] { background:#ffe3e7; color:#a00020; border-color:#f3bcbe; }
+    .dec-btn.active-decision[id="mkt-dec-ENTER"] { background:#d4f5e9; color:#0a6640; border-color:#0a6640; }
+    .dec-btn.active-decision[id="mkt-dec-WATCH"] { background:#fff3cc; color:#7a5000; border-color:#e8ca7a; }
+    .dec-btn.active-decision[id="mkt-dec-REST"]  { background:#ffe3e7; color:#a00020; border-color:#f3bcbe; }
   </style>
 </head>
 <body>
@@ -409,7 +416,9 @@
     <div class="grid">
 
       <section class="card span-4">
-        <h2>市場狀態</h2>
+        <h2>市場狀態
+          <button class="btn" id="d-marketEditBtn" style="margin-left:auto;padding:4px 12px;font-size:12px">⚙ 設定</button>
+        </h2>
         <div class="kv">
           <div class="k">市場等級</div><div class="v" id="d-marketGrade">-</div>
           <div class="k">行情階段</div><div class="v" id="d-marketPhase">-</div>
@@ -773,6 +782,16 @@
         <h2>系統警示</h2>
         <div class="small" id="sys-alertsMeta" style="margin-bottom:10px">無異常</div>
         <div id="sys-alertsBody" class="alerts"></div>
+      </section>
+
+      <section class="card span-12">
+        <h2>市場快照歷史
+          <button class="btn" id="sys-marketLoad" style="margin-left:auto;padding:4px 12px;font-size:12px">重新載入</button>
+        </h2>
+        <table>
+          <thead><tr><th>日期</th><th>市場等級</th><th>行情階段</th><th>決策方向</th><th>建立時間</th></tr></thead>
+          <tbody id="sys-marketBody"></tbody>
+        </table>
       </section>
 
       <section class="card span-12">
@@ -1747,8 +1766,25 @@
   async function loadSystemPage() {
     clearErr("errBoxSys");
     try {
-      await Promise.all([loadMigration(), loadProbeHistory()]);
+      await Promise.all([loadMigration(), loadProbeHistory(), loadMarketHistory()]);
     } catch(e) { showErr("errBoxSys", `載入失敗：${e.message}`); }
+  }
+
+  async function loadMarketHistory() {
+    try {
+      const data = await api("/api/market/history?limit=30");
+      const gradeColor = g => g === "A" ? "num-pos" : g === "C" ? "num-neg" : "";
+      const decisionColor = d => d === "ENTER" ? "num-pos" : d === "REST" ? "num-neg" : "";
+      $("sys-marketBody").innerHTML = (data || []).length
+        ? data.map(r => `<tr>
+            <td class="mono">${fmtDate(r.tradingDate)}</td>
+            <td class="mono ${gradeColor(r.marketGrade)}" style="font-weight:700">${esc(r.marketGrade)}</td>
+            <td class="small">${esc(r.marketPhase)}</td>
+            <td class="small ${decisionColor(r.decision)}">${esc(r.decision)}</td>
+            <td class="mono small">${fmtTime(r.createdAt)}</td>
+          </tr>`).join("")
+        : `<tr class="empty-row"><td colspan="5">無市場快照</td></tr>`;
+    } catch(e) { /* 不中斷其他載入 */ }
   }
 
   async function loadMigration() {
@@ -1849,6 +1885,7 @@
   $("sys-btnClaude").addEventListener("click", () => runProbe(false, true));
   $("sys-probeFailedOnly").addEventListener("change", renderProbeHistTable);
   $("sys-probeHistLoad").addEventListener("click", loadProbeHistory);
+  $("sys-marketLoad").addEventListener("click", loadMarketHistory);
 
   /* ─────────────────────────────────────────────
      Live Quotes（即時報價輪詢）
@@ -2116,6 +2153,65 @@
   }
 
   /* ─────────────────────────────────────────────
+     Market Snapshot Modal
+  ───────────────────────────────────────────── */
+  let _marketGradeSelected = "B";
+  let _marketDecisionSelected = "WATCH";
+
+  async function openMarketModal() {
+    clearErr("mkt-err");
+    // 讀取目前市場狀態預填
+    try {
+      const m = await api("/api/market/current");
+      if (m) {
+        selectMarketGrade(m.marketGrade || "B");
+        selectMarketDecision(m.decision || "WATCH");
+        $("mkt-phase").value = m.marketPhase || "";
+      }
+    } catch(_) {
+      selectMarketGrade("B");
+      selectMarketDecision("WATCH");
+    }
+    $("modal-market").style.display = "flex";
+  }
+
+  function selectMarketGrade(grade) {
+    _marketGradeSelected = grade;
+    ["A","B","C"].forEach(g => {
+      const btn = $(`mkt-grade-${g}`);
+      if (btn) btn.classList.toggle("active-grade", g === grade);
+    });
+  }
+
+  function selectMarketDecision(dec) {
+    _marketDecisionSelected = dec;
+    ["ENTER","WATCH","REST"].forEach(d => {
+      const btn = $(`mkt-dec-${d}`);
+      if (btn) btn.classList.toggle("active-decision", d === dec);
+    });
+  }
+
+  async function submitMarketSnapshot() {
+    clearErr("mkt-err");
+    const phase = $("mkt-phase").value.trim();
+    try {
+      await api("/api/market/snapshot", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          marketGrade: _marketGradeSelected,
+          marketPhase: phase || null,
+          decision:    _marketDecisionSelected
+        })
+      });
+      closeModal("modal-market");
+      await loadDashboard();
+    } catch(e) { showErr("mkt-err", e.message); }
+  }
+
+  $("d-marketEditBtn").addEventListener("click", openMarketModal);
+
+  /* ─────────────────────────────────────────────
      Capital Config Modal
   ───────────────────────────────────────────── */
   async function openCapitalModal() {
@@ -2269,6 +2365,50 @@
   $("navMeta").textContent = `更新：${new Date().toLocaleTimeString("zh-TW")}`;
   setInterval(refreshCurrent, 60000);
 </script>
+
+<!-- ══════════════════════════════════════════
+     Market Snapshot Modal
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-market" style="display:none" onclick="if(event.target===this)closeModal('modal-market')">
+  <div class="modal-box" style="max-width:420px">
+    <h3>設定市場快照</h3>
+    <div id="mkt-err" class="err-msg" style="display:none"></div>
+    <div class="form-grid">
+      <div class="form-field form-full">
+        <label>市場等級</label>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button id="mkt-grade-A" class="btn grade-btn" onclick="selectMarketGrade('A')" style="flex:1;font-size:15px;font-weight:700">A 主升</button>
+          <button id="mkt-grade-B" class="btn grade-btn" onclick="selectMarketGrade('B')" style="flex:1;font-size:15px;font-weight:700">B 震盪</button>
+          <button id="mkt-grade-C" class="btn grade-btn" onclick="selectMarketGrade('C')" style="flex:1;font-size:15px;font-weight:700">C 出貨</button>
+        </div>
+      </div>
+      <div class="form-field form-full">
+        <label>行情階段</label>
+        <select id="mkt-phase" style="width:100%;font-family:inherit;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:14px;background:var(--bg2);color:var(--ink)">
+          <option value="">（不設定）</option>
+          <option value="PREMARKET">PREMARKET 盤前</option>
+          <option value="開盤洗盤期">開盤洗盤期</option>
+          <option value="主升發動期">主升發動期</option>
+          <option value="高檔震盪期">高檔震盪期</option>
+          <option value="出貨鈍化期">出貨鈍化期</option>
+          <option value="CLOSE">CLOSE 收盤</option>
+        </select>
+      </div>
+      <div class="form-field form-full">
+        <label>決策方向</label>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button id="mkt-dec-ENTER" class="btn dec-btn" onclick="selectMarketDecision('ENTER')" style="flex:1;font-weight:700">✅ 可進場</button>
+          <button id="mkt-dec-WATCH" class="btn dec-btn" onclick="selectMarketDecision('WATCH')" style="flex:1;font-weight:700">👁 僅觀察</button>
+          <button id="mkt-dec-REST"  class="btn dec-btn" onclick="selectMarketDecision('REST')"  style="flex:1;font-weight:700">⛔ 休息</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="submitMarketSnapshot()">儲存</button>
+      <button class="btn" style="background:var(--bg3)" onclick="closeModal('modal-market')">取消</button>
+    </div>
+  </div>
+</div>
 
 <!-- ══════════════════════════════════════════
      Candidate Edit Modal
