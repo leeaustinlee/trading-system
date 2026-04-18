@@ -1,5 +1,8 @@
 package com.austin.trading.workflow;
 
+import com.austin.trading.dto.response.CandidateResponse;
+import com.austin.trading.dto.response.MarketCurrentResponse;
+import com.austin.trading.notify.LineTemplateService;
 import com.austin.trading.service.CandidateScanService;
 import com.austin.trading.service.ClaudeCodeRequestWriterService;
 import com.austin.trading.service.MarketDataService;
@@ -10,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 盤前工作流編排器（08:10 觸發）。
@@ -29,21 +33,24 @@ public class PremarketWorkflowService {
 
     private static final Logger log = LoggerFactory.getLogger(PremarketWorkflowService.class);
 
-    private final MarketDataService marketDataService;
-    private final CandidateScanService candidateScanService;
+    private final MarketDataService              marketDataService;
+    private final CandidateScanService           candidateScanService;
     private final ClaudeCodeRequestWriterService requestWriterService;
-    private final ScoreConfigService config;
+    private final LineTemplateService            lineTemplateService;
+    private final ScoreConfigService             config;
 
     public PremarketWorkflowService(
             MarketDataService marketDataService,
             CandidateScanService candidateScanService,
             ClaudeCodeRequestWriterService requestWriterService,
+            LineTemplateService lineTemplateService,
             ScoreConfigService config
     ) {
-        this.marketDataService = marketDataService;
+        this.marketDataService    = marketDataService;
         this.candidateScanService = candidateScanService;
         this.requestWriterService = requestWriterService;
-        this.config = config;
+        this.lineTemplateService  = lineTemplateService;
+        this.config               = config;
     }
 
     /**
@@ -76,10 +83,26 @@ public class PremarketWorkflowService {
         int researchMax = config.getInt("candidate.research.maxCount", 5);
         List<String> topSymbols = candidates.stream()
                 .limit(researchMax)
-                .map(c -> c.symbol())
+                .map(CandidateResponse::symbol)
                 .toList();
 
         boolean written = requestWriterService.writeRequest("PREMARKET", tradingDate, topSymbols, null);
         log.info("[PremarketWorkflow] Claude 研究請求寫出={}, symbols={}", written, topSymbols);
+
+        // Step 6: LINE 盤前通知（由 scheduling.line_notify_enabled 控制）
+        boolean lineEnabled = config.getBoolean("scheduling.line_notify_enabled", false);
+        if (lineEnabled) {
+            MarketCurrentResponse market = marketDataService.getCurrentMarket().orElse(null);
+            String marketSummary = market == null
+                    ? "（盤前市場資料尚未就緒）"
+                    : "行情等級：" + market.marketGrade() + "，階段：" + market.marketPhase();
+            String candidateText = candidates.isEmpty() ? "（無候選資料）"
+                    : candidates.stream()
+                        .map(c -> "  ▶ " + c.symbol() + " " + (c.stockName() == null ? "" : c.stockName())
+                                + (c.entryPriceZone() == null ? "" : "  進場區：" + c.entryPriceZone()))
+                        .collect(Collectors.joining("\n"));
+            lineTemplateService.notifyPremarket(marketSummary, candidateText, tradingDate);
+            log.info("[PremarketWorkflow] LINE 盤前通知已發送");
+        }
     }
 }

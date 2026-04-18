@@ -1,5 +1,7 @@
 package com.austin.trading.workflow;
 
+import com.austin.trading.dto.response.FinalDecisionResponse;
+import com.austin.trading.notify.LineTemplateService;
 import com.austin.trading.service.FinalDecisionService;
 import com.austin.trading.service.MarketDataService;
 import com.austin.trading.service.ScoreConfigService;
@@ -25,18 +27,21 @@ public class IntradayDecisionWorkflowService {
 
     private static final Logger log = LoggerFactory.getLogger(IntradayDecisionWorkflowService.class);
 
-    private final MarketDataService marketDataService;
+    private final MarketDataService    marketDataService;
     private final FinalDecisionService finalDecisionService;
-    private final ScoreConfigService config;
+    private final LineTemplateService  lineTemplateService;
+    private final ScoreConfigService   config;
 
     public IntradayDecisionWorkflowService(
             MarketDataService marketDataService,
             FinalDecisionService finalDecisionService,
+            LineTemplateService lineTemplateService,
             ScoreConfigService config
     ) {
-        this.marketDataService = marketDataService;
+        this.marketDataService    = marketDataService;
         this.finalDecisionService = finalDecisionService;
-        this.config = config;
+        this.lineTemplateService  = lineTemplateService;
+        this.config               = config;
     }
 
     /**
@@ -57,11 +62,18 @@ public class IntradayDecisionWorkflowService {
         log.info("[IntradayDecisionWorkflow] 決策={}，入選={} 檔",
                 result.decision(), result.selectedStocks().size());
 
-        // Step 5: LINE 通知
+        // Step 5: LINE 通知（由 scheduling.line_notify_enabled 控制）
         boolean lineEnabled = config.getBoolean("scheduling.line_notify_enabled", false);
         if (lineEnabled) {
-            // TODO Phase 3: lineNotifyService.sendFinalDecision(result)
-            log.info("[IntradayDecisionWorkflow] LINE 通知已設定啟用（TODO Phase 3）");
+            lineTemplateService.notifyFinalDecision(result, tradingDate);
+            log.info("[IntradayDecisionWorkflow] LINE 通知已發送");
+        } else {
+            log.info("[IntradayDecisionWorkflow] LINE 通知未啟用（scheduling.line_notify_enabled=false）");
         }
+    }
+
+    /** 供外部直接取得結果（不重複計算）的入口 */
+    public FinalDecisionResponse evaluateAndPersist(LocalDate tradingDate) {
+        return finalDecisionService.evaluateAndPersist(tradingDate);
     }
 }

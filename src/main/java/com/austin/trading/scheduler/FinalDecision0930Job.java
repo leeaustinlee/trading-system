@@ -1,9 +1,7 @@
 package com.austin.trading.scheduler;
 
-import com.austin.trading.dto.response.FinalDecisionResponse;
-import com.austin.trading.notify.LineTemplateService;
-import com.austin.trading.service.FinalDecisionService;
 import com.austin.trading.service.SchedulerLogService;
+import com.austin.trading.workflow.IntradayDecisionWorkflowService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -19,17 +17,14 @@ public class FinalDecision0930Job {
 
     private static final Logger log = LoggerFactory.getLogger(FinalDecision0930Job.class);
 
-    private final FinalDecisionService finalDecisionService;
-    private final LineTemplateService lineTemplateService;
+    private final IntradayDecisionWorkflowService workflowService;
     private final SchedulerLogService schedulerLogService;
 
     public FinalDecision0930Job(
-            FinalDecisionService finalDecisionService,
-            LineTemplateService lineTemplateService,
+            IntradayDecisionWorkflowService workflowService,
             SchedulerLogService schedulerLogService
     ) {
-        this.finalDecisionService = finalDecisionService;
-        this.lineTemplateService = lineTemplateService;
+        this.workflowService    = workflowService;
         this.schedulerLogService = schedulerLogService;
     }
 
@@ -38,15 +33,9 @@ public class FinalDecision0930Job {
         LocalDateTime triggerTime = LocalDateTime.now();
         String jobName = "FinalDecision0930Job";
         try {
-            LocalDate today = LocalDate.now();
-            FinalDecisionResponse result = finalDecisionService.evaluateAndPersist(today);
-
-            // LINE 通知（含建議倉位與停損停利）
-            lineTemplateService.notifyFinalDecision(result, today);
-
-            String msg = "decision=" + result.decision() + ", selected=" + result.selectedStocks().size();
-            log.info("[FinalDecision0930Job] {}", msg);
-            schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), msg);
+            workflowService.execute(LocalDate.now());
+            log.info("[FinalDecision0930Job] completed");
+            schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), "workflow completed");
         } catch (Exception e) {
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());
             throw e;
