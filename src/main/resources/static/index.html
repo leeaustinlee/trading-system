@@ -386,6 +386,7 @@
   <button class="nav-tab" data-page="pageDecisions">決策歷史</button>
   <button class="nav-tab" data-page="pageAiResearch">AI 研究</button>
   <button class="nav-tab" data-page="pageSystem">系統</button>
+  <button class="nav-tab" data-page="pageSettings">設定</button>
   <div class="nav-spacer"></div>
   <span class="nav-meta" id="navMeta"></span>
   <button id="btnRefreshNav">⟳ 刷新</button>
@@ -533,8 +534,13 @@
         </h2>
         <table>
           <thead><tr>
-            <th>代號</th><th>名稱</th><th>評分</th><th>風報比</th>
-            <th>估值模式</th><th>進場區間</th><th>停損</th><th>停利1</th><th>停利2</th>
+            <th>代號</th><th>名稱</th><th>題材</th>
+            <th title="Java結構評分 0-10">Java分</th>
+            <th title="Claude研究評分 0-10">Claude分</th>
+            <th title="最終排序分（veto後）">最終分</th>
+            <th title="是否被硬性淘汰">淘汰</th>
+            <th>風報比</th><th>估值模式</th><th>進場區間</th>
+            <th>停損</th><th>停利1</th><th>停利2</th>
             <th>納入計畫</th><th>操作</th>
           </tr></thead>
           <tbody id="c-currentBody"></tbody>
@@ -833,6 +839,71 @@
   </div>
 </div>
 
+<!-- ══════════════ PAGE: Settings ══════════════ -->
+<div class="page" id="pageSettings">
+  <div class="wrap">
+    <div id="errBoxSettings" class="errbox"></div>
+    <div class="grid">
+
+      <section class="card span-12">
+        <h2>評分策略設定
+          <span class="small" style="color:var(--muted);margin-left:8px">score_config — 所有參數即時生效，無需重啟</span>
+        </h2>
+        <table>
+          <thead><tr>
+            <th style="width:280px">設定 Key</th>
+            <th style="width:120px">目前值</th>
+            <th style="width:90px">型別</th>
+            <th>說明</th>
+            <th style="width:100px">操作</th>
+          </tr></thead>
+          <tbody id="settings-configBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-6">
+        <h2>題材對應管理</h2>
+        <div class="toolbar">
+          <label>代號 <input type="text" id="stm-symbol" placeholder="全部" style="width:80px"></label>
+          <button class="btn" id="stm-load">查詢</button>
+          <button class="btn primary" id="stm-btnAdd">＋ 新增對應</button>
+        </div>
+        <table>
+          <thead><tr><th>代號</th><th>名稱</th><th>題材</th><th>分類</th><th>來源</th><th>啟用</th></tr></thead>
+          <tbody id="stm-body"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-6">
+        <h2>今日題材快照</h2>
+        <table>
+          <thead><tr><th>題材</th><th>分類</th><th>行為分</th><th>熱度(Claude)</th><th>延續(Claude)</th><th>最終分</th><th>排名</th></tr></thead>
+          <tbody id="settings-themeBody"></tbody>
+        </table>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ MODAL: Score Config Edit ══════════════ -->
+<div class="modal-overlay" id="modal-config-edit" style="display:none" onclick="if(event.target===this)closeModal('modal-config-edit')">
+  <div class="modal-box" style="max-width:440px">
+    <h3>編輯設定 — <span id="cfg-editKey" style="color:var(--accent);font-family:monospace"></span></h3>
+    <div id="cfg-editErr" class="err-msg" style="display:none"></div>
+    <div class="form-grid">
+      <div class="form-field form-full">
+        <label id="cfg-editDesc" style="color:var(--muted);font-size:13px"></label>
+        <input id="cfg-editValue" type="text" style="margin-top:8px">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="submitConfigEdit()">儲存</button>
+      <button class="btn" style="background:var(--bg3)" onclick="closeModal('modal-config-edit')">取消</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════ MODAL: 手動新增損益 ══════════════ -->
 <div class="modal-overlay" id="modal-pnl-add" style="display:none" onclick="if(event.target===this)closeModal('modal-pnl-add')">
   <div class="modal-box">
@@ -1078,6 +1149,16 @@
   const setText = (id, v) => { const el = $(id); if (el) el.textContent = zh(v) ?? "-"; };
   const pill = (label, cls) => `<span class="pill ${cls}">${esc(label)}</span>`;
 
+  /** 依評分（0~10）回傳背景色（綠→黃→紅） */
+  const scoreBg = (v) => {
+    const n = Number(v);
+    if (isNaN(n)) return "#eee";
+    if (n >= 7)  return "#d3f8ea";  // 綠
+    if (n >= 5)  return "#fff2cc";  // 黃
+    if (n >= 3)  return "#ffe6cc";  // 橙
+    return "#ffe3e7";               // 紅
+  };
+
   /* ── 代碼 → 繁體中文對照表 ── */
   const ZH_MAP = {
     // 市場等級
@@ -1291,25 +1372,46 @@
       _candidateCache = {};
       (data || []).forEach(c => { _candidateCache[c.symbol] = c; });
       $("c-currentBody").innerHTML = (data || []).length
-        ? (data || []).map(c => `<tr>
-            <td class="mono">${esc(c.symbol)}</td>
-            <td>${esc(c.stockName)}</td>
-            <td>${esc(c.score)}</td>
-            <td>${esc(c.riskRewardRatio)}</td>
-            <td>${zhEsc(c.valuationMode)}</td>
-            <td>${esc(c.entryPriceZone)}</td>
-            <td>${esc(c.stopLossPrice)}</td>
-            <td>${esc(c.takeProfit1)}</td>
-            <td>${esc(c.takeProfit2)}</td>
-            <td>${c.includeInFinalPlan ? pill("納入","ok") : pill("未納入","muted")}</td>
-            <td style="white-space:nowrap">
-              <button class="btn" style="padding:2px 8px;font-size:12px"
-                onclick="toggleCandidateInclude('${esc(c.symbol)}')">${c.includeInFinalPlan ? "移除" : "納入"}</button>
-              <button class="btn" style="padding:2px 8px;font-size:12px;margin-left:4px"
-                onclick="openCandidateEditModal('${esc(c.symbol)}')">編輯</button>
-            </td>
-          </tr>`).join("")
-        : `<tr class="empty-row"><td colspan="11">目前無候選股</td></tr>`;
+        ? (data || []).map(c => {
+            const jScore  = c.javaStructureScore != null ? Number(c.javaStructureScore).toFixed(1) : "–";
+            const clScore = c.claudeScore        != null ? Number(c.claudeScore).toFixed(1)        : "–";
+            const fScore  = c.finalRankScore     != null ? Number(c.finalRankScore).toFixed(1)     : "–";
+            const vetoCell = c.isVetoed
+              ? `<span class="pill err" title="已被淘汰">✗</span>`
+              : `<span class="pill ok">✓</span>`;
+            const jScoreCell = c.javaStructureScore != null
+              ? `<span class="score-badge" style="background:${scoreBg(c.javaStructureScore)}">${jScore}</span>`
+              : `<span class="quote-meta">–</span>`;
+            const clScoreCell = c.claudeScore != null
+              ? `<span class="score-badge" style="background:${scoreBg(c.claudeScore)}">${clScore}</span>`
+              : `<span class="quote-meta">–</span>`;
+            const fScoreCell = c.finalRankScore != null
+              ? `<span class="score-badge" style="background:${scoreBg(c.finalRankScore)};font-weight:700">${fScore}</span>`
+              : `<span class="quote-meta">–</span>`;
+            return `<tr>
+              <td class="mono">${esc(c.symbol)}</td>
+              <td>${esc(c.stockName)}</td>
+              <td class="small">${c.themeTag ? `<span class="pill warn">${esc(c.themeTag)}</span>` : "–"}</td>
+              <td style="text-align:center">${jScoreCell}</td>
+              <td style="text-align:center">${clScoreCell}</td>
+              <td style="text-align:center">${fScoreCell}</td>
+              <td style="text-align:center">${vetoCell}</td>
+              <td>${esc(c.riskRewardRatio)}</td>
+              <td>${zhEsc(c.valuationMode)}</td>
+              <td>${esc(c.entryPriceZone)}</td>
+              <td>${esc(c.stopLossPrice)}</td>
+              <td>${esc(c.takeProfit1)}</td>
+              <td>${esc(c.takeProfit2)}</td>
+              <td>${c.includeInFinalPlan ? pill("納入","ok") : pill("未納入","muted")}</td>
+              <td style="white-space:nowrap">
+                <button class="btn" style="padding:2px 8px;font-size:12px"
+                  onclick="toggleCandidateInclude('${esc(c.symbol)}')">${c.includeInFinalPlan ? "移除" : "納入"}</button>
+                <button class="btn" style="padding:2px 8px;font-size:12px;margin-left:4px"
+                  onclick="openCandidateEditModal('${esc(c.symbol)}')">編輯</button>
+              </td>
+            </tr>`;
+          }).join("")
+        : `<tr class="empty-row"><td colspan="15">目前無候選股</td></tr>`;
     } catch(e) { showErr("errBoxCand", `載入失敗：${e.message}`); }
   }
 
@@ -2462,6 +2564,7 @@
       case "pageDecisions":  loadDecisions(); break;
       case "pageAiResearch": loadAiResearch(); break;
       case "pageSystem":     loadSystemPage(); break;
+      case "pageSettings":   loadSettingsPage(); break;
     }
   }
 
@@ -2488,6 +2591,117 @@
 
   $("btnRefreshNav").addEventListener("click", refreshCurrent);
   $("dec-btnEvaluate").addEventListener("click", runFinalDecisionEvaluate);
+
+  /* ─────────────────────────────────────────────
+     PAGE: Settings（評分策略設定 + 題材管理）
+  ───────────────────────────────────────────── */
+  let _configEditKey = null;
+
+  async function loadSettingsPage() {
+    clearErr("errBoxSettings");
+    try {
+      const [configs, themes] = await Promise.all([
+        api("/api/config/score"),
+        api("/api/market/current").then(() => {
+          return api("/api/candidates/current?limit=1").then(() =>
+            api("/api/decisions/current").then(() => [])
+          ).catch(() => []);
+        }).catch(() => [])
+      ]);
+
+      renderScoreConfigs(configs || []);
+      loadThemeSnapshots();
+      loadThemeMappings();
+    } catch(e) { showErr("errBoxSettings", `載入失敗：${e.message}`); }
+  }
+
+  function renderScoreConfigs(configs) {
+    const body = $("settings-configBody");
+    if (!configs.length) {
+      body.innerHTML = `<tr class="empty-row"><td colspan="5">無設定</td></tr>`;
+      return;
+    }
+    body.innerHTML = configs.map(c => `<tr>
+      <td class="mono small">${esc(c.configKey)}</td>
+      <td><strong>${esc(c.configValue)}</strong></td>
+      <td class="small">${esc(c.valueType)}</td>
+      <td class="small">${esc(c.description)}</td>
+      <td><button class="btn" style="padding:2px 10px;font-size:12px"
+        onclick="openConfigEdit('${esc(c.configKey)}','${esc(c.configValue)}','${esc(c.description)}')">編輯</button></td>
+    </tr>`).join("");
+  }
+
+  function openConfigEdit(key, value, desc) {
+    _configEditKey = key;
+    $("cfg-editKey").textContent  = key;
+    $("cfg-editDesc").textContent = desc;
+    $("cfg-editValue").value      = value;
+    clearErr("cfg-editErr");
+    $("modal-config-edit").style.display = "flex";
+  }
+
+  async function submitConfigEdit() {
+    if (!_configEditKey) return;
+    const value = $("cfg-editValue").value.trim();
+    if (!value) { showErr("cfg-editErr", "值不可為空"); return; }
+    clearErr("cfg-editErr");
+    try {
+      await api(`/api/config/score/${encodeURIComponent(_configEditKey)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value })
+      });
+      closeModal("modal-config-edit");
+      await loadSettingsPage();
+    } catch(e) { showErr("cfg-editErr", e.message); }
+  }
+
+  async function loadThemeSnapshots() {
+    try {
+      const today = new Date().toLocaleDateString("sv-SE");
+      const data = await api(`/api/themes/snapshots?date=${today}`).catch(() => []);
+      const body = $("settings-themeBody");
+      body.innerHTML = (data || []).length
+        ? (data || []).map(t => `<tr>
+            <td class="small">${esc(t.themeTag)}</td>
+            <td class="small">${esc(t.themeCategory)}</td>
+            <td>${t.marketBehaviorScore != null ? Number(t.marketBehaviorScore).toFixed(1) : "–"}</td>
+            <td>${t.themeHeatScore != null ? Number(t.themeHeatScore).toFixed(1) : "–"}</td>
+            <td>${t.themeContinuationScore != null ? Number(t.themeContinuationScore).toFixed(1) : "–"}</td>
+            <td><strong>${t.finalThemeScore != null ? Number(t.finalThemeScore).toFixed(1) : "–"}</strong></td>
+            <td>${t.rankingOrder ?? "–"}</td>
+          </tr>`).join("")
+        : `<tr class="empty-row"><td colspan="7">今日無題材快照</td></tr>`;
+    } catch(_) {}
+  }
+
+  async function loadThemeMappings() {
+    try {
+      const sym = $("stm-symbol")?.value?.trim() || "";
+      const url = sym ? `/api/themes/mappings?symbol=${encodeURIComponent(sym)}` : "/api/themes/mappings";
+      const data = await api(url).catch(() => []);
+      const body = $("stm-body");
+      body.innerHTML = (data || []).length
+        ? (data || []).map(m => `<tr>
+            <td class="mono">${esc(m.symbol)}</td>
+            <td>${esc(m.stockName)}</td>
+            <td><span class="pill warn">${esc(m.themeTag)}</span></td>
+            <td class="small">${esc(m.themeCategory)}</td>
+            <td class="small">${esc(m.source)}</td>
+            <td>${m.isActive ? "✓" : "✗"}</td>
+          </tr>`).join("")
+        : `<tr class="empty-row"><td colspan="6">無對應資料</td></tr>`;
+    } catch(_) {}
+  }
+
+  $("stm-load")?.addEventListener("click", loadThemeMappings);
+
+  /* .score-badge 樣式（動態注入） */
+  (function injectScoreBadgeCss() {
+    const style = document.createElement("style");
+    style.textContent = `.score-badge{display:inline-block;min-width:32px;text-align:center;padding:2px 6px;border-radius:6px;font-size:12px;font-weight:600;}`;
+    document.head.appendChild(style);
+  })();
 
   // Init
   loadDashboard();

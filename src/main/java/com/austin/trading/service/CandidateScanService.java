@@ -264,7 +264,13 @@ public class CandidateScanService {
                             eval == null ? null : eval.getIncludeInFinalPlan(),
                             eval == null ? null : eval.getStopLossPrice(),
                             eval == null ? null : eval.getTakeProfit1(),
-                            eval == null ? null : eval.getTakeProfit2()
+                            eval == null ? null : eval.getTakeProfit2(),
+                            c.getThemeTag(),
+                            c.getSector(),
+                            eval == null ? null : eval.getJavaStructureScore(),
+                            eval == null ? null : eval.getClaudeScore(),
+                            eval == null ? null : eval.getFinalRankScore(),
+                            eval == null ? null : eval.getIsVetoed()
                     );
                 })
                 .toList();
@@ -344,7 +350,10 @@ public class CandidateScanService {
                 cand.getScore(), cand.getReason(),
                 eval.getValuationMode(), eval.getEntryPriceZone(), eval.getRiskRewardRatio(),
                 eval.getIncludeInFinalPlan(), eval.getStopLossPrice(),
-                eval.getTakeProfit1(), eval.getTakeProfit2()
+                eval.getTakeProfit1(), eval.getTakeProfit2(),
+                cand.getThemeTag(), cand.getSector(),
+                eval.getJavaStructureScore(), eval.getClaudeScore(),
+                eval.getFinalRankScore(), eval.getIsVetoed()
         );
     }
 
@@ -386,7 +395,10 @@ public class CandidateScanService {
                 cand.getScore(), cand.getReason(),
                 eval.getValuationMode(), eval.getEntryPriceZone(), eval.getRiskRewardRatio(),
                 eval.getIncludeInFinalPlan(), eval.getStopLossPrice(),
-                eval.getTakeProfit1(), eval.getTakeProfit2()
+                eval.getTakeProfit1(), eval.getTakeProfit2(),
+                cand.getThemeTag(), cand.getSector(),
+                eval.getJavaStructureScore(), eval.getClaudeScore(),
+                eval.getFinalRankScore(), eval.getIsVetoed()
         );
     }
 

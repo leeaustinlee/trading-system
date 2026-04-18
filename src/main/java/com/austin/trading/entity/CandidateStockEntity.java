@@ -29,6 +29,12 @@ public class CandidateStockEntity {
     @Column(name = "reason", length = 500)
     private String reason;
 
+    @Column(name = "theme_tag", length = 100)
+    private String themeTag;
+
+    @Column(name = "sector", length = 100)
+    private String sector;
+
     @Column(name = "payload_json", columnDefinition = "json")
     private String payloadJson;
 
@@ -46,6 +52,10 @@ public class CandidateStockEntity {
     public void setScore(BigDecimal score) { this.score = score; }
     public String getReason() { return reason; }
     public void setReason(String reason) { this.reason = reason; }
+    public String getThemeTag() { return themeTag; }
+    public void setThemeTag(String themeTag) { this.themeTag = themeTag; }
+    public String getSector() { return sector; }
+    public void setSector(String sector) { this.sector = sector; }
     public String getPayloadJson() { return payloadJson; }
     public void setPayloadJson(String payloadJson) { this.payloadJson = payloadJson; }
     public LocalDateTime getCreatedAt() { return createdAt; }

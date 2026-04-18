@@ -15,6 +15,13 @@ public record CandidateResponse(
         Boolean includeInFinalPlan,
         BigDecimal stopLossPrice,
         BigDecimal takeProfit1,
-        BigDecimal takeProfit2
+        BigDecimal takeProfit2,
+        // ── Phase 1 新增欄位 ────────────────────────────────
+        String themeTag,
+        String sector,
+        BigDecimal javaStructureScore,
+        BigDecimal claudeScore,
+        BigDecimal finalRankScore,
+        Boolean isVetoed
 ) {
 }
