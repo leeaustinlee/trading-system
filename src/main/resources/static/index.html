@@ -453,7 +453,7 @@
         </h2>
         <table>
           <thead><tr>
-            <th>代號</th><th>名稱</th><th>現價</th><th>漲跌</th><th>日高</th><th>日低</th><th>量(張)</th>
+            <th>代號</th><th>名稱</th><th>評分</th><th>現價</th><th>漲跌</th><th>日高</th><th>日低</th><th>量(張)</th>
           </tr></thead>
           <tbody id="d-liveBody"></tbody>
         </table>
@@ -672,23 +672,29 @@
         <h2>觸發 AI 研究</h2>
         <div style="display:grid;gap:14px;font-size:14px">
           <div>
-            <div class="section-title">盤前研究</div>
+            <div class="section-title">盤前研究
+              <span class="small" style="color:var(--muted);margin-left:6px">寫入請求檔 → Claude Code 執行</span>
+            </div>
             <div class="toolbar" style="margin-bottom:8px">
               <input type="text" id="ai-txf" placeholder="台指期摘要（可留空）" style="flex:1;min-width:0" />
             </div>
-            <button class="btn primary" id="ai-btnPremarket" style="width:100%">執行盤前研究</button>
+            <button class="btn primary" id="ai-btnPremarket" style="width:100%">寫入盤前研究請求</button>
           </div>
           <div>
-            <div class="section-title">個股評估</div>
+            <div class="section-title">個股評估
+              <span class="small" style="color:var(--muted);margin-left:6px">寫入請求檔 → Claude Code 執行</span>
+            </div>
             <div class="toolbar" style="margin-bottom:8px">
               <label>代號 <input type="text" id="ai-symbol" placeholder="2330" style="width:90px" /></label>
               <label>日期 <input type="date" id="ai-date" /></label>
             </div>
-            <button class="btn primary" id="ai-btnStock" style="width:100%">執行個股評估</button>
+            <button class="btn primary" id="ai-btnStock" style="width:100%">寫入個股評估請求</button>
           </div>
           <div>
-            <div class="section-title">最終決策研究</div>
-            <button class="btn primary" id="ai-btnFinalDecision" style="width:100%">執行最終決策研究</button>
+            <div class="section-title">最終決策研究
+              <span class="small" style="color:var(--muted);margin-left:6px">寫入請求檔 → Claude Code 執行</span>
+            </div>
+            <button class="btn primary" id="ai-btnFinalDecision" style="width:100%">寫入最終決策請求</button>
           </div>
           <div>
             <div class="section-title">匯入研究報告（claude-research-latest.md）</div>
@@ -1187,7 +1193,14 @@
       setText("d-pnlWinRate", pnl.avgWinRate != null ? `${pnl.avgWinRate}%` : "-");
       setText("d-pnlDays", pnl.days);
 
-      // Candidates（即時報價由 fetchLiveQuotes 負責，此處略過）
+      // 候選股評分快取（供 Dashboard 即時報價欄顯示）
+      try {
+        const cands = await api("/api/candidates/current");
+        _candidateScoreCache = {};
+        (cands || []).forEach(c => {
+          _candidateScoreCache[c.symbol] = { score: c.score, entryPriceZone: c.entryPriceZone };
+        });
+      } catch(_) { /* 不影響主 Dashboard */ }
 
       // Positions
       $("d-positionsBody").innerHTML = (pos || []).length
@@ -1281,6 +1294,7 @@
   /* ─────────────────────────────────────────────
      PAGE: Positions
   ───────────────────────────────────────────── */
+  let _candidateScoreCache = {};  // symbol -> { score, entryPriceZone }，供 Dashboard 評分欄使用
   let _openPosCache = {};   // id -> PositionResponse，供 modal 使用
 
   async function loadOpenPositions() {
@@ -1605,18 +1619,40 @@
     }
   }
 
+  async function writeResearchRequest(type, symbol, context) {
+    const label = { PREMARKET:"盤前研究", STOCK_EVAL:"個股評估", FINAL_DECISION:"最終決策研究" }[type] || type;
+    $("ai-triggerStatus").textContent = `⏳ ${label}：寫入請求檔...`;
+    $("ai-triggerStatus").style.color = "var(--warn)";
+    const params = new URLSearchParams({ type });
+    if (symbol)  params.set("symbol",  symbol);
+    if (context) params.set("context", context);
+    try {
+      const r = await api(`/api/ai/research/write-request?${params}`, { method:"POST" });
+      if (r.success) {
+        $("ai-triggerStatus").textContent = `✅ ${r.message}`;
+        $("ai-triggerStatus").style.color = "var(--ok)";
+      } else {
+        $("ai-triggerStatus").textContent = `⚠️ ${r.message}`;
+        $("ai-triggerStatus").style.color = "var(--warn)";
+      }
+    } catch(e) {
+      $("ai-triggerStatus").textContent = `❌ 寫入失敗：${e.message}`;
+      $("ai-triggerStatus").style.color = "var(--err)";
+      showErr("errBoxAi", `寫入失敗：${e.message}`);
+    }
+  }
+
   $("ai-btnPremarket").addEventListener("click", () => {
     const txf = $("ai-txf").value.trim();
-    triggerAi(`/api/ai/research/premarket${txf?`?txfSummary=${encodeURIComponent(txf)}`:""}`, null, "盤前研究");
+    writeResearchRequest("PREMARKET", null, txf || null);
   });
   $("ai-btnStock").addEventListener("click", () => {
-    const sym  = $("ai-symbol").value.trim();
-    const date = $("ai-date").value;
+    const sym = $("ai-symbol").value.trim();
     if (!sym) { showErr("errBoxAi","請輸入代號"); return; }
-    triggerAi(`/api/ai/research/stock/${encodeURIComponent(sym)}${date?`?date=${date}`:""}`, null, `個股評估 ${sym}`);
+    writeResearchRequest("STOCK_EVAL", sym, null);
   });
   $("ai-btnFinalDecision").addEventListener("click", () => {
-    triggerAi("/api/ai/research/final-decision", null, "最終決策研究");
+    writeResearchRequest("FINAL_DECISION", null, null);
   });
   $("ai-loadLogs").addEventListener("click", loadAiResearch);
 
@@ -1847,10 +1883,26 @@
       setLiveStatus("d-liveDot","d-liveStatus", statusText, dotState);
       setLiveStatus("c-liveDot","c-liveStatus", statusText, dotState);
 
-      // Dashboard 精簡版（無開盤/昨收/更新欄）
+      // Dashboard 精簡版（含評分欄，無開盤/昨收/更新欄）
       const dBody = $("d-liveBody");
       if (dBody) {
-        dBody.innerHTML = data.map(q => renderLiveRow(q, false)).join("");
+        dBody.innerHTML = data.map(q => {
+          const cls  = changeClass(q.changePercent);
+          const cand = _candidateScoreCache[q.symbol];
+          const scoreCell = cand?.score != null
+            ? `<td class="small" style="color:var(--ok);font-weight:600">${cand.score}</td>`
+            : `<td class="small" style="color:var(--muted)">-</td>`;
+          return `<tr id="lq-row-${q.symbol}">
+            <td class="mono">${esc(q.symbol)}</td>
+            <td>${esc(q.stockName)}</td>
+            ${scoreCell}
+            <td id="lq-price-${q.symbol}" class="quote-price ${cls==="up"?"num-pos":cls==="dn"?"num-neg":""}">${fmtPrice(q.currentPrice)}</td>
+            <td class="quote-change ${cls}">${changeSign(q.changeAmount)} ${changePctText(q.changePercent)}</td>
+            <td class="quote-meta">${fmtPrice(q.dayHigh)}</td>
+            <td class="quote-meta">${fmtPrice(q.dayLow)}</td>
+            <td class="quote-meta">${fmtVol(q.volume)}</td>
+          </tr>`;
+        }).join("");
       }
 
       // Candidates 完整版（含所有欄位）
