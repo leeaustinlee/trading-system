@@ -19,4 +19,4 @@ application-local.yml
 # secrets
 *.key
 *.pem
-secrets/
+secrets/D:/
