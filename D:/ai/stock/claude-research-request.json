@@ -1,0 +1,8 @@
+{
+  "requested_at" : "2026-04-19 14:15:23",
+  "type" : "POSTMARKET",
+  "trading_date" : "2026-04-19",
+  "candidates" : [ "3231", "2303", "2383", "6213", "3017" ],
+  "rules_files" : [ "D:/ai/stock/AI_RULES_INDEX.md", "D:/ai/stock/dual-ai-workflow.md", "D:/ai/stock/market-data-protocol.md", "D:/ai/stock/market-snapshot.json", "D:/ai/stock/capital-summary.md", "D:/ai/stock/trade-decision-engine.md", "D:/ai/stock/market-gate-self-optimization-engine.md" ],
+  "output_path" : "D:/ai/stock/claude-research-latest.md"
+}

@@ -385,6 +385,7 @@
   <button class="nav-tab" data-page="pagePnl">損益</button>
   <button class="nav-tab" data-page="pageDecisions">決策歷史</button>
   <button class="nav-tab" data-page="pageAiResearch">AI 研究</button>
+  <button class="nav-tab" data-page="pageScheduler">排程</button>
   <button class="nav-tab" data-page="pageSystem">系統</button>
   <button class="nav-tab" data-page="pageSettings">設定</button>
   <div class="nav-spacer"></div>
@@ -770,6 +771,62 @@
         <div id="ai-logsBody"></div>
       </section>
 
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE: Scheduler ══════════════ -->
+<div class="page" id="pageScheduler">
+  <div class="wrap">
+    <div id="errBoxSched" class="errbox"></div>
+    <div class="grid">
+      <section class="card span-12">
+        <h2>📅 排程 Job 清單</h2>
+        <p class="small" style="margin-bottom:8px;color:var(--muted)">
+          所有 Spring @Scheduled Job 的狀態與最近執行記錄。若排程 Job 沒跑到，可用「手動觸發」補。
+        </p>
+        <div style="margin-bottom:12px">
+          <button class="btn" id="sched-refresh">⟳ 刷新</button>
+          <span class="small" id="sched-updatedAt" style="margin-left:12px;color:var(--muted)"></span>
+        </div>
+        <table class="table" id="sched-jobs-table">
+          <thead>
+            <tr>
+              <th>Job</th>
+              <th>啟用</th>
+              <th>Cron</th>
+              <th>最後執行</th>
+              <th>狀態</th>
+              <th>耗時</th>
+              <th>訊息</th>
+              <th>動作</th>
+            </tr>
+          </thead>
+          <tbody id="sched-jobs-body"><tr><td colspan="8">載入中...</td></tr></tbody>
+        </table>
+      </section>
+
+      <section class="card span-12">
+        <h2>📜 執行歷史（最近 50 筆）</h2>
+        <div style="margin-bottom:12px">
+          <select id="sched-log-filter" style="padding:4px 8px">
+            <option value="">全部 Job</option>
+          </select>
+          <button class="btn" id="sched-log-refresh">⟳ 刷新</button>
+        </div>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>觸發時間</th>
+              <th>Job</th>
+              <th>狀態</th>
+              <th>耗時 (ms)</th>
+              <th>訊息</th>
+            </tr>
+          </thead>
+          <tbody id="sched-logs-body"><tr><td colspan="5">載入中...</td></tr></tbody>
+        </table>
+      </section>
     </div>
   </div>
 </div>
@@ -2069,6 +2126,96 @@
     } catch(e) { showErr("errBoxSys", `載入失敗：${e.message}`); }
   }
 
+  // ══════════════ Scheduler Console ══════════════
+  async function loadScheduler() {
+    clearErr("errBoxSched");
+    try {
+      await Promise.all([loadSchedJobs(), loadSchedLogs()]);
+    } catch(e) { showErr("errBoxSched", `載入失敗：${e.message}`); }
+  }
+
+  async function loadSchedJobs() {
+    const jobs = await api("/api/scheduler/jobs");
+    const statusPillLocal = (s) => {
+      if (s === "SUCCESS") return `<span class="pill" style="background:#d4f5e9;color:#0a6640">SUCCESS</span>`;
+      if (s === "FAILED")  return `<span class="pill" style="background:#ffe3e7;color:#a00020">FAILED</span>`;
+      return `<span class="pill" style="background:#eee;color:#555">${esc(s || "-")}</span>`;
+    };
+    const enabledBadge = (e) => e
+      ? `<span class="pill" style="background:#d4f5e9;color:#0a6640">ON</span>`
+      : `<span class="pill" style="background:#eee;color:#888">OFF</span>`;
+
+    $("sched-jobs-body").innerHTML = jobs.map(j => {
+      const triggerBtn = j.triggerKey
+        ? `<button class="btn" onclick="triggerSchedJob('${j.triggerKey}')">▶ 手動</button>`
+        : `<span class="small" style="color:#aaa">(僅排程)</span>`;
+      return `<tr>
+        <td><b>${esc(j.display)}</b><br><span class="small" style="color:var(--muted)">${esc(j.jobName)}</span></td>
+        <td>${enabledBadge(j.enabled)}</td>
+        <td class="mono small">${esc(j.cron || "-")}</td>
+        <td class="mono small">${j.lastRunAt ? fmtTime(j.lastRunAt) : "-"}</td>
+        <td>${j.lastStatus ? statusPillLocal(j.lastStatus) : "-"}</td>
+        <td class="mono small">${j.lastDurationMs ?? "-"}</td>
+        <td class="small" title="${esc(j.lastMessage || "")}">${esc((j.lastMessage || "").substring(0, 60))}</td>
+        <td>${triggerBtn}</td>
+      </tr>`;
+    }).join("");
+
+    // 更新 log 篩選 dropdown
+    const filter = $("sched-log-filter");
+    if (filter) {
+      const cur = filter.value;
+      filter.innerHTML = `<option value="">全部 Job</option>` +
+        jobs.map(j => `<option value="${esc(j.jobName)}">${esc(j.display)}</option>`).join("");
+      filter.value = cur;
+    }
+    setText("sched-updatedAt", `更新於 ${new Date().toLocaleTimeString("zh-TW")}`);
+  }
+
+  async function loadSchedLogs() {
+    const jobFilter = $("sched-log-filter")?.value || "";
+    const q = new URLSearchParams({ limit: "50" });
+    if (jobFilter) q.append("jobName", jobFilter);
+    const logs = await api(`/api/scheduler/logs?${q}`);
+    $("sched-logs-body").innerHTML = (logs || []).length
+      ? logs.map(l => `<tr>
+          <td class="mono small">${fmtTime(l.triggerTime)}</td>
+          <td class="small">${esc(l.jobName)}</td>
+          <td>${l.status === "SUCCESS"
+            ? `<span class="pill" style="background:#d4f5e9;color:#0a6640">${esc(l.status)}</span>`
+            : `<span class="pill" style="background:#ffe3e7;color:#a00020">${esc(l.status)}</span>`}</td>
+          <td class="mono small">${l.durationMs ?? "-"}</td>
+          <td class="small" title="${esc(l.message || "")}">${esc((l.message || "").substring(0, 100))}</td>
+        </tr>`).join("")
+      : `<tr class="empty-row"><td colspan="5">尚無執行記錄</td></tr>`;
+  }
+
+  window.triggerSchedJob = async function(triggerKey) {
+    clearErr("errBoxSched");
+    try {
+      const res = await fetch(`/api/scheduler/trigger/${triggerKey}`, { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || res.status);
+      }
+      await loadScheduler();
+      showErr("errBoxSched", `✅ ${triggerKey} 觸發成功`);
+      setTimeout(() => clearErr("errBoxSched"), 3000);
+    } catch(e) {
+      showErr("errBoxSched", `觸發失敗: ${e.message}`);
+    }
+  };
+
+  // 綁定按鈕
+  document.addEventListener("DOMContentLoaded", () => {
+    const refreshBtn = document.getElementById("sched-refresh");
+    if (refreshBtn) refreshBtn.addEventListener("click", loadScheduler);
+    const logRefresh = document.getElementById("sched-log-refresh");
+    if (logRefresh) logRefresh.addEventListener("click", loadSchedLogs);
+    const logFilter = document.getElementById("sched-log-filter");
+    if (logFilter) logFilter.addEventListener("change", loadSchedLogs);
+  });
+
   async function loadMarketHistory() {
     try {
       const data = await api("/api/market/history?limit=30");
@@ -2631,6 +2778,7 @@
       case "pagePnl":        loadPnl(); break;
       case "pageDecisions":  loadDecisions(); break;
       case "pageAiResearch": loadAiResearch(); break;
+      case "pageScheduler":  loadScheduler(); break;
       case "pageSystem":     loadSystemPage(); break;
       case "pageSettings":   loadSettingsPage(); break;
     }
