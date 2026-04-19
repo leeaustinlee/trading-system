@@ -1,4 +1,4 @@
-# BC Sniper v2.0 評分工作流程
+﻿# BC Sniper v2.0 評分工作流程
 > **共同入口**：Claude、Codex、Java 每次執行評分相關操作前，必須先讀此文件。
 > **系統版本**：`v2.0-bc-sniper`（對應 `score_config.scoring.version`）
 > **Java App**：`http://localhost:8080`
@@ -328,7 +328,7 @@ Content-Type: application/json
 09:30 最終決策
   Codex → GET /api/dashboard/current（確認最新 final_rank_score）
   Codex → 即時報價確認 → 若失敗則不進場
-  Codex → 輸出 LINE 通知（含 A+ 名單或 REST 原因）
+  Codex → 提交 /api/ai/tasks/{id}/codex-result（含 A+ 名單或 REST 原因），Java 負責 LINE 通知
 ```
 
 ---
@@ -363,3 +363,4 @@ Body: { "value": "8.5" }
 3. **分歧保護**：若 `|java - claude| ≥ 2.5`，系統自動觸發 `SCORE_DIVERGENCE_HIGH` veto。這代表研究品質有問題，Claude 應重新審視。
 4. **題材先決**：`veto.require_theme = true` 時，無題材標籤的股票直接 veto。Codex 選股時必須確保每檔都有對應題材。
 5. **A+ 才能進場**：不論任何情況，`final_rank_score < 8.8` 或 `RR < 2.5` 的標的一律不進場。若所有候選都未達 A+，系統輸出 REST，當日不操作。
+

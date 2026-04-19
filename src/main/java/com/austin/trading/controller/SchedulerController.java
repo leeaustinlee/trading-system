@@ -8,6 +8,8 @@ import com.austin.trading.service.SchedulerLogService;
 import com.austin.trading.service.StrategyRecommendationService;
 import com.austin.trading.service.TradeReviewService;
 import com.austin.trading.scheduler.AftermarketReview1400Job;
+import com.austin.trading.scheduler.DailyHealthCheckJob;
+import com.austin.trading.scheduler.ExternalProbeHealthJob;
 import com.austin.trading.scheduler.MiddayReviewJob;
 import com.austin.trading.scheduler.OpenDataPrepJob;
 import com.austin.trading.scheduler.PostmarketDataPrepJob;
@@ -60,6 +62,8 @@ public class SchedulerController {
     @Autowired(required = false) private PostmarketDataPrepJob postmarketDataPrepJob;
     @Autowired(required = false) private T86DataPrepJob t86DataPrepJob;
     @Autowired(required = false) private TomorrowPlan1800Job tomorrowPlan1800Job;
+    @Autowired(required = false) private ExternalProbeHealthJob externalProbeHealthJob;
+    @Autowired(required = false) private DailyHealthCheckJob dailyHealthCheckJob;
 
     // ── scheduler enabled flags (從 application.yml 注入) ───────────────
     @Value("${trading.scheduler.premarket-notify.enabled:false}")        boolean premarketNotifyEnabled;
@@ -138,9 +142,9 @@ public class SchedulerController {
         jobs.add(job("WatchlistRefreshJob",    "15:35 觀察名單刷新",watchlistRefreshCron, watchlistRefreshEnabled,    "watchlist-refresh"));
         jobs.add(job("T86DataPrepJob",         "18:10 法人籌碼", t86DataPrepCron,         t86DataPrepEnabled,         "t86-data-prep"));
         jobs.add(job("TomorrowPlan1800Job",    "18:30 明日計畫", tomorrowPlanCron,        tomorrowPlanEnabled,        "tomorrow-plan"));
-        jobs.add(job("ExternalProbeHealthJob", "外部服務健康", externalProbeHealthCron, externalProbeHealthEnabled, null));
+        jobs.add(job("ExternalProbeHealthJob", "外部服務健康", externalProbeHealthCron, externalProbeHealthEnabled, "external-probe-health"));
         jobs.add(job("WeeklyTradeReviewJob",   "週五交易檢討+建議",weeklyTradeReviewCron, weeklyTradeReviewEnabled,   "weekly-review"));
-        jobs.add(job("DailyHealthCheckJob",    "每日健康檢查",  dailyHealthCheckCron,    dailyHealthCheckEnabled,    null));
+        jobs.add(job("DailyHealthCheckJob",    "每日健康檢查",  dailyHealthCheckCron,    dailyHealthCheckEnabled,    "daily-health-check"));
         return jobs;
     }
 
@@ -205,6 +209,8 @@ public class SchedulerController {
                 case "postmarket-data-prep" -> { requireJob(postmarketDataPrepJob, "postmarket-data-prep"); postmarketDataPrepJob.run(); yield "postmarket-data-prep done"; }
                 case "t86-data-prep"     -> { requireJob(t86DataPrepJob, "t86-data-prep");      t86DataPrepJob.run();     yield "t86-data-prep done"; }
                 case "tomorrow-plan"     -> { requireJob(tomorrowPlan1800Job, "tomorrow-plan"); tomorrowPlan1800Job.run(); yield "tomorrow-plan done"; }
+                case "external-probe-health" -> { requireJob(externalProbeHealthJob, "external-probe-health"); externalProbeHealthJob.run(); yield "external-probe-health done"; }
+                case "daily-health-check" -> { requireJob(dailyHealthCheckJob, "daily-health-check"); dailyHealthCheckJob.run(); yield "daily-health-check done"; }
                 default -> throw new IllegalArgumentException("Unknown triggerKey: " + triggerKey);
             };
             schedulerLogService.success(jobName, trigger, LocalDateTime.now(), result.toString());
@@ -237,6 +243,8 @@ public class SchedulerController {
             case "watchlist-refresh"   -> "WatchlistRefreshJob";
             case "t86-data-prep"       -> "T86DataPrepJob";
             case "tomorrow-plan"       -> "TomorrowPlan1800Job";
+            case "external-probe-health" -> "ExternalProbeHealthJob";
+            case "daily-health-check"  -> "DailyHealthCheckJob";
             case "weekly-review"       -> "WeeklyTradeReviewJob";
             default                    -> triggerKey;
         };

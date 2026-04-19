@@ -21,5 +21,8 @@ application-local.yml
 *.pem
 secrets/D:/
 
+# Windows 絕對路徑誤寫成 WSL 相對路徑時產生的目錄
+/D:/
+
 # Claude agent worktrees
 .claude/worktrees/

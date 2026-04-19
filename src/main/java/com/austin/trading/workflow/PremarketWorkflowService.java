@@ -1,7 +1,7 @@
 package com.austin.trading.workflow;
 
-import com.austin.trading.dto.request.AiTaskCandidateRef;
 import com.austin.trading.dto.response.CandidateResponse;
+import com.austin.trading.entity.AiTaskEntity;
 import com.austin.trading.dto.response.MarketCurrentResponse;
 import com.austin.trading.engine.JavaStructureScoringEngine;
 import com.austin.trading.engine.JavaStructureScoringEngine.JavaStructureInput;
@@ -110,38 +110,61 @@ public class PremarketWorkflowService {
         boolean written = requestWriterService.writeRequest("PREMARKET", tradingDate, topSymbols, contextPayload);
         log.info("[PremarketWorkflow] Claude 研究請求寫出={}, symbols={}", written, topSymbols);
 
-        // Step 5.5: 建立 AI 任務（PR-2）供 Claude 認領
-        try {
-            List<AiTaskCandidateRef> refs = candidates.stream()
-                    .limit(researchMax)
-                    .map(c -> new AiTaskCandidateRef(
-                            c.symbol(), c.stockName(), c.themeTag(), c.javaStructureScore()))
-                    .toList();
-            aiTaskService.createTask(
-                    tradingDate, "PREMARKET", null, refs,
-                    "今日盤前研究請求，共 " + refs.size() + " 檔",
-                    written ? "D:/ai/stock/claude-research-request.json" : null
-            );
-        } catch (Exception e) {
-            log.warn("[PremarketWorkflow] createTask 失敗: {}", e.getMessage());
-        }
-
-        // Step 6: LINE 盤前通知
+        // Step 6: LINE 盤前通知 — 優先讀 Codex 最終決策，否則 fallback Claude / 候選股列表
+        // Task 已由 PremarketDataPrepJob 於 08:10 建立，此處只讀取不重建
         boolean lineEnabled = config.getBoolean("scheduling.line_notify_enabled", false);
         if (lineEnabled) {
             MarketCurrentResponse market = marketDataService.getCurrentMarket().orElse(null);
             String marketSummary = market == null
                     ? "（盤前市場資料尚未就緒）"
                     : "行情等級：" + market.marketGrade() + "，階段：" + market.marketPhase();
-            String candidateText = candidates.isEmpty() ? "（無候選資料）"
-                    : candidates.stream()
-                        .map(c -> "  ▶ " + c.symbol()
-                                + (c.stockName() == null ? "" : " " + c.stockName())
-                                + (c.entryPriceZone() == null ? "" : "  進場區：" + c.entryPriceZone()))
-                        .collect(Collectors.joining("\n"));
-            lineTemplateService.notifyPremarket(marketSummary, candidateText, tradingDate);
-            log.info("[PremarketWorkflow] LINE 盤前通知已發送");
+
+            AiTaskEntity task = findLatestTask(tradingDate, "PREMARKET");
+            String aiStage = aiStageTag(task);
+            String body = buildNotifyBody(task, candidates);
+
+            lineTemplateService.notifyPremarket(marketSummary + aiStage, body, tradingDate);
+            log.info("[PremarketWorkflow] LINE 盤前通知已發送 aiStage={}", aiStage);
         }
+    }
+
+    /** 取當日同類型最新的 task，用於讀取 Claude/Codex 成果 */
+    private AiTaskEntity findLatestTask(LocalDate tradingDate, String taskType) {
+        return aiTaskService.getByDate(tradingDate).stream()
+                .filter(t -> taskType.equalsIgnoreCase(t.getTaskType()))
+                .reduce((first, second) -> second)
+                .orElse(null);
+    }
+
+    /** 根據 task 狀態產生一行 AI 流程進度標示，附加到 marketSummary */
+    private String aiStageTag(AiTaskEntity task) {
+        if (task == null) return "\n⚠ 未建 AI 任務";
+        return switch (task.getStatus()) {
+            case "FINALIZED", "CODEX_DONE" -> "\n✅ 已整合 Codex 最終決策";
+            case "CLAUDE_DONE"             -> "\n⏳ Claude 完成，Codex 尚未審核";
+            case "CLAUDE_RUNNING"          -> "\n⏳ Claude 研究中";
+            case "PENDING"                 -> "\n⚠ AI 任務尚未認領";
+            case "FAILED"                  -> "\n❌ AI 流程失敗";
+            default                        -> "\n⚠ 未知 AI 狀態：" + task.getStatus();
+        };
+    }
+
+    /** 依 AI 完成度選擇通知內文：Codex md > Claude md > 候選股列表 */
+    private String buildNotifyBody(AiTaskEntity task, List<CandidateResponse> candidates) {
+        if (task != null && task.getCodexResultMarkdown() != null
+                && !task.getCodexResultMarkdown().isBlank()) {
+            return task.getCodexResultMarkdown();
+        }
+        if (task != null && task.getClaudeResultMarkdown() != null
+                && !task.getClaudeResultMarkdown().isBlank()) {
+            return "📎 Claude 研究摘要：\n" + task.getClaudeResultMarkdown();
+        }
+        return candidates.isEmpty() ? "（無候選資料）"
+                : candidates.stream()
+                    .map(c -> "  ▶ " + c.symbol()
+                            + (c.stockName() == null ? "" : " " + c.stockName())
+                            + (c.entryPriceZone() == null ? "" : "  進場區：" + c.entryPriceZone()))
+                    .collect(Collectors.joining("\n"));
     }
 
     // ── 私有方法 ──────────────────────────────────────────────────────────────

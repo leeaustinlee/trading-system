@@ -4,9 +4,11 @@ import com.austin.trading.client.TaifexClient;
 import com.austin.trading.client.TwseMisClient;
 import com.austin.trading.client.dto.FuturesQuote;
 import com.austin.trading.client.dto.StockQuote;
+import com.austin.trading.dto.request.AiTaskCandidateRef;
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.entity.MarketSnapshotEntity;
 import com.austin.trading.repository.MarketSnapshotRepository;
+import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.CandidateScanService;
 import com.austin.trading.service.ClaudeCodeRequestWriterService;
 import com.austin.trading.service.DailyOrchestrationService;
@@ -46,6 +48,7 @@ public class PremarketDataPrepJob {
     private final SchedulerLogService             schedulerLogService;
     private final ClaudeCodeRequestWriterService  requestWriterService;
     private final DailyOrchestrationService       orchestrationService;
+    private final AiTaskService                   aiTaskService;
 
     public PremarketDataPrepJob(
             TaifexClient taifexClient,
@@ -54,7 +57,8 @@ public class PremarketDataPrepJob {
             MarketSnapshotRepository marketSnapshotRepository,
             SchedulerLogService schedulerLogService,
             ClaudeCodeRequestWriterService requestWriterService,
-            DailyOrchestrationService orchestrationService
+            DailyOrchestrationService orchestrationService,
+            AiTaskService aiTaskService
     ) {
         this.taifexClient            = taifexClient;
         this.twseMisClient           = twseMisClient;
@@ -63,6 +67,7 @@ public class PremarketDataPrepJob {
         this.schedulerLogService     = schedulerLogService;
         this.requestWriterService    = requestWriterService;
         this.orchestrationService    = orchestrationService;
+        this.aiTaskService           = aiTaskService;
     }
 
     @Scheduled(cron = "${trading.scheduler.premarket-data-prep-cron:0 10 8 * * MON-FRI}",
@@ -107,6 +112,21 @@ public class PremarketDataPrepJob {
 
             // 寫出研究請求給 Claude Code 排程 Agent（08:20 執行）
             requestWriterService.writeRequest("PREMARKET", today, symbols, buildPayload(txf.orElse(null), quoteSummary));
+
+            // 建立 AI 任務供 Claude/Codex 認領（給 20 分鐘窗口至 08:30 Notify 前完成）
+            try {
+                List<AiTaskCandidateRef> refs = candidates.stream()
+                        .map(c -> new AiTaskCandidateRef(
+                                c.symbol(), c.stockName(), c.themeTag(), c.javaStructureScore()))
+                        .collect(Collectors.toList());
+                aiTaskService.createTask(
+                        today, "PREMARKET", null, refs,
+                        "今日盤前研究請求，共 " + refs.size() + " 檔",
+                        "D:/ai/stock/claude-research-request.json"
+                );
+            } catch (Exception e) {
+                log.warn("[PremarketDataPrepJob] createTask 失敗: {}", e.getMessage());
+            }
 
             String msg = "txf=" + txfSummary + " candidates=" + candidates.size();
             log.info("[PremarketDataPrepJob] {}", msg);

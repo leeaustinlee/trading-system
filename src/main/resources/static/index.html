@@ -514,7 +514,7 @@
         <h2>持倉中</h2>
         <table>
           <thead><tr>
-            <th>代號</th><th>方向</th><th>股數</th><th>均價</th><th>開倉時間</th>
+            <th>股票</th><th>方向</th><th>股數</th><th>均價</th><th>開倉時間</th>
           </tr></thead>
           <tbody id="d-positionsBody"></tbody>
         </table>
@@ -1528,7 +1528,7 @@
       // Positions
       $("d-positionsBody").innerHTML = (pos || []).length
         ? (pos || []).map(p => `<tr>
-            <td class="mono">${esc(p.symbol)}</td>
+            <td>${p.stockName ? esc(p.stockName) + ' ' : ''}<span class="mono">${esc(p.symbol)}</span></td>
             <td>${zhEsc(p.side)}</td>
             <td>${esc(p.qty)}</td>
             <td>${esc(p.avgCost)}</td>

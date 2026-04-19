@@ -55,22 +55,20 @@ public class LocalMockDataLoader implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        log.info("[DataLoader] 清除舊測試資料...");
+        // 只重灌「當日研究 seed data」(每次啟動都 refresh)
+        // 使用者自建資料 (positions / dailyPnl / notificationLog) 僅在空 table 時 seed，不 deleteAll
+        log.info("[DataLoader] 清除當日研究 seed data（candidates/evaluation/market/state）...");
         candidateStockRepository.deleteAll();
         stockEvaluationRepository.deleteAll();
         marketSnapshotRepository.deleteAll();
         tradingStateRepository.deleteAll();
-        notificationLogRepository.deleteAll();
-        positionRepository.deleteAll();
-        dailyPnlRepository.deleteAll();
-        log.info("[DataLoader] 清除完成，開始填入真實研究資料...");
 
         seedMarketSnapshot();
         seedTradingState();
         seedCandidates();
-        seedPosition();
-        seedPnl();
-        seedNotification();
+        seedPositionIfEmpty();
+        seedPnlIfEmpty();
+        seedNotificationIfEmpty();
 
         log.info("[DataLoader] 初始化完成。");
     }
@@ -210,7 +208,12 @@ public class LocalMockDataLoader implements CommandLineRunner {
 
     // ── 現有波段持倉（00631L）────────────────────────────────────────────────
 
-    private void seedPosition() {
+    private void seedPositionIfEmpty() {
+        if (positionRepository.count() > 0) {
+            log.info("[DataLoader] positions 已有 {} 筆資料，跳過 seed（保留使用者新增持倉）",
+                    positionRepository.count());
+            return;
+        }
         PositionEntity p = new PositionEntity();
         p.setSymbol("00631L");
         p.setSide("做多");
@@ -230,7 +233,11 @@ public class LocalMockDataLoader implements CommandLineRunner {
 
     // ── 近日損益（含券商實際損益）────────────────────────────────────────────
 
-    private void seedPnl() {
+    private void seedPnlIfEmpty() {
+        if (dailyPnlRepository.count() > 0) {
+            log.info("[DataLoader] daily_pnl 已有資料，跳過 seed");
+            return;
+        }
         // 2026-04-16 波段減碼 + 出清
         DailyPnlEntity p16 = new DailyPnlEntity();
         p16.setTradingDate(LocalDate.of(2026, 4, 16));
@@ -262,7 +269,11 @@ public class LocalMockDataLoader implements CommandLineRunner {
 
     // ── 研究完成通知────────────────────────────────────────────────────────────
 
-    private void seedNotification() {
+    private void seedNotificationIfEmpty() {
+        if (notificationLogRepository.count() > 0) {
+            log.info("[DataLoader] notification_log 已有資料，跳過 seed");
+            return;
+        }
         NotificationLogEntity n = new NotificationLogEntity();
         n.setEventTime(LocalDateTime.of(2026, 4, 17, 17, 50));
         n.setNotificationType("AI研究");
