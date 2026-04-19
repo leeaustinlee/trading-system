@@ -91,8 +91,15 @@ public class PremarketDataPrepJob {
                     String.format("TX=%.0f (%+.0f)", q.currentPrice(), q.change() == null ? 0.0 : q.change())
             ).orElse("TX=N/A");
 
-            // 2. 昨日候選股昨收報價
+            // 2. 昨日候選股昨收報價；若昨日無（週末 / 假日），fallback 到 DB 最新有候選的交易日
             List<CandidateResponse> candidates = candidateScanService.getCandidatesByDate(yesterday, 10);
+            if (candidates.isEmpty()) {
+                candidates = candidateScanService.getCurrentCandidates(10);
+                if (!candidates.isEmpty()) {
+                    log.info("[PremarketDataPrepJob] yesterday={} 無候選，fallback 到最新交易日共 {} 檔",
+                            yesterday, candidates.size());
+                }
+            }
             List<String> symbols = candidates.stream()
                     .map(CandidateResponse::symbol)
                     .collect(Collectors.toList());

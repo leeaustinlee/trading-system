@@ -22,6 +22,18 @@
 6. 提交 `POST /api/ai/tasks/{id}/codex-result`。
 7. 寫 `D:\ai\stock\codex-research-latest.md`。
 
+## 候選股 fallback（週一 / 假日後首個交易日必做）
+
+Java `PremarketDataPrepJob` 在 08:10 建 task 時，若「昨日」是週末或假日，
+會自動 fallback 到 DB 最新有候選的交易日。但 task 的 `targetCandidatesJson`
+不保證永遠同步最新 DB 狀態，**Codex 必須額外呼叫** `GET /api/candidates/current`
+取真實候選股清單，以此為主線。若兩者不一致：
+
+- 以 `/api/candidates/current` 為準。
+- 在 markdown 標示「候選來源：最新交易日 YYYY-MM-DD（週末/假日 fallback）」。
+- Claude 的 `claudeScoresJson` 只對能匹配到 `/api/candidates/current` 的 symbol 有效，
+  其餘 symbol 作 Claude 研究脈絡參考，不直接用於 Codex 評分。
+
 ## API
 
 ```http
