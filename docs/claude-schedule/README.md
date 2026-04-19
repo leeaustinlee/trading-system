@@ -20,11 +20,29 @@ Claude Code 排程 Agent（本目錄 prompt）
   → 讀 market-snapshot.json + request.json + 規則 MD
   → 做深度研究
   → 寫出 D:/ai/stock/claude-research-latest.md
+  → **立即 POST /api/ai/research/import-file 匯入 DB**（2026-04-19 起）
+  → 若 API 失敗才請 Austin 用 UI 手動補匯
 
 Codex 最終通知（Windows 排程 PS1）
-  → 讀 claude-research-latest.md
+  → 從 DB 讀最新 Claude 研究（API: GET /api/ai/research?date=today）
+  → 若 DB 沒有才 fallback 讀 claude-research-latest.md
   → 發 LINE 給 Austin
 ```
+
+## DB 匯入規則（2026-04-19 新增）
+
+所有 Claude 研究完成後必須立即匯入 DB，不再需要人工觸發。
+
+| 時段 | researchType |
+|---|---|
+| 08:20 盤前 | `PREMARKET` |
+| 09:20 開盤 | `OPENING` |
+| 10:50 盤中 | `MIDDAY` |
+| 15:20 盤後 | `POSTMARKET` |
+| 17:50 明日 | `T86_TOMORROW` |
+| 個股研究 | `STOCK_EVAL`（加 `symbol=XXXX`） |
+
+Markdown 檔案僅作為備份／fallback。API 匯入失敗時，Austin 從 UI「AI 研究」分頁手動補。
 
 ## 分工原則
 

@@ -80,9 +80,25 @@
 
 ---
 
+## 第六步：匯入 DB（必做）
+
+```bash
+curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt/d/ai/stock/claude-research-latest.md&researchType=OPENING&tradingDate=$(date +%Y-%m-%d)"
+```
+
+- 回應 `success:true` → ✅ 已入 DB
+- 回應 `success:false` 或 HTTP 錯誤 → 在輸出結尾印出：
+  ```
+  ❌ DB 匯入失敗：<原因>
+  👉 請 Austin 手動匯入 claude-research-latest.md
+  ```
+
+---
+
 ## 禁止事項
 
 - 不發 LINE
 - snapshot 超過 10 分鐘不得給進場建議（僅可標示方向）
 - 跌破開盤、跌破昨收、爆量開高走低的標的，直接排除
 - 不直接給張數
+- **不要跳過第六步 DB 匯入**

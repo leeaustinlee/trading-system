@@ -77,9 +77,30 @@ D:/ai/stock/claude-research-YYYYMMDD-0820.md
 
 ---
 
+## 第六步：匯入 DB（必做）
+
+寫完檔案後**立刻**用 Bash 工具呼叫 Java API：
+
+```bash
+curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt/d/ai/stock/claude-research-latest.md&researchType=PREMARKET&tradingDate=$(date +%Y-%m-%d)"
+```
+
+**驗證回應**：
+- `{"success":true, "id":N, ...}` → ✅ 完成，研究已入 DB
+- `{"success":false, ...}` 或 HTTP 非 200 → 在你最後輸出中明確印出：
+  ```
+  ❌ DB 匯入失敗：<原因>
+  👉 請 Austin 手動透過 UI「AI 研究」分頁匯入 claude-research-latest.md
+  ```
+
+**md 檔只是備份；正常情況下研究完已在 DB。匯入失敗才需手動上傳補回。**
+
+---
+
 ## 禁止事項
 
 - 不發 LINE
 - 不寫 `claude-outbox.json`
 - 不直接給 Austin 買賣張數（張數由 Codex 決定）
 - 不用超過 30 分鐘的報價給進場建議
+- **不要跳過第六步 DB 匯入**

@@ -72,8 +72,24 @@ T86 自營商：買超 / 賣超
 
 ---
 
+## 第七步：匯入 DB（必做）
+
+```bash
+curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt/d/ai/stock/claude-research-latest.md&researchType=T86_TOMORROW&tradingDate=$(date +%Y-%m-%d)"
+```
+
+- 回應 `success:true` → ✅ 已入 DB
+- 回應 `success:false` 或 HTTP 錯誤 → 輸出結尾印出：
+  ```
+  ❌ DB 匯入失敗：<原因>
+  👉 請 Austin 手動匯入 claude-research-latest.md
+  ```
+
+---
+
 ## 禁止事項
 
 - 不發 LINE
 - T86 date 不是今日時，不得提高候選股排序（只能標示，等明日確認）
 - 不直接給 Austin 買賣張數
+- **不要跳過第七步 DB 匯入**

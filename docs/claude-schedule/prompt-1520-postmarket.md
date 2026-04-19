@@ -94,8 +94,24 @@
 
 ---
 
+## 第八步：匯入 DB（必做）
+
+```bash
+curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt/d/ai/stock/claude-research-latest.md&researchType=POSTMARKET&tradingDate=$(date +%Y-%m-%d)"
+```
+
+- 回應 `success:true` → ✅ 已入 DB
+- 回應 `success:false` 或 HTTP 錯誤 → 輸出結尾印出：
+  ```
+  ❌ DB 匯入失敗：<原因>
+  👉 請 Austin 手動匯入 claude-research-latest.md
+  ```
+
+---
+
 ## 禁止事項
 
 - 不發 LINE
 - 不直接給張數與最終下單
 - 候選股不得由固定觀察池產生，必須依今日全市場掃描結果
+- **不要跳過第八步 DB 匯入**
