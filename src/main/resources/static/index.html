@@ -17,6 +17,8 @@
       --ok: #0a7a52;
       --warn: #8c5d00;
       --err: #a0192a;
+      --up: #c8001e;
+      --dn: #007a45;
       --accent: #0452b8;
       --accent-2: #0c9589;
       --accent-light: #e6f0ff;
@@ -130,9 +132,9 @@
       display: inline-block; padding: 3px 10px; border-radius: 999px;
       font-size: 12px; font-weight: 700; letter-spacing: .2px;
     }
-    .pill.ok { background:#d3f8ea; color:#076b45; }
+    .pill.ok { background:#ffe3e7; color:#8b0014; }
     .pill.warn { background:#fff2cc; color:#7a5000; }
-    .pill.err { background:#ffe3e7; color:#91161f; }
+    .pill.err { background:#d3f8ea; color:#076b45; }
     .pill.muted { background:#edf0f6; color:var(--muted); }
 
     /* ── Table ── */
@@ -154,8 +156,8 @@
     /* ── Misc ── */
     .mono { font-family:"Consolas","Courier New",monospace; font-size:13px; }
     .small { font-size:13px; color:var(--muted); }
-    .num-pos { color:var(--ok); font-weight:700; }
-    .num-neg { color:var(--err); font-weight:700; }
+    .num-pos { color:var(--up); font-weight:700; }
+    .num-neg { color:var(--dn); font-weight:700; }
     .errbox {
       background:#ffeaea; color:#7d1928; border:1px solid #f3bcbe;
       border-radius:var(--radius-sm); padding:12px 16px; margin-bottom:14px;
@@ -220,9 +222,9 @@
     .decision-chart { display:flex; align-items:flex-end; gap:6px; min-height:140px; padding:8px 2px 4px; }
     .decision-col { width:24px; display:flex; flex-direction:column; align-items:center; gap:4px; }
     .decision-bar { width:100%; border-radius:6px 6px 3px 3px; background:#dde4ef; transition:.2s; }
-    .decision-bar.enter { background:linear-gradient(180deg,#36c085,#0a7a52); }
+    .decision-bar.enter { background:linear-gradient(180deg,#f07a8a,#c8001e); }
     .decision-bar.watch { background:linear-gradient(180deg,#f5c047,#8c5d00); }
-    .decision-bar.rest  { background:linear-gradient(180deg,#f07580,#a0192a); }
+    .decision-bar.rest  { background:linear-gradient(180deg,#8fa8c2,#3a4f68); }
     .decision-label { font-size:10px; color:var(--muted); transform:rotate(-30deg) translateX(-4px); transform-origin:top left; width:36px; white-space:nowrap; }
     .decision-summary { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
 
@@ -280,8 +282,8 @@
       0%   { background:#ffe3e7; }
       100% { background: transparent; }
     }
-    .price-flash-up   { animation: flashGreen .9s ease-out; }
-    .price-flash-down { animation: flashRed   .9s ease-out; }
+    .price-flash-up   { animation: flashRed   .9s ease-out; }
+    .price-flash-down { animation: flashGreen .9s ease-out; }
 
     .live-status {
       display:inline-flex; align-items:center; gap:5px;
@@ -304,8 +306,8 @@
     }
     .quote-price { font-weight:700; font-size:15px; font-family:"Consolas","Courier New",monospace; }
     .quote-change { font-size:13px; font-weight:700; }
-    .quote-change.up  { color: var(--ok); }
-    .quote-change.dn  { color: var(--err); }
+    .quote-change.up  { color: var(--up); }
+    .quote-change.dn  { color: var(--dn); }
     .quote-change.flat{ color: var(--muted); }
     .quote-meta { font-size:12px; color:var(--muted); }
 
@@ -362,8 +364,8 @@
     /* PnL bar chart */
     .pnl-chart-wrap { display:flex; align-items:center; gap:4px; overflow-x:auto; padding:8px 0 4px; min-height:120px; }
     .pnl-col { display:flex; flex-direction:column; align-items:center; gap:2px; min-width:22px; }
-    .pnl-bar-pos { width:18px; border-radius:4px 4px 2px 2px; background:linear-gradient(180deg,#4dd49a,#0a7a52); transition:.2s; }
-    .pnl-bar-neg { width:18px; border-radius:2px 2px 4px 4px; background:linear-gradient(0deg,#f07580,#a0192a); transition:.2s; }
+    .pnl-bar-pos { width:18px; border-radius:4px 4px 2px 2px; background:linear-gradient(180deg,#f07a8a,#c8001e); transition:.2s; }
+    .pnl-bar-neg { width:18px; border-radius:2px 2px 4px 4px; background:linear-gradient(0deg,#4dd49a,#007a45); transition:.2s; }
     .pnl-zero    { width:18px; height:3px; background:var(--line); border-radius:2px; }
     .pnl-label   { font-size:9px; color:var(--muted); transform:rotate(-40deg) translateX(-4px); transform-origin:top left; white-space:nowrap; width:30px; }
     /* Market grade / decision button active states */
@@ -383,11 +385,21 @@
   <button class="nav-tab" data-page="pageCandidates">候選股</button>
   <button class="nav-tab" data-page="pagePositions">持倉</button>
   <button class="nav-tab" data-page="pagePnl">損益</button>
-  <button class="nav-tab" data-page="pageDecisions">決策歷史</button>
-  <button class="nav-tab" data-page="pageAiResearch">AI 研究</button>
-  <button class="nav-tab" data-page="pageScheduler">排程</button>
-  <button class="nav-tab" data-page="pageSystem">系統</button>
-  <button class="nav-tab" data-page="pageSettings">設定</button>
+  <div class="nav-more" style="position:relative;display:inline-block">
+    <button class="nav-tab" id="navMoreBtn" onclick="toggleNavMore()">進階 ▾</button>
+    <div id="navMoreMenu" style="
+      display:none; position:absolute; top:100%; left:0; z-index:200;
+      background:#fff; border:1px solid var(--line); border-radius:12px;
+      box-shadow:0 8px 24px rgba(18,35,62,.12); padding:6px; min-width:130px;
+      margin-top:4px;
+    ">
+      <button class="nav-tab" data-page="pageDecisions"  style="display:block;width:100%;text-align:left">決策歷史</button>
+      <button class="nav-tab" data-page="pageAiResearch" style="display:block;width:100%;text-align:left">AI 研究</button>
+      <button class="nav-tab" data-page="pageScheduler"  style="display:block;width:100%;text-align:left">排程</button>
+      <button class="nav-tab" data-page="pageSystem"     style="display:block;width:100%;text-align:left">系統</button>
+      <button class="nav-tab" data-page="pageSettings"   style="display:block;width:100%;text-align:left">設定</button>
+    </div>
+  </div>
   <div class="nav-spacer"></div>
   <span class="nav-meta" id="navMeta"></span>
   <button id="btnRefreshNav">⟳ 刷新</button>
@@ -397,6 +409,27 @@
 <div class="page active" id="pageDashboard">
   <div class="wrap">
     <div id="errBoxDash" class="errbox"></div>
+
+    <!-- 今日決策 Banner -->
+    <div id="d-decisionBanner" style="
+      display:none;
+      border-radius: 14px;
+      padding: 14px 20px;
+      margin-bottom: 18px;
+      align-items: center;
+      gap: 14px;
+      font-weight: 700;
+      font-size: 15px;
+      border: 1.5px solid;
+      animation: fadeUp .35s ease both;
+    ">
+      <span id="d-bannerIcon" style="font-size: 22px; line-height:1">—</span>
+      <div>
+        <div id="d-bannerDecision" style="font-size: 17px; font-weight: 800">載入中...</div>
+        <div id="d-bannerSummary" style="font-size: 13px; margin-top: 2px; opacity: .85"></div>
+      </div>
+      <div style="margin-left: auto; font-size: 13px; font-weight: 600; opacity: .75" id="d-bannerGrade"></div>
+    </div>
 
     <!-- 資金總覽 stat-row -->
     <div class="stat-row" id="d-capitalRow" style="margin-bottom:16px">
@@ -588,7 +621,7 @@
           <thead><tr>
             <th>代號</th><th>名稱</th><th>方向</th><th>股數</th><th>均價</th>
             <th>停損</th><th>停利1</th><th>停利2</th>
-            <th>現值</th><th>預估損益</th>
+            <th>距停損</th><th>現值</th><th>預估損益</th>
             <th>開倉時間</th><th>備註</th><th style="width:130px">操作</th>
           </tr></thead>
           <tbody id="p-openBody"></tbody>
@@ -746,7 +779,7 @@
             </div>
             <button class="btn" id="ai-btnImport" style="width:100%">匯入最新研究報告</button>
           </div>
-          <div id="ai-triggerStatus" style="font-size:13px;color:var(--ok);font-weight:600"></div>
+          <div id="ai-triggerStatus" style="font-size:13px;color:var(--up);font-weight:600"></div>
         </div>
       </section>
 
@@ -1323,6 +1356,28 @@
     const cls = Number(v) < 0 ? "num-neg" : "num-pos";
     return `<span class="${cls}">${esc(v)}</span>`;
   };
+  function fmtPnl(v) {
+    if (v == null) return "–";
+    const n = Number(v);
+    if (Number.isNaN(n)) return "–";
+    return (n >= 0 ? "+" : "") + n.toLocaleString("zh-TW", {minimumFractionDigits: 0, maximumFractionDigits: 0});
+  }
+  function distToStop(currentPrice, stopLoss, direction) {
+    if (!currentPrice || !stopLoss) return "–";
+    const cp = Number(currentPrice), sl = Number(stopLoss);
+    if (!cp || !sl) return "–";
+    const isShort = direction === "SHORT" || direction === "做空";
+    const pct = isShort ? ((sl - cp) / cp * 100) : ((cp - sl) / cp * 100);
+    const color = pct < 2 ? "var(--up)" : pct < 4 ? "#c87000" : "var(--muted)";
+    const weight = pct < 2 ? "800" : "600";
+    return `<span style="color:${color};font-weight:${weight}">${pct.toFixed(1)}%</span>`;
+  }
+  function pnlHtml(v) {
+    if (v == null) return `<span style="color:var(--muted)">–</span>`;
+    const n = Number(v);
+    const color = n >= 0 ? "var(--up)" : "var(--dn)";
+    return `<span style="color:${color};font-weight:700">${fmtPnl(n)}</span>`;
+  }
   const fmtDate = s => s ? String(s).slice(0,10) : "-";
   const fmtTime = s => s ? String(s).slice(0,16).replace("T"," ") : "-";
 
@@ -1342,7 +1397,7 @@
   }
 
   /* ── Nav routing ── */
-  const tabs = document.querySelectorAll(".nav-tab");
+  const tabs = document.querySelectorAll(".nav-tab[data-page]");
   tabs.forEach(t => t.addEventListener("click", () => {
     tabs.forEach(x => x.classList.remove("active"));
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
@@ -1350,7 +1405,22 @@
     const target = $(t.dataset.page);
     if (target) target.classList.add("active");
     loadPageData(t.dataset.page);
+    // 點擊下拉內項目後關閉選單
+    closeNavMore();
   }));
+
+  window.toggleNavMore = function() {
+    const m = $("navMoreMenu");
+    if (!m) return;
+    m.style.display = m.style.display === "none" || !m.style.display ? "block" : "none";
+  };
+  window.closeNavMore = function() {
+    const m = $("navMoreMenu");
+    if (m) m.style.display = "none";
+  };
+  document.addEventListener("click", e => {
+    if (!e.target.closest(".nav-more")) closeNavMore();
+  });
 
   /* ─────────────────────────────────────────────
      PAGE: Dashboard
@@ -1364,12 +1434,51 @@
         : `<span style="font-size:16px;color:var(--muted)">${fmtPrice(c.investedCost)} <span style="font-size:11px">(成本)</span></span>`;
       $("d-capCost").textContent     = c.investedValue != null ? `成本 ${fmtPrice(c.investedCost)}` : "";
       $("d-capUnrealized").innerHTML = c.unrealizedPnl != null
-        ? numHtml(c.unrealizedPnl)
+        ? `<span style="font-size:20px">${pnlHtml(c.unrealizedPnl)}</span>`
         : `<span style="color:var(--muted);font-size:16px">盤外</span>`;
       $("d-capPositions").textContent = `${c.openPositionCount} 檔持倉`;
       $("d-capTotal").innerHTML      = `<span style="font-size:20px;font-weight:700">${fmtPrice(c.totalAssets)}</span>`;
       $("d-capCashRatio").textContent = `現金比 ${c.cashRatio}%`;
     } catch(_) { /* 不影響主頁 */ }
+  }
+
+  function updateDecisionBanner(decision, marketGrade) {
+    const banner = $("d-decisionBanner");
+    if (!banner) return;
+    const icon = $("d-bannerIcon");
+    const decText = $("d-bannerDecision");
+    const summary = $("d-bannerSummary");
+    const grade = $("d-bannerGrade");
+
+    if (!decision) { banner.style.display = "none"; return; }
+
+    const d = decision.finalDecision || decision.decision || "";
+    const sum = decision.summary || decision.decisionSummary || "";
+    const g = marketGrade || "";
+
+    if (d === "ENTER" || d === "CAN_ENTER") {
+      banner.style.background = "#fff0f2";
+      banner.style.borderColor = "#c8001e";
+      banner.style.color = "#8b0014";
+      icon.textContent = "🟢";
+      decText.textContent = "✅ 可考慮進場";
+    } else if (d === "WATCH" || d === "ONLY_WATCH") {
+      banner.style.background = "#fffaec";
+      banner.style.borderColor = "#d4a017";
+      banner.style.color = "#7a5000";
+      icon.textContent = "🟡";
+      decText.textContent = "👀 僅觀察，暫不進場";
+    } else {
+      banner.style.background = "#f4f7fb";
+      banner.style.borderColor = "#b0bfd4";
+      banner.style.color = "#3a4f68";
+      icon.textContent = "⛔";
+      decText.textContent = "💤 今日建議休息";
+    }
+
+    summary.textContent = sum;
+    grade.textContent = g ? `市場等級：${g}` : "";
+    banner.style.display = "flex";
   }
 
   async function loadDashboard() {
@@ -1393,6 +1502,8 @@
 
       setText("d-finalDecision", dash.finalDecision?.decision);
       setText("d-finalSummary",  dash.finalDecision?.summary);
+
+      updateDecisionBanner(dash.finalDecision, dash.market?.marketGrade);
       setText("d-latestHourly",  dash.hourlyGateDecision?.hourlyGate);
       setText("d-hourlyEvent",   dash.hourlyGateDecision?.triggerEvent);
       setText("d-latestMonitor", dash.monitorDecision?.monitorMode);
@@ -1400,8 +1511,8 @@
       setText("d-latestNotice",  dash.latestNotification?.title);
 
       // PnL
-      $("d-pnlRealized").innerHTML   = numHtml(pnl.totalRealizedPnl);
-      $("d-pnlUnrealized").innerHTML = numHtml(pnl.totalUnrealizedPnl);
+      $("d-pnlRealized").innerHTML   = pnlHtml(pnl.totalRealizedPnl);
+      $("d-pnlUnrealized").innerHTML = pnlHtml(pnl.totalUnrealizedPnl);
       setText("d-pnlWinRate", pnl.avgWinRate != null ? `${pnl.avgWinRate}%` : "-");
       setText("d-pnlDays", pnl.days);
 
@@ -1505,7 +1616,7 @@
               ? `<span class="score-badge" style="background:${scoreBg(c.consensusScore)}">${csScore}</span>`
               : `<span class="quote-meta">–</span>`;
             const dpCell  = c.disagreementPenalty   != null
-              ? `<span class="mono" style="color:${c.disagreementPenalty > 1 ? 'var(--err)' : 'var(--muted)'}">${dpScore}</span>`
+              ? `<span class="mono" style="color:${c.disagreementPenalty > 1 ? 'var(--dn)' : 'var(--muted)'}">${dpScore}</span>`
               : `<span class="quote-meta">–</span>`;
             return `<tr>
               <td class="mono">${esc(c.symbol)}</td>
@@ -1703,6 +1814,7 @@
               <td class="${p.stopLossPrice ? 'num-neg' : ''}">${esc(p.stopLossPrice)}</td>
               <td>${esc(p.takeProfit1)}</td>
               <td>${esc(p.takeProfit2)}</td>
+              <td style="text-align:right">${distToStop(cur ?? p.currentPrice, p.stopLossPrice, p.side)}</td>
               <td style="text-align:right">${valueCell}</td>
               <td style="text-align:right">${pnlCell}</td>
               <td class="small mono">${fmtTime(p.openedAt)}</td>
@@ -1715,7 +1827,7 @@
               </td>
             </tr>`;
           }).join("")
-        : `<tr class="empty-row"><td colspan="13">無持倉</td></tr>`;
+        : `<tr class="empty-row"><td colspan="14">無持倉</td></tr>`;
     } catch(e) { showErr("errBoxPos", `載入失敗：${e.message}`); }
   }
 
@@ -2038,11 +2150,11 @@
     try {
       await api(url, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body||{}) });
       $("ai-triggerStatus").textContent = `✅ ${label} 完成`;
-      $("ai-triggerStatus").style.color = "var(--ok)";
+      $("ai-triggerStatus").style.color = "var(--up)";
       await loadAiResearch();
     } catch(e) {
       $("ai-triggerStatus").textContent = `❌ ${label} 失敗：${e.message}`;
-      $("ai-triggerStatus").style.color = "var(--err)";
+      $("ai-triggerStatus").style.color = "var(--dn)";
       showErr("errBoxAi", `${label} 失敗：${e.message}`);
     }
   }
@@ -2058,14 +2170,14 @@
       const r = await api(`/api/ai/research/write-request?${params}`, { method:"POST" });
       if (r.success) {
         $("ai-triggerStatus").textContent = `✅ ${r.message}`;
-        $("ai-triggerStatus").style.color = "var(--ok)";
+        $("ai-triggerStatus").style.color = "var(--up)";
       } else {
         $("ai-triggerStatus").textContent = `⚠️ ${r.message}`;
         $("ai-triggerStatus").style.color = "var(--warn)";
       }
     } catch(e) {
       $("ai-triggerStatus").textContent = `❌ 寫入失敗：${e.message}`;
-      $("ai-triggerStatus").style.color = "var(--err)";
+      $("ai-triggerStatus").style.color = "var(--dn)";
       showErr("errBoxAi", `寫入失敗：${e.message}`);
     }
   }
@@ -2100,7 +2212,7 @@
       const r = await api(`/api/ai/research/import-file?${params}`, { method: "POST" });
       if (r.success) {
         $("ai-triggerStatus").textContent = `✅ 匯入完成（${r.contentLength} 字元，id=${r.id}）`;
-        $("ai-triggerStatus").style.color = "var(--ok)";
+        $("ai-triggerStatus").style.color = "var(--up)";
         // 自動切到對應日期顯示
         $("ai-filterDate").value = date;
         await loadAiResearch();
@@ -2109,7 +2221,7 @@
       }
     } catch(e) {
       $("ai-triggerStatus").textContent = `❌ 匯入失敗：${e.message}`;
-      $("ai-triggerStatus").style.color = "var(--err)";
+      $("ai-triggerStatus").style.color = "var(--dn)";
       showErr("errBoxAi", `匯入失敗：${e.message}`);
     }
   });
@@ -2426,7 +2538,7 @@
           const cls  = changeClass(q.changePercent);
           const cand = _candidateScoreCache[q.symbol];
           const scoreCell = cand?.score != null
-            ? `<td class="small" style="color:var(--ok);font-weight:600">${cand.score}</td>`
+            ? `<td class="small" style="color:var(--up);font-weight:600">${cand.score}</td>`
             : `<td class="small" style="color:var(--muted)">-</td>`;
           return `<tr id="lq-row-${q.symbol}">
             <td class="mono">${esc(q.symbol)}</td>
@@ -2991,7 +3103,7 @@
   loadDashboard();
   startLivePolling();   // Dashboard 一開始就啟動即時報價
   $("navMeta").textContent = `更新：${new Date().toLocaleTimeString("zh-TW")}`;
-  setInterval(refreshCurrent, 60000);
+  setInterval(refreshCurrent, 15000);
 </script>
 
 <!-- ══════════════════════════════════════════
