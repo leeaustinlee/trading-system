@@ -20,3 +20,6 @@ application-local.yml
 *.key
 *.pem
 secrets/D:/
+
+# Claude agent worktrees
+.claude/worktrees/

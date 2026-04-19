@@ -76,6 +76,7 @@ public class FinalDecisionService {
     private final CooldownService           cooldownService;
     private final MarketCooldownService     marketCooldownService;
     private final ScoreConfigService        scoreConfigService;
+    private final AiTaskService             aiTaskService;
     private final ObjectMapper              objectMapper;
 
     public FinalDecisionService(
@@ -97,6 +98,7 @@ public class FinalDecisionService {
             CooldownService cooldownService,
             MarketCooldownService marketCooldownService,
             ScoreConfigService scoreConfigService,
+            AiTaskService aiTaskService,
             ObjectMapper objectMapper
     ) {
         this.consensusScoringEngine     = consensusScoringEngine;
@@ -117,11 +119,34 @@ public class FinalDecisionService {
         this.cooldownService            = cooldownService;
         this.marketCooldownService      = marketCooldownService;
         this.scoreConfigService         = scoreConfigService;
+        this.aiTaskService              = aiTaskService;
         this.objectMapper               = objectMapper;
     }
 
     @Transactional
     public FinalDecisionResponse evaluateAndPersist(LocalDate tradingDate) {
+        // ── Step 0: AI 研究準備度檢查（PR-2）──────────────────────────────────
+        boolean downgradeEnabled = scoreConfigService.getBoolean("final_decision.ai_downgrade_enabled", true);
+        if (downgradeEnabled) {
+            boolean requireClaude = scoreConfigService.getBoolean("final_decision.require_claude", true);
+            boolean requireCodex  = scoreConfigService.getBoolean("final_decision.require_codex", false);
+
+            if (requireClaude && !aiTaskService.isClaudeReady(tradingDate, "PREMARKET")) {
+                log.warn("[FinalDecision] Claude 盤前研究未完成，降級為保守休息 (date={})", tradingDate);
+                return persistAndReturn(tradingDate, new FinalDecisionResponse(
+                        "REST", List.of(),
+                        List.of("AI_CLAUDE_NOT_READY"),
+                        "Claude 盤前研究未完成，今日保守休息"));
+            }
+            if (requireCodex && !aiTaskService.isCodexReady(tradingDate, "PREMARKET")) {
+                log.warn("[FinalDecision] Codex 審核未完成，降級為保守休息 (date={})", tradingDate);
+                return persistAndReturn(tradingDate, new FinalDecisionResponse(
+                        "REST", List.of(),
+                        List.of("AI_CODEX_NOT_READY"),
+                        "Codex 審核未完成，今日保守休息"));
+            }
+        }
+
         MarketCurrentResponse market = marketDataService.getCurrentMarket().orElse(null);
         TradingStateResponse state = tradingStateService.getCurrentState().orElse(null);
 

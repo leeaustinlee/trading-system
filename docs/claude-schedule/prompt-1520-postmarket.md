@@ -94,18 +94,41 @@
 
 ---
 
-## 第八步：匯入 DB（必做）
+## 第八步：認領任務 + 回報結果（PR-2 新流程）
 
+Java PostmarketWorkflowService 在 15:05 已建立 POSTMARKET 任務。
+
+### 8.1 認領
+```bash
+curl -s "http://localhost:8080/api/ai/tasks/pending?type=POSTMARKET" | jq '.[0]'
+```
+記下 `id`。
+
+### 8.2 回報
+```bash
+curl -X POST "http://localhost:8080/api/ai/tasks/$TASK_ID/claude-result" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contentMarkdown": "完整盤後研究 md（含超強勢5+中短線5）",
+    "scores": {"2303": 8.5, "3231": 7.8, "4938": 7.2, "2330": 7.5, "2317": 7.0},
+    "thesis": {"2303": "盤後收盤強", "2330": "大盤領頭"},
+    "riskFlags": ["若明日台指期貼水擴大，降評"]
+  }'
+```
+
+分數會立即寫入 `stock_evaluation.claude_score` 並觸發 consensus 重算，
+明日 09:30 FinalDecisionService 就能直接使用。
+
+### 8.3 驗證
+```bash
+curl -s "http://localhost:8080/api/ai/tasks/$TASK_ID" | jq '.status'   # CLAUDE_DONE
+curl -s "http://localhost:8080/api/candidates/current" | jq '.[] | {symbol, claudeScore}'
+```
+
+### Fallback（無 PENDING 任務時）
 ```bash
 curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt/d/ai/stock/claude-research-latest.md&researchType=POSTMARKET&tradingDate=$(date +%Y-%m-%d)"
 ```
-
-- 回應 `success:true` → ✅ 已入 DB
-- 回應 `success:false` 或 HTTP 錯誤 → 輸出結尾印出：
-  ```
-  ❌ DB 匯入失敗：<原因>
-  👉 請 Austin 手動匯入 claude-research-latest.md
-  ```
 
 ---
 
@@ -114,4 +137,4 @@ curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt
 - 不發 LINE
 - 不直接給張數與最終下單
 - 候選股不得由固定觀察池產生，必須依今日全市場掃描結果
-- **不要跳過第八步 DB 匯入**
+- **不要跳過第八步回報** — FinalDecision 拿分數靠這步

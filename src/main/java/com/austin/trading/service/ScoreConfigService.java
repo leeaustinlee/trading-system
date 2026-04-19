@@ -133,6 +133,15 @@ public class ScoreConfigService {
         DEFAULTS.put("review.profit_giveback_pct",                 new String[]{"50.0",  "DECIMAL", "MFE 回吐超過此 % 標記 GAVE_BACK_PROFIT"});
         DEFAULTS.put("review.held_too_long_days",                  new String[]{"12",    "INTEGER", "持有超過此天數且低報酬 → HELD_TOO_LONG"});
         DEFAULTS.put("recommendation.min_sample_size",             new String[]{"10",    "INTEGER", "分組統計 < 此筆數時 confidence 降為 LOW 或跳過"});
+
+        // ── Orchestration — 防重跑 / 補跑 ────────────────────────────────────────
+        DEFAULTS.put("orchestration.stale_running_minutes",        new String[]{"15",    "INTEGER", "RUNNING 超過此分鐘視為卡死，允許覆蓋重跑"});
+        DEFAULTS.put("orchestration.enforce_idempotency",          new String[]{"true",  "BOOLEAN", "是否啟用每日 step 防重跑（false 則退回舊行為）"});
+
+        // ── Final Decision AI 研究準備度（PR-2）─────────────────────────────────
+        DEFAULTS.put("final_decision.require_claude",              new String[]{"true",  "BOOLEAN", "FinalDecision 前必須等到 Claude PREMARKET 任務完成"});
+        DEFAULTS.put("final_decision.require_codex",               new String[]{"false", "BOOLEAN", "FinalDecision 前必須等到 Codex 審核（PR-2 預設 false）"});
+        DEFAULTS.put("final_decision.ai_downgrade_enabled",        new String[]{"true",  "BOOLEAN", "AI 未就緒時是否降級為 REST（false 則忽略準備度）"});
     }
 
     public ScoreConfigService(ScoreConfigRepository repository) {

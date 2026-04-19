@@ -1,5 +1,6 @@
 package com.austin.trading.workflow;
 
+import com.austin.trading.dto.request.AiTaskCandidateRef;
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.dto.response.MarketCurrentResponse;
 import com.austin.trading.engine.JavaStructureScoringEngine;
@@ -9,6 +10,7 @@ import com.austin.trading.entity.StockEvaluationEntity;
 import com.austin.trading.entity.ThemeSnapshotEntity;
 import com.austin.trading.notify.LineTemplateService;
 import com.austin.trading.repository.StockEvaluationRepository;
+import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.CandidateScanService;
 import com.austin.trading.service.ClaudeCodeRequestWriterService;
 import com.austin.trading.service.MarketDataService;
@@ -48,6 +50,7 @@ public class PremarketWorkflowService {
     private final ClaudeCodeRequestWriterService requestWriterService;
     private final LineTemplateService            lineTemplateService;
     private final ScoreConfigService             config;
+    private final AiTaskService                  aiTaskService;
 
     public PremarketWorkflowService(
             MarketDataService marketDataService,
@@ -57,7 +60,8 @@ public class PremarketWorkflowService {
             StockEvaluationRepository stockEvaluationRepository,
             ClaudeCodeRequestWriterService requestWriterService,
             LineTemplateService lineTemplateService,
-            ScoreConfigService config
+            ScoreConfigService config,
+            AiTaskService aiTaskService
     ) {
         this.marketDataService         = marketDataService;
         this.candidateScanService      = candidateScanService;
@@ -67,6 +71,7 @@ public class PremarketWorkflowService {
         this.requestWriterService      = requestWriterService;
         this.lineTemplateService       = lineTemplateService;
         this.config                    = config;
+        this.aiTaskService             = aiTaskService;
     }
 
     public void execute(LocalDate tradingDate) {
@@ -104,6 +109,22 @@ public class PremarketWorkflowService {
         String contextPayload = themeContext.isBlank() ? null : themeContext;
         boolean written = requestWriterService.writeRequest("PREMARKET", tradingDate, topSymbols, contextPayload);
         log.info("[PremarketWorkflow] Claude 研究請求寫出={}, symbols={}", written, topSymbols);
+
+        // Step 5.5: 建立 AI 任務（PR-2）供 Claude 認領
+        try {
+            List<AiTaskCandidateRef> refs = candidates.stream()
+                    .limit(researchMax)
+                    .map(c -> new AiTaskCandidateRef(
+                            c.symbol(), c.stockName(), c.themeTag(), c.javaStructureScore()))
+                    .toList();
+            aiTaskService.createTask(
+                    tradingDate, "PREMARKET", null, refs,
+                    "今日盤前研究請求，共 " + refs.size() + " 檔",
+                    written ? "D:/ai/stock/claude-research-request.json" : null
+            );
+        } catch (Exception e) {
+            log.warn("[PremarketWorkflow] createTask 失敗: {}", e.getMessage());
+        }
 
         // Step 6: LINE 盤前通知
         boolean lineEnabled = config.getBoolean("scheduling.line_notify_enabled", false);

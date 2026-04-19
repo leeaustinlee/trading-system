@@ -3,7 +3,9 @@ package com.austin.trading.scheduler;
 import com.austin.trading.dto.response.ExternalProbeItemResponse;
 import com.austin.trading.dto.response.ExternalProbeResponse;
 import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.ExternalProbeService;
+import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -21,15 +23,18 @@ public class ExternalProbeHealthJob {
     private final ExternalProbeService externalProbeService;
     private final LineTemplateService lineTemplateService;
     private final SchedulerLogService schedulerLogService;
+    private final DailyOrchestrationService orchestrationService;
 
     public ExternalProbeHealthJob(
             ExternalProbeService externalProbeService,
             LineTemplateService lineTemplateService,
-            SchedulerLogService schedulerLogService
+            SchedulerLogService schedulerLogService,
+            DailyOrchestrationService orchestrationService
     ) {
         this.externalProbeService = externalProbeService;
         this.lineTemplateService = lineTemplateService;
         this.schedulerLogService = schedulerLogService;
+        this.orchestrationService = orchestrationService;
     }
 
     @Scheduled(cron = "${trading.scheduler.external-probe-health-cron:0 25 8,15 * * MON-FRI}",
@@ -37,8 +42,11 @@ public class ExternalProbeHealthJob {
     public void run() {
         LocalDateTime triggerTime = LocalDateTime.now();
         String jobName = "ExternalProbeHealthJob";
+        LocalDate today = LocalDate.now();
+        OrchestrationStep step = OrchestrationStep.EXTERNAL_PROBE_HEALTH;
+        // 一天跑兩次（08:25、15:25）：使用 markExecuted 只更新 updatedAt
         try {
-            ExternalProbeResponse probe = externalProbeService.probe(LocalDate.now(), false, false);
+            ExternalProbeResponse probe = externalProbeService.probe(today, false, false);
             List<String> failures = collectFailures(probe);
 
             if (!failures.isEmpty()) {
@@ -48,7 +56,9 @@ public class ExternalProbeHealthJob {
 
             String msg = failures.isEmpty() ? "all_ok" : "failures=" + failures.size();
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), msg);
+            orchestrationService.markExecuted(today, step, msg);
         } catch (Exception e) {
+            orchestrationService.markFailed(today, step, e.getMessage());
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());
             throw e;
         }

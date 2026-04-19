@@ -4,7 +4,9 @@ import com.austin.trading.dto.response.MarketCurrentResponse;
 import com.austin.trading.dto.response.PositionResponse;
 import com.austin.trading.dto.response.TradingStateResponse;
 import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.MarketDataService;
+import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.PositionService;
 import com.austin.trading.service.SchedulerLogService;
 import com.austin.trading.service.TradingStateService;
@@ -38,19 +40,22 @@ public class MiddayReviewJob {
     private final PositionService     positionService;
     private final LineTemplateService lineTemplateService;
     private final SchedulerLogService schedulerLogService;
+    private final DailyOrchestrationService orchestrationService;
 
     public MiddayReviewJob(
             MarketDataService marketDataService,
             TradingStateService tradingStateService,
             PositionService positionService,
             LineTemplateService lineTemplateService,
-            SchedulerLogService schedulerLogService
+            SchedulerLogService schedulerLogService,
+            DailyOrchestrationService orchestrationService
     ) {
         this.marketDataService   = marketDataService;
         this.tradingStateService = tradingStateService;
         this.positionService     = positionService;
         this.lineTemplateService = lineTemplateService;
         this.schedulerLogService = schedulerLogService;
+        this.orchestrationService = orchestrationService;
     }
 
     @Scheduled(cron = "${trading.scheduler.midday-review-cron:0 0 11 * * MON-FRI}",
@@ -58,9 +63,14 @@ public class MiddayReviewJob {
     public void run() {
         LocalDateTime triggerTime = LocalDateTime.now();
         String jobName = "MiddayReviewJob";
-        try {
-            LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now();
+        OrchestrationStep step = OrchestrationStep.MIDDAY_REVIEW;
 
+        if (!orchestrationService.markRunning(today, step)) {
+            log.info("[{}] Step {} already DONE today, skip.", jobName, step);
+            return;
+        }
+        try {
             MarketCurrentResponse market = marketDataService.getCurrentMarket().orElse(null);
             TradingStateResponse  state  = tradingStateService.getCurrentState().orElse(null);
             List<PositionResponse> openPositions = positionService.getOpenPositions(20);
@@ -77,8 +87,10 @@ public class MiddayReviewJob {
                     openPositions.size());
             log.info("[MiddayReviewJob] {}", logMsg);
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), logMsg);
+            orchestrationService.markDone(today, step, logMsg);
 
         } catch (Exception e) {
+            orchestrationService.markFailed(today, step, e.getMessage());
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());
             throw e;
         }

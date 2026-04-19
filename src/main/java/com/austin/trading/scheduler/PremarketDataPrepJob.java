@@ -9,6 +9,8 @@ import com.austin.trading.entity.MarketSnapshotEntity;
 import com.austin.trading.repository.MarketSnapshotRepository;
 import com.austin.trading.service.CandidateScanService;
 import com.austin.trading.service.ClaudeCodeRequestWriterService;
+import com.austin.trading.service.DailyOrchestrationService;
+import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +45,7 @@ public class PremarketDataPrepJob {
     private final MarketSnapshotRepository        marketSnapshotRepository;
     private final SchedulerLogService             schedulerLogService;
     private final ClaudeCodeRequestWriterService  requestWriterService;
+    private final DailyOrchestrationService       orchestrationService;
 
     public PremarketDataPrepJob(
             TaifexClient taifexClient,
@@ -50,7 +53,8 @@ public class PremarketDataPrepJob {
             CandidateScanService candidateScanService,
             MarketSnapshotRepository marketSnapshotRepository,
             SchedulerLogService schedulerLogService,
-            ClaudeCodeRequestWriterService requestWriterService
+            ClaudeCodeRequestWriterService requestWriterService,
+            DailyOrchestrationService orchestrationService
     ) {
         this.taifexClient            = taifexClient;
         this.twseMisClient           = twseMisClient;
@@ -58,6 +62,7 @@ public class PremarketDataPrepJob {
         this.marketSnapshotRepository = marketSnapshotRepository;
         this.schedulerLogService     = schedulerLogService;
         this.requestWriterService    = requestWriterService;
+        this.orchestrationService    = orchestrationService;
     }
 
     @Scheduled(cron = "${trading.scheduler.premarket-data-prep-cron:0 10 8 * * MON-FRI}",
@@ -65,9 +70,15 @@ public class PremarketDataPrepJob {
     public void run() {
         LocalDateTime triggerTime = LocalDateTime.now();
         String jobName = "PremarketDataPrepJob";
+        LocalDate today    = LocalDate.now();
+        LocalDate yesterday = today.minusDays(1);
+        OrchestrationStep step = OrchestrationStep.PREMARKET_DATA_PREP;
+
+        if (!orchestrationService.markRunning(today, step)) {
+            log.info("[{}] Step {} already DONE today, skip.", jobName, step);
+            return;
+        }
         try {
-            LocalDate today    = LocalDate.now();
-            LocalDate yesterday = today.minusDays(1);
 
             // 1. 台指期近月
             Optional<FuturesQuote> txf = taifexClient.getTxfQuote(null);
@@ -100,8 +111,10 @@ public class PremarketDataPrepJob {
             String msg = "txf=" + txfSummary + " candidates=" + candidates.size();
             log.info("[PremarketDataPrepJob] {}", msg);
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), msg);
+            orchestrationService.markDone(today, step, msg);
 
         } catch (Exception e) {
+            orchestrationService.markFailed(today, step, e.getMessage());
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());
             throw e;
         }

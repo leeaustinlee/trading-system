@@ -1,5 +1,7 @@
 package com.austin.trading.scheduler;
 
+import com.austin.trading.service.DailyOrchestrationService;
+import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
 import com.austin.trading.workflow.WatchlistWorkflowService;
 import org.slf4j.Logger;
@@ -19,11 +21,14 @@ public class WatchlistRefreshJob {
 
     private final WatchlistWorkflowService watchlistWorkflowService;
     private final SchedulerLogService schedulerLogService;
+    private final DailyOrchestrationService orchestrationService;
 
     public WatchlistRefreshJob(WatchlistWorkflowService watchlistWorkflowService,
-                               SchedulerLogService schedulerLogService) {
+                               SchedulerLogService schedulerLogService,
+                               DailyOrchestrationService orchestrationService) {
         this.watchlistWorkflowService = watchlistWorkflowService;
         this.schedulerLogService = schedulerLogService;
+        this.orchestrationService = orchestrationService;
     }
 
     @Scheduled(cron = "${trading.scheduler.watchlist-refresh-cron:0 35 15 * * MON-FRI}",
@@ -31,10 +36,19 @@ public class WatchlistRefreshJob {
     public void run() {
         LocalDateTime triggerTime = LocalDateTime.now();
         String jobName = "WatchlistRefreshJob";
+        LocalDate today = LocalDate.now();
+        OrchestrationStep step = OrchestrationStep.WATCHLIST_REFRESH;
+
+        if (!orchestrationService.markRunning(today, step)) {
+            log.info("[{}] Step {} already DONE today, skip.", jobName, step);
+            return;
+        }
         try {
-            watchlistWorkflowService.execute(LocalDate.now());
+            watchlistWorkflowService.execute(today);
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), "Watchlist refresh done.");
+            orchestrationService.markDone(today, step, "Watchlist refresh done.");
         } catch (Exception e) {
+            orchestrationService.markFailed(today, step, e.getMessage());
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());
             throw e;
         }

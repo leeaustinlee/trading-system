@@ -6,6 +6,8 @@ import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.entity.CandidateStockEntity;
 import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.service.CandidateScanService;
+import com.austin.trading.service.DailyOrchestrationService;
+import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,17 +40,20 @@ public class OpenDataPrepJob {
     private final CandidateScanService     candidateScanService;
     private final CandidateStockRepository candidateStockRepository;
     private final SchedulerLogService      schedulerLogService;
+    private final DailyOrchestrationService orchestrationService;
 
     public OpenDataPrepJob(
             TwseMisClient twseMisClient,
             CandidateScanService candidateScanService,
             CandidateStockRepository candidateStockRepository,
-            SchedulerLogService schedulerLogService
+            SchedulerLogService schedulerLogService,
+            DailyOrchestrationService orchestrationService
     ) {
         this.twseMisClient           = twseMisClient;
         this.candidateScanService    = candidateScanService;
         this.candidateStockRepository = candidateStockRepository;
         this.schedulerLogService     = schedulerLogService;
+        this.orchestrationService    = orchestrationService;
     }
 
     @Scheduled(cron = "${trading.scheduler.open-data-prep-cron:0 1 9 * * MON-FRI}",
@@ -56,14 +61,20 @@ public class OpenDataPrepJob {
     public void run() {
         LocalDateTime triggerTime = LocalDateTime.now();
         String jobName = "OpenDataPrepJob";
-        try {
-            LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now();
+        OrchestrationStep step = OrchestrationStep.OPEN_DATA_PREP;
 
+        if (!orchestrationService.markRunning(today, step)) {
+            log.info("[{}] Step {} already DONE today, skip.", jobName, step);
+            return;
+        }
+        try {
             // 今日候選（最多 20 檔：超強勢 5 + 中短線 5 + 額外備選）
             List<CandidateResponse> candidates = candidateScanService.getCurrentCandidates(20);
             if (candidates.isEmpty()) {
                 log.info("[OpenDataPrepJob] No candidates for {}, skip.", today);
                 schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), "No candidates");
+                orchestrationService.markDone(today, step, "No candidates");
                 return;
             }
 
@@ -94,8 +105,10 @@ public class OpenDataPrepJob {
                     symbols.size(), quotes.size(), updated);
             log.info("[OpenDataPrepJob] {}", msg);
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), msg);
+            orchestrationService.markDone(today, step, msg);
 
         } catch (Exception e) {
+            orchestrationService.markFailed(today, step, e.getMessage());
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());
             throw e;
         }

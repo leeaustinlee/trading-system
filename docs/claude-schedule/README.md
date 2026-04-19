@@ -5,44 +5,52 @@
 此目錄存放 Claude Code 排程 Agent 的 5 個研究 prompt。
 不需要 Anthropic API Key — Claude Code 本身即為執行環境。
 
-## 整體流程（每個時段三段式）
+## 整體流程（PR-2 新流程：AI 任務佇列 + 自動分數回寫）
 
 ```
 Codex DataPrep（Windows 排程 PS1）
   → 更新 D:/ai/stock/market-snapshot.json
   → 寫出 D:/ai/stock/codex-research-latest.md
 
-Java DataPrep Job（Spring Boot 排程）
+Java Workflow（Spring Boot）
   → 更新 DB snapshot
   → 寫出 D:/ai/stock/claude-research-request.json
+  → **POST 建立 ai_task（PENDING）**  ← PR-2 新增
 
 Claude Code 排程 Agent（本目錄 prompt）
+  → GET /api/ai/tasks/pending?type=XXX 認領任務
   → 讀 market-snapshot.json + request.json + 規則 MD
-  → 做深度研究
-  → 寫出 D:/ai/stock/claude-research-latest.md
-  → **立即 POST /api/ai/research/import-file 匯入 DB**（2026-04-19 起）
+  → 做深度研究，寫 claude-research-latest.md（備份）
+  → **POST /api/ai/tasks/{id}/claude-result**（含 scores map）
+    → Service 自動寫 stock_evaluation.claude_score
+    → 自動觸發 consensus / finalRank 重算
+    → 同步寫 ai_research_log（舊 API 相容）
   → 若 API 失敗才請 Austin 用 UI 手動補匯
 
 Codex 最終通知（Windows 排程 PS1）
-  → 從 DB 讀最新 Claude 研究（API: GET /api/ai/research?date=today）
-  → 若 DB 沒有才 fallback 讀 claude-research-latest.md
+  → 從 DB 讀 Claude 研究 & candidate.claudeScore（不再讀 md）
+  → FinalDecisionService 可直接用 Claude 分數
   → 發 LINE 給 Austin
 ```
 
-## DB 匯入規則（2026-04-19 新增）
+## 任務佇列規則（PR-2，2026-04-19 起）
 
-所有 Claude 研究完成後必須立即匯入 DB，不再需要人工觸發。
+所有 Claude 研究完成後必須回報到 ai_task，不再只寫 md 或 ai_research_log。
 
-| 時段 | researchType |
+| 時段 | taskType |
 |---|---|
 | 08:20 盤前 | `PREMARKET` |
 | 09:20 開盤 | `OPENING` |
 | 10:50 盤中 | `MIDDAY` |
 | 15:20 盤後 | `POSTMARKET` |
 | 17:50 明日 | `T86_TOMORROW` |
-| 個股研究 | `STOCK_EVAL`（加 `symbol=XXXX`） |
+| 個股研究 | `STOCK_EVAL`（target_symbol 必填） |
 
-Markdown 檔案僅作為備份／fallback。API 匯入失敗時，Austin 從 UI「AI 研究」分頁手動補。
+**新流程優先**：`POST /api/ai/tasks/{id}/claude-result` 會自動寫 stock_evaluation.claude_score，
+FinalDecisionService 在 09:30 就能看到 Claude 分數。
+
+**Fallback**：舊 `POST /api/ai/research/import-file` 仍保留，但只寫 ai_research_log，
+不會觸發 stock_evaluation 回寫 — FinalDecision 拿不到分數。只在 ai_task 不存在時才用。
 
 ## 分工原則
 

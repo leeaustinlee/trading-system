@@ -11,6 +11,8 @@ import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.MarketSnapshotRepository;
 import com.austin.trading.service.CandidateScanService;
 import com.austin.trading.service.ClaudeCodeRequestWriterService;
+import com.austin.trading.service.DailyOrchestrationService;
+import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +51,7 @@ public class PostmarketDataPrepJob {
     private final MarketSnapshotRepository        marketSnapshotRepository;
     private final SchedulerLogService             schedulerLogService;
     private final ClaudeCodeRequestWriterService  requestWriterService;
+    private final DailyOrchestrationService       orchestrationService;
 
     public PostmarketDataPrepJob(
             MarketBreadthClient marketBreadthClient,
@@ -57,7 +60,8 @@ public class PostmarketDataPrepJob {
             CandidateStockRepository candidateStockRepository,
             MarketSnapshotRepository marketSnapshotRepository,
             SchedulerLogService schedulerLogService,
-            ClaudeCodeRequestWriterService requestWriterService
+            ClaudeCodeRequestWriterService requestWriterService,
+            DailyOrchestrationService orchestrationService
     ) {
         this.marketBreadthClient      = marketBreadthClient;
         this.twseMisClient            = twseMisClient;
@@ -66,6 +70,7 @@ public class PostmarketDataPrepJob {
         this.marketSnapshotRepository = marketSnapshotRepository;
         this.schedulerLogService      = schedulerLogService;
         this.requestWriterService     = requestWriterService;
+        this.orchestrationService     = orchestrationService;
     }
 
     @Scheduled(cron = "${trading.scheduler.postmarket-data-prep-cron:0 5 15 * * MON-FRI}",
@@ -73,9 +78,14 @@ public class PostmarketDataPrepJob {
     public void run() {
         LocalDateTime triggerTime = LocalDateTime.now();
         String jobName = "PostmarketDataPrepJob";
-        try {
-            LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now();
+        OrchestrationStep step = OrchestrationStep.POSTMARKET_DATA_PREP;
 
+        if (!orchestrationService.markRunning(today, step)) {
+            log.info("[{}] Step {} already DONE today, skip.", jobName, step);
+            return;
+        }
+        try {
             // 1. 大盤漲跌家數
             Optional<MarketBreadth> breadth = marketBreadthClient.getBreadth(today);
 
@@ -122,8 +132,10 @@ public class PostmarketDataPrepJob {
                     candidates.size(), updated);
             log.info("[PostmarketDataPrepJob] {}", msg);
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), msg);
+            orchestrationService.markDone(today, step, msg);
 
         } catch (Exception e) {
+            orchestrationService.markFailed(today, step, e.getMessage());
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());
             throw e;
         }

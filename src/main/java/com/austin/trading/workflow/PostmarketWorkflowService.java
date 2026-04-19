@@ -1,5 +1,6 @@
 package com.austin.trading.workflow;
 
+import com.austin.trading.dto.request.AiTaskCandidateRef;
 import com.austin.trading.dto.request.DailyPnlCreateRequest;
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.dto.response.LiveQuoteResponse;
@@ -10,6 +11,7 @@ import com.austin.trading.notify.LineTemplateService;
 import com.austin.trading.repository.DailyPnlRepository;
 import com.austin.trading.repository.PositionRepository;
 import com.austin.trading.repository.StockThemeMappingRepository;
+import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.CandidateScanService;
 import com.austin.trading.service.ClaudeCodeRequestWriterService;
 import com.austin.trading.service.PnlService;
@@ -48,6 +50,7 @@ public class PostmarketWorkflowService {
     private final ClaudeCodeRequestWriterService requestWriterService;
     private final LineTemplateService            lineTemplateService;
     private final ScoreConfigService             config;
+    private final AiTaskService                  aiTaskService;
 
     public PostmarketWorkflowService(
             CandidateScanService candidateScanService,
@@ -58,7 +61,8 @@ public class PostmarketWorkflowService {
             PnlService pnlService,
             ClaudeCodeRequestWriterService requestWriterService,
             LineTemplateService lineTemplateService,
-            ScoreConfigService config
+            ScoreConfigService config,
+            AiTaskService aiTaskService
     ) {
         this.candidateScanService       = candidateScanService;
         this.themeSelectionEngine       = themeSelectionEngine;
@@ -69,6 +73,7 @@ public class PostmarketWorkflowService {
         this.requestWriterService       = requestWriterService;
         this.lineTemplateService        = lineTemplateService;
         this.config                     = config;
+        this.aiTaskService              = aiTaskService;
     }
 
     public void execute(LocalDate tradingDate) {
@@ -88,6 +93,21 @@ public class PostmarketWorkflowService {
         if (!symbols.isEmpty()) {
             boolean written = requestWriterService.writeRequest("POSTMARKET", tradingDate, symbols, null);
             log.info("[PostmarketWorkflow] Claude 研究請求寫出={}, symbols={}", written, symbols);
+
+            // Step 3.5: 建立 AI 任務（PR-2）供 Claude 認領
+            try {
+                List<AiTaskCandidateRef> refs = candidates.stream()
+                        .map(c -> new AiTaskCandidateRef(
+                                c.symbol(), c.stockName(), c.themeTag(), c.javaStructureScore()))
+                        .toList();
+                aiTaskService.createTask(
+                        tradingDate, "POSTMARKET", null, refs,
+                        "今日盤後研究請求，共 " + refs.size() + " 檔",
+                        written ? "D:/ai/stock/claude-research-request.json" : null
+                );
+            } catch (Exception e) {
+                log.warn("[PostmarketWorkflow] createTask 失敗: {}", e.getMessage());
+            }
         }
 
         // Step 4: LINE 盤後通知

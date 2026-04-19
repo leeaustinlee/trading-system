@@ -10,8 +10,10 @@ import com.austin.trading.engine.ReviewScoringEngine.ReviewResult;
 import com.austin.trading.notify.LineTemplateService;
 import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.PositionRepository;
+import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.FinalDecisionService;
 import com.austin.trading.service.MarketDataService;
+import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
 import com.austin.trading.service.TradingStateService;
 import org.slf4j.Logger;
@@ -56,6 +58,7 @@ public class AftermarketReview1400Job {
     private final CandidateStockRepository candidateStockRepository;
     private final TwseMisClient twseMisClient;
     private final ChasedHighEntryEngine chasedHighEntryEngine;
+    private final DailyOrchestrationService orchestrationService;
 
     public AftermarketReview1400Job(
             MarketDataService marketDataService,
@@ -67,7 +70,8 @@ public class AftermarketReview1400Job {
             PositionRepository positionRepository,
             CandidateStockRepository candidateStockRepository,
             TwseMisClient twseMisClient,
-            ChasedHighEntryEngine chasedHighEntryEngine
+            ChasedHighEntryEngine chasedHighEntryEngine,
+            DailyOrchestrationService orchestrationService
     ) {
         this.marketDataService = marketDataService;
         this.tradingStateService = tradingStateService;
@@ -79,6 +83,7 @@ public class AftermarketReview1400Job {
         this.candidateStockRepository = candidateStockRepository;
         this.twseMisClient = twseMisClient;
         this.chasedHighEntryEngine = chasedHighEntryEngine;
+        this.orchestrationService = orchestrationService;
     }
 
     @Scheduled(cron = "${trading.scheduler.aftermarket-review-cron:0 0 14 * * MON-FRI}",
@@ -86,9 +91,14 @@ public class AftermarketReview1400Job {
     public void run() {
         LocalDateTime triggerTime = LocalDateTime.now();
         String jobName = "AftermarketReview1400Job";
-        try {
-            LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now();
+        OrchestrationStep step = OrchestrationStep.AFTERMARKET_REVIEW;
 
+        if (!orchestrationService.markRunning(today, step)) {
+            log.info("[{}] Step {} already DONE today, skip.", jobName, step);
+            return;
+        }
+        try {
             // 讀取今日狀態
             var market = marketDataService.getCurrentMarket().orElse(null);
             var state  = tradingStateService.getCurrentState().orElse(null);
@@ -119,9 +129,11 @@ public class AftermarketReview1400Job {
             lineTemplateService.notifyReview1400(result.summary(), today);
 
             log.info("[AftermarketReview1400Job] score={}, compliance={}", result.score(), result.compliance());
-            schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(),
-                    "score=" + result.score());
+            String logMsg = "score=" + result.score();
+            schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), logMsg);
+            orchestrationService.markDone(today, step, logMsg);
         } catch (Exception e) {
+            orchestrationService.markFailed(today, step, e.getMessage());
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());
             throw e;
         }

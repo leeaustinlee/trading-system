@@ -77,23 +77,52 @@ D:/ai/stock/claude-research-YYYYMMDD-0820.md
 
 ---
 
-## 第六步：匯入 DB（必做）
+## 第六步：認領任務 + 回報結果（PR-2 新流程，取代原本的「匯入 DB」）
 
-寫完檔案後**立刻**用 Bash 工具呼叫 Java API：
+### 6.1 認領任務
+先查詢 PENDING 的 PREMARKET 任務（Java 於 08:10 已建立）：
 
 ```bash
-curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt/d/ai/stock/claude-research-latest.md&researchType=PREMARKET&tradingDate=$(date +%Y-%m-%d)"
+curl -s "http://localhost:8080/api/ai/tasks/pending?type=PREMARKET" | jq '.[0]'
 ```
 
-**驗證回應**：
-- `{"success":true, "id":N, ...}` → ✅ 完成，研究已入 DB
-- `{"success":false, ...}` 或 HTTP 非 200 → 在你最後輸出中明確印出：
-  ```
-  ❌ DB 匯入失敗：<原因>
-  👉 請 Austin 手動透過 UI「AI 研究」分頁匯入 claude-research-latest.md
-  ```
+記下回傳中的 `id`（下稱 `TASK_ID`）。讀取 `target_candidates_json` 作為研究對象。
 
-**md 檔只是備份；正常情況下研究完已在 DB。匯入失敗才需手動上傳補回。**
+### 6.2 做研究（讀 target_candidates_json + 各來源）
+
+### 6.3 寫研究到 claude-research-latest.md（備份用，Codex fallback）
+
+### 6.4 回報結果（自動寫 stock_evaluation.claude_score + 觸發 consensus 重算）
+
+```bash
+curl -X POST "http://localhost:8080/api/ai/tasks/$TASK_ID/claude-result" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contentMarkdown": "完整盤前研究 md 內容",
+    "scores": {"2303": 8.5, "3231": 7.8, "4938": 7.2},
+    "thesis": {"2303": "T86 年度級大買，但 4/22 法說風險"},
+    "riskFlags": ["台積電 T86 大賣，大盤風險偏高"]
+  }'
+```
+
+成功回應：`{"success":true, "id":N, "status":"CLAUDE_DONE", "autoScored":{...}}`。
+
+### 6.5 驗證
+```bash
+curl -s "http://localhost:8080/api/ai/tasks/$TASK_ID" | jq '.status'   # 應為 "CLAUDE_DONE"
+curl -s "http://localhost:8080/api/candidates/current" | jq '.[] | {symbol, claudeScore}'
+```
+
+### 6.6 失敗處理
+若 `claude-result` 失敗或 PENDING 任務不存在，在最後輸出印出：
+```
+❌ 任務回報失敗：<原因>
+👉 請 Austin 手動用 UI 匯入 claude-research-latest.md 作為備援，或 curl 重試
+```
+
+> **舊 API `POST /api/ai/research/import-file` 仍保留**，但只寫 `ai_research_log`，
+> 不會寫 `stock_evaluation.claude_score`，FinalDecisionService 拿不到 Claude 分數。
+> 優先用新流程。
 
 ---
 
@@ -103,4 +132,4 @@ curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt
 - 不寫 `claude-outbox.json`
 - 不直接給 Austin 買賣張數（張數由 Codex 決定）
 - 不用超過 30 分鐘的報價給進場建議
-- **不要跳過第六步 DB 匯入**
+- **不要跳過第六步 — 這是 FinalDecisionService 拿到 Claude 分數的唯一管道**

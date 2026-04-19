@@ -4,7 +4,9 @@ import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.dto.response.MarketCurrentResponse;
 import com.austin.trading.notify.LineTemplateService;
 import com.austin.trading.service.CandidateScanService;
+import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.MarketDataService;
+import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,17 +36,20 @@ public class TomorrowPlan1800Job {
     private final CandidateScanService candidateScanService;
     private final LineTemplateService  lineTemplateService;
     private final SchedulerLogService  schedulerLogService;
+    private final DailyOrchestrationService orchestrationService;
 
     public TomorrowPlan1800Job(
             MarketDataService marketDataService,
             CandidateScanService candidateScanService,
             LineTemplateService lineTemplateService,
-            SchedulerLogService schedulerLogService
+            SchedulerLogService schedulerLogService,
+            DailyOrchestrationService orchestrationService
     ) {
         this.marketDataService   = marketDataService;
         this.candidateScanService = candidateScanService;
         this.lineTemplateService  = lineTemplateService;
         this.schedulerLogService  = schedulerLogService;
+        this.orchestrationService = orchestrationService;
     }
 
     @Scheduled(cron = "${trading.scheduler.tomorrow-plan-cron:0 30 18 * * MON-FRI}",
@@ -52,9 +57,14 @@ public class TomorrowPlan1800Job {
     public void run() {
         LocalDateTime triggerTime = LocalDateTime.now();
         String jobName = "TomorrowPlan1800Job";
-        try {
-            LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now();
+        OrchestrationStep step = OrchestrationStep.TOMORROW_PLAN;
 
+        if (!orchestrationService.markRunning(today, step)) {
+            log.info("[{}] Step {} already DONE today, skip.", jobName, step);
+            return;
+        }
+        try {
             MarketCurrentResponse market = marketDataService.getCurrentMarket().orElse(null);
             List<CandidateResponse> candidates = candidateScanService.getCurrentCandidates(10);
 
@@ -62,10 +72,12 @@ public class TomorrowPlan1800Job {
             lineTemplateService.notifyTomorrowPlan(message, today);
 
             log.info("[TomorrowPlan1800Job] candidates={}", candidates.size());
-            schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(),
-                    "candidates=" + candidates.size());
+            String msg = "candidates=" + candidates.size();
+            schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), msg);
+            orchestrationService.markDone(today, step, msg);
 
         } catch (Exception e) {
+            orchestrationService.markFailed(today, step, e.getMessage());
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());
             throw e;
         }

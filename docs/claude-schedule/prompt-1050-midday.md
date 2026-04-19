@@ -77,18 +77,41 @@
 
 ---
 
-## 第七步：匯入 DB（必做）
+## 第七步：認領任務 + 回報結果（PR-2 新流程）
 
+### 7.1 認領任務
+```bash
+curl -s "http://localhost:8080/api/ai/tasks/pending?type=MIDDAY" | jq '.[0]'
+```
+記下 `id`。若無 PENDING 可用舊 API fallback。
+
+### 7.2 回報結果
+```bash
+curl -X POST "http://localhost:8080/api/ai/tasks/$TASK_ID/claude-result" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contentMarkdown": "完整盤中研究 md",
+    "scores": {"2303": 8.0},
+    "thesis": {"2303": "持倉續抱，動能尚在"},
+    "riskFlags": []
+  }'
+```
+
+### 7.3 驗證
+```bash
+curl -s "http://localhost:8080/api/ai/tasks/$TASK_ID" | jq '.status'   # CLAUDE_DONE
+```
+
+### Fallback（僅無 PENDING 任務時）
 ```bash
 curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt/d/ai/stock/claude-research-latest.md&researchType=MIDDAY&tradingDate=$(date +%Y-%m-%d)"
 ```
 
-- 回應 `success:true` → ✅ 已入 DB
-- 回應 `success:false` 或 HTTP 錯誤 → 輸出結尾印出：
-  ```
-  ❌ DB 匯入失敗：<原因>
-  👉 請 Austin 手動匯入 claude-research-latest.md
-  ```
+失敗處理：
+```
+❌ 任務回報失敗：<原因>
+👉 請 Austin 手動匯入 claude-research-latest.md
+```
 
 ---
 
@@ -97,4 +120,4 @@ curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt
 - 不發 LINE
 - 不執行盤中監控（監控由 Codex 負責）
 - 不直接給張數
-- **不要跳過第七步 DB 匯入**
+- **不要跳過第七步回報**

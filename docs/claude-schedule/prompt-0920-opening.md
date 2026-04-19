@@ -80,18 +80,44 @@
 
 ---
 
-## 第六步：匯入 DB（必做）
+## 第六步：認領任務 + 回報結果（PR-2 新流程）
 
+### 6.1 認領任務
+```bash
+curl -s "http://localhost:8080/api/ai/tasks/pending?type=OPENING" | jq '.[0]'
+```
+記下 `id`（下稱 `TASK_ID`）。若無 PENDING 任務（workflow 未建立），可用舊 API fallback（見最後）。
+
+### 6.2 回報結果
+```bash
+curl -X POST "http://localhost:8080/api/ai/tasks/$TASK_ID/claude-result" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contentMarkdown": "完整開盤研究 md",
+    "scores": {"2303": 8.5, "3231": 7.8},
+    "thesis": {"2303": "開盤洗盤轉強"},
+    "riskFlags": ["若跌破均價立即出場"]
+  }'
+```
+
+### 6.3 驗證
+```bash
+curl -s "http://localhost:8080/api/ai/tasks/$TASK_ID" | jq '.status'   # 應為 "CLAUDE_DONE"
+```
+
+成功後 `stock_evaluation.claude_score` 自動寫入；FinalDecisionService 即可使用。
+
+### 6.4 Fallback（僅無 PENDING 任務時）
 ```bash
 curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt/d/ai/stock/claude-research-latest.md&researchType=OPENING&tradingDate=$(date +%Y-%m-%d)"
 ```
+**注意**：舊 API 只寫 `ai_research_log`，不寫 `stock_evaluation.claude_score`。優先走新流程。
 
-- 回應 `success:true` → ✅ 已入 DB
-- 回應 `success:false` 或 HTTP 錯誤 → 在輸出結尾印出：
-  ```
-  ❌ DB 匯入失敗：<原因>
-  👉 請 Austin 手動匯入 claude-research-latest.md
-  ```
+失敗處理：
+```
+❌ 任務回報失敗：<原因>
+👉 請 Austin 手動匯入 claude-research-latest.md
+```
 
 ---
 
@@ -101,4 +127,4 @@ curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt
 - snapshot 超過 10 分鐘不得給進場建議（僅可標示方向）
 - 跌破開盤、跌破昨收、爆量開高走低的標的，直接排除
 - 不直接給張數
-- **不要跳過第六步 DB 匯入**
+- **不要跳過第六步回報** — 這是 FinalDecision 拿到 Claude 分數的唯一管道

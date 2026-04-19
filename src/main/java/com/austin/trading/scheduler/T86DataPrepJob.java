@@ -4,6 +4,8 @@ import com.austin.trading.client.TwseInstitutionalClient;
 import com.austin.trading.client.dto.InstitutionalFlow;
 import com.austin.trading.entity.CandidateStockEntity;
 import com.austin.trading.repository.CandidateStockRepository;
+import com.austin.trading.service.DailyOrchestrationService;
+import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,15 +36,18 @@ public class T86DataPrepJob {
     private final TwseInstitutionalClient  institutionalClient;
     private final CandidateStockRepository candidateStockRepository;
     private final SchedulerLogService      schedulerLogService;
+    private final DailyOrchestrationService orchestrationService;
 
     public T86DataPrepJob(
             TwseInstitutionalClient institutionalClient,
             CandidateStockRepository candidateStockRepository,
-            SchedulerLogService schedulerLogService
+            SchedulerLogService schedulerLogService,
+            DailyOrchestrationService orchestrationService
     ) {
         this.institutionalClient      = institutionalClient;
         this.candidateStockRepository = candidateStockRepository;
         this.schedulerLogService      = schedulerLogService;
+        this.orchestrationService     = orchestrationService;
     }
 
     @Scheduled(cron = "${trading.scheduler.t86-data-prep-cron:0 10 18 * * MON-FRI}",
@@ -50,14 +55,20 @@ public class T86DataPrepJob {
     public void run() {
         LocalDateTime triggerTime = LocalDateTime.now();
         String jobName = "T86DataPrepJob";
-        try {
-            LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now();
+        OrchestrationStep step = OrchestrationStep.T86_DATA_PREP;
 
+        if (!orchestrationService.markRunning(today, step)) {
+            log.info("[{}] Step {} already DONE today, skip.", jobName, step);
+            return;
+        }
+        try {
             // 1. 抓取今日 T86 全量資料
             List<InstitutionalFlow> flows = institutionalClient.getT86(today);
             if (flows.isEmpty()) {
                 log.info("[T86DataPrepJob] No T86 data for {}, skip.", today);
                 schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), "No T86 data");
+                orchestrationService.markDone(today, step, "No T86 data");
                 return;
             }
 
@@ -83,8 +94,10 @@ public class T86DataPrepJob {
                     flows.size(), candidates.size(), updated);
             log.info("[T86DataPrepJob] {}", msg);
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), msg);
+            orchestrationService.markDone(today, step, msg);
 
         } catch (Exception e) {
+            orchestrationService.markFailed(today, step, e.getMessage());
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());
             throw e;
         }

@@ -9,8 +9,10 @@ import com.austin.trading.engine.MonitorDecisionEngine;
 import com.austin.trading.engine.PositionDecisionEngine.PositionDecisionResult;
 import com.austin.trading.engine.PositionDecisionEngine.PositionStatus;
 import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.MarketDataService;
 import com.austin.trading.service.MonitorDecisionService;
+import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.PositionReviewService;
 import com.austin.trading.service.PositionReviewService.ReviewResult;
 import com.austin.trading.service.SchedulerLogService;
@@ -42,6 +44,7 @@ public class FiveMinuteMonitorJob {
     private final LineTemplateService lineTemplateService;
     private final SchedulerLogService schedulerLogService;
     private final ScoreConfigService scoreConfig;
+    private final DailyOrchestrationService orchestrationService;
 
     public FiveMinuteMonitorJob(
             MarketDataService marketDataService,
@@ -51,7 +54,8 @@ public class FiveMinuteMonitorJob {
             PositionReviewService positionReviewService,
             LineTemplateService lineTemplateService,
             SchedulerLogService schedulerLogService,
-            ScoreConfigService scoreConfig
+            ScoreConfigService scoreConfig,
+            DailyOrchestrationService orchestrationService
     ) {
         this.marketDataService = marketDataService;
         this.tradingStateService = tradingStateService;
@@ -61,16 +65,21 @@ public class FiveMinuteMonitorJob {
         this.lineTemplateService = lineTemplateService;
         this.schedulerLogService = schedulerLogService;
         this.scoreConfig = scoreConfig;
+        this.orchestrationService = orchestrationService;
     }
 
     @Scheduled(cron = "${trading.scheduler.five-minute-monitor-cron:0 */5 9-13 * * MON-FRI}", zone = "${trading.timezone:Asia/Taipei}")
     public void run() {
         LocalDateTime triggerTime = LocalDateTime.now();
         String jobName = "FiveMinuteMonitorJob";
+        LocalDate today = LocalDate.now();
+        OrchestrationStep step = OrchestrationStep.FIVE_MINUTE_MONITOR;
+        // 一天跑多次：不做 DONE 阻擋，完成後 markExecuted 更新 updated_at
         try {
             MarketCurrentResponse market = marketDataService.getCurrentMarket().orElse(null);
             if (market == null) {
                 schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), "Skip: no market snapshot.");
+                orchestrationService.markExecuted(today, step, "Skip: no market snapshot.");
                 return;
             }
 
@@ -126,7 +135,9 @@ public class FiveMinuteMonitorJob {
 
             log.info("[FiveMinuteMonitorJob] {}", decision.summaryForLog());
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), decision.summaryForLog());
+            orchestrationService.markExecuted(today, step, decision.summaryForLog());
         } catch (Exception e) {
+            orchestrationService.markFailed(today, step, e.getMessage());
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());
             throw e;
         }

@@ -72,18 +72,42 @@ T86 自營商：買超 / 賣超
 
 ---
 
-## 第七步：匯入 DB（必做）
+## 第七步：認領任務 + 回報結果（PR-2 新流程）
 
+### 7.1 認領
+```bash
+curl -s "http://localhost:8080/api/ai/tasks/pending?type=T86_TOMORROW" | jq '.[0]'
+```
+記下 `id`。若尚未有 PENDING 任務，走 Fallback。
+
+### 7.2 回報
+```bash
+curl -X POST "http://localhost:8080/api/ai/tasks/$TASK_ID/claude-result" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contentMarkdown": "完整 T86 + 明日策略研究 md",
+    "scores": {"2303": 8.5, "3231": 7.8, "4938": 7.2},
+    "thesis": {"2303": "T86 年度級大買，但 4/22 法說風險"},
+    "riskFlags": ["台積電 T86 大賣，大盤風險偏高"]
+  }'
+```
+
+### 7.3 驗證
+```bash
+curl -s "http://localhost:8080/api/ai/tasks/$TASK_ID" | jq '.status'
+curl -s "http://localhost:8080/api/candidates/current" | jq '.[] | {symbol, claudeScore}'
+```
+
+### Fallback
 ```bash
 curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt/d/ai/stock/claude-research-latest.md&researchType=T86_TOMORROW&tradingDate=$(date +%Y-%m-%d)"
 ```
 
-- 回應 `success:true` → ✅ 已入 DB
-- 回應 `success:false` 或 HTTP 錯誤 → 輸出結尾印出：
-  ```
-  ❌ DB 匯入失敗：<原因>
-  👉 請 Austin 手動匯入 claude-research-latest.md
-  ```
+失敗處理：
+```
+❌ 任務回報失敗：<原因>
+👉 請 Austin 手動匯入 claude-research-latest.md
+```
 
 ---
 
@@ -92,4 +116,4 @@ curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt
 - 不發 LINE
 - T86 date 不是今日時，不得提高候選股排序（只能標示，等明日確認）
 - 不直接給 Austin 買賣張數
-- **不要跳過第七步 DB 匯入**
+- **不要跳過第七步回報**

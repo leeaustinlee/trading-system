@@ -1,5 +1,7 @@
 package com.austin.trading.scheduler;
 
+import com.austin.trading.service.DailyOrchestrationService;
+import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
 import com.austin.trading.workflow.PostmarketWorkflowService;
 import org.slf4j.Logger;
@@ -23,13 +25,16 @@ public class PostmarketAnalysis1530Job {
 
     private final PostmarketWorkflowService workflowService;
     private final SchedulerLogService       schedulerLogService;
+    private final DailyOrchestrationService orchestrationService;
 
     public PostmarketAnalysis1530Job(
             PostmarketWorkflowService workflowService,
-            SchedulerLogService schedulerLogService
+            SchedulerLogService schedulerLogService,
+            DailyOrchestrationService orchestrationService
     ) {
         this.workflowService    = workflowService;
         this.schedulerLogService = schedulerLogService;
+        this.orchestrationService = orchestrationService;
     }
 
     @Scheduled(cron = "${trading.scheduler.postmarket-analysis-cron:0 30 15 * * MON-FRI}",
@@ -37,10 +42,19 @@ public class PostmarketAnalysis1530Job {
     public void run() {
         LocalDateTime triggerTime = LocalDateTime.now();
         String jobName = "PostmarketAnalysis1530Job";
+        LocalDate today = LocalDate.now();
+        OrchestrationStep step = OrchestrationStep.POSTMARKET_ANALYSIS;
+
+        if (!orchestrationService.markRunning(today, step)) {
+            log.info("[{}] Step {} already DONE today, skip.", jobName, step);
+            return;
+        }
         try {
-            workflowService.execute(LocalDate.now());
+            workflowService.execute(today);
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), "ok");
+            orchestrationService.markDone(today, step, "ok");
         } catch (Exception e) {
+            orchestrationService.markFailed(today, step, e.getMessage());
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());
             throw e;
         }
