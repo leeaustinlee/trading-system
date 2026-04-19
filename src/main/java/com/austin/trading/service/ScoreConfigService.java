@@ -126,6 +126,13 @@ public class ScoreConfigService {
         DEFAULTS.put("portfolio.reserve_cash_pct",                  new String[]{"30",    "INTEGER", "保留現金 %"});
         DEFAULTS.put("portfolio.allow_new_when_full_strong",        new String[]{"false", "BOOLEAN", "滿倉全 STRONG 時是否允許新倉"});
         DEFAULTS.put("portfolio.replace_strong_score_gap",          new String[]{"1.5",   "DECIMAL", "新倉需高出 STRONG 持股最低分的差距"});
+
+        // ── Trade Review / Backtest / Recommendation ──────────────────────
+        DEFAULTS.put("review.auto_on_close",                       new String[]{"true",  "BOOLEAN", "position close 時自動產生 trade review"});
+        DEFAULTS.put("review.chased_high_pct",                     new String[]{"3.0",   "DECIMAL", "進場價距日高 < 此 % 視為追高"});
+        DEFAULTS.put("review.profit_giveback_pct",                 new String[]{"50.0",  "DECIMAL", "MFE 回吐超過此 % 標記 GAVE_BACK_PROFIT"});
+        DEFAULTS.put("review.held_too_long_days",                  new String[]{"12",    "INTEGER", "持有超過此天數且低報酬 → HELD_TOO_LONG"});
+        DEFAULTS.put("recommendation.min_sample_size",             new String[]{"10",    "INTEGER", "分組統計 < 此筆數時 confidence 降為 LOW 或跳過"});
     }
 
     public ScoreConfigService(ScoreConfigRepository repository) {

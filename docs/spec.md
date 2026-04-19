@@ -82,7 +82,22 @@
 - `GET /api/ai/research`、`POST /api/ai/research/write-request|import-file`
 - `GET /api/system/external/probe|probe/history|migration/health`
 
-**測試（115 tests pass，4 skipped）**
+**Phase 8 — Backtest + Trade Review + Strategy Recommendation（v1.0 完成）**
+- `TradeReviewEngine`：單筆交易檢討
+  - 12 種 ReviewTag（GOOD_ENTRY_GOOD_EXIT / CHASED_TOO_HIGH / FAILED_BREAKOUT_ENTRY / HELD_TOO_LONG ...）
+  - A/B/C/D 四級 grade + strengths/weaknesses/improvementSuggestions
+  - MarketCondition（BULL/RANGE/BEAR）區分好/壞環境的交易品質
+- `BacktestMetricsEngine`：winRate / profitFactor / maxDrawdown / bestTrade / worstTrade
+- `StrategyRecommendationEngine`：策略參數建議
+  - sample size 保護（< min_sample_size 時 confidence 降為 LOW 或跳過）
+  - 追高 / 假突破 / 持有過久 / 利潤回吐 / 連續虧損 / 勝率分析 6 條分析方向
+  - Level 2 — 只寫 strategy_recommendation，不直接改 config
+- 新表：`backtest_run`（含 config_snapshot_json）、`backtest_trade`（含 entry_trigger_type）、`trade_review`（支援 reviewer_type + review_version）、`strategy_recommendation`
+- `PositionService.close()` 自動觸發 trade review（可 config 關閉）
+- `WeeklyTradeReviewJob`（每週五 19:00）
+- API：`/api/backtest/*`, `/api/trade-reviews/*`, `/api/strategy-recommendations/*`
+
+**測試（128 tests pass，4 skipped）**
 - 單元測試：engine 層含 ConsensusScoringEngine 6、VetoEngine 17、ThemeSelectionEngine 6 等
 - 整合測試（`ApiIntegrationTests`）：3 tests，E2E 骨架
 - 整合測試（`FullApiIntegrationTests`）：26 tests，涵蓋所有主要 API + AI 評分回填 consensus 驗證

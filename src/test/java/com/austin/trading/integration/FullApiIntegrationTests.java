@@ -426,7 +426,7 @@ class FullApiIntegrationTests {
     void position_openAtLoss_realizedPnlShouldBeNegative() throws Exception {
         String createReq = """
                 {
-                  "symbol": "1802",
+                  "symbol": "TEST_LOSS_1802",
                   "side": "LONG",
                   "qty": 1000,
                   "avgCost": 70.0,

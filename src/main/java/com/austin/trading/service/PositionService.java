@@ -25,10 +25,15 @@ public class PositionService {
 
     private final PositionRepository positionRepository;
     private final PnlService pnlService;
+    private final TradeReviewService tradeReviewService;
+    private final ScoreConfigService scoreConfigService;
 
-    public PositionService(PositionRepository positionRepository, PnlService pnlService) {
+    public PositionService(PositionRepository positionRepository, PnlService pnlService,
+                            TradeReviewService tradeReviewService, ScoreConfigService scoreConfigService) {
         this.positionRepository = positionRepository;
         this.pnlService = pnlService;
+        this.tradeReviewService = tradeReviewService;
+        this.scoreConfigService = scoreConfigService;
     }
 
     public List<PositionResponse> getOpenPositions(int limit) {
@@ -133,6 +138,11 @@ public class PositionService {
 
         // 自動更新當日損益
         pnlService.recordClosedPosition(saved, saved.getRealizedPnl());
+
+        // 自動產生 trade review（若啟用）
+        if (scoreConfigService.getBoolean("review.auto_on_close", true)) {
+            tradeReviewService.generateForPosition(saved);
+        }
 
         return toResponse(saved);
     }

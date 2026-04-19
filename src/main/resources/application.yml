@@ -67,6 +67,9 @@ trading:
     watchlist-refresh:
       enabled: false
     watchlist-refresh-cron: "0 35 15 * * MON-FRI"
+    weekly-trade-review:
+      enabled: false
+    weekly-trade-review-cron: "0 0 19 * * FRI"
 
   taifex:
     base-url: ${TAIFEX_BASE_URL:https://openapi.taifex.com.tw}

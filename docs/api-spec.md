@@ -70,6 +70,22 @@
 - PATCH `/api/watchlist/{symbol}/status`  手動調整狀態
 - POST `/api/watchlist/position-review/trigger`  手動觸發持倉 review
 
+## Backtest
+- POST `/api/backtest/run`                 `{startDate, endDate, runName, notes}`
+- GET  `/api/backtest/runs`                列出所有回測
+- GET  `/api/backtest/runs/{id}`           取單筆回測
+- GET  `/api/backtest/runs/{id}/trades`    取回測交易明細
+
+## Trade Review
+- POST `/api/trade-reviews/generate`       批次 review 所有未 review 的已關閉 position
+- GET  `/api/trade-reviews`                列出所有 review
+- GET  `/api/trade-reviews/{positionId}`   取指定 position 的 review
+
+## Strategy Recommendation
+- POST `/api/strategy-recommendations/generate` `?sourceRunId=` 從 trade review 聚合產生建議
+- GET  `/api/strategy-recommendations`     列出所有建議
+- PATCH `/api/strategy-recommendations/{id}/status` `{status: NEW/REVIEWED/ACCEPTED/REJECTED}`
+
 ## System
 - GET `/api/system/external/probe` `?taifexDate=&liveLine=&liveClaude=`
 - GET `/api/system/external/probe/history` `?limit=`
