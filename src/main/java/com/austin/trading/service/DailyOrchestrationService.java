@@ -132,6 +132,15 @@ public class DailyOrchestrationService {
         return true;
     }
 
+    /**
+     * 手動觸發 Job 前，將 step 重置為 PENDING，讓 Job 內部的 markRunning() 可以順利取得執行權。
+     * 用於 {@code ?force=true} 且 case 會呼叫 Job.run()（Job 自己做 markRunning）的情境。
+     */
+    @Transactional
+    public void resetStepToPending(LocalDate date, OrchestrationStep step) {
+        applyStatus(date, step, STATUS_PENDING, "manual force reset");
+    }
+
     @Transactional
     public void markDone(LocalDate date, OrchestrationStep step, String notes) {
         applyStatus(date, step, STATUS_DONE, notes);

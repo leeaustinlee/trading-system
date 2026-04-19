@@ -13,6 +13,7 @@ import com.austin.trading.scheduler.ExternalProbeHealthJob;
 import com.austin.trading.scheduler.MiddayReviewJob;
 import com.austin.trading.scheduler.OpenDataPrepJob;
 import com.austin.trading.scheduler.PostmarketDataPrepJob;
+import com.austin.trading.scheduler.PremarketDataPrepJob;
 import com.austin.trading.scheduler.T86DataPrepJob;
 import com.austin.trading.scheduler.TomorrowPlan1800Job;
 import com.austin.trading.workflow.HourlyGateWorkflowService;
@@ -64,6 +65,14 @@ public class SchedulerController {
     @Autowired(required = false) private TomorrowPlan1800Job tomorrowPlan1800Job;
     @Autowired(required = false) private ExternalProbeHealthJob externalProbeHealthJob;
     @Autowired(required = false) private DailyHealthCheckJob dailyHealthCheckJob;
+    @Autowired(required = false) private PremarketDataPrepJob premarketDataPrepJob;
+
+    /** 這些 trigger 會直接呼叫 Job.run()，Job 內部自己做 markRunning（orchestration）。 */
+    private static final java.util.Set<String> JOB_TRIGGERS = java.util.Set.of(
+            "premarket-data-prep", "open-data-prep", "midday-review",
+            "aftermarket-review", "postmarket-data-prep", "t86-data-prep",
+            "tomorrow-plan", "external-probe-health", "daily-health-check"
+    );
 
     // ── scheduler enabled flags (從 application.yml 注入) ───────────────
     @Value("${trading.scheduler.premarket-notify.enabled:false}")        boolean premarketNotifyEnabled;
@@ -174,25 +183,34 @@ public class SchedulerController {
         // 1. 解析對應的 orchestration step（若該 trigger 能對應）
         OrchestrationStep step = OrchestrationStep.fromKey(triggerKey).orElse(null);
 
-        // 2. 走跟 scheduler 一致的 markRunning 流程，但手動可透過 force 覆寫 DONE
+        // 2. Orchestration guard：
+        //    - JOB_TRIGGERS 會呼叫 Job.run()，Job 內部自己做 markRunning，Controller 只在 force=true 時 reset 到 PENDING
+        //    - 其他走 workflow 的 trigger 由 Controller 做 markRunning（workflow 不負責 orchestration）
         if (step != null) {
-            boolean acquired = force
-                    ? orchestrationService.forceMarkRunning(d, step)
-                    : orchestrationService.markRunning(d, step);
-            if (!acquired) {
-                return ResponseEntity.ok(Map.of(
-                        "ok", true,
-                        "triggerKey", triggerKey,
-                        "date", d.toString(),
-                        "skipped", true,
-                        "reason", "already DONE today (use ?force=true to override)"));
+            if (JOB_TRIGGERS.contains(triggerKey)) {
+                if (force) {
+                    orchestrationService.resetStepToPending(d, step);
+                }
+                // force=false 時放行到 Job，讓 Job 自己決定是否 skip
+            } else {
+                boolean acquired = force
+                        ? orchestrationService.forceMarkRunning(d, step)
+                        : orchestrationService.markRunning(d, step);
+                if (!acquired) {
+                    return ResponseEntity.ok(Map.of(
+                            "ok", true,
+                            "triggerKey", triggerKey,
+                            "date", d.toString(),
+                            "skipped", true,
+                            "reason", "already DONE today (use ?force=true to override)"));
+                }
             }
         }
 
         try {
             Object result = switch (triggerKey) {
                 case "premarket"         -> { premarketWorkflow.execute(d); yield "premarket done"; }
-                case "premarket-data-prep" -> { premarketWorkflow.execute(d); yield "premarket-data-prep done"; }
+                case "premarket-data-prep" -> { requireJob(premarketDataPrepJob, "premarket-data-prep"); premarketDataPrepJob.run(); yield "premarket-data-prep done"; }
                 case "final-decision"    -> { intradayDecisionWorkflow.execute(d); yield "final-decision done"; }
                 case "hourly-gate"       -> { hourlyGateWorkflow.execute(d, LocalTime.now()); yield "hourly-gate done"; }
                 case "postmarket"        -> { postmarketWorkflow.execute(d); yield "postmarket done"; }
