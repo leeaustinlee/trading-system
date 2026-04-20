@@ -125,6 +125,16 @@ public class StockEvaluationEntity {
     @Column(name = "payload_json", columnDefinition = "json")
     private String payloadJson;
 
+    // v2.3 Momentum Chase
+    @Column(name = "momentum_score", precision = 4, scale = 2)
+    private BigDecimal momentumScore;
+
+    @Column(name = "momentum_sub_scores_json", columnDefinition = "json")
+    private String momentumSubScoresJson;
+
+    @Column(name = "strategy_type", length = 20)
+    private String strategyType;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -189,5 +199,13 @@ public class StockEvaluationEntity {
     public void setJavaVetoFlags(String javaVetoFlags) { this.javaVetoFlags = javaVetoFlags; }
     public String getPayloadJson() { return payloadJson; }
     public void setPayloadJson(String payloadJson) { this.payloadJson = payloadJson; }
+
+    public BigDecimal getMomentumScore() { return momentumScore; }
+    public void setMomentumScore(BigDecimal momentumScore) { this.momentumScore = momentumScore; }
+    public String getMomentumSubScoresJson() { return momentumSubScoresJson; }
+    public void setMomentumSubScoresJson(String momentumSubScoresJson) { this.momentumSubScoresJson = momentumSubScoresJson; }
+    public String getStrategyType() { return strategyType; }
+    public void setStrategyType(String strategyType) { this.strategyType = strategyType; }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

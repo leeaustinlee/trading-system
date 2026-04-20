@@ -2,6 +2,7 @@ package com.austin.trading.service;
 
 import com.austin.trading.dto.request.FinalDecisionCandidateRequest;
 import com.austin.trading.dto.request.FinalDecisionEvaluateRequest;
+import com.austin.trading.domain.enums.StrategyType;
 import com.austin.trading.dto.request.PositionSizingEvaluateRequest;
 import com.austin.trading.dto.request.StopLossTakeProfitEvaluateRequest;
 import com.austin.trading.dto.response.FinalDecisionRecordResponse;
@@ -80,6 +81,7 @@ public class FinalDecisionService {
     private final ScoreConfigService        scoreConfigService;
     private final AiTaskService             aiTaskService;
     private final ObjectMapper              objectMapper;
+    private final MomentumDecisionService   momentumDecisionService;
 
     public FinalDecisionService(
             ConsensusScoringEngine consensusScoringEngine,
@@ -101,7 +103,8 @@ public class FinalDecisionService {
             MarketCooldownService marketCooldownService,
             ScoreConfigService scoreConfigService,
             AiTaskService aiTaskService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            MomentumDecisionService momentumDecisionService
     ) {
         this.consensusScoringEngine     = consensusScoringEngine;
         this.finalDecisionEngine        = finalDecisionEngine;
@@ -123,13 +126,24 @@ public class FinalDecisionService {
         this.scoreConfigService         = scoreConfigService;
         this.aiTaskService              = aiTaskService;
         this.objectMapper               = objectMapper;
+        this.momentumDecisionService    = momentumDecisionService;
     }
 
     @Transactional
     public FinalDecisionResponse evaluateAndPersist(LocalDate tradingDate) {
+        return evaluateAndPersist(tradingDate, null);
+    }
+
+    /**
+     * v2.2: 指定 preferTaskType 讓各時段 Job 能消化自己的 AI task。
+     * 例：PostmarketAnalysis1530Job 傳 "POSTMARKET"；T86/TomorrowPlan 傳 "T86_TOMORROW"。
+     * 傳 null 時維持 v2.1 行為（OPENING 優先、PREMARKET fallback）。
+     */
+    @Transactional
+    public FinalDecisionResponse evaluateAndPersist(LocalDate tradingDate, String preferTaskType) {
         // ── Step 0: v2.1 AI Readiness 判定（OPENING 優先，fallback PREMARKET）─────
         // 預設：require_codex=true，Codex 未完成時不得輸出正式 ENTER。
-        AiReadiness readiness = resolveAiReadiness(tradingDate);
+        AiReadiness readiness = resolveAiReadiness(tradingDate, preferTaskType);
         log.info("[FinalDecision] AI readiness: mode={} sourceTaskType={} taskId={} fallback={}",
                 readiness.mode(), readiness.sourceTaskType(), readiness.aiTaskId(), readiness.fallbackReason());
 
@@ -266,27 +280,70 @@ public class FinalDecisionService {
                 : DEFAULT_MAX_SINGLE;
 
         // 為每檔入選股補上倉位建議與停損停利
-        List<FinalDecisionSelectedStockResponse> enriched = decision.selectedStocks().stream()
+        List<FinalDecisionSelectedStockResponse> setupEnriched = decision.selectedStocks().stream()
                 .map(s -> enrichWithSizing(s, marketGrade, candidateMap.get(s.stockCode()),
                         baseCapital, maxSingle))
                 .toList();
 
+        // ── v2.3 Momentum Chase 平行 pipeline ─────────────────────────────────
+        java.util.Set<String> setupSymbols = new java.util.HashSet<>();
+        for (FinalDecisionSelectedStockResponse s : setupEnriched) setupSymbols.add(s.stockCode());
+
+        int remainingSlots = Math.max(0, maxPos - openPositions.size() - setupEnriched.size());
+        List<FinalDecisionSelectedStockResponse> momentumEnriched = new java.util.ArrayList<>();
+        List<String> momentumSummary = new java.util.ArrayList<>();
+
+        if (remainingSlots > 0) {
+            MomentumDecisionService.MomentumResultBundle mb = momentumDecisionService.evaluate(
+                    tradingDate, scoredCandidates, marketGrade, decisionLock, timeDecay);
+            for (MomentumDecisionService.MomentumPick pick : mb.picks()) {
+                if (momentumEnriched.size() >= remainingSlots) break;
+                if (setupSymbols.contains(pick.selected().stockCode())) continue; // SETUP 優先，去重
+                FinalDecisionSelectedStockResponse enriched = enrichMomentumSizing(
+                        pick.selected(), candidateMap.get(pick.selected().stockCode()),
+                        baseCapital, maxSingle, pick);
+                momentumEnriched.add(enriched);
+                momentumSummary.add(String.format("%s(score=%s)",
+                        pick.selected().stockCode(), pick.momentumScore().toPlainString()));
+            }
+            if (mb.observationMode() && mb.enterThresholdCount() > 0) {
+                log.info("[FinalDecision] Momentum observation mode: {} stocks ≥ entry threshold but held as WATCH only",
+                        mb.enterThresholdCount());
+            }
+        }
+
+        // 合併 selected_stocks（Setup 在前、Momentum 在後）
+        List<FinalDecisionSelectedStockResponse> merged = new java.util.ArrayList<>(setupEnriched);
+        merged.addAll(momentumEnriched);
+
+        // 決定最終 decision 與 strategy_type
+        String finalDecisionCode = decision.decision();
+        String strategyType;
+        if (!setupEnriched.isEmpty() && !momentumEnriched.isEmpty()) {
+            strategyType = "MIXED";
+            finalDecisionCode = "ENTER";
+        } else if (!setupEnriched.isEmpty()) {
+            strategyType = "SETUP";
+        } else if (!momentumEnriched.isEmpty()) {
+            strategyType = "MOMENTUM_CHASE";
+            finalDecisionCode = "ENTER";
+        } else {
+            strategyType = "SETUP"; // REST/WATCH 預設 SETUP
+        }
+
+        // 擴充 summary：Momentum 加註追價提示
+        String summary = decision.summary();
+        if (!momentumEnriched.isEmpty()) {
+            summary = (summary == null ? "" : summary + "  ") +
+                    "含 " + momentumEnriched.size() + " 檔 Momentum 追價單（" +
+                    String.join(",", momentumSummary) + "）；倉位已壓低、停損收緊。";
+        }
+
         FinalDecisionResponse enrichedDecision = new FinalDecisionResponse(
-                decision.decision(),
-                enriched,
-                decision.rejectedReasons(),
-                decision.summary()
-        );
+                finalDecisionCode, merged, decision.rejectedReasons(), summary);
 
-        FinalDecisionEntity entity = new FinalDecisionEntity();
-        entity.setTradingDate(tradingDate);
-        entity.setDecision(enrichedDecision.decision());
-        entity.setSummary(enrichedDecision.summary());
-        entity.setPayloadJson(toPayload(enrichedDecision));
-        fillAiContext(entity, readiness);
-        finalDecisionRepository.save(entity);
-
-        return enrichedDecision;
+        // v2.2: 走 persistAndReturn 確保「產生 FinalDecision → finalize AI task」原子執行
+        return persistAndReturnWithStrategy(tradingDate, enrichedDecision, readiness, strategyType);
     }
 
     public Optional<FinalDecisionRecordResponse> getCurrent() {
@@ -304,13 +361,35 @@ public class FinalDecisionService {
     /** 快速回傳 REST 並持久化（用於滿倉等提前中斷情境） */
     private FinalDecisionResponse persistAndReturn(LocalDate tradingDate, FinalDecisionResponse response,
                                                     AiReadiness readiness) {
+        return persistAndReturnWithStrategy(tradingDate, response, readiness, "SETUP");
+    }
+
+    /** v2.3：帶 strategyType 的持久化版本 */
+    private FinalDecisionResponse persistAndReturnWithStrategy(LocalDate tradingDate,
+                                                                FinalDecisionResponse response,
+                                                                AiReadiness readiness,
+                                                                String strategyType) {
         FinalDecisionEntity entity = new FinalDecisionEntity();
         entity.setTradingDate(tradingDate);
         entity.setDecision(response.decision());
         entity.setSummary(response.summary());
         entity.setPayloadJson(toPayload(response));
+        entity.setStrategyType(strategyType);
         fillAiContext(entity, readiness);
         finalDecisionRepository.save(entity);
+
+        // v2.1/v2.2: 最終決策產出後，標記來源 AI task 為 FINALIZED（只對 CODEX_DONE 有效）
+        if (readiness != null && readiness.aiTaskId() != null
+                && readiness.mode() == AiReadinessMode.FULL_AI_READY) {
+            try {
+                aiTaskService.finalizeTask(readiness.aiTaskId(), "final-decision-consumed");
+                log.info("[FinalDecisionService] finalized AI task id={} type={}",
+                        readiness.aiTaskId(), readiness.sourceTaskType());
+            } catch (Exception e) {
+                log.warn("[FinalDecisionService] finalizeTask({}) skipped: {}",
+                        readiness.aiTaskId(), e.getMessage());
+            }
+        }
         return response;
     }
 
@@ -348,12 +427,29 @@ public class FinalDecisionService {
      * </ul>
      */
     private AiReadiness resolveAiReadiness(LocalDate tradingDate) {
-        // 先嘗試 OPENING，找不到 fallback 到 PREMARKET
-        AiTaskEntity task = findPrimaryTask(tradingDate, "OPENING");
-        String sourceType = "OPENING";
-        if (task == null) {
-            task = findPrimaryTask(tradingDate, "PREMARKET");
-            sourceType = "PREMARKET";
+        return resolveAiReadiness(tradingDate, null);
+    }
+
+    /**
+     * v2.2: 支援 preferTaskType。
+     * 傳 null → 維持原預設（OPENING 優先、PREMARKET fallback）。
+     * 傳 "POSTMARKET"/"T86_TOMORROW"/"MIDDAY"/"PREMARKET"/"OPENING" → 指定來源；若該 taskType 無 task
+     * 則按預設順序 fallback。
+     */
+    private AiReadiness resolveAiReadiness(LocalDate tradingDate, String preferTaskType) {
+        String[] order;
+        if (preferTaskType != null && !preferTaskType.isBlank()) {
+            order = new String[]{ preferTaskType.toUpperCase(),
+                    "OPENING", "PREMARKET", "POSTMARKET", "MIDDAY", "T86_TOMORROW" };
+        } else {
+            order = new String[]{ "OPENING", "PREMARKET" };
+        }
+
+        AiTaskEntity task = null;
+        String sourceType = null;
+        for (String type : order) {
+            task = findPrimaryTask(tradingDate, type);
+            if (task != null) { sourceType = type; break; }
         }
 
         if (task == null) {
@@ -439,6 +535,64 @@ public class FinalDecisionService {
     }
 
     /**
+     * v2.3 Momentum 專屬 sizing：
+     * 1. 倉位 = baseCapital × momentum.position_size_ratio（或 strong_position_ratio）
+     * 2. 停損：entry × (1 + momentum.stop_loss_pct)；比 Setup 停損更緊則覆寫
+     * 3. TP1/TP2 由 momentum.take_profit_*_pct 計算
+     */
+    private FinalDecisionSelectedStockResponse enrichMomentumSizing(
+            FinalDecisionSelectedStockResponse stock,
+            FinalDecisionCandidateRequest candidate,
+            double baseCapital, double maxSingle,
+            MomentumDecisionService.MomentumPick pick
+    ) {
+        double multiplier = stock.positionMultiplier() != null
+                ? stock.positionMultiplier()
+                : scoreConfigService.getDecimal("momentum.position_size_ratio",
+                        new BigDecimal("0.5")).doubleValue();
+        double suggested = Math.min(baseCapital * multiplier, maxSingle * multiplier);
+        // 保守下限：不低於 1 萬（避免買不到 1 張）
+        if (suggested < 10_000 && baseCapital >= 20_000) suggested = 10_000;
+
+        // 從 entryPriceZone 或 stopLoss 推 entry
+        double entry = parseEntryFromZone(stock.entryPriceZone());
+        double stopLossPct = scoreConfigService.getDecimal("momentum.stop_loss_pct",
+                new BigDecimal("-0.025")).doubleValue();
+        double tp1Pct = scoreConfigService.getDecimal("momentum.take_profit_1_pct",
+                new BigDecimal("0.06")).doubleValue();
+        double tp2Pct = scoreConfigService.getDecimal("momentum.take_profit_2_pct",
+                new BigDecimal("0.10")).doubleValue();
+
+        Double finalSl = stock.stopLossPrice();
+        Double finalTp1 = stock.takeProfit1();
+        Double finalTp2 = stock.takeProfit2();
+        if (entry > 0) {
+            double momentumSl = round2(entry * (1 + stopLossPct));
+            // 比 Setup 停損更緊則覆寫（讓 Momentum 更快認錯）
+            if (finalSl == null || finalSl < momentumSl) finalSl = momentumSl;
+            if (finalTp1 == null) finalTp1 = round2(entry * (1 + tp1Pct));
+            if (finalTp2 == null) finalTp2 = round2(entry * (1 + tp2Pct));
+        }
+
+        return new FinalDecisionSelectedStockResponse(
+                stock.stockCode(), stock.stockName(),
+                "MOMENTUM",
+                stock.entryPriceZone(),
+                finalSl, finalTp1, finalTp2,
+                stock.riskRewardRatio(),
+                stock.rationale(),
+                suggested,
+                multiplier,
+                StrategyType.MOMENTUM_CHASE.name(),
+                stock.momentumScore()
+        );
+    }
+
+    private double round2(double v) {
+        return Math.round(v * 100.0) / 100.0;
+    }
+
+    /**
      * 若 SL/TP/entry 皆無，嘗試從 entryPriceZone 取中間價計算預設值。
      * entryPriceZone 格式 "100.00-102.00"。若解析失敗，回傳 0.0（呼叫方判斷）。
      */
@@ -477,7 +631,13 @@ public class FinalDecisionService {
                 entity.getDecision(),
                 entity.getSummary(),
                 entity.getPayloadJson(),
-                entity.getCreatedAt()
+                entity.getCreatedAt(),
+                entity.getAiTaskId(),
+                entity.getAiStatus(),
+                entity.getFallbackReason(),
+                entity.getSourceTaskType(),
+                entity.getClaudeDoneAt(),
+                entity.getCodexDoneAt()
         );
     }
 

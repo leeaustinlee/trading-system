@@ -67,6 +67,10 @@ public class WatchlistStockEntity {
     @Column(name = "payload_json", columnDefinition = "json")
     private String payloadJson;
 
+    /** v2.3 策略類型：SETUP / MOMENTUM_CHASE。Momentum 可 bypass observationDays。 */
+    @Column(name = "strategy_type", length = 20, nullable = false)
+    private String strategyType = "SETUP";
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -110,6 +114,8 @@ public class WatchlistStockEntity {
     public void setNotes(String notes) { this.notes = notes; }
     public String getPayloadJson() { return payloadJson; }
     public void setPayloadJson(String payloadJson) { this.payloadJson = payloadJson; }
+    public String getStrategyType() { return strategyType == null ? "SETUP" : strategyType; }
+    public void setStrategyType(String strategyType) { this.strategyType = strategyType; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }

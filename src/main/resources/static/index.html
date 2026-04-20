@@ -1516,6 +1516,18 @@
   const fmtDate = s => s ? String(s).slice(0,10) : "-";
   const fmtTime = s => s ? String(s).slice(0,16).replace("T"," ") : "-";
 
+  // v2.3: 策略類型 badge
+  const strategyBadge = st => {
+    if (!st || st === "SETUP") return "";
+    if (st === "MOMENTUM_CHASE") {
+      return ` <span class="pill" style="background:#fff3d6;color:#8a4a00;font-size:11px;padding:1px 6px">追價</span>`;
+    }
+    if (st === "MIXED") {
+      return ` <span class="pill" style="background:#e3efff;color:#1d4aad;font-size:11px;padding:1px 6px">混合</span>`;
+    }
+    return ` <span class="pill" style="background:#eee;color:#555;font-size:11px;padding:1px 6px">${esc(st)}</span>`;
+  };
+
   async function api(url, opts) {
     const r = await fetch(url, opts);
     if (!r.ok) { const t = await r.text(); throw new Error(`${url} → HTTP ${r.status}: ${t}`); }
@@ -1678,7 +1690,7 @@
       // Positions
       $("d-positionsBody").innerHTML = (pos || []).length
         ? (pos || []).map(p => `<tr>
-            <td>${p.stockName ? esc(p.stockName) + ' ' : ''}<span class="mono">${esc(p.symbol)}</span></td>
+            <td>${p.stockName ? esc(p.stockName) + ' ' : ''}<span class="mono">${esc(p.symbol)}</span>${strategyBadge(p.strategyType)}</td>
             <td>${zhEsc(p.side)}</td>
             <td>${esc(p.qty)}</td>
             <td>${esc(p.avgCost)}</td>
@@ -1967,7 +1979,7 @@
               ? `${numHtml(unrealized)}${pnlPct != null ? `<br><span class="quote-meta">${pnlPct > 0 ? '+' : ''}${pnlPct}%</span>` : ""}`
               : `<span class="quote-meta">--</span>`;
             return `<tr>
-              <td class="mono">${esc(p.symbol)}</td>
+              <td class="mono">${esc(p.symbol)}${strategyBadge(p.strategyType)}</td>
               <td>${esc(p.stockName)}</td>
               <td>${zhEsc(p.side)}</td>
               <td>${esc(p.qty)}</td>
@@ -2576,7 +2588,8 @@
 
   async function loadSchedAiTasks() {
     try {
-      const tasks = await api("/api/ai/tasks");
+      // v2.2：改用 /api/orchestration/tasks/today 拿到 displayStatus / displayMessage / finalDecision 對應
+      const tasks = await api("/api/orchestration/tasks/today");
       const body = $("sched-aiBody");
       const now = new Date();
       if (!tasks || !tasks.length) {
@@ -2592,18 +2605,18 @@
           const sched = AI_TASK_SCHEDULE[t.taskType];
           const claudeCell = _aiScheduleCell(sched?.claudeBy, t.claudeDoneAt, now);
           const codexCell  = _aiScheduleCell(sched?.codexBy,  t.codexDoneAt,  now);
-          const finalCell  = _aiScheduleCell(sched?.finalBy,  t.finalizedAt,  now);
-          const lastUpdate = t.lastTransitionAt || t.codexDoneAt || t.claudeDoneAt || t.createdAt;
+          const finalCell  = _aiFinalCell(t, sched, now);
+          const lastUpdate = t.lastTransitionAt || t.codexDoneAt || t.claudeDoneAt;
           return `<tr>
             <td><b>${esc(aiTaskTypeZh(t.taskType))}</b>
-              <div class="small" style="color:var(--muted)">${esc(t.taskType)}${t.targetSymbol ? " / " + esc(t.targetSymbol) : ""}${sched ? " • 建立 " + sched.created : ""}</div>
+              <div class="small" style="color:var(--muted)">${esc(t.taskType)}${sched ? " • 建立 " + sched.created : ""}</div>
             </td>
-            <td>${aiStatusPill(t.status)}</td>
+            <td>${aiStatusPillWithDisplay(t)}</td>
             <td>${claudeCell}</td>
             <td>${codexCell}</td>
             <td>${finalCell}</td>
             <td class="mono small">${lastUpdate ? fmtTime(lastUpdate) : "-"}</td>
-            <td>${_aiActionsCell(t, sched, now)}</td>
+            <td>${_aiActionsCellV2(t, sched, now)}</td>
           </tr>`;
         }).join("");
       }
@@ -2612,6 +2625,106 @@
       $("sched-aiBody").innerHTML = `<tr class="empty-row"><td colspan="7">載入失敗：${esc(e.message)}</td></tr>`;
     }
   }
+
+  // displayStatus 來自後端，回 OK/WARN/ERR/INFO
+  function aiStatusPillWithDisplay(t) {
+    const ds = t.displayStatus || "INFO";
+    const bg = ds === "OK"   ? "#c8f0db"
+             : ds === "WARN" ? "#ffe6b8"
+             : ds === "ERR"  ? "#ffe3e7"
+                             : "#eee";
+    const fg = ds === "OK"   ? "#0a6640"
+             : ds === "WARN" ? "#8a4a00"
+             : ds === "ERR"  ? "#a00020"
+                             : "#555";
+    const statusLabel = aiStatusLabel(t.status);
+    const msg = t.displayMessage || "";
+    return `<span class="pill" style="background:${bg};color:${fg}">${esc(statusLabel)}</span>
+            <div class="small" style="margin-top:2px;color:${fg}">${esc(msg)}</div>`;
+  }
+
+  function aiStatusLabel(s) {
+    const map = {
+      "PENDING":"等待 Claude", "CLAUDE_RUNNING":"Claude 執行中",
+      "CLAUDE_DONE":"Claude 完成", "CODEX_RUNNING":"Codex 執行中",
+      "CODEX_DONE":"Codex 完成", "FINALIZED":"已完成",
+      "CLAUDE_FAILED":"Claude 失敗", "CODEX_FAILED":"Codex 失敗",
+      "FAILED":"失敗", "EXPIRED":"已逾時"
+    };
+    return map[s] || s || "-";
+  }
+
+  // 最終決策欄：已 FINALIZED 顯示時間；REST/WATCH 顯示決策；CODEX_DONE 未消化顯示「等待 FinalDecision」
+  function _aiFinalCell(t, sched, now) {
+    if (t.finalizedAt) {
+      const label = t.finalDecisionStatus ? `✓ ${esc(t.finalDecisionStatus)}` : "✓ 完成";
+      return `<span class="pill" style="background:#c8f0db;color:#0a6640">${label}</span>
+              <div class="small" style="color:var(--muted)">${fmtTime(t.finalizedAt).slice(-5)}${sched ? " • 預計 " + sched.finalBy : ""}</div>`;
+    }
+    if (t.finalDecisionStatus) {
+      // 已有決策但未 finalize（例如 REST/WATCH 狀態）
+      const color = t.finalDecisionStatus === "ENTER" ? "#0a6640"
+                  : t.finalDecisionStatus === "REST"  ? "#a00020"
+                                                        : "#8a4a00";
+      return `<span class="pill" style="background:#fff3d6;color:${color}">已決策：${esc(t.finalDecisionStatus)}</span>
+              <div class="small" style="color:var(--muted)">尚未 finalize</div>`;
+    }
+    if (t.status === "CODEX_DONE" && sched) {
+      const target = _todayAt(sched.finalBy);
+      if (target && now > target) {
+        const lateMin = Math.floor((now - target) / 60000);
+        return `<span class="pill" style="background:#ffe3e7;color:#a00020">⚠ 未消化</span>
+                <div class="small" style="color:#a00020">超過 ${lateMin} 分</div>`;
+      }
+    }
+    return _aiScheduleCell(sched?.finalBy, null, now);
+  }
+
+  // v2.2 actions：加「補跑 FinalDecision」按鈕
+  function _aiActionsCellV2(task, sched, now) {
+    const buttons = [];
+    const st = task.status;
+    const claudeOverdue = sched && !task.claudeDoneAt && now > _todayAt(sched.claudeBy);
+    const codexOverdue  = sched && !task.codexDoneAt  && now > _todayAt(sched.codexBy);
+
+    // CODEX_DONE 但未 finalize（後端顯示 WARN）→ 提供補跑 FinalDecision
+    if (st === "CODEX_DONE" && !task.finalizedAt) {
+      buttons.push(`<button class="btn primary" onclick="finalizeCatchup(${task.taskId})"
+        style="padding:3px 8px;font-size:11px">▶ 補跑 FinalDecision</button>`);
+    }
+    // 等待中且超時 → 標為過期
+    if (["PENDING", "CLAUDE_RUNNING", "CODEX_RUNNING"].includes(st) && (claudeOverdue || codexOverdue)) {
+      buttons.push(`<button class="btn" onclick="expireAiTask(${task.taskId})"
+        style="padding:3px 8px;font-size:11px">⏭ 標為過期</button>`);
+    }
+    // 已失敗 → 重跑 DataPrep
+    if (["FAILED", "EXPIRED", "CLAUDE_FAILED", "CODEX_FAILED"].includes(st)) {
+      buttons.push(`<button class="btn" onclick="recreateAiTask('${esc(task.taskType)}')"
+        style="padding:3px 8px;font-size:11px">♻ 重跑 DataPrep</button>`);
+    }
+    if (st === "FINALIZED") {
+      buttons.push(`<span class="small" style="color:var(--up);font-weight:600">✓ 完成</span>`);
+    }
+    if (!buttons.length) {
+      return `<span class="small" style="color:var(--muted)">進行中</span>`;
+    }
+    return buttons.join(" ");
+  }
+
+  window.finalizeCatchup = async function(taskId) {
+    if (!confirm(`確定補跑 FinalDecision for task #${taskId}？`)) return;
+    try {
+      const res = await fetch(`/api/orchestration/tasks/${taskId}/finalize-catchup`, {
+        method: "POST", headers: { "Content-Type": "application/json" }
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        alert(`補跑失敗：${body.errorCode || res.status}\n${body.message || ""}`);
+        return;
+      }
+      await loadSchedAiTasks();
+    } catch(e) { alert("補跑失敗：" + e.message); }
+  };
 
   // jobName → 中文顯示名稱；(MANUAL) 手動觸發也正確映射
   const _jobDisplayMap = {};

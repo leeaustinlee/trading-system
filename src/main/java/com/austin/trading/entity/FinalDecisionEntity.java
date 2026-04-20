@@ -50,6 +50,10 @@ public class FinalDecisionEntity {
     @Column(name = "codex_done_at")
     private LocalDateTime codexDoneAt;
 
+    /** v2.3 策略類型：SETUP / MOMENTUM_CHASE / MIXED */
+    @Column(name = "strategy_type", length = 20)
+    private String strategyType;
+
     public Long getId() { return id; }
     public LocalDate getTradingDate() { return tradingDate; }
     public void setTradingDate(LocalDate tradingDate) { this.tradingDate = tradingDate; }
@@ -78,4 +82,7 @@ public class FinalDecisionEntity {
 
     public LocalDateTime getCodexDoneAt() { return codexDoneAt; }
     public void setCodexDoneAt(LocalDateTime codexDoneAt) { this.codexDoneAt = codexDoneAt; }
+
+    public String getStrategyType() { return strategyType; }
+    public void setStrategyType(String strategyType) { this.strategyType = strategyType; }
 }

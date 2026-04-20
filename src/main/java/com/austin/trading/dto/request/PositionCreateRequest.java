@@ -18,5 +18,17 @@ public record PositionCreateRequest(
         BigDecimal takeProfit2,
         LocalDateTime openedAt,
         String note,
-        String payloadJson
-) {}
+        String payloadJson,
+        /** v2.3：SETUP / MOMENTUM_CHASE；null 視同 SETUP */
+        String strategyType
+) {
+    /** 向下相容 ctor：舊呼叫不傳 strategyType，預設 SETUP。 */
+    public PositionCreateRequest(String symbol, String stockName, String side,
+                                  BigDecimal qty, BigDecimal avgCost,
+                                  BigDecimal stopLossPrice, BigDecimal takeProfit1, BigDecimal takeProfit2,
+                                  LocalDateTime openedAt, String note, String payloadJson) {
+        this(symbol, stockName, side, qty, avgCost,
+                stopLossPrice, takeProfit1, takeProfit2,
+                openedAt, note, payloadJson, "SETUP");
+    }
+}

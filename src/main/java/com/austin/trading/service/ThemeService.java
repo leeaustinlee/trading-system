@@ -72,7 +72,8 @@ public class ThemeService {
 
     public StockThemeMappingResponse addMapping(String symbol, String stockName,
                                                 String themeTag, String source) {
-        StockThemeMappingEntity entity = new StockThemeMappingEntity();
+        StockThemeMappingEntity entity = mappingRepo.findBySymbolAndThemeTag(symbol, themeTag)
+                .orElseGet(StockThemeMappingEntity::new);
         entity.setSymbol(symbol);
         entity.setStockName(stockName);
         entity.setThemeTag(themeTag);

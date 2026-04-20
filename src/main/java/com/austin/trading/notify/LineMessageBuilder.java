@@ -35,7 +35,16 @@ public class LineMessageBuilder {
 
     public static String buildFinalDecision(FinalDecisionResponse decision, LocalDate date) {
         StringBuilder sb = new StringBuilder();
-        sb.append("【09:30 今日操作】").append(date).append("\n\n");
+        // v2.3: 若含 Momentum 追價單，標題加註
+        boolean hasMomentum = decision.selectedStocks().stream()
+                .anyMatch(s -> "MOMENTUM_CHASE".equalsIgnoreCase(s.strategyType()));
+        boolean hasSetup = decision.selectedStocks().stream()
+                .anyMatch(s -> s.strategyType() == null || "SETUP".equalsIgnoreCase(s.strategyType()));
+        String titleSuffix;
+        if (hasMomentum && hasSetup)       titleSuffix = "（含追價單）";
+        else if (hasMomentum)              titleSuffix = "（追價單）";
+        else                                titleSuffix = "";
+        sb.append("【09:30 今日操作").append(titleSuffix).append("】").append(date).append("\n\n");
         sb.append("🎯 決策：").append(decisionText(decision.decision())).append("\n");
         sb.append("📌 結論：").append(clean(decision.summary())).append("\n");
 
@@ -43,8 +52,15 @@ public class LineMessageBuilder {
             sb.append("\n✅ 可執行標的\n");
             int count = 0;
             for (FinalDecisionSelectedStockResponse s : decision.selectedStocks()) {
-                if (++count > 2) break;
-                sb.append(s.stockCode()).append(" ").append(s.stockName()).append("\n");
+                if (++count > 3) break; // v2.3: 最多 3 檔（Setup 2 + Momentum 1 的合併上限）
+                String tag = "MOMENTUM_CHASE".equalsIgnoreCase(s.strategyType())
+                        ? "[Momentum] "
+                        : "[SETUP]    ";
+                sb.append(tag).append(s.stockCode()).append(" ").append(s.stockName());
+                if (s.momentumScore() != null) {
+                    sb.append(String.format("（score=%.1f）", s.momentumScore()));
+                }
+                sb.append("\n");
                 sb.append("進場：").append(entryText(s)).append("\n");
                 if (s.stopLossPrice() != null) sb.append("停損：").append(formatPrice(s.stopLossPrice())).append("\n");
                 if (s.takeProfit1() != null || s.takeProfit2() != null) {
@@ -58,6 +74,9 @@ public class LineMessageBuilder {
                 if (s.suggestedPositionSize() != null) sb.append("倉位：").append(formatPosition(s.suggestedPositionSize())).append("\n");
                 if (s.rationale() != null && !s.rationale().isBlank()) sb.append("理由：").append(clean(s.rationale())).append("\n");
                 sb.append("\n");
+            }
+            if (hasMomentum) {
+                sb.append("⚠️ Momentum 追價提醒：倉位已壓低、停損收緊、持有上限 3 日\n\n");
             }
         }
 

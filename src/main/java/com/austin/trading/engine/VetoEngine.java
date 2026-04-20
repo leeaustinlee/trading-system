@@ -1,5 +1,6 @@
 package com.austin.trading.engine;
 
+import com.austin.trading.domain.enums.StrategyType;
 import com.austin.trading.service.ScoreConfigService;
 import org.springframework.stereotype.Component;
 
@@ -8,32 +9,26 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 硬性淘汰引擎（Veto）。
+ * 硬性淘汰引擎（Veto）v2.3：支援 strategyType 分層。
  * <p>
- * 所有 veto 規則在此統一執行。AI 評分不能覆蓋 veto。
- * 先 veto → 再排序，是本系統最重要的優先原則。
+ * SETUP 維持 v1.0 + v2.0 全部 hard veto；
+ * MOMENTUM_CHASE 把部分流程性規則降為 scoring penalty，但保留核心風險 veto。
  * </p>
  *
- * Veto 原因代碼（v1.0 原有）：
+ * <h3>Veto 原因代碼（v1.0 原有）</h3>
  * <ul>
- *   <li>MARKET_GRADE_C       — 市場等級 C，禁止進場</li>
- *   <li>DECISION_LOCKED      — Decision Lock 啟動</li>
- *   <li>TIME_DECAY_LATE      — 時間衰減 LATE 且市場非 A</li>
- *   <li>RR_BELOW_MIN         — 風報比低於最低門檻</li>
- *   <li>NOT_IN_FINAL_PLAN    — 未標記納入最終計畫</li>
- *   <li>NO_STOP_LOSS         — 無合理停損設定</li>
- *   <li>HIGH_VAL_WEAK_MARKET — 高估值標的在弱市（VALUE_HIGH/STORY + 非 A）</li>
+ *   <li>MARKET_GRADE_C, DECISION_LOCKED, TIME_DECAY_LATE</li>
+ *   <li>RR_BELOW_MIN, NOT_IN_FINAL_PLAN, NO_STOP_LOSS</li>
+ *   <li>HIGH_VAL_WEAK_MARKET</li>
  * </ul>
- *
- * Veto 原因代碼（v2.0 BC Sniper 新增）：
+ * <h3>v2.0 BC Sniper 新增</h3>
  * <ul>
- *   <li>NO_THEME              — 無題材標籤（veto.require_theme=true 時）</li>
- *   <li>CODEX_SCORE_LOW       — Codex 分低於 veto.codex_score_min</li>
- *   <li>THEME_NOT_IN_TOP      — 題材排名超過 veto.theme_rank_max</li>
- *   <li>THEME_SCORE_TOO_LOW   — 題材分低於 veto.final_theme_score_min</li>
- *   <li>SCORE_DIVERGENCE_HIGH — Java/Claude 分差超過 veto.score_divergence_max</li>
- *   <li>VOLUME_SPIKE_NO_BREAKOUT — 爆量但未突破高點</li>
- *   <li>ENTRY_TOO_EXTENDED    — 進場位置距突破點太遠</li>
+ *   <li>NO_THEME, CODEX_SCORE_LOW, THEME_NOT_IN_TOP, THEME_SCORE_TOO_LOW</li>
+ *   <li>SCORE_DIVERGENCE_HIGH, VOLUME_SPIKE_NO_BREAKOUT, ENTRY_TOO_EXTENDED</li>
+ * </ul>
+ * <h3>v2.3 Momentum 新增</h3>
+ * <ul>
+ *   <li>AI_STRONG_NEGATIVE — Claude 分數過低 / 含重大 riskFlag / Codex veto</li>
  * </ul>
  */
 @Component
@@ -46,7 +41,6 @@ public class VetoEngine {
     }
 
     public record VetoInput(
-            // ── v1.0 原有欄位 ──────────────────────────────────────────────────
             String marketGrade,
             String decisionLock,
             String timeDecayStage,
@@ -54,46 +48,72 @@ public class VetoEngine {
             Boolean includeInFinalPlan,
             BigDecimal stopLossPrice,
             String valuationMode,
-            // ── v2.0 BC Sniper 新增欄位 ────────────────────────────────────────
-            Boolean hasTheme,           // 是否有題材標籤
-            Integer themeRank,          // 題材排名（null = 未查詢）
-            BigDecimal finalThemeScore, // 題材最終分（null = 未查詢）
-            BigDecimal codexScore,      // Codex 審核評分（null = 未啟用）
-            BigDecimal javaScore,       // Java 結構評分（用於分歧計算）
-            BigDecimal claudeScore,     // Claude 研究評分（用於分歧計算）
-            Boolean volumeSpike,        // 爆量警示
-            Boolean priceNotBreakHigh,  // 未突破近期高點
-            Boolean entryTooExtended    // 進場位置過遠
-    ) {}
+            Boolean hasTheme,
+            Integer themeRank,
+            BigDecimal finalThemeScore,
+            BigDecimal codexScore,
+            BigDecimal javaScore,
+            BigDecimal claudeScore,
+            Boolean volumeSpike,
+            Boolean priceNotBreakHigh,
+            Boolean entryTooExtended,
+            // v2.3 新欄位（SETUP 可忽略；MOMENTUM 用於 AI_STRONG_NEGATIVE 判定）
+            List<String> claudeRiskFlags,
+            Boolean codexVetoed
+    ) {
+        /** 向下相容 ctor：舊呼叫點不帶 v2.3 欄位。 */
+        public VetoInput(String marketGrade, String decisionLock, String timeDecayStage,
+                         BigDecimal riskRewardRatio, Boolean includeInFinalPlan,
+                         BigDecimal stopLossPrice, String valuationMode,
+                         Boolean hasTheme, Integer themeRank, BigDecimal finalThemeScore,
+                         BigDecimal codexScore, BigDecimal javaScore, BigDecimal claudeScore,
+                         Boolean volumeSpike, Boolean priceNotBreakHigh, Boolean entryTooExtended) {
+            this(marketGrade, decisionLock, timeDecayStage, riskRewardRatio, includeInFinalPlan,
+                    stopLossPrice, valuationMode, hasTheme, themeRank, finalThemeScore,
+                    codexScore, javaScore, claudeScore, volumeSpike, priceNotBreakHigh, entryTooExtended,
+                    null, null);
+        }
+    }
 
-    public record VetoResult(boolean vetoed, List<String> reasons) {}
+    /**
+     * v2.3: scoringPenalty 給 MOMENTUM 用（SETUP 下一律 0）。
+     */
+    public record VetoResult(boolean vetoed, List<String> reasons, BigDecimal scoringPenalty) {
+        public VetoResult(boolean vetoed, List<String> reasons) {
+            this(vetoed, reasons, BigDecimal.ZERO);
+        }
+    }
 
+    /** 舊 API：預設 SETUP。 */
     public VetoResult evaluate(VetoInput input) {
+        return evaluate(input, StrategyType.SETUP);
+    }
+
+    /**
+     * v2.3 主入口：依 strategyType 走對應分支。
+     */
+    public VetoResult evaluate(VetoInput input, StrategyType strategy) {
+        if (strategy == StrategyType.MOMENTUM_CHASE) {
+            return evaluateMomentum(input);
+        }
+        return evaluateSetup(input);
+    }
+
+    // ── SETUP 分支（原 v2.0 邏輯全保留）─────────────────────────────────────
+
+    private VetoResult evaluateSetup(VetoInput input) {
         List<String> reasons = new ArrayList<>();
 
-        // ── v1.0 規則 ─────────────────────────────────────────────────────────
+        if ("C".equalsIgnoreCase(input.marketGrade())) reasons.add("MARKET_GRADE_C");
+        if ("LOCKED".equalsIgnoreCase(input.decisionLock())) reasons.add("DECISION_LOCKED");
 
-        // Rule 1: 市場等級 C
-        if ("C".equalsIgnoreCase(input.marketGrade())) {
-            reasons.add("MARKET_GRADE_C");
-        }
-
-        // Rule 2: Decision Lock 鎖定
-        if ("LOCKED".equalsIgnoreCase(input.decisionLock())) {
-            reasons.add("DECISION_LOCKED");
-        }
-
-        // Rule 3: 時間衰減 LATE 且市場非 A（可設定允許的最低等級）
         String lateStopGrade = config.getString("scoring.late_stop_market_grade", "A");
         if ("LATE".equalsIgnoreCase(input.timeDecayStage())) {
             boolean marketSufficient = "A".equalsIgnoreCase(input.marketGrade())
                     || ("B".equalsIgnoreCase(lateStopGrade) && "B".equalsIgnoreCase(input.marketGrade()));
-            if (!marketSufficient) {
-                reasons.add("TIME_DECAY_LATE");
-            }
+            if (!marketSufficient) reasons.add("TIME_DECAY_LATE");
         }
 
-        // Rule 4: 風報比低於門檻
         BigDecimal rrMin = "A".equalsIgnoreCase(input.marketGrade())
                 ? config.getDecimal("scoring.rr_min_grade_a", new BigDecimal("2.2"))
                 : config.getDecimal("scoring.rr_min_grade_b", new BigDecimal("2.5"));
@@ -101,49 +121,34 @@ public class VetoEngine {
             reasons.add("RR_BELOW_MIN");
         }
 
-        // Rule 5: 未標記納入最終計畫
-        if (!Boolean.TRUE.equals(input.includeInFinalPlan())) {
-            reasons.add("NOT_IN_FINAL_PLAN");
-        }
+        if (!Boolean.TRUE.equals(input.includeInFinalPlan())) reasons.add("NOT_IN_FINAL_PLAN");
+        if (input.stopLossPrice() == null) reasons.add("NO_STOP_LOSS");
 
-        // Rule 6: 無停損設定
-        if (input.stopLossPrice() == null) {
-            reasons.add("NO_STOP_LOSS");
-        }
-
-        // Rule 7: 高估值在弱市
         String vm = input.valuationMode();
         if (("VALUE_HIGH".equalsIgnoreCase(vm) || "VALUE_STORY".equalsIgnoreCase(vm))
                 && !"A".equalsIgnoreCase(input.marketGrade())) {
             reasons.add("HIGH_VAL_WEAK_MARKET");
         }
 
-        // ── v2.0 BC Sniper 新規則 ─────────────────────────────────────────────
-
-        // Rule 8: 無題材標籤（require_theme=true 時）
         if (config.getBoolean("veto.require_theme", true) && !Boolean.TRUE.equals(input.hasTheme())) {
             reasons.add("NO_THEME");
         }
 
-        // Rule 9: Codex 分低於門檻
         BigDecimal codexMin = config.getDecimal("veto.codex_score_min", new BigDecimal("6.5"));
         if (input.codexScore() != null && input.codexScore().compareTo(codexMin) < 0) {
             reasons.add("CODEX_SCORE_LOW");
         }
 
-        // Rule 10: 題材排名超過門檻
         int themeRankMax = config.getInt("veto.theme_rank_max", 2);
         if (input.themeRank() != null && input.themeRank() > themeRankMax) {
             reasons.add("THEME_NOT_IN_TOP");
         }
 
-        // Rule 11: 題材分低於門檻
         BigDecimal themeScoreMin = config.getDecimal("veto.final_theme_score_min", new BigDecimal("7.5"));
         if (input.finalThemeScore() != null && input.finalThemeScore().compareTo(themeScoreMin) < 0) {
             reasons.add("THEME_SCORE_TOO_LOW");
         }
 
-        // Rule 12: Java / Claude 分歧過大
         BigDecimal divergenceMax = config.getDecimal("veto.score_divergence_max", new BigDecimal("2.5"));
         if (input.javaScore() != null && input.claudeScore() != null) {
             if (input.javaScore().subtract(input.claudeScore()).abs().compareTo(divergenceMax) >= 0) {
@@ -151,16 +156,139 @@ public class VetoEngine {
             }
         }
 
-        // Rule 13: 爆量但未突破高點
         if (Boolean.TRUE.equals(input.volumeSpike()) && Boolean.TRUE.equals(input.priceNotBreakHigh())) {
             reasons.add("VOLUME_SPIKE_NO_BREAKOUT");
         }
 
-        // Rule 14: 進場位置距突破點太遠
-        if (Boolean.TRUE.equals(input.entryTooExtended())) {
-            reasons.add("ENTRY_TOO_EXTENDED");
+        if (Boolean.TRUE.equals(input.entryTooExtended())) reasons.add("ENTRY_TOO_EXTENDED");
+
+        return new VetoResult(!reasons.isEmpty(), reasons, BigDecimal.ZERO);
+    }
+
+    // ── MOMENTUM_CHASE 分支 ─────────────────────────────────────────────────
+
+    /**
+     * MOMENTUM 規則表（參考 docs/momentum-chase-strategy-design.md §四）：
+     * HARD_VETO：MARKET_GRADE_C、DECISION_LOCKED、SCORE_DIVERGENCE_HIGH、
+     *           VOLUME_SPIKE_NO_BREAKOUT、AI_STRONG_NEGATIVE
+     * PENALTY  ：TIME_DECAY_LATE、NOT_IN_FINAL_PLAN、HIGH_VAL_WEAK_MARKET、
+     *           NO_THEME、CODEX_SCORE_LOW、THEME_NOT_IN_TOP、THEME_SCORE_TOO_LOW、
+     *           ENTRY_TOO_EXTENDED
+     * 跳過    ：RR_BELOW_MIN（Momentum 本質較差 RR）
+     * 強制處理：NO_STOP_LOSS → 交由 Position 建立時用 momentum.stop_loss_pct 補停損
+     */
+    private VetoResult evaluateMomentum(VetoInput input) {
+        List<String> hardReasons = new ArrayList<>();
+        BigDecimal penalty = BigDecimal.ZERO;
+
+        // HARD VETO
+        if ("C".equalsIgnoreCase(input.marketGrade())) hardReasons.add("MARKET_GRADE_C");
+        if ("LOCKED".equalsIgnoreCase(input.decisionLock())) hardReasons.add("DECISION_LOCKED");
+
+        BigDecimal divergenceMax = config.getDecimal("veto.score_divergence_max", new BigDecimal("2.5"));
+        if (input.javaScore() != null && input.claudeScore() != null) {
+            if (input.javaScore().subtract(input.claudeScore()).abs().compareTo(divergenceMax) >= 0) {
+                hardReasons.add("SCORE_DIVERGENCE_HIGH");
+            }
         }
 
-        return new VetoResult(!reasons.isEmpty(), reasons);
+        if (Boolean.TRUE.equals(input.volumeSpike()) && Boolean.TRUE.equals(input.priceNotBreakHigh())) {
+            hardReasons.add("VOLUME_SPIKE_NO_BREAKOUT");
+        }
+
+        // AI_STRONG_NEGATIVE
+        if (isAiStronglyNegative(input)) {
+            hardReasons.add("AI_STRONG_NEGATIVE");
+        }
+
+        // 若已有 hard veto，直接回（不需累加 penalty）
+        if (!hardReasons.isEmpty()) {
+            return new VetoResult(true, hardReasons, BigDecimal.ZERO);
+        }
+
+        // PENALTIES（累加到 scoringPenalty，附上 reason 作資訊）
+        List<String> penaltyReasons = new ArrayList<>();
+
+        // TIME_DECAY_LATE
+        if ("LATE".equalsIgnoreCase(input.timeDecayStage())
+                && !"A".equalsIgnoreCase(input.marketGrade())) {
+            penalty = penalty.add(config.getDecimal("momentum.veto_penalty.time_decay_late",
+                    new BigDecimal("0.5")));
+            penaltyReasons.add("PENALTY:TIME_DECAY_LATE");
+        }
+
+        // NOT_IN_FINAL_PLAN
+        if (!Boolean.TRUE.equals(input.includeInFinalPlan())) {
+            penalty = penalty.add(config.getDecimal("momentum.veto_penalty.not_in_plan",
+                    new BigDecimal("0.5")));
+            penaltyReasons.add("PENALTY:NOT_IN_FINAL_PLAN");
+        }
+
+        // HIGH_VAL_WEAK_MARKET
+        String vm = input.valuationMode();
+        if (("VALUE_HIGH".equalsIgnoreCase(vm) || "VALUE_STORY".equalsIgnoreCase(vm))
+                && !"A".equalsIgnoreCase(input.marketGrade())) {
+            penalty = penalty.add(config.getDecimal("momentum.veto_penalty.high_val",
+                    new BigDecimal("1.0")));
+            penaltyReasons.add("PENALTY:HIGH_VAL_WEAK_MARKET");
+        }
+
+        // NO_THEME
+        if (config.getBoolean("veto.require_theme", true) && !Boolean.TRUE.equals(input.hasTheme())) {
+            penalty = penalty.add(config.getDecimal("momentum.veto_penalty.no_theme",
+                    new BigDecimal("1.0")));
+            penaltyReasons.add("PENALTY:NO_THEME");
+        }
+
+        // CODEX_SCORE_LOW
+        BigDecimal codexMin = config.getDecimal("veto.codex_score_min", new BigDecimal("6.5"));
+        if (input.codexScore() != null && input.codexScore().compareTo(codexMin) < 0) {
+            penalty = penalty.add(config.getDecimal("momentum.veto_penalty.codex_low",
+                    new BigDecimal("0.5")));
+            penaltyReasons.add("PENALTY:CODEX_SCORE_LOW");
+        }
+
+        // THEME_NOT_IN_TOP
+        int themeRankMax = config.getInt("veto.theme_rank_max", 2);
+        if (input.themeRank() != null && input.themeRank() > themeRankMax) {
+            penalty = penalty.add(config.getDecimal("momentum.veto_penalty.theme_not_in_top",
+                    new BigDecimal("0.5")));
+            penaltyReasons.add("PENALTY:THEME_NOT_IN_TOP");
+        }
+
+        // THEME_SCORE_TOO_LOW
+        BigDecimal themeScoreMin = config.getDecimal("veto.final_theme_score_min", new BigDecimal("7.5"));
+        if (input.finalThemeScore() != null && input.finalThemeScore().compareTo(themeScoreMin) < 0) {
+            penalty = penalty.add(config.getDecimal("momentum.veto_penalty.theme_low",
+                    new BigDecimal("0.5")));
+            penaltyReasons.add("PENALTY:THEME_SCORE_TOO_LOW");
+        }
+
+        // ENTRY_TOO_EXTENDED
+        if (Boolean.TRUE.equals(input.entryTooExtended())) {
+            penalty = penalty.add(config.getDecimal("momentum.veto_penalty.extended",
+                    new BigDecimal("1.0")));
+            penaltyReasons.add("PENALTY:ENTRY_TOO_EXTENDED");
+        }
+
+        return new VetoResult(false, penaltyReasons, penalty);
+    }
+
+    private boolean isAiStronglyNegative(VetoInput input) {
+        if (Boolean.TRUE.equals(input.codexVetoed())) return true;
+        BigDecimal claudeMin = config.getDecimal("momentum.veto.claude_score_min", new BigDecimal("4.0"));
+        if (input.claudeScore() != null && input.claudeScore().compareTo(claudeMin) < 0) return true;
+        List<String> flags = input.claudeRiskFlags();
+        if (flags != null && !flags.isEmpty()) {
+            String hardCsv = config.getString("momentum.veto.risk_flag_hard",
+                    "LIQUIDITY_TRAP,EARNINGS_MISS,INSIDER_SELLING,VOLUME_SPIKE_LONG_BLACK,SUSPENDED_WARN");
+            for (String f : flags) {
+                if (f == null) continue;
+                for (String hard : hardCsv.split(",")) {
+                    if (hard.trim().equalsIgnoreCase(f.trim())) return true;
+                }
+            }
+        }
+        return false;
     }
 }

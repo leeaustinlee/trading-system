@@ -64,8 +64,29 @@ public class PositionDecisionEngine {
             boolean failedBreakout,
             boolean momentumStrong,
             boolean nearResistance,
-            boolean madeNewHighRecently
-    ) {}
+            boolean madeNewHighRecently,
+            // v2.3 Momentum 專屬
+            String strategyType,              // SETUP | MOMENTUM_CHASE；null 視同 SETUP
+            boolean belowMa5,                 // 今日跌破 5MA？
+            boolean volumeSpikeLongBlack      // bar 爆量長黑？
+    ) {
+        /** 向下相容 ctor：舊呼叫不傳 Momentum 欄位 → 預設 SETUP。 */
+        public PositionDecisionInput(String symbol, BigDecimal entryPrice, BigDecimal currentStopLoss,
+                BigDecimal takeProfit1, BigDecimal takeProfit2, BigDecimal trailingStopPrice,
+                String side, int holdingDays,
+                BigDecimal currentPrice, BigDecimal dayHigh, BigDecimal dayLow, BigDecimal prevClose,
+                BigDecimal sessionHighPrice,
+                String marketGrade, Integer themeRank, BigDecimal finalThemeScore,
+                BigDecimal unrealizedPnlPct, ExtendedLevel extendedLevel,
+                boolean volumeWeakening, boolean failedBreakout, boolean momentumStrong,
+                boolean nearResistance, boolean madeNewHighRecently) {
+            this(symbol, entryPrice, currentStopLoss, takeProfit1, takeProfit2, trailingStopPrice,
+                    side, holdingDays, currentPrice, dayHigh, dayLow, prevClose, sessionHighPrice,
+                    marketGrade, themeRank, finalThemeScore, unrealizedPnlPct, extendedLevel,
+                    volumeWeakening, failedBreakout, momentumStrong, nearResistance, madeNewHighRecently,
+                    "SETUP", false, false);
+        }
+    }
 
     public record PositionDecisionResult(
             PositionStatus status,
@@ -78,6 +99,12 @@ public class PositionDecisionEngine {
 
     public PositionDecisionResult evaluate(PositionDecisionInput in) {
         BigDecimal pnlPct = in.unrealizedPnlPct() != null ? in.unrealizedPnlPct() : BigDecimal.ZERO;
+
+        // ─ 0. v2.3 Momentum 專屬快速出場規則（優先級最高）────────────────
+        if ("MOMENTUM_CHASE".equalsIgnoreCase(in.strategyType())) {
+            PositionDecisionResult momentumExit = checkMomentumExit(in, pnlPct);
+            if (momentumExit != null) return momentumExit;
+        }
 
         // ─ 1. 停損觸發 → EXIT ──────────────────────────────────────────────
         BigDecimal effectiveStop = effectiveStopLoss(in);
@@ -173,6 +200,56 @@ public class PositionDecisionEngine {
 
         // ─ 10. 其餘 → HOLD ──────────────────────────────────────────────
         return hold("持股尚穩，持續觀察");
+    }
+
+    // ── v2.3 Momentum 專屬 ─────────────────────────────────────────────────
+
+    /**
+     * Momentum 快速出場：
+     * <ul>
+     *   <li>跌破 Momentum 停損（entry × (1 + stop_loss_pct)）→ STOP_LOSS</li>
+     *   <li>跌破 5MA → TRAILING_STOP（MOMENTUM 特別敏感）</li>
+     *   <li>bar 爆量長黑 → MOMENTUM_COLLAPSE</li>
+     *   <li>持有超過 {@code momentum.max_holding_days} 且未達 TP1 → TIME_STOP</li>
+     *   <li>大盤由 B 降 C → EMERGENCY_EXIT</li>
+     * </ul>
+     * 任一成立立即回 EXIT；全部不成立回 null 讓主流程繼續走原 Setup 邏輯。
+     */
+    private PositionDecisionResult checkMomentumExit(PositionDecisionInput in, BigDecimal pnlPct) {
+        // 跌破 5MA
+        if (in.belowMa5()) {
+            return exit("MOMENTUM_COLLAPSE: 跌破 5MA");
+        }
+        // 爆量長黑
+        if (in.volumeSpikeLongBlack()) {
+            return exit("MOMENTUM_COLLAPSE: 爆量長黑");
+        }
+        // Time stop：holdingDays 超過上限且未達 TP1
+        int maxDays = config.getInt("momentum.max_holding_days", 3);
+        if (in.holdingDays() >= maxDays) {
+            BigDecimal tp1 = in.takeProfit1();
+            boolean reachedTp1 = tp1 != null && in.currentPrice() != null
+                    && in.currentPrice().compareTo(tp1) >= 0;
+            if (!reachedTp1) {
+                return exit("TIME_STOP: 持有 " + in.holdingDays() + " 天未達 TP1");
+            }
+        }
+        // 大盤 C 級（Momentum 特別敏感）
+        if ("C".equalsIgnoreCase(in.marketGrade())) {
+            return exit("EMERGENCY_EXIT: 大盤降至 C 級");
+        }
+        // Momentum 停損（-2.5% 預設）
+        BigDecimal stopLossPct = config.getDecimal("momentum.stop_loss_pct", new BigDecimal("-0.025"));
+        if (in.entryPrice() != null && in.currentPrice() != null) {
+            BigDecimal momentumStop = in.entryPrice()
+                    .multiply(BigDecimal.ONE.add(stopLossPct))
+                    .setScale(4, RoundingMode.HALF_UP);
+            if (in.currentPrice().compareTo(momentumStop) <= 0) {
+                return exit("MOMENTUM_STOP_LOSS: 跌破 " + momentumStop.toPlainString()
+                        + " (" + stopLossPct.multiply(new BigDecimal("100")).toPlainString() + "%)");
+            }
+        }
+        return null;
     }
 
     // ── 私有方法 ──────────────────────────────────────────────────────────

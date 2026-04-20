@@ -73,6 +73,10 @@ public class PositionEntity {
     @Column(name = "review_status", length = 20)
     private String reviewStatus;
 
+    /** v2.3 策略類型：SETUP / MOMENTUM_CHASE。影響出場邏輯。舊資料 default=SETUP。 */
+    @Column(name = "strategy_type", length = 20, nullable = false)
+    private String strategyType = "SETUP";
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -117,5 +121,7 @@ public class PositionEntity {
     public void setTrailingStopPrice(BigDecimal trailingStopPrice) { this.trailingStopPrice = trailingStopPrice; }
     public String getReviewStatus() { return reviewStatus; }
     public void setReviewStatus(String reviewStatus) { this.reviewStatus = reviewStatus; }
+    public String getStrategyType() { return strategyType == null ? "SETUP" : strategyType; }
+    public void setStrategyType(String strategyType) { this.strategyType = strategyType; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

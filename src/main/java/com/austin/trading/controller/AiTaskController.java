@@ -7,15 +7,20 @@ import com.austin.trading.entity.AiTaskEntity;
 import com.austin.trading.service.AiTaskInvalidStateException;
 import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.AiTaskService.SubmitResult;
+import com.austin.trading.service.FinalDecisionService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * AI 任務佇列 API（v2.1 嚴格狀態機）。
@@ -40,10 +45,15 @@ import java.util.Map;
 @RequestMapping("/api/ai/tasks")
 public class AiTaskController {
 
-    private final AiTaskService aiTaskService;
+    private static final Logger log = LoggerFactory.getLogger(AiTaskController.class);
 
-    public AiTaskController(AiTaskService aiTaskService) {
+    private final AiTaskService aiTaskService;
+    private final FinalDecisionService finalDecisionService;
+
+    public AiTaskController(AiTaskService aiTaskService,
+                             FinalDecisionService finalDecisionService) {
         this.aiTaskService = aiTaskService;
+        this.finalDecisionService = finalDecisionService;
     }
 
     @GetMapping
@@ -148,21 +158,74 @@ public class AiTaskController {
             @PathVariable Long id,
             @RequestBody CodexSubmitRequest req
     ) {
+        // P0-5: scores key 必須是單一台股代號（3-6 位英數，不含空白），不合法直接 400。
+        String invalidKey = findInvalidScoreKey(req.scores());
+        if (invalidKey != null) {
+            Map<String, Object> err = new LinkedHashMap<>();
+            err.put("success", false);
+            err.put("errorCode", "INVALID_SCORE_SYMBOL_KEY");
+            err.put("invalidKey", invalidKey);
+            err.put("message", "Codex scores key 必須是單一股票代號（例如 \"2303\"），不可為空白分隔的多 symbol 串接。");
+            err.put("exampleCorrect", Map.of("2303", 7.0, "5469", 6.5));
+            return ResponseEntity.badRequest().body(err);
+        }
         try {
             SubmitResult result = aiTaskService.submitCodexResult(id, req);
+            AiTaskEntity task = result.task();
+
+            // P0-2 catch-up: Codex 晚到時，自動跑對應 taskType 的 FinalDecision 消化 + finalize。
+            // 只對 CODEX_DONE 且非 idempotent 的新提交觸發；失敗不影響 submit 結果。
+            boolean catchUpTriggered = false;
+            String catchUpResult = null;
+            if (!result.idempotent() && "CODEX_DONE".equals(task.getStatus())) {
+                try {
+                    var decision = finalDecisionService.evaluateAndPersist(
+                            task.getTradingDate(), task.getTaskType());
+                    catchUpTriggered = true;
+                    catchUpResult = decision.decision();
+                    log.info("[AiTaskController] catch-up FinalDecision for task {} ({}): {}",
+                            task.getId(), task.getTaskType(), catchUpResult);
+                } catch (Exception ex) {
+                    log.warn("[AiTaskController] catch-up FinalDecision failed for task {}: {}",
+                            task.getId(), ex.getMessage());
+                }
+            }
+
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("success", true);
             body.put("idempotent", result.idempotent());
-            body.put("id", result.task().getId());
-            body.put("status", result.task().getStatus());
+            body.put("id", task.getId());
+            // 重撈一次確保拿到 catch-up 後的狀態（可能已 FINALIZED）
+            String finalStatus = aiTaskService.getById(task.getId())
+                    .map(AiTaskEntity::getStatus).orElse(task.getStatus());
+            body.put("status", finalStatus);
             body.put("autoScored",  req.scores()      == null ? Map.of() : req.scores());
             body.put("vetoSymbols", req.vetoSymbols() == null ? List.of() : req.vetoSymbols());
+            body.put("catchUpTriggered", catchUpTriggered);
+            if (catchUpResult != null) body.put("catchUpDecision", catchUpResult);
             return ResponseEntity.ok(body);
         } catch (AiTaskInvalidStateException e) {
             return invalidState(e);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "error", e.getMessage()));
         }
+    }
+
+    // ── 私有 helpers ───────────────────────────────────────────────────────────
+
+    /** 台股單一股票代號：3-6 位英數（含 ETF 如 00631L / 權證 03xxxx）。不接受空白或多個 symbol 串接。 */
+    private static final Pattern SYMBOL_PATTERN = Pattern.compile("^[0-9A-Z]{3,6}$");
+
+    private String findInvalidScoreKey(Map<String, BigDecimal> scores) {
+        if (scores == null || scores.isEmpty()) return null;
+        for (String key : scores.keySet()) {
+            if (key == null) return "(null)";
+            String trimmed = key.trim();
+            if (!SYMBOL_PATTERN.matcher(trimmed).matches() || !trimmed.equals(key)) {
+                return key;
+            }
+        }
+        return null;
     }
 
     @PostMapping("/{id}/finalize")

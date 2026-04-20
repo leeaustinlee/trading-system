@@ -44,8 +44,10 @@ import java.util.Set;
 public class AiTaskService {
 
     private static final Logger log = LoggerFactory.getLogger(AiTaskService.class);
-    private static final int RESULT_HASH_SHORT_LEN = 40;
-    private static final int RESULT_HASH_MAX_LEN = 128;
+    // 短 hash 長度：16 chars（約 64 bit），idempotency 用足夠。
+    // merge 後格式「claude:xxxxxxxxxxxxxxxx,codex:yyyyyyyyyyyyyyyy」= 45 chars，遠小於 DB column。
+    private static final int RESULT_HASH_SHORT_LEN = 16;
+    private static final int RESULT_HASH_MAX_LEN = 64;
 
     // ── 狀態常數 ─────────────────────────────────────────────────────────────
     public static final String STATUS_PENDING        = "PENDING";
@@ -105,11 +107,29 @@ public class AiTaskService {
                 // Do not create duplicate — return existing to avoid UNIQUE violation.
                 return task;
             }
-            // UPSERT：更新候選 + prompt，但不重置狀態（除非還是 PENDING）
+            // v2.2：遇 FAILED/EXPIRED 時重置狀態讓 AI 可重試，避免 UNIQUE (trading_date,task_type,target_symbol) 衝突。
+            //   若 Claude 已完成 → 回到 CLAUDE_DONE（Codex 可直接接手，Claude 不重跑）
+            //   否則 → 回到 PENDING（整個流程重新走）
+            if (STATUS_FAILED.equals(task.getStatus()) || STATUS_EXPIRED.equals(task.getStatus())) {
+                String prev = task.getStatus();
+                if (task.getClaudeDoneAt() != null) {
+                    task.setStatus(STATUS_CLAUDE_DONE);
+                    task.setCodexStartedAt(null);
+                    task.setCodexDoneAt(null);
+                    task.setCodexResultMarkdown(null);
+                    task.setCodexScoresJson(null);
+                    task.setCodexVetoSymbolsJson(null);
+                } else {
+                    task.setStatus(STATUS_PENDING);
+                    task.setClaudeStartedAt(null);
+                }
+                task.setErrorMessage(null);
+                recordTransition(task, "recreate: reset from " + prev);
+            }
+            // UPSERT：更新候選 + prompt，但若狀態不在 PENDING/CLAUDE_DONE 就不動
             task.setTargetCandidatesJson(toJson(candidates));
             if (promptSummary != null)  task.setPromptSummary(truncate(promptSummary, 2000));
             if (promptFilePath != null) task.setPromptFilePath(promptFilePath);
-            // 若 task 原本已經進入 CLAUDE_DONE 之類，不要退回 PENDING；保留既有 status。
             AiTaskEntity saved = aiTaskRepository.save(task);
             log.info("[AiTaskService] UPSERT task id={} type={} date={} symbol={} status={}",
                     saved.getId(), taskType, tradingDate, targetSymbol, saved.getStatus());
@@ -267,6 +287,14 @@ public class AiTaskService {
      */
     @Transactional
     public AiTaskEntity finalizeTask(Long taskId) {
+        return finalizeTask(taskId, "finalize");
+    }
+
+    /**
+     * v2.2: 允許指定 reason（例如 "final-decision-consumed"、"catchup-sweep"）便於追蹤。
+     */
+    @Transactional
+    public AiTaskEntity finalizeTask(Long taskId, String reason) {
         AiTaskEntity task = requireTask(taskId);
         if (STATUS_FINALIZED.equals(task.getStatus())) {
             // idempotent：已 FINALIZED 直接回
@@ -275,7 +303,7 @@ public class AiTaskService {
         requireState(task, Set.of(STATUS_CODEX_DONE), "finalize");
         task.setStatus(STATUS_FINALIZED);
         task.setFinalizedAt(LocalDateTime.now());
-        recordTransition(task, "finalize");
+        recordTransition(task, reason == null || reason.isBlank() ? "finalize" : reason);
         return aiTaskRepository.save(task);
     }
 
@@ -492,16 +520,21 @@ public class AiTaskService {
             String symbol = e.getKey();
             BigDecimal score = e.getValue();
             if (symbol == null || score == null) continue;
+            String trimmed = symbol.trim();
+            if (trimmed.isEmpty() || trimmed.length() > 20 || trimmed.contains(" ")) {
+                log.warn("[AiTaskService] skip invalid Claude score key (malformed symbol): '{}'", symbol);
+                continue;
+            }
             try {
                 AiScoreUpdateRequest update = new AiScoreUpdateRequest(
                         date,
                         score,
                         null,                 // confidence: 未提供
-                        thesis.get(symbol),
+                        thesis.get(trimmed),
                         riskFlags.isEmpty() ? null : new ArrayList<>(riskFlags),
                         null, null, null
                 );
-                stockEvaluationService.updateAiScores(symbol, update);
+                stockEvaluationService.updateAiScores(trimmed, update);
             } catch (Exception ex) {
                 log.warn("[AiTaskService] Failed to write Claude score for symbol={}: {}", symbol, ex.getMessage());
             }
@@ -517,6 +550,13 @@ public class AiTaskService {
             String symbol = e.getKey();
             BigDecimal score = e.getValue();
             if (symbol == null || score == null) continue;
+            // 防禦：symbol 必須是單一股票代號（<=20 字元、不含空白）。
+            // Codex 若 scores 格式錯誤將多個 symbol 串成一個 key，這邊直接跳過避免炸 DB。
+            String trimmed = symbol.trim();
+            if (trimmed.isEmpty() || trimmed.length() > 20 || trimmed.contains(" ")) {
+                log.warn("[AiTaskService] skip invalid Codex score key (malformed symbol): '{}'", symbol);
+                continue;
+            }
             try {
                 List<String> issues = null;
                 if (reviewIssues.containsKey(symbol)) {
@@ -529,7 +569,7 @@ public class AiTaskService {
                         null,          // confidence: 未提供
                         issues
                 );
-                stockEvaluationService.updateAiScores(symbol, update);
+                stockEvaluationService.updateAiScores(trimmed, update);
             } catch (Exception ex) {
                 log.warn("[AiTaskService] Failed to write Codex score for symbol={}: {}", symbol, ex.getMessage());
             }

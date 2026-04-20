@@ -3,6 +3,7 @@ package com.austin.trading.scheduler;
 import com.austin.trading.entity.AiTaskEntity;
 import com.austin.trading.repository.AiTaskRepository;
 import com.austin.trading.service.AiTaskService;
+import com.austin.trading.service.FinalDecisionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,6 +33,7 @@ public class AiTaskSweepJob {
 
     private final AiTaskRepository aiTaskRepository;
     private final AiTaskService aiTaskService;
+    private final FinalDecisionService finalDecisionService;
 
     private final long claudeTimeoutMinutes;
     private final long codexTimeoutMinutes;
@@ -40,12 +42,14 @@ public class AiTaskSweepJob {
     public AiTaskSweepJob(
             AiTaskRepository aiTaskRepository,
             AiTaskService aiTaskService,
+            FinalDecisionService finalDecisionService,
             @Value("${ai.task.claude.timeout.minutes:20}") long claudeTimeoutMinutes,
             @Value("${ai.task.codex.timeout.minutes:10}") long codexTimeoutMinutes,
             @Value("${ai.task.pending.timeout.minutes:30}") long pendingTimeoutMinutes
     ) {
         this.aiTaskRepository = aiTaskRepository;
         this.aiTaskService = aiTaskService;
+        this.finalDecisionService = finalDecisionService;
         this.claudeTimeoutMinutes = claudeTimeoutMinutes;
         this.codexTimeoutMinutes = codexTimeoutMinutes;
         this.pendingTimeoutMinutes = pendingTimeoutMinutes;
@@ -54,7 +58,7 @@ public class AiTaskSweepJob {
     @Scheduled(fixedDelayString = "${ai.task.sweep.interval.seconds:60}000")
     public void sweep() {
         LocalDateTime now = LocalDateTime.now();
-        int pendingExpired = 0, claudeFailed = 0, codexFailed = 0;
+        int pendingExpired = 0, claudeFailed = 0, codexFailed = 0, catchUp = 0;
 
         List<AiTaskEntity> candidates = aiTaskRepository.findAll();
         for (AiTaskEntity t : candidates) {
@@ -81,14 +85,29 @@ public class AiTaskSweepJob {
                                 "AI_TIMEOUT: CODEX_RUNNING > " + codexTimeoutMinutes + "m");
                         codexFailed++;
                     }
+                } else if (AiTaskService.STATUS_CODEX_DONE.equals(status)
+                        && t.getFinalizedAt() == null) {
+                    // P0-2 catch-up: CODEX_DONE 但未 finalize（submit 後 catch-up 失敗或跨重啟），
+                    // 補跑 FinalDecision 消化之。僅限今日以免處理陳年資料。
+                    if (t.getTradingDate() != null
+                            && t.getTradingDate().equals(java.time.LocalDate.now())) {
+                        try {
+                            finalDecisionService.evaluateAndPersist(
+                                    t.getTradingDate(), t.getTaskType());
+                            catchUp++;
+                        } catch (Exception ex) {
+                            log.debug("[AiTaskSweep] catch-up id={} failed: {}",
+                                    t.getId(), ex.getMessage());
+                        }
+                    }
                 }
             } catch (Exception e) {
                 log.warn("[AiTaskSweep] id={} 掃描失敗: {}", t.getId(), e.getMessage());
             }
         }
-        if (pendingExpired + claudeFailed + codexFailed > 0) {
-            log.info("[AiTaskSweep] pendingExpired={} claudeFailed={} codexFailed={}",
-                    pendingExpired, claudeFailed, codexFailed);
+        if (pendingExpired + claudeFailed + codexFailed + catchUp > 0) {
+            log.info("[AiTaskSweep] pendingExpired={} claudeFailed={} codexFailed={} catchUp={}",
+                    pendingExpired, claudeFailed, codexFailed, catchUp);
         }
     }
 

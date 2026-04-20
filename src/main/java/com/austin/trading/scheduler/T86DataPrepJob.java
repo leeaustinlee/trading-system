@@ -6,6 +6,7 @@ import com.austin.trading.dto.request.AiTaskCandidateRef;
 import com.austin.trading.entity.CandidateStockEntity;
 import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.service.AiTaskService;
+import com.austin.trading.service.ClaudeCodeRequestWriterService;
 import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
@@ -40,19 +41,22 @@ public class T86DataPrepJob {
     private final SchedulerLogService      schedulerLogService;
     private final DailyOrchestrationService orchestrationService;
     private final AiTaskService            aiTaskService;
+    private final ClaudeCodeRequestWriterService requestWriterService;
 
     public T86DataPrepJob(
             TwseInstitutionalClient institutionalClient,
             CandidateStockRepository candidateStockRepository,
             SchedulerLogService schedulerLogService,
             DailyOrchestrationService orchestrationService,
-            AiTaskService aiTaskService
+            AiTaskService aiTaskService,
+            ClaudeCodeRequestWriterService requestWriterService
     ) {
         this.institutionalClient      = institutionalClient;
         this.candidateStockRepository = candidateStockRepository;
         this.schedulerLogService      = schedulerLogService;
         this.orchestrationService     = orchestrationService;
         this.aiTaskService            = aiTaskService;
+        this.requestWriterService     = requestWriterService;
     }
 
     @Scheduled(cron = "${trading.scheduler.t86-data-prep-cron:0 10 18 * * MON-FRI}",
@@ -96,6 +100,9 @@ public class T86DataPrepJob {
             }
 
             // v2.1：建 T86_TOMORROW ai_task（供 Claude 17:50 / Codex 17:58 接手，18:30 TomorrowPlan 讀取）
+            List<String> symbols = candidates.stream()
+                    .map(CandidateStockEntity::getSymbol)
+                    .collect(Collectors.toList());
             try {
                 List<AiTaskCandidateRef> refs = candidates.stream()
                         .map(c -> new AiTaskCandidateRef(
@@ -108,6 +115,15 @@ public class T86DataPrepJob {
                 );
             } catch (Exception e) {
                 log.warn("[T86DataPrepJob] createTask 失敗: {}", e.getMessage());
+            }
+
+            // 寫 Claude 研究請求檔，通知 Claude Code Agent 執行明日策略研究
+            try {
+                String context = String.format("{\"t86_rows\":%d,\"candidates_with_flow\":%d}",
+                        flows.size(), updated);
+                requestWriterService.writeRequest("T86_TOMORROW", today, symbols, context);
+            } catch (Exception e) {
+                log.warn("[T86DataPrepJob] writeRequest 失敗: {}", e.getMessage());
             }
 
             String msg = String.format("t86_rows=%d candidates=%d updated=%d",

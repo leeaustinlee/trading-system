@@ -1,7 +1,11 @@
 package com.austin.trading.controller;
 
+import com.austin.trading.dto.response.FinalDecisionRecordResponse;
+import com.austin.trading.entity.AiTaskEntity;
 import com.austin.trading.entity.DailyOrchestrationStatusEntity;
+import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.DailyOrchestrationService;
+import com.austin.trading.service.FinalDecisionService;
 import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.workflow.HourlyGateWorkflowService;
 import com.austin.trading.workflow.IntradayDecisionWorkflowService;
@@ -11,6 +15,7 @@ import com.austin.trading.workflow.WatchlistWorkflowService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -48,6 +54,9 @@ public class OrchestrationController {
     private final HourlyGateWorkflowService hourlyGateWorkflow;
     private final PostmarketWorkflowService postmarketWorkflow;
     private final WatchlistWorkflowService watchlistWorkflow;
+    // v2.2 AI orchestration
+    private final AiTaskService aiTaskService;
+    private final FinalDecisionService finalDecisionService;
 
     public OrchestrationController(
             DailyOrchestrationService orchestrationService,
@@ -55,7 +64,9 @@ public class OrchestrationController {
             IntradayDecisionWorkflowService intradayDecisionWorkflow,
             HourlyGateWorkflowService hourlyGateWorkflow,
             PostmarketWorkflowService postmarketWorkflow,
-            WatchlistWorkflowService watchlistWorkflow
+            WatchlistWorkflowService watchlistWorkflow,
+            AiTaskService aiTaskService,
+            FinalDecisionService finalDecisionService
     ) {
         this.orchestrationService = orchestrationService;
         this.premarketWorkflow = premarketWorkflow;
@@ -63,6 +74,8 @@ public class OrchestrationController {
         this.hourlyGateWorkflow = hourlyGateWorkflow;
         this.postmarketWorkflow = postmarketWorkflow;
         this.watchlistWorkflow = watchlistWorkflow;
+        this.aiTaskService = aiTaskService;
+        this.finalDecisionService = finalDecisionService;
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -212,5 +225,170 @@ public class OrchestrationController {
             default -> throw new UnsupportedOperationException(
                     "No workflow mapping for step " + step + "; use /api/scheduler/trigger/... instead.");
         };
+    }
+
+    // ═════════════════════════════════════════════════════════════════════
+    //  v2.2 AI 任務 orchestration（與 ai_task + final_decision 對應）
+    // ═════════════════════════════════════════════════════════════════════
+
+    /** 今日 AI 任務 + 對應 FinalDecision + Dashboard displayStatus/displayMessage */
+    @GetMapping("/tasks/today")
+    public List<Map<String, Object>> aiTasksToday() {
+        LocalDate today = LocalDate.now();
+        List<AiTaskEntity> tasks = aiTaskService.getByDate(today);
+        List<FinalDecisionRecordResponse> decisions = finalDecisionService.getHistory(100)
+                .stream().filter(d -> today.equals(d.tradingDate())).toList();
+        return tasks.stream().map(t -> toAiOrchestrationRow(t, decisions)).toList();
+    }
+
+    /**
+     * P1-7 手動補跑：CODEX_DONE + 無 FinalDecision 的 task 可在此觸發。
+     * 錯誤碼：TASK_NOT_FOUND / TASK_ALREADY_FINALIZED / TASK_NOT_CODEX_DONE /
+     *        CODEX_RESULT_EMPTY / FINAL_DECISION_FAILED。
+     */
+    @PostMapping("/tasks/{taskId}/finalize-catchup")
+    public ResponseEntity<Map<String, Object>> finalizeCatchup(@PathVariable Long taskId) {
+        AiTaskEntity task = aiTaskService.getById(taskId).orElse(null);
+        if (task == null) {
+            return aiError(HttpStatus.NOT_FOUND, "TASK_NOT_FOUND",
+                    "任務不存在：" + taskId, taskId);
+        }
+        if (AiTaskService.STATUS_FINALIZED.equals(task.getStatus())) {
+            Map<String, Object> ok = aiOkBody(task);
+            ok.put("idempotent", true);
+            ok.put("message", "已 FINALIZED，無需重跑");
+            return ResponseEntity.ok(ok);
+        }
+        if (!AiTaskService.STATUS_CODEX_DONE.equals(task.getStatus())) {
+            return aiError(HttpStatus.CONFLICT, "TASK_NOT_CODEX_DONE",
+                    "只允許 CODEX_DONE 狀態補跑，目前：" + task.getStatus(), taskId);
+        }
+        if (task.getCodexResultMarkdown() == null
+                || task.getCodexResultMarkdown().trim().length() < 10) {
+            return aiError(HttpStatus.CONFLICT, "CODEX_RESULT_EMPTY",
+                    "Codex 結果為空或過短，無法補跑", taskId);
+        }
+        try {
+            var decision = finalDecisionService.evaluateAndPersist(
+                    task.getTradingDate(), task.getTaskType());
+            AiTaskEntity refreshed = aiTaskService.getById(taskId).orElse(task);
+            Map<String, Object> ok = aiOkBody(refreshed);
+            ok.put("idempotent", false);
+            ok.put("decision", decision.decision());
+            ok.put("summary", decision.summary());
+            return ResponseEntity.ok(ok);
+        } catch (Exception e) {
+            log.error("[Orchestration] finalize-catchup failed for {}: {}", taskId, e.getMessage(), e);
+            return aiError(HttpStatus.INTERNAL_SERVER_ERROR, "FINAL_DECISION_FAILED",
+                    e.getMessage(), taskId);
+        }
+    }
+
+    // ── AI orchestration helpers ──────────────────────────────────────────
+
+    private Map<String, Object> toAiOrchestrationRow(AiTaskEntity t,
+                                                      List<FinalDecisionRecordResponse> decisions) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("taskId",               t.getId());
+        row.put("taskType",             t.getTaskType());
+        row.put("status",               t.getStatus());
+        row.put("claudeDoneAt",         t.getClaudeDoneAt());
+        row.put("codexDoneAt",          t.getCodexDoneAt());
+        row.put("finalizedAt",          t.getFinalizedAt());
+        row.put("lastTransitionAt",     t.getLastTransitionAt());
+        row.put("lastTransitionReason", t.getLastTransitionReason());
+        row.put("errorMessage",         t.getErrorMessage());
+
+        FinalDecisionRecordResponse matched = decisions.stream()
+                .filter(d -> t.getId().equals(d.aiTaskId()))
+                .findFirst()
+                .orElseGet(() -> decisions.stream()
+                        .filter(d -> t.getTaskType() != null
+                                && t.getTaskType().equalsIgnoreCase(d.sourceTaskType()))
+                        .findFirst().orElse(null));
+        if (matched != null) {
+            row.put("finalDecisionId",     matched.id());
+            row.put("finalDecisionStatus", matched.decision());
+            row.put("aiStatus",            matched.aiStatus());
+            row.put("fallbackReason",      matched.fallbackReason());
+            row.put("selectedCount",       countJsonArrayEntries(matched.payloadJson(), "selected_stocks"));
+            row.put("rejectedCount",       countJsonArrayEntries(matched.payloadJson(), "rejected_reasons"));
+            row.put("summary",             matched.summary());
+        } else {
+            row.put("finalDecisionId",     null);
+            row.put("finalDecisionStatus", null);
+            row.put("aiStatus",            null);
+            row.put("fallbackReason",      null);
+            row.put("selectedCount",       0);
+            row.put("rejectedCount",       0);
+            row.put("summary",             null);
+        }
+
+        String[] disp = computeAiDisplayStatus(t, matched);
+        row.put("displayStatus",  disp[0]);
+        row.put("displayMessage", disp[1]);
+        return row;
+    }
+
+    private String[] computeAiDisplayStatus(AiTaskEntity t, FinalDecisionRecordResponse d) {
+        String s = t.getStatus();
+        if (AiTaskService.STATUS_FINALIZED.equals(s)) {
+            return new String[]{ "OK", "最終決策完成" };
+        }
+        if (AiTaskService.STATUS_CODEX_DONE.equals(s)) {
+            if (d == null) {
+                return new String[]{ "WARN", "Codex 已完成，等待 FinalDecision 消化" };
+            }
+            if ("REST".equalsIgnoreCase(d.decision())) {
+                return new String[]{ "OK", "已決策：休息 / 無符合標的" };
+            }
+            if ("WATCH".equalsIgnoreCase(d.decision())) {
+                return new String[]{ "OK", "已決策：僅觀察" };
+            }
+            return new String[]{ "OK", "已決策：" + d.decision() };
+        }
+        if (AiTaskService.STATUS_CLAUDE_DONE.equals(s)) {
+            return new String[]{ "INFO", "Claude 完成，等 Codex" };
+        }
+        if (AiTaskService.STATUS_FAILED.equals(s) || AiTaskService.STATUS_EXPIRED.equals(s)) {
+            return new String[]{ "ERR", t.getErrorMessage() == null
+                    ? "任務異常（" + s + "）" : t.getErrorMessage() };
+        }
+        return new String[]{ "INFO", "進行中（" + s + "）" };
+    }
+
+    /** 粗解析 payloadJson 中某陣列欄位的元素數（避免拉入完整 JSON 解析器）。 */
+    private int countJsonArrayEntries(String payloadJson, String field) {
+        if (payloadJson == null) return 0;
+        int i = payloadJson.indexOf("\"" + field + "\"");
+        if (i < 0) return 0;
+        int open = payloadJson.indexOf('[', i);
+        int close = payloadJson.indexOf(']', open);
+        if (open < 0 || close < 0 || close <= open + 1) return 0;
+        String body = payloadJson.substring(open + 1, close).trim();
+        if (body.isEmpty()) return 0;
+        long commas = body.chars().filter(ch -> ch == ',').count();
+        return (int) (commas + 1);
+    }
+
+    private Map<String, Object> aiOkBody(AiTaskEntity task) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("success", true);
+        m.put("taskId", task.getId());
+        m.put("taskType", task.getTaskType());
+        m.put("status", task.getStatus());
+        m.put("finalizedAt", task.getFinalizedAt());
+        return m;
+    }
+
+    private ResponseEntity<Map<String, Object>> aiError(HttpStatus status, String code,
+                                                          String message, Long taskId) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("success", false);
+        body.put("errorCode", code);
+        body.put("message", message);
+        body.put("taskId", taskId);
+        body.put("timestamp", LocalDateTime.now());
+        return ResponseEntity.status(status).body(body);
     }
 }

@@ -38,6 +38,13 @@ public class CandidateStockEntity {
     @Column(name = "payload_json", columnDefinition = "json")
     private String payloadJson;
 
+    // v2.3 Momentum Chase
+    @Column(name = "is_momentum_candidate", nullable = false)
+    private boolean isMomentumCandidate = false;
+
+    @Column(name = "momentum_flags_json", columnDefinition = "json")
+    private String momentumFlagsJson;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -58,5 +65,9 @@ public class CandidateStockEntity {
     public void setSector(String sector) { this.sector = sector; }
     public String getPayloadJson() { return payloadJson; }
     public void setPayloadJson(String payloadJson) { this.payloadJson = payloadJson; }
+    public boolean isMomentumCandidate() { return isMomentumCandidate; }
+    public void setMomentumCandidate(boolean momentumCandidate) { this.isMomentumCandidate = momentumCandidate; }
+    public String getMomentumFlagsJson() { return momentumFlagsJson; }
+    public void setMomentumFlagsJson(String momentumFlagsJson) { this.momentumFlagsJson = momentumFlagsJson; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

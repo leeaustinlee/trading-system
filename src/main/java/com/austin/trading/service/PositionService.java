@@ -89,6 +89,20 @@ public class PositionService {
         entity.setOpenedAt(request.openedAt() == null ? LocalDateTime.now() : request.openedAt());
         entity.setNote(request.note());
         entity.setPayloadJson(request.payloadJson());
+        // v2.3: strategy_type 預設 SETUP；前端/API 可覆寫為 MOMENTUM_CHASE
+        entity.setStrategyType(request.strategyType() == null ? "SETUP" : request.strategyType());
+
+        // v2.3: Momentum 建倉若未指定停損，以 momentum.stop_loss_pct 自動補上
+        if ("MOMENTUM_CHASE".equalsIgnoreCase(entity.getStrategyType())
+                && entity.getStopLossPrice() == null
+                && entity.getAvgCost() != null) {
+            BigDecimal stopPct = scoreConfigService.getDecimal(
+                    "momentum.stop_loss_pct", new BigDecimal("-0.025"));
+            BigDecimal stop = entity.getAvgCost()
+                    .multiply(BigDecimal.ONE.add(stopPct))
+                    .setScale(4, RoundingMode.HALF_UP);
+            entity.setStopLossPrice(stop);
+        }
         return toResponse(positionRepository.save(entity));
     }
 
@@ -236,7 +250,8 @@ public class PositionService {
                 entity.getRealizedPnl(),
                 entity.getNote(),
                 entity.getPayloadJson(),
-                entity.getCreatedAt()
+                entity.getCreatedAt(),
+                entity.getStrategyType()
         );
     }
 }
