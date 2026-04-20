@@ -98,6 +98,21 @@ public class AiTaskEntity {
     @Column(name = "finalized_at")
     private LocalDateTime finalizedAt;
 
+    /** JPA optimistic lock。防止多人同時轉移狀態導致髒寫 */
+    @jakarta.persistence.Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
+
+    @Column(name = "last_transition_at")
+    private LocalDateTime lastTransitionAt;
+
+    @Column(name = "last_transition_reason", length = 100)
+    private String lastTransitionReason;
+
+    /** Claude/Codex submit 結果 hash，重送相同內容視為 idempotent。可為 claude 或 codex hash 合併 */
+    @Column(name = "result_hash", length = 128)
+    private String resultHash;
+
     // ── Getters / Setters ────────────────────────────────────────────────────
 
     public Long getId() { return id; }
@@ -166,4 +181,16 @@ public class AiTaskEntity {
 
     public LocalDateTime getFinalizedAt() { return finalizedAt; }
     public void setFinalizedAt(LocalDateTime finalizedAt) { this.finalizedAt = finalizedAt; }
+
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
+
+    public LocalDateTime getLastTransitionAt() { return lastTransitionAt; }
+    public void setLastTransitionAt(LocalDateTime lastTransitionAt) { this.lastTransitionAt = lastTransitionAt; }
+
+    public String getLastTransitionReason() { return lastTransitionReason; }
+    public void setLastTransitionReason(String lastTransitionReason) { this.lastTransitionReason = lastTransitionReason; }
+
+    public String getResultHash() { return resultHash; }
+    public void setResultHash(String resultHash) { this.resultHash = resultHash; }
 }

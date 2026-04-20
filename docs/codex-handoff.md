@@ -87,3 +87,18 @@ POST http://localhost:8080/api/ai/tasks/{id}/fail
 - Codex 不在市場等級 C 或硬性風控觸發時推薦進場。
 - Codex 不推薦超過單檔 3-5 萬或破壞 30% 現金保留的標的。
 
+## v2.1 Workflow Correctness 更新
+
+完整規格見 `docs/workflow-correctness-ai-orchestration-spec.md`。
+
+Codex 必須遵守：
+
+- 只處理狀態為 `CLAUDE_DONE` 的 task。
+- 若 task 狀態不是 `CLAUDE_DONE`，不可 submit `codex-result`，應回報 `CODEX_WAITING_FOR_CLAUDE` 或 `AI_TASK_INVALID_STATE`。
+- submit 成功後 task 狀態必須是 `CODEX_DONE`。
+- Codex 不得 finalize task；finalize 由 Java Decision / Notify workflow 在使用結果後處理。
+- Codex 不直接發 LINE。
+- Codex 不讀過期 markdown 作為權威來源；DB task 的 Claude result 才是權威來源。
+- 若 Claude 未完成，Codex 不應自行完整推薦股票，只能提交降級審核或讓 Java fallback。
+
+FinalDecision 預設 `final_decision.require_codex=true`；Codex 未完成時，Java 不得輸出正常 ENTER。

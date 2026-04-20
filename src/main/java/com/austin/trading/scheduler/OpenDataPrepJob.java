@@ -2,9 +2,11 @@ package com.austin.trading.scheduler;
 
 import com.austin.trading.client.TwseMisClient;
 import com.austin.trading.client.dto.StockQuote;
+import com.austin.trading.dto.request.AiTaskCandidateRef;
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.entity.CandidateStockEntity;
 import com.austin.trading.repository.CandidateStockRepository;
+import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.CandidateScanService;
 import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.OrchestrationStep;
@@ -41,19 +43,22 @@ public class OpenDataPrepJob {
     private final CandidateStockRepository candidateStockRepository;
     private final SchedulerLogService      schedulerLogService;
     private final DailyOrchestrationService orchestrationService;
+    private final AiTaskService            aiTaskService;
 
     public OpenDataPrepJob(
             TwseMisClient twseMisClient,
             CandidateScanService candidateScanService,
             CandidateStockRepository candidateStockRepository,
             SchedulerLogService schedulerLogService,
-            DailyOrchestrationService orchestrationService
+            DailyOrchestrationService orchestrationService,
+            AiTaskService aiTaskService
     ) {
         this.twseMisClient           = twseMisClient;
         this.candidateScanService    = candidateScanService;
         this.candidateStockRepository = candidateStockRepository;
         this.schedulerLogService     = schedulerLogService;
         this.orchestrationService    = orchestrationService;
+        this.aiTaskService           = aiTaskService;
     }
 
     @Scheduled(cron = "${trading.scheduler.open-data-prep-cron:0 1 9 * * MON-FRI}",
@@ -83,7 +88,7 @@ public class OpenDataPrepJob {
                     .map(CandidateResponse::symbol)
                     .collect(Collectors.toList());
 
-            List<StockQuote> quotes = twseMisClient.getTseQuotes(symbols);
+            List<StockQuote> quotes = twseMisClient.getQuotesWithOtcFallback(symbols);
             Map<String, StockQuote> quoteMap = quotes.stream()
                     .collect(Collectors.toMap(StockQuote::symbol, q -> q, (a, b) -> a));
 
@@ -99,6 +104,21 @@ public class OpenDataPrepJob {
                 entity.setPayloadJson(mergeOpenPrice(entity.getPayloadJson(), q));
                 candidateStockRepository.save(entity);
                 updated++;
+            }
+
+            // v2.1：建 OPENING ai_task（供 Claude 09:20 / Codex 09:28 接手，09:30 FinalDecision 讀取）
+            try {
+                List<AiTaskCandidateRef> refs = candidates.stream()
+                        .map(c -> new AiTaskCandidateRef(
+                                c.symbol(), c.stockName(), c.themeTag(), c.javaStructureScore()))
+                        .collect(Collectors.toList());
+                aiTaskService.createTask(
+                        today, "OPENING", null, refs,
+                        "09:01 開盤候選（共 " + refs.size() + " 檔），等 Claude 09:20 / Codex 09:28 接手",
+                        "D:/ai/stock/claude-research-request.json"
+                );
+            } catch (Exception e) {
+                log.warn("[OpenDataPrepJob] createTask 失敗: {}", e.getMessage());
             }
 
             String msg = String.format("symbols=%d quotes=%d updated=%d",

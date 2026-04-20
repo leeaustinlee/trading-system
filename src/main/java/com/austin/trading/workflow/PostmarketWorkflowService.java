@@ -91,23 +91,12 @@ public class PostmarketWorkflowService {
         List<String> symbols = candidates.stream().map(CandidateResponse::symbol).toList();
 
         if (!symbols.isEmpty()) {
+            // v2.1：Claude request 仍由 workflow 維護（作為溝通橋樑），
+            // 但 AI task 的建立已移到 PostmarketDataPrepJob (15:05)。
+            // 本 workflow (15:30) 只讀已完成 POSTMARKET task，不再自行 createTask。
             boolean written = requestWriterService.writeRequest("POSTMARKET", tradingDate, symbols, null);
-            log.info("[PostmarketWorkflow] Claude 研究請求寫出={}, symbols={}", written, symbols);
-
-            // Step 3.5: 建立 AI 任務（PR-2）供 Claude 認領
-            try {
-                List<AiTaskCandidateRef> refs = candidates.stream()
-                        .map(c -> new AiTaskCandidateRef(
-                                c.symbol(), c.stockName(), c.themeTag(), c.javaStructureScore()))
-                        .toList();
-                aiTaskService.createTask(
-                        tradingDate, "POSTMARKET", null, refs,
-                        "今日盤後研究請求，共 " + refs.size() + " 檔",
-                        written ? "D:/ai/stock/claude-research-request.json" : null
-                );
-            } catch (Exception e) {
-                log.warn("[PostmarketWorkflow] createTask 失敗: {}", e.getMessage());
-            }
+            log.info("[PostmarketWorkflow] Claude 研究請求寫出={}, symbols={}（task 由 DataPrep 建立）",
+                    written, symbols);
         }
 
         // Step 4: LINE 盤後通知

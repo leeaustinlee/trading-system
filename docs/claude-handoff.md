@@ -128,3 +128,41 @@ mvn -Dmaven.repo.local=/tmp/m2 test -q
 - 如果 DB 無資料，先執行 `./scripts/load-local-seed.sh`。
 - 若改動交易規則，務必先更新 `docs/spec.md` 再改程式。
 - 正式環境啟動用 `./scripts/run-prod.sh`（會驗證必填 env var）。
+## v2.1 Claude File Bridge 合約
+
+Claude 不直接呼叫 Java localhost，也不直接發 LINE。Claude 只把研究結果寫入 file bridge，由 Java watcher 匯入 DB。
+
+正式寫檔協定：
+
+```text
+1. 先寫入 claude-submit/claude-<TASK_TYPE>-<YYYY-MM-DD>-<HHmm>-task-<TASK_ID>.tmp
+2. 寫完後 rename 成 claude-submit/claude-<TASK_TYPE>-<YYYY-MM-DD>-<HHmm>-task-<TASK_ID>.json
+3. Java watcher 只讀 .json，不讀 .tmp
+```
+
+JSON 必填：
+
+```json
+{
+  "taskId": 42,
+  "taskType": "POSTMARKET",
+  "tradingDate": "2026-04-20",
+  "contentMarkdown": "Claude research markdown",
+  "scores": {"3231": 8.5},
+  "thesis": {"3231": "研究摘要"},
+  "riskFlags": ["高檔爆量"],
+  "generatedAt": "2026-04-20T15:20:00+08:00",
+  "schemaVersion": "claude-submit-v2.1"
+}
+```
+
+Claude 必須假設 task 已由 Java DataPrep 建立。若沒有 taskId，不得自行創造 id；缺 taskId 時 Java bridge 只能 fallback 尋找同日同 taskType 的最新 task。
+
+禁止事項：
+
+- 不得寫半成品 `.json`。
+- 不得直接寫 `processed/`、`failed/`、`retry/`。
+- 不得直接發 LINE。
+- 不得把研究結果包裝成最終下單決策；最終決策由 Codex / Java 完成。
+
+完整規格見 `docs/workflow-correctness-ai-orchestration-spec.md`。

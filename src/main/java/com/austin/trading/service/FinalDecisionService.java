@@ -18,6 +18,7 @@ import com.austin.trading.engine.PositionSizingEngine;
 import com.austin.trading.engine.StopLossTakeProfitEngine;
 import com.austin.trading.engine.VetoEngine;
 import com.austin.trading.engine.WeightedScoringEngine;
+import com.austin.trading.entity.AiTaskEntity;
 import com.austin.trading.entity.CapitalConfigEntity;
 import com.austin.trading.entity.FinalDecisionEntity;
 import com.austin.trading.entity.PositionEntity;
@@ -37,6 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -125,25 +127,35 @@ public class FinalDecisionService {
 
     @Transactional
     public FinalDecisionResponse evaluateAndPersist(LocalDate tradingDate) {
-        // ── Step 0: AI 研究準備度檢查（PR-2）──────────────────────────────────
+        // ── Step 0: v2.1 AI Readiness 判定（OPENING 優先，fallback PREMARKET）─────
+        // 預設：require_codex=true，Codex 未完成時不得輸出正式 ENTER。
+        AiReadiness readiness = resolveAiReadiness(tradingDate);
+        log.info("[FinalDecision] AI readiness: mode={} sourceTaskType={} taskId={} fallback={}",
+                readiness.mode(), readiness.sourceTaskType(), readiness.aiTaskId(), readiness.fallbackReason());
+
         boolean downgradeEnabled = scoreConfigService.getBoolean("final_decision.ai_downgrade_enabled", true);
         if (downgradeEnabled) {
-            boolean requireClaude = scoreConfigService.getBoolean("final_decision.require_claude", true);
-            boolean requireCodex  = scoreConfigService.getBoolean("final_decision.require_codex", false);
-
-            if (requireClaude && !aiTaskService.isClaudeReady(tradingDate, "PREMARKET")) {
-                log.warn("[FinalDecision] Claude 盤前研究未完成，降級為保守休息 (date={})", tradingDate);
-                return persistAndReturn(tradingDate, new FinalDecisionResponse(
-                        "REST", List.of(),
-                        List.of("AI_CLAUDE_NOT_READY"),
-                        "Claude 盤前研究未完成，今日保守休息"));
+            if (readiness.mode() == AiReadinessMode.AI_NOT_READY) {
+                String reason = readiness.fallbackReason() == null ? "AI_NOT_READY" : readiness.fallbackReason();
+                log.warn("[FinalDecision] AI_NOT_READY → REST (reason={})", reason);
+                return persistAndReturn(tradingDate,
+                        new FinalDecisionResponse("REST", List.of(),
+                                List.of(reason),
+                                "AI 未完成，今日保守休息（" + reason + "）"),
+                        readiness);
             }
-            if (requireCodex && !aiTaskService.isCodexReady(tradingDate, "PREMARKET")) {
-                log.warn("[FinalDecision] Codex 審核未完成，降級為保守休息 (date={})", tradingDate);
-                return persistAndReturn(tradingDate, new FinalDecisionResponse(
-                        "REST", List.of(),
-                        List.of("AI_CODEX_NOT_READY"),
-                        "Codex 審核未完成，今日保守休息"));
+            if (readiness.mode() == AiReadinessMode.PARTIAL_AI_READY) {
+                String partialMode = scoreConfigService.getString("final_decision.partial_ai_mode", "WATCH");
+                String decisionLabel = "REST".equalsIgnoreCase(partialMode) ? "REST" : "WATCH";
+                String reasonCode = readiness.fallbackReason() == null ? "CODEX_MISSING" : readiness.fallbackReason();
+                log.warn("[FinalDecision] PARTIAL_AI_READY → {} (reason={})", decisionLabel, reasonCode);
+                return persistAndReturn(tradingDate,
+                        new FinalDecisionResponse(decisionLabel, List.of(),
+                                List.of(reasonCode),
+                                "Claude 已完成但 Codex 尚未完成，本輪降級為"
+                                        + ("WATCH".equals(decisionLabel) ? "只可觀察" : "休息")
+                                        + "，不輸出正式進場標的"),
+                        readiness);
             }
         }
 
@@ -168,7 +180,7 @@ public class FinalDecisionService {
                 log.info("[FinalDecision] 持倉已滿 ({}/{}), 不開新倉", openPositions.size(), maxPos);
                 return persistAndReturn(tradingDate, new FinalDecisionResponse(
                         "REST", List.of(), List.of("持倉已滿 (" + openPositions.size() + "/" + maxPos + ")"),
-                        "持倉已滿，不開新倉。"));
+                        "持倉已滿，不開新倉。"), readiness);
             }
         }
 
@@ -177,7 +189,8 @@ public class FinalDecisionService {
         if (marketCooldown.blocked()) {
             log.info("[FinalDecision] 全市場冷卻: {}", marketCooldown.reason());
             return persistAndReturn(tradingDate, new FinalDecisionResponse(
-                    "REST", List.of(), List.of(marketCooldown.reason()), marketCooldown.reason()));
+                    "REST", List.of(), List.of(marketCooldown.reason()), marketCooldown.reason()),
+                    readiness);
         }
 
         int maxCount = scoreConfigService.getInt("candidate.scan.maxCount", 8);
@@ -270,6 +283,7 @@ public class FinalDecisionService {
         entity.setDecision(enrichedDecision.decision());
         entity.setSummary(enrichedDecision.summary());
         entity.setPayloadJson(toPayload(enrichedDecision));
+        fillAiContext(entity, readiness);
         finalDecisionRepository.save(entity);
 
         return enrichedDecision;
@@ -288,14 +302,93 @@ public class FinalDecisionService {
     // ── 私有方法 ───────────────────────────────────────────────────────────────
 
     /** 快速回傳 REST 並持久化（用於滿倉等提前中斷情境） */
-    private FinalDecisionResponse persistAndReturn(LocalDate tradingDate, FinalDecisionResponse response) {
+    private FinalDecisionResponse persistAndReturn(LocalDate tradingDate, FinalDecisionResponse response,
+                                                    AiReadiness readiness) {
         FinalDecisionEntity entity = new FinalDecisionEntity();
         entity.setTradingDate(tradingDate);
         entity.setDecision(response.decision());
         entity.setSummary(response.summary());
         entity.setPayloadJson(toPayload(response));
+        fillAiContext(entity, readiness);
         finalDecisionRepository.save(entity);
         return response;
+    }
+
+    /** 把 AiReadiness 資訊寫入 FinalDecisionEntity 以便追溯 */
+    private void fillAiContext(FinalDecisionEntity entity, AiReadiness readiness) {
+        if (readiness == null) return;
+        entity.setAiTaskId(readiness.aiTaskId());
+        entity.setAiStatus(readiness.mode() == null ? null : readiness.mode().name());
+        entity.setFallbackReason(readiness.fallbackReason());
+        entity.setSourceTaskType(readiness.sourceTaskType());
+        entity.setClaudeDoneAt(readiness.claudeDoneAt());
+        entity.setCodexDoneAt(readiness.codexDoneAt());
+    }
+
+    // ── v2.1 AI Readiness ────────────────────────────────────────────────────
+
+    /** AI 準備度結果 */
+    public record AiReadiness(
+            AiReadinessMode mode,
+            Long aiTaskId,
+            String sourceTaskType,
+            LocalDateTime claudeDoneAt,
+            LocalDateTime codexDoneAt,
+            String fallbackReason
+    ) {}
+
+    public enum AiReadinessMode { FULL_AI_READY, PARTIAL_AI_READY, AI_NOT_READY }
+
+    /**
+     * v2.1 AI Readiness 判定。09:30 FinalDecision 優先讀 OPENING，fallback PREMARKET。
+     * <ul>
+     *     <li>兩者都 CODEX_DONE → FULL_AI_READY</li>
+     *     <li>僅 CLAUDE_DONE → PARTIAL_AI_READY（Codex missing）</li>
+     *     <li>都沒有或 Claude 未完成 → AI_NOT_READY</li>
+     * </ul>
+     */
+    private AiReadiness resolveAiReadiness(LocalDate tradingDate) {
+        // 先嘗試 OPENING，找不到 fallback 到 PREMARKET
+        AiTaskEntity task = findPrimaryTask(tradingDate, "OPENING");
+        String sourceType = "OPENING";
+        if (task == null) {
+            task = findPrimaryTask(tradingDate, "PREMARKET");
+            sourceType = "PREMARKET";
+        }
+
+        if (task == null) {
+            return new AiReadiness(AiReadinessMode.AI_NOT_READY, null, null,
+                    null, null, AiTaskErrorCode.AI_NOT_READY.name());
+        }
+
+        String status = task.getStatus();
+        boolean claudeDone = AiTaskService.STATUS_CLAUDE_DONE.equals(status)
+                || AiTaskService.STATUS_CODEX_RUNNING.equals(status)
+                || AiTaskService.STATUS_CODEX_DONE.equals(status)
+                || AiTaskService.STATUS_FINALIZED.equals(status);
+        boolean codexDone = AiTaskService.STATUS_CODEX_DONE.equals(status)
+                || AiTaskService.STATUS_FINALIZED.equals(status);
+
+        if (codexDone) {
+            return new AiReadiness(AiReadinessMode.FULL_AI_READY, task.getId(), sourceType,
+                    task.getClaudeDoneAt(), task.getCodexDoneAt(), null);
+        }
+        if (claudeDone) {
+            return new AiReadiness(AiReadinessMode.PARTIAL_AI_READY, task.getId(), sourceType,
+                    task.getClaudeDoneAt(), null, AiTaskErrorCode.CODEX_MISSING.name());
+        }
+        return new AiReadiness(AiReadinessMode.AI_NOT_READY, task.getId(), sourceType,
+                null, null, AiTaskErrorCode.AI_NOT_READY.name());
+    }
+
+    /** 找當日指定 taskType 最新的 non-terminal task */
+    private AiTaskEntity findPrimaryTask(LocalDate date, String taskType) {
+        return aiTaskService.getByDate(date).stream()
+                .filter(t -> taskType.equalsIgnoreCase(t.getTaskType()))
+                .filter(t -> !AiTaskService.STATUS_EXPIRED.equals(t.getStatus())
+                          && !AiTaskService.STATUS_FAILED.equals(t.getStatus()))
+                .findFirst()  // getByDate 已 order by createdAt desc
+                .orElse(null);
     }
 
     private FinalDecisionSelectedStockResponse enrichWithSizing(

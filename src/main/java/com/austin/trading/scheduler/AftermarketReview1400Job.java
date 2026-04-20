@@ -188,7 +188,7 @@ public class AftermarketReview1400Job {
                     .toList();
 
             Map<String, Double> dayHighMap = new HashMap<>();
-            for (StockQuote q : twseMisClient.getTseQuotes(symbols)) {
+            for (StockQuote q : twseMisClient.getQuotesWithOtcFallback(symbols)) {
                 if (q.dayHigh() != null) dayHighMap.put(q.symbol(), q.dayHigh());
             }
 

@@ -16,6 +16,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -23,6 +26,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * AI 任務佇列服務（PR-2）。
@@ -141,16 +145,36 @@ public class AiTaskService {
         return Optional.of(saved);
     }
 
-    /** 顯式認領指定 id 的任務。 */
+    /**
+     * 顯式認領指定 id 的任務（Claude）。
+     * 只允許 {@code PENDING → CLAUDE_RUNNING}，其他狀態回 {@link AiTaskInvalidStateException}。
+     */
     @Transactional
     public AiTaskEntity claim(Long taskId) {
-        AiTaskEntity task = aiTaskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
-        if (!STATUS_PENDING.equals(task.getStatus())) {
-            throw new IllegalStateException("Task " + taskId + " is not PENDING (status=" + task.getStatus() + ")");
-        }
+        return claimClaude(taskId);
+    }
+
+    /** v2.1：明確的 claim-claude 方法。 */
+    @Transactional
+    public AiTaskEntity claimClaude(Long taskId) {
+        AiTaskEntity task = requireTask(taskId);
+        requireState(task, Set.of(STATUS_PENDING), "claim-claude");
         task.setStatus(STATUS_CLAUDE_RUNNING);
         task.setClaudeStartedAt(LocalDateTime.now());
+        recordTransition(task, "claim-claude");
+        return aiTaskRepository.save(task);
+    }
+
+    /**
+     * v2.1：Codex 顯式認領，{@code CLAUDE_DONE → CODEX_RUNNING}。
+     */
+    @Transactional
+    public AiTaskEntity claimCodex(Long taskId) {
+        AiTaskEntity task = requireTask(taskId);
+        requireState(task, Set.of(STATUS_CLAUDE_DONE), "claim-codex");
+        task.setStatus(STATUS_CODEX_RUNNING);
+        task.setCodexStartedAt(LocalDateTime.now());
+        recordTransition(task, "claim-codex");
         return aiTaskRepository.save(task);
     }
 
@@ -158,21 +182,32 @@ public class AiTaskService {
 
     /**
      * Claude 提交研究結果：儲存 markdown + scoresJson，並自動回寫 stock_evaluation.claude_score。
+     * <p>v2.1：嚴格狀態機，只允許 {@code PENDING / CLAUDE_RUNNING}；支援 idempotent 重送。</p>
+     *
+     * @return 提交結果，含 task 與 {@code idempotent} 旗標
      */
     @Transactional
-    public AiTaskEntity submitClaudeResult(Long taskId, ClaudeSubmitRequest req) {
-        AiTaskEntity task = aiTaskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+    public SubmitResult submitClaudeResult(Long taskId, ClaudeSubmitRequest req) {
+        AiTaskEntity task = requireTask(taskId);
 
-        if (STATUS_FINALIZED.equals(task.getStatus()) || STATUS_EXPIRED.equals(task.getStatus())) {
-            throw new IllegalStateException(
-                    "Cannot submit Claude result to task " + taskId + " with status=" + task.getStatus());
+        // 計算 request hash（用於 idempotent check）
+        String hash = computeClaudeHash(req);
+
+        // Idempotent：同 task、狀態已 ≥ CLAUDE_DONE、且 hash 相同 → 直接回 OK
+        if (STATUS_CLAUDE_DONE.equals(task.getStatus()) && hashMatches(task.getResultHash(), hash, "claude")) {
+            log.info("[AiTaskService] Idempotent SUBMIT Claude id={} (same hash)", taskId);
+            return new SubmitResult(task, true);
         }
+
+        // 狀態機：只允許 PENDING / CLAUDE_RUNNING
+        requireState(task, Set.of(STATUS_PENDING, STATUS_CLAUDE_RUNNING), "claude-result");
 
         task.setClaudeResultMarkdown(req.contentMarkdown());
         task.setClaudeScoresJson(toJson(req.scores() == null ? Collections.emptyMap() : req.scores()));
         task.setClaudeDoneAt(LocalDateTime.now());
         task.setStatus(STATUS_CLAUDE_DONE);
+        task.setResultHash(mergeHash(task.getResultHash(), "claude", hash));
+        recordTransition(task, "claude-result");
 
         // 自動解析分數 → 寫入 stock_evaluation
         autoWriteClaudeScores(task.getTradingDate(), req);
@@ -184,28 +219,34 @@ public class AiTaskService {
         log.info("[AiTaskService] SUBMIT Claude id={} type={} scores={} → CLAUDE_DONE",
                 saved.getId(), saved.getTaskType(),
                 req.scores() == null ? 0 : req.scores().size());
-        return saved;
+        return new SubmitResult(saved, false);
     }
 
     /**
      * Codex 提交審核結果：儲存 markdown + scoresJson + vetoSymbolsJson，
      * 並自動回寫 stock_evaluation.codex_score / codex_review_issues。
+     * <p>v2.1：嚴格狀態機，只允許 {@code CLAUDE_DONE / CODEX_RUNNING}；支援 idempotent 重送。</p>
      */
     @Transactional
-    public AiTaskEntity submitCodexResult(Long taskId, CodexSubmitRequest req) {
-        AiTaskEntity task = aiTaskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+    public SubmitResult submitCodexResult(Long taskId, CodexSubmitRequest req) {
+        AiTaskEntity task = requireTask(taskId);
 
-        if (STATUS_FINALIZED.equals(task.getStatus()) || STATUS_EXPIRED.equals(task.getStatus())) {
-            throw new IllegalStateException(
-                    "Cannot submit Codex result to task " + taskId + " with status=" + task.getStatus());
+        String hash = computeCodexHash(req);
+
+        if (STATUS_CODEX_DONE.equals(task.getStatus()) && hashMatches(task.getResultHash(), hash, "codex")) {
+            log.info("[AiTaskService] Idempotent SUBMIT Codex id={} (same hash)", taskId);
+            return new SubmitResult(task, true);
         }
+
+        requireState(task, Set.of(STATUS_CLAUDE_DONE, STATUS_CODEX_RUNNING), "codex-result");
 
         task.setCodexResultMarkdown(req.contentMarkdown());
         task.setCodexScoresJson(toJson(req.scores() == null ? Collections.emptyMap() : req.scores()));
         task.setCodexVetoSymbolsJson(toJson(req.vetoSymbols() == null ? List.of() : req.vetoSymbols()));
         task.setCodexDoneAt(LocalDateTime.now());
         task.setStatus(STATUS_CODEX_DONE);
+        task.setResultHash(mergeHash(task.getResultHash(), "codex", hash));
+        recordTransition(task, "codex-result");
 
         autoWriteCodexScores(task.getTradingDate(), req);
 
@@ -216,26 +257,161 @@ public class AiTaskService {
                 saved.getId(), saved.getTaskType(),
                 req.scores()      == null ? 0 : req.scores().size(),
                 req.vetoSymbols() == null ? 0 : req.vetoSymbols().size());
-        return saved;
+        return new SubmitResult(saved, false);
     }
 
+    /**
+     * v2.1：只允許 {@code CODEX_DONE → FINALIZED}。
+     */
     @Transactional
     public AiTaskEntity finalizeTask(Long taskId) {
-        AiTaskEntity task = aiTaskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        AiTaskEntity task = requireTask(taskId);
+        if (STATUS_FINALIZED.equals(task.getStatus())) {
+            // idempotent：已 FINALIZED 直接回
+            return task;
+        }
+        requireState(task, Set.of(STATUS_CODEX_DONE), "finalize");
         task.setStatus(STATUS_FINALIZED);
         task.setFinalizedAt(LocalDateTime.now());
+        recordTransition(task, "finalize");
         return aiTaskRepository.save(task);
     }
 
+    /**
+     * v2.1：只允許 {@code PENDING / CLAUDE_RUNNING / CODEX_RUNNING} 才可標記 FAILED。
+     * 已 terminal（FINALIZED/FAILED/EXPIRED）不得改回 running。
+     */
     @Transactional
     public AiTaskEntity failTask(Long taskId, String errorMessage) {
-        AiTaskEntity task = aiTaskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        AiTaskEntity task = requireTask(taskId);
+        if (STATUS_FAILED.equals(task.getStatus())) return task;
+        requireState(task, Set.of(STATUS_PENDING, STATUS_CLAUDE_RUNNING, STATUS_CODEX_RUNNING), "fail");
         task.setStatus(STATUS_FAILED);
         task.setErrorMessage(truncate(errorMessage, 1000));
+        recordTransition(task, "fail: " + truncate(errorMessage, 60));
         return aiTaskRepository.save(task);
     }
+
+    /**
+     * v2.1：任何 non-terminal 狀態可以 {@code → EXPIRED}（通常由 timeout sweep 呼叫）。
+     */
+    @Transactional
+    public AiTaskEntity expireTask(Long taskId, String reason) {
+        AiTaskEntity task = requireTask(taskId);
+        if (STATUS_EXPIRED.equals(task.getStatus())) return task;
+        // terminal 不得 expire
+        if (STATUS_FINALIZED.equals(task.getStatus()) || STATUS_FAILED.equals(task.getStatus())) {
+            throw new AiTaskInvalidStateException(
+                    AiTaskErrorCode.AI_TASK_INVALID_STATE,
+                    taskId, task.getStatus(),
+                    List.of(STATUS_PENDING, STATUS_CLAUDE_RUNNING, STATUS_CLAUDE_DONE,
+                            STATUS_CODEX_RUNNING, STATUS_CODEX_DONE),
+                    "Cannot expire task in terminal status=" + task.getStatus());
+        }
+        task.setStatus(STATUS_EXPIRED);
+        task.setErrorMessage(truncate(reason, 1000));
+        recordTransition(task, "expire: " + truncate(reason, 60));
+        return aiTaskRepository.save(task);
+    }
+
+    /** Submit 結果 wrapper，含 idempotent 旗標 */
+    public record SubmitResult(AiTaskEntity task, boolean idempotent) {}
+
+    // ── 狀態機 helper ──────────────────────────────────────────────────────
+
+    private AiTaskEntity requireTask(Long taskId) {
+        return aiTaskRepository.findById(taskId)
+                .orElseThrow(() -> new AiTaskInvalidStateException(
+                        AiTaskErrorCode.TASK_NOT_FOUND, taskId, null, List.of(),
+                        "Task not found: " + taskId));
+    }
+
+    private void requireState(AiTaskEntity task, Set<String> allowed, String action) {
+        if (!allowed.contains(task.getStatus())) {
+            throw new AiTaskInvalidStateException(
+                    terminalCode(task.getStatus()),
+                    task.getId(),
+                    task.getStatus(),
+                    List.copyOf(allowed),
+                    "Cannot " + action + " when task status is " + task.getStatus());
+        }
+    }
+
+    private AiTaskErrorCode terminalCode(String currentStatus) {
+        if (STATUS_EXPIRED.equals(currentStatus)) return AiTaskErrorCode.TASK_EXPIRED;
+        // CODEX_DONE / FINALIZED 收到 Claude result 等，視為已前進
+        if (STATUS_CODEX_DONE.equals(currentStatus) || STATUS_FINALIZED.equals(currentStatus)) {
+            return AiTaskErrorCode.AI_TASK_ALREADY_ADVANCED;
+        }
+        return AiTaskErrorCode.AI_TASK_INVALID_STATE;
+    }
+
+    private void recordTransition(AiTaskEntity task, String reason) {
+        task.setLastTransitionAt(LocalDateTime.now());
+        task.setLastTransitionReason(truncate(reason, 100));
+    }
+
+    // ── Hash helpers：for idempotency ─────────────────────────────────────
+
+    private String computeClaudeHash(ClaudeSubmitRequest req) {
+        return sha256("claude:"
+                + safe(req.contentMarkdown()) + "|"
+                + toJson(req.scores()) + "|"
+                + toJson(req.thesis()) + "|"
+                + toJson(req.riskFlags()));
+    }
+
+    private String computeCodexHash(CodexSubmitRequest req) {
+        return sha256("codex:"
+                + safe(req.contentMarkdown()) + "|"
+                + toJson(req.scores()) + "|"
+                + toJson(req.vetoSymbols()) + "|"
+                + toJson(req.reviewIssues()));
+    }
+
+    /** result_hash 欄位格式：{@code claude:abc,codex:def}，分別比對 */
+    private boolean hashMatches(String stored, String newHash, String provider) {
+        if (stored == null || newHash == null) return false;
+        for (String part : stored.split(",")) {
+            int i = part.indexOf(':');
+            if (i > 0 && provider.equals(part.substring(0, i))
+                    && newHash.equals(part.substring(i + 1))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String mergeHash(String stored, String provider, String newHash) {
+        String prefix = provider + ":" + newHash;
+        if (stored == null || stored.isBlank()) return prefix;
+        // 移除舊的同 provider 記錄後附加新的
+        StringBuilder sb = new StringBuilder();
+        for (String part : stored.split(",")) {
+            int i = part.indexOf(':');
+            if (i > 0 && !provider.equals(part.substring(0, i))) {
+                if (sb.length() > 0) sb.append(',');
+                sb.append(part);
+            }
+        }
+        if (sb.length() > 0) sb.append(',');
+        sb.append(prefix);
+        return sb.toString();
+    }
+
+    private String sha256(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = md.digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : bytes) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            return String.valueOf(input.hashCode());
+        }
+    }
+
+    private String safe(String s) { return s == null ? "" : s; }
 
     // ── 查詢 ────────────────────────────────────────────────────────────────
 

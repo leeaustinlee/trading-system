@@ -62,6 +62,29 @@ public class TwseMisClient {
     // ── 混合查詢（自動選前綴）───────────────────────────────────────────────────
 
     /**
+     * v2.1：先打 TSE，找不到或無 currentPrice 的代號再打 OTC fallback。
+     * <p>解決 OTC 候選股（如 5469 瀚宇博）在 DataPrep job 用 {@link #getTseQuotes} 抓不到的問題。</p>
+     */
+    public List<StockQuote> getQuotesWithOtcFallback(List<String> symbols) {
+        if (symbols == null || symbols.isEmpty()) return List.of();
+        java.util.Map<String, StockQuote> map = new java.util.HashMap<>();
+        getTseQuotes(symbols).forEach(q -> map.put(q.symbol(), q));
+
+        List<String> otcRetry = symbols.stream()
+                .filter(s -> !map.containsKey(s) || map.get(s).currentPrice() == null)
+                .collect(Collectors.toList());
+        if (!otcRetry.isEmpty()) {
+            getOtcQuotes(otcRetry).forEach(q -> {
+                // 只在 OTC 抓到有效價格才覆蓋（避免把 OTC null 蓋掉 TSE 的 prevClose）
+                if (q.currentPrice() != null || !map.containsKey(q.symbol())) {
+                    map.put(q.symbol(), q);
+                }
+            });
+        }
+        return new java.util.ArrayList<>(map.values());
+    }
+
+    /**
      * 自動選 tse/otc 前綴查詢。
      * 預設以 tse 查詢；若需 OTC 請在 symbol 前加 "otc:" 前綴（例如 "otc:6669"）。
      */

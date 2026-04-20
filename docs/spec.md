@@ -423,3 +423,27 @@ Trading Decision Platform
 ### Phase 6
 - BC Sniper v2.0 評分管線（Consensus / Weighted / Veto / FinalRank）
 - PremarketWorkflowService / PostmarketWorkflowService Phase 2
+## v2.1 Workflow Correctness / AI Orchestration 一致性更新
+
+本文件的 workflow 與 AI task 規則，以 `docs/workflow-correctness-ai-orchestration-spec.md` 為最新權威規格。
+
+本次 P0++ 更新主題：
+
+1. AI task 狀態機必須嚴格單向，禁止狀態倒退。
+2. Claude file bridge 必須使用 `.tmp -> .json` 原子寫入協定。
+3. POSTMARKET / T86_TOMORROW task 必須由 Java DataPrep 事先建立，通知 job 只讀結果或明確 fallback。
+4. FinalDecision 預設必須等待 Claude + Codex 完成；Codex 未完成不得輸出正常 ENTER。
+
+硬性原則：
+
+- 系統從「固定時間硬跑」改為「時間 + 狀態雙重驅動」。
+- 所有 fallback 必須有 reason code，並寫入 DB、orchestration、scheduler log 與 LINE 文案。
+- Java file bridge 不可作為正式建 task 手段；正式 task 由 DataPrep / Workflow 建立。
+- `final_decision.require_codex` 預設值必須為 `true`。
+
+詳見：
+
+- `docs/workflow-correctness-ai-orchestration-spec.md`
+- `docs/scheduler-plan.md`
+- `docs/api-spec.md`
+- `docs/db-schema.md`

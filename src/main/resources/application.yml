@@ -86,3 +86,27 @@ trading:
     enabled: ${CLAUDE_SUBMIT_BRIDGE_ENABLED:true}
     watch-dir: ${CLAUDE_SUBMIT_WATCH_DIR:D:/ai/stock/claude-submit}
     scan-interval-ms: 30000
+
+# v2.1 AI Orchestration 規格（docs/workflow-correctness-ai-orchestration-spec.md）
+ai:
+  file_bridge:
+    use_tmp_protocol: true
+    required_stable_seconds: 2
+    processed_dir: ${CLAUDE_SUBMIT_WATCH_DIR:D:/ai/stock/claude-submit}/processed
+    failed_dir: ${CLAUDE_SUBMIT_WATCH_DIR:D:/ai/stock/claude-submit}/failed
+    retry_dir: ${CLAUDE_SUBMIT_WATCH_DIR:D:/ai/stock/claude-submit}/retry
+    allow_auto_create_task: false
+  task:
+    claude:
+      timeout:
+        minutes: 20
+    codex:
+      timeout:
+        minutes: 10
+    pending:
+      timeout:
+        minutes: 30
+    sweep:
+      enabled: true
+      interval:
+        seconds: 60

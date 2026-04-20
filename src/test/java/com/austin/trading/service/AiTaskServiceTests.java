@@ -199,9 +199,11 @@ class AiTaskServiceTests {
         Map<String, String> thesis = new HashMap<>();
         thesis.put("2303", "好");
 
-        AiTaskEntity submitted = service.submitClaudeResult(t.getId(),
+        AiTaskService.SubmitResult res = service.submitClaudeResult(t.getId(),
                 new ClaudeSubmitRequest("full md", scores, thesis, List.of("risk1")));
+        AiTaskEntity submitted = res.task();
 
+        assertThat(res.idempotent()).isFalse();
         assertThat(submitted.getStatus()).isEqualTo(AiTaskService.STATUS_CLAUDE_DONE);
         assertThat(submitted.getClaudeDoneAt()).isNotNull();
         assertThat(submitted.getClaudeScoresJson()).contains("2303");
@@ -231,7 +233,7 @@ class AiTaskServiceTests {
         Map<String, String> issues = Map.of("6213", "風險未揭露");
 
         AiTaskEntity submitted = service.submitCodexResult(t.getId(),
-                new CodexSubmitRequest("codex md", cscores, List.of("6213"), issues));
+                new CodexSubmitRequest("codex md", cscores, List.of("6213"), issues)).task();
 
         assertThat(submitted.getStatus()).isEqualTo(AiTaskService.STATUS_CODEX_DONE);
         assertThat(submitted.getCodexDoneAt()).isNotNull();
@@ -244,7 +246,7 @@ class AiTaskServiceTests {
                 .anyMatch(r -> r.codexScore() != null && r.codexScore().compareTo(new BigDecimal("8.0")) == 0);
     }
 
-    // ── 6. finalizeTask → FINALIZED ────────────────────────────────────
+    // ── 6. finalizeTask → FINALIZED（v2.1：要先 CODEX_DONE）────────────────
     @Test
     void finalizeTask_shouldMarkFinalized() {
         LocalDate date = LocalDate.of(2026, 4, 20);
@@ -252,6 +254,8 @@ class AiTaskServiceTests {
         service.claim(t.getId());
         service.submitClaudeResult(t.getId(),
                 new ClaudeSubmitRequest("md", Collections.emptyMap(), null, null));
+        service.submitCodexResult(t.getId(),
+                new CodexSubmitRequest("codex", Collections.emptyMap(), List.of(), null));
 
         AiTaskEntity done = service.finalizeTask(t.getId());
         assertThat(done.getStatus()).isEqualTo(AiTaskService.STATUS_FINALIZED);
@@ -273,6 +277,8 @@ class AiTaskServiceTests {
                 new ClaudeSubmitRequest("md", Collections.emptyMap(), null, null));
         assertThat(service.isClaudeReady(date, "PREMARKET")).isTrue();   // CLAUDE_DONE
 
+        service.submitCodexResult(t.getId(),
+                new CodexSubmitRequest("codex", Collections.emptyMap(), List.of(), null));
         service.finalizeTask(t.getId());
         assertThat(service.isClaudeReady(date, "PREMARKET")).isTrue();   // FINALIZED
     }
@@ -293,15 +299,17 @@ class AiTaskServiceTests {
         assertThat(service.isCodexReady(date, "PREMARKET")).isTrue();
     }
 
-    // ── 8. submit 不存在 task → throw ─────────────────────────────────
+    // ── 8. submit 不存在 task → throw（v2.1：AiTaskInvalidStateException / TASK_NOT_FOUND）─────
     @Test
     void submitClaudeResult_taskNotFound_shouldThrow() {
         assertThatThrownBy(() -> service.submitClaudeResult(999L,
                 new ClaudeSubmitRequest("md", null, null, null)))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(AiTaskInvalidStateException.class)
+                .matches(e -> ((AiTaskInvalidStateException) e).getErrorCode()
+                        == AiTaskErrorCode.TASK_NOT_FOUND);
     }
 
-    // ── 9. FINALIZED 的 task 再提交 → throw ───────────────────────────
+    // ── 9. FINALIZED 的 task 再提交 → throw（v2.1：AiTaskInvalidStateException）─────
     @Test
     void submitClaudeResult_finalizedTask_shouldThrow() {
         LocalDate date = LocalDate.of(2026, 4, 20);
@@ -309,11 +317,60 @@ class AiTaskServiceTests {
         service.claim(t.getId());
         service.submitClaudeResult(t.getId(),
                 new ClaudeSubmitRequest("md", Collections.emptyMap(), null, null));
+        // v2.1：要先 CODEX_DONE 才能 finalize
+        service.submitCodexResult(t.getId(),
+                new CodexSubmitRequest("codex", Collections.emptyMap(), List.of(), null));
         service.finalizeTask(t.getId());
 
         assertThatThrownBy(() -> service.submitClaudeResult(t.getId(),
-                new ClaudeSubmitRequest("md", Collections.emptyMap(), null, null)))
-                .isInstanceOf(IllegalStateException.class);
+                new ClaudeSubmitRequest("changed", Collections.emptyMap(), null, null)))
+                .isInstanceOf(AiTaskInvalidStateException.class);
+    }
+
+    // ── 9b. CODEX_DONE 收到 Claude result → AI_TASK_ALREADY_ADVANCED ───
+    @Test
+    void submitClaudeResult_onCodexDone_shouldFail409() {
+        LocalDate date = LocalDate.of(2026, 4, 20);
+        AiTaskEntity t = service.createTask(date, "PREMARKET", null, List.of(), "t", null);
+        service.claim(t.getId());
+        service.submitClaudeResult(t.getId(),
+                new ClaudeSubmitRequest("md", Collections.emptyMap(), null, null));
+        service.submitCodexResult(t.getId(),
+                new CodexSubmitRequest("codex", Collections.emptyMap(), List.of(), null));
+
+        assertThatThrownBy(() -> service.submitClaudeResult(t.getId(),
+                new ClaudeSubmitRequest("new md", Collections.emptyMap(), null, null)))
+                .isInstanceOf(AiTaskInvalidStateException.class)
+                .matches(e -> ((AiTaskInvalidStateException) e).getErrorCode()
+                        == AiTaskErrorCode.AI_TASK_ALREADY_ADVANCED);
+    }
+
+    // ── 9c. 相同 Claude hash 重送 → idempotent success ─────────────────
+    @Test
+    void submitClaudeResult_sameHashRepost_shouldBeIdempotent() {
+        LocalDate date = LocalDate.of(2026, 4, 20);
+        AiTaskEntity t = service.createTask(date, "PREMARKET", null, List.of(), "t", null);
+        service.claim(t.getId());
+        ClaudeSubmitRequest req = new ClaudeSubmitRequest("md-v1",
+                java.util.Map.of("2303", new BigDecimal("8.0")), null, null);
+
+        AiTaskService.SubmitResult first = service.submitClaudeResult(t.getId(), req);
+        AiTaskService.SubmitResult second = service.submitClaudeResult(t.getId(), req);
+
+        assertThat(first.idempotent()).isFalse();
+        assertThat(second.idempotent()).isTrue();
+        assertThat(second.task().getStatus()).isEqualTo(AiTaskService.STATUS_CLAUDE_DONE);
+    }
+
+    // ── 9d. FAILED task 不可 claim 回 running ──────────────────────────
+    @Test
+    void failedTask_cannotClaimAgain() {
+        LocalDate date = LocalDate.of(2026, 4, 20);
+        AiTaskEntity t = service.createTask(date, "PREMARKET", null, List.of(), "t", null);
+        service.failTask(t.getId(), "simulated");
+
+        assertThatThrownBy(() -> service.claimClaude(t.getId()))
+                .isInstanceOf(AiTaskInvalidStateException.class);
     }
 
     // ── 10. failTask → FAILED ──────────────────────────────────────────
@@ -339,13 +396,13 @@ class AiTaskServiceTests {
         assertThat(store).hasSize(2);
     }
 
-    // ── 12. claim() 非 PENDING → throw ─────────────────────────────────
+    // ── 12. claim() 非 PENDING → throw（v2.1：AiTaskInvalidStateException）─────
     @Test
     void claim_nonPendingTask_shouldThrow() {
         LocalDate date = LocalDate.of(2026, 4, 20);
         AiTaskEntity t = service.createTask(date, "PREMARKET", null, List.of(), "t", null);
         service.claim(t.getId());
         assertThatThrownBy(() -> service.claim(t.getId()))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(AiTaskInvalidStateException.class);
     }
 }

@@ -106,7 +106,7 @@ public class PremarketDataPrepJob {
 
             List<StockQuote> quotes = symbols.isEmpty()
                     ? List.of()
-                    : twseMisClient.getTseQuotes(symbols);
+                    : twseMisClient.getQuotesWithOtcFallback(symbols);
 
             String quoteSummary = quotes.stream()
                     .filter(q -> q.prevClose() != null)

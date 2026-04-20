@@ -2,8 +2,10 @@ package com.austin.trading.scheduler;
 
 import com.austin.trading.client.TwseInstitutionalClient;
 import com.austin.trading.client.dto.InstitutionalFlow;
+import com.austin.trading.dto.request.AiTaskCandidateRef;
 import com.austin.trading.entity.CandidateStockEntity;
 import com.austin.trading.repository.CandidateStockRepository;
+import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
@@ -37,17 +39,20 @@ public class T86DataPrepJob {
     private final CandidateStockRepository candidateStockRepository;
     private final SchedulerLogService      schedulerLogService;
     private final DailyOrchestrationService orchestrationService;
+    private final AiTaskService            aiTaskService;
 
     public T86DataPrepJob(
             TwseInstitutionalClient institutionalClient,
             CandidateStockRepository candidateStockRepository,
             SchedulerLogService schedulerLogService,
-            DailyOrchestrationService orchestrationService
+            DailyOrchestrationService orchestrationService,
+            AiTaskService aiTaskService
     ) {
         this.institutionalClient      = institutionalClient;
         this.candidateStockRepository = candidateStockRepository;
         this.schedulerLogService      = schedulerLogService;
         this.orchestrationService     = orchestrationService;
+        this.aiTaskService            = aiTaskService;
     }
 
     @Scheduled(cron = "${trading.scheduler.t86-data-prep-cron:0 10 18 * * MON-FRI}",
@@ -88,6 +93,21 @@ public class T86DataPrepJob {
                 entity.setPayloadJson(mergeInstitutional(entity.getPayloadJson(), flow));
                 candidateStockRepository.save(entity);
                 updated++;
+            }
+
+            // v2.1：建 T86_TOMORROW ai_task（供 Claude 17:50 / Codex 17:58 接手，18:30 TomorrowPlan 讀取）
+            try {
+                List<AiTaskCandidateRef> refs = candidates.stream()
+                        .map(c -> new AiTaskCandidateRef(
+                                c.getSymbol(), c.getStockName(), c.getThemeTag(), null))
+                        .collect(Collectors.toList());
+                aiTaskService.createTask(
+                        today, "T86_TOMORROW", null, refs,
+                        "18:10 T86 確認後候選（共 " + refs.size() + " 檔），等 Claude 17:50 / Codex 17:58 接手",
+                        "D:/ai/stock/claude-research-request.json"
+                );
+            } catch (Exception e) {
+                log.warn("[T86DataPrepJob] createTask 失敗: {}", e.getMessage());
             }
 
             String msg = String.format("t86_rows=%d candidates=%d updated=%d",

@@ -178,3 +178,33 @@ Response: `StockEvaluateResult`（含 valuationMode, entryPriceZone, stopLossPri
 - `position.close_price`
 - `position.realized_pnl`
 - 核心表：`position`、`ai_research_log`、`external_probe_log`
+## v2.1 AI Task API 契約變更
+
+最新 workflow correctness 規格見 `docs/workflow-correctness-ai-orchestration-spec.md`。
+
+AI task API 必須遵守嚴格狀態機：
+
+| Endpoint | 允許前置狀態 | 成功後狀態 |
+|---|---|---|
+| `POST /api/ai/tasks/{id}/claim-claude` | `PENDING` | `CLAUDE_RUNNING` |
+| `POST /api/ai/tasks/{id}/claude-result` | `PENDING`, `CLAUDE_RUNNING` | `CLAUDE_DONE` |
+| `POST /api/ai/tasks/{id}/claim-codex` | `CLAUDE_DONE` | `CODEX_RUNNING` |
+| `POST /api/ai/tasks/{id}/codex-result` | `CLAUDE_DONE`, `CODEX_RUNNING` | `CODEX_DONE` |
+| `POST /api/ai/tasks/{id}/finalize` | `CODEX_DONE` | `FINALIZED` |
+| `POST /api/ai/tasks/{id}/fail` | `PENDING`, `CLAUDE_RUNNING`, `CODEX_RUNNING` | `FAILED` |
+| `POST /api/ai/tasks/{id}/expire` | non-terminal states | `EXPIRED` |
+
+非法狀態轉移必須回：
+
+```json
+{
+  "success": false,
+  "errorCode": "AI_TASK_INVALID_STATE",
+  "message": "Cannot submit Claude result when task status is CODEX_DONE",
+  "taskId": 42,
+  "currentStatus": "CODEX_DONE",
+  "expectedStatuses": ["PENDING", "CLAUDE_RUNNING"]
+}
+```
+
+Codex 未完成且 `final_decision.require_codex=true` 時，FinalDecision API 不得產出正常 `ENTER`。

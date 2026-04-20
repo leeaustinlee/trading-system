@@ -185,3 +185,20 @@ Codex 通知前必須讀 Claude 研究檔；若研究檔不存在、為空或超
 - market_grade = C 時，decision 預設今日建議休息，monitor_mode 預設 OFF。
 - market_grade = B 時，decision 預設只可觀察；除非非常明確洗盤轉強，否則不可進場。
 - 11:00 後無持倉且無明確轉強，monitor_mode 優先降為 OFF。
+## v2.1 Workflow Correctness 補充
+
+雙 AI 決策鏈的正式順序為：
+
+```text
+Java 建 task -> Claude 研究 -> Java 匯入 CLAUDE_DONE -> Codex 審核 -> CODEX_DONE -> Java FinalDecision / LINE
+```
+
+規則：
+
+- Claude 只做研究，不直接產生最終下單通知。
+- Codex 只審核 `CLAUDE_DONE` task，不跳過 Claude 直接產生正式 ENTER。
+- Java FinalDecision 預設必須等待 `CODEX_DONE`。
+- 若 AI 未完成，通知必須明確標示 `AI_NOT_READY`、`CODEX_MISSING` 或 `AI_TIMEOUT`，不得看起來像完整 AI 決策。
+- POSTMARKET 與 T86_TOMORROW task 必須由 Java DataPrep 事先建立，不能等通知時間才建 task。
+
+完整規格見 `docs/workflow-correctness-ai-orchestration-spec.md`。
