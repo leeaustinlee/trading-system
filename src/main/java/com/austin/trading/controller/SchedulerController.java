@@ -162,12 +162,14 @@ public class SchedulerController {
     @GetMapping("/logs")
     public List<SchedulerExecutionLogEntity> logs(
             @RequestParam(required = false) String jobName,
-            @RequestParam(defaultValue = "50") int limit) {
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") int page) {
         int n = Math.max(1, Math.min(limit, 500));
+        int p = Math.max(0, page);
         if (jobName != null && !jobName.isBlank()) {
-            return logRepository.findByJobNameOrderByTriggerTimeDesc(jobName, PageRequest.of(0, n));
+            return logRepository.findByJobNameOrderByTriggerTimeDesc(jobName, PageRequest.of(p, n));
         }
-        return logRepository.findAllByOrderByTriggerTimeDesc(PageRequest.of(0, n));
+        return logRepository.findAllByOrderByTriggerTimeDesc(PageRequest.of(p, n));
     }
 
     // ── 手動觸發 ──────────────────────────────────────────────────────

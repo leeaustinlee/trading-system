@@ -45,7 +45,7 @@ public class DashboardController {
     @GetMapping("/current")
     public DashboardCurrentResponse getCurrentDashboard() {
         return new DashboardCurrentResponse(
-                marketDataService.getCurrentMarket().orElse(null),
+                marketDataService.getMarketPreferToday().orElse(null),
                 tradingStateService.getCurrentState().orElse(null),
                 finalDecisionService.getCurrent().orElse(null),
                 hourlyGateDecisionService.getCurrent().orElse(null),

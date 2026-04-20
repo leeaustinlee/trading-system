@@ -28,9 +28,12 @@ public class MarketController {
     }
 
     @GetMapping("/current")
-    public ResponseEntity<MarketCurrentResponse> getCurrent() {
-        return marketDataService.getCurrentMarket()
-                .map(ResponseEntity::ok)
+    public ResponseEntity<MarketCurrentResponse> getCurrent(
+            @RequestParam(name = "preferToday", defaultValue = "false") boolean preferToday) {
+        var opt = preferToday
+                ? marketDataService.getMarketPreferToday()
+                : marketDataService.getCurrentMarket();
+        return opt.map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 

@@ -2,6 +2,7 @@ package com.austin.trading.controller;
 
 import com.austin.trading.dto.request.PositionCloseRequest;
 import com.austin.trading.dto.request.PositionCreateRequest;
+import com.austin.trading.dto.request.PositionPartialCloseRequest;
 import com.austin.trading.dto.request.PositionUpdateRequest;
 import com.austin.trading.dto.response.LiveQuoteResponse;
 import com.austin.trading.dto.response.PositionResponse;
@@ -83,12 +84,21 @@ public class PositionController {
         return positionService.update(id, request);
     }
 
-    /** 出清持倉 */
+    /** 出清持倉（全部） */
     @PatchMapping("/{id}/close")
     public PositionResponse close(
             @PathVariable Long id,
             @Valid @RequestBody PositionCloseRequest request
     ) {
         return positionService.close(id, request);
+    }
+
+    /** 分段出清持倉（指定本次賣出張數與價格） */
+    @PostMapping("/{id}/partial-close")
+    public PositionResponse partialClose(
+            @PathVariable Long id,
+            @Valid @RequestBody PositionPartialCloseRequest request
+    ) {
+        return positionService.partialClose(id, request);
     }
 }

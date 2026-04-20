@@ -39,22 +39,22 @@ public class AiResearchService {
     // ── 查詢方法 ──────────────────────────────────────────────────────────────
 
     public List<AiResearchResponse> getByDate(LocalDate date) {
-        return repository.findByTradingDateOrderByCreatedAtDesc(date)
+        return repository.findByTradingDateOrderByCreatedAtDescIdDesc(date)
                 .stream().map(this::toResponse).toList();
     }
 
     public List<AiResearchResponse> getByDateAndType(LocalDate date, String type) {
-        return repository.findByTradingDateAndResearchTypeOrderByCreatedAtDesc(date, type)
+        return repository.findByTradingDateAndResearchTypeOrderByCreatedAtDescIdDesc(date, type)
                 .stream().map(this::toResponse).toList();
     }
 
     public Optional<AiResearchResponse> getLatestForSymbol(String type, String symbol) {
-        return repository.findTopByResearchTypeAndSymbolOrderByCreatedAtDesc(type, symbol)
+        return repository.findTopByResearchTypeAndSymbolOrderByCreatedAtDescIdDesc(type, symbol)
                 .map(this::toResponse);
     }
 
     public Optional<AiResearchResponse> getLatestForDate(LocalDate date, String type) {
-        return repository.findTopByTradingDateAndResearchTypeOrderByCreatedAtDesc(date, type)
+        return repository.findTopByTradingDateAndResearchTypeOrderByCreatedAtDescIdDesc(date, type)
                 .map(this::toResponse);
     }
 

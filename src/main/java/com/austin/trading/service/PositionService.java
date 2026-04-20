@@ -2,6 +2,7 @@ package com.austin.trading.service;
 
 import com.austin.trading.dto.request.PositionCloseRequest;
 import com.austin.trading.dto.request.PositionCreateRequest;
+import com.austin.trading.dto.request.PositionPartialCloseRequest;
 import com.austin.trading.dto.request.PositionUpdateRequest;
 import com.austin.trading.dto.response.PositionResponse;
 import com.austin.trading.entity.PositionEntity;
@@ -145,6 +146,66 @@ public class PositionService {
         }
 
         return toResponse(saved);
+    }
+
+    /**
+     * 分段出清：指定 qty + closePrice，將此次出清部分拆成獨立 CLOSED 紀錄，
+     * 原持倉扣掉對應張數繼續保持 OPEN。若 qty >= 剩餘張數，等同全部出清。
+     */
+    @Transactional
+    public PositionResponse partialClose(Long id, PositionPartialCloseRequest request) {
+        PositionEntity entity = positionRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Position not found: " + id));
+
+        if ("CLOSED".equalsIgnoreCase(entity.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Position already closed: " + id);
+        }
+        if (entity.getQty() == null || entity.getQty().signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Position qty invalid: " + id);
+        }
+        if (request.qty().signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "qty must be positive");
+        }
+
+        BigDecimal sellQty = request.qty();
+        BigDecimal remaining = entity.getQty();
+
+        // 若一次賣完，等同全部出清
+        if (sellQty.compareTo(remaining) >= 0) {
+            return close(id, new PositionCloseRequest(
+                    request.closePrice(), request.closedAt(), request.exitReason(), request.note()));
+        }
+
+        LocalDateTime closedAt = request.closedAt() == null ? LocalDateTime.now() : request.closedAt();
+
+        // 建立新 CLOSED 子紀錄：copy 原欄位 + 本次賣量/價
+        PositionEntity closedLeg = new PositionEntity();
+        closedLeg.setSymbol(entity.getSymbol());
+        closedLeg.setStockName(entity.getStockName());
+        closedLeg.setSide(entity.getSide());
+        closedLeg.setQty(sellQty);
+        closedLeg.setAvgCost(entity.getAvgCost());
+        closedLeg.setStatus("CLOSED");
+        closedLeg.setOpenedAt(entity.getOpenedAt());
+        closedLeg.setClosePrice(request.closePrice());
+        closedLeg.setClosedAt(closedAt);
+        closedLeg.setExitReason(request.exitReason());
+        closedLeg.setRealizedPnl(computePnl(closedLeg, request.closePrice()));
+        closedLeg.setPayloadJson(entity.getPayloadJson());
+        String parentNote = "分段出清 from #" + entity.getId();
+        closedLeg.setNote(request.note() == null || request.note().isBlank()
+                ? parentNote : parentNote + " / " + request.note());
+        PositionEntity savedLeg = positionRepository.save(closedLeg);
+
+        // 原持倉扣張數
+        entity.setQty(remaining.subtract(sellQty));
+        positionRepository.save(entity);
+
+        // 更新當日損益
+        pnlService.recordClosedPosition(savedLeg, savedLeg.getRealizedPnl());
+
+        // 分段出清不自動產生 trade review（避免多次重複），全清時才產生
+        return toResponse(savedLeg);
     }
 
     private BigDecimal computePnl(PositionEntity entity, BigDecimal closePrice) {

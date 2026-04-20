@@ -11,6 +11,9 @@ public interface NotificationLogRepository extends JpaRepository<NotificationLog
 
     List<NotificationLogEntity> findAllByOrderByEventTimeDesc(Pageable pageable);
 
+    List<NotificationLogEntity> findAllByEventTimeBetweenOrderByEventTimeDesc(
+            LocalDateTime start, LocalDateTime end, Pageable pageable);
+
     boolean existsByNotificationTypeAndTitleAndEventTimeAfter(
             String notificationType,
             String title,

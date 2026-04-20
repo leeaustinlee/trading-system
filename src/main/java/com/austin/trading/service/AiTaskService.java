@@ -44,6 +44,8 @@ import java.util.Set;
 public class AiTaskService {
 
     private static final Logger log = LoggerFactory.getLogger(AiTaskService.class);
+    private static final int RESULT_HASH_SHORT_LEN = 40;
+    private static final int RESULT_HASH_MAX_LEN = 128;
 
     // ── 狀態常數 ─────────────────────────────────────────────────────────────
     public static final String STATUS_PENDING        = "PENDING";
@@ -354,19 +356,19 @@ public class AiTaskService {
     // ── Hash helpers：for idempotency ─────────────────────────────────────
 
     private String computeClaudeHash(ClaudeSubmitRequest req) {
-        return sha256("claude:"
+        return shortHash(sha256("claude:"
                 + safe(req.contentMarkdown()) + "|"
                 + toJson(req.scores()) + "|"
                 + toJson(req.thesis()) + "|"
-                + toJson(req.riskFlags()));
+                + toJson(req.riskFlags())));
     }
 
     private String computeCodexHash(CodexSubmitRequest req) {
-        return sha256("codex:"
+        return shortHash(sha256("codex:"
                 + safe(req.contentMarkdown()) + "|"
                 + toJson(req.scores()) + "|"
                 + toJson(req.vetoSymbols()) + "|"
-                + toJson(req.reviewIssues()));
+                + toJson(req.reviewIssues())));
     }
 
     /** result_hash 欄位格式：{@code claude:abc,codex:def}，分別比對 */
@@ -374,16 +376,19 @@ public class AiTaskService {
         if (stored == null || newHash == null) return false;
         for (String part : stored.split(",")) {
             int i = part.indexOf(':');
-            if (i > 0 && provider.equals(part.substring(0, i))
-                    && newHash.equals(part.substring(i + 1))) {
-                return true;
+            if (i > 0 && provider.equals(part.substring(0, i))) {
+                String oldHash = part.substring(i + 1);
+                // 與舊資料相容：允許 full-hash 與 short-hash 互比
+                if (newHash.equals(oldHash) || oldHash.startsWith(newHash) || newHash.startsWith(oldHash)) {
+                    return true;
+                }
             }
         }
         return false;
     }
 
     private String mergeHash(String stored, String provider, String newHash) {
-        String prefix = provider + ":" + newHash;
+        String prefix = provider + ":" + shortHash(newHash);
         if (stored == null || stored.isBlank()) return prefix;
         // 移除舊的同 provider 記錄後附加新的
         StringBuilder sb = new StringBuilder();
@@ -396,7 +401,15 @@ public class AiTaskService {
         }
         if (sb.length() > 0) sb.append(',');
         sb.append(prefix);
-        return sb.toString();
+        String merged = sb.toString();
+        return merged.length() <= RESULT_HASH_MAX_LEN
+                ? merged
+                : merged.substring(0, RESULT_HASH_MAX_LEN);
+    }
+
+    private String shortHash(String hash) {
+        if (hash == null) return null;
+        return hash.length() <= RESULT_HASH_SHORT_LEN ? hash : hash.substring(0, RESULT_HASH_SHORT_LEN);
     }
 
     private String sha256(String input) {

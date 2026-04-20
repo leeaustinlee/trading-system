@@ -397,6 +397,7 @@
   <button class="nav-tab" data-page="pagePnl">損益</button>
   <button class="nav-tab" data-page="pageDecisions">決策歷史</button>
   <button class="nav-tab" data-page="pageAiResearch">AI 研究</button>
+  <button class="nav-tab" data-page="pageScheduler">排程</button>
   <div class="nav-more" style="position:relative;display:inline-block">
     <button class="nav-tab" id="navMoreBtn" onclick="toggleNavMore()">進階 ▾</button>
     <div id="navMoreMenu" style="
@@ -405,7 +406,6 @@
       box-shadow:0 8px 24px rgba(18,35,62,.12); padding:6px; min-width:130px;
       margin-top:4px;
     ">
-      <button class="nav-tab" data-page="pageScheduler"  style="display:block;width:100%;text-align:left">排程</button>
       <button class="nav-tab" data-page="pageSystem"     style="display:block;width:100%;text-align:left">系統</button>
       <button class="nav-tab" data-page="pageSettings"   style="display:block;width:100%;text-align:left">設定</button>
     </div>
@@ -724,7 +724,10 @@
       </section>
 
       <section class="card span-6">
-        <h2>監控決策歷史</h2>
+        <h2>監控決策歷史
+          <span class="small" id="dec-monitorScope" style="margin-left:8px;color:var(--muted);font-weight:normal">（今日）</span>
+          <button class="btn" id="dec-monitorLoadAll" style="margin-left:auto;padding:4px 10px;font-size:12px">載入歷史</button>
+        </h2>
         <table>
           <thead><tr><th>時間</th><th>模式</th><th>事件</th><th>動作</th></tr></thead>
           <tbody id="dec-monitorBody"></tbody>
@@ -732,7 +735,10 @@
       </section>
 
       <section class="card span-6">
-        <h2>近期通知</h2>
+        <h2>近期通知
+          <span class="small" id="dec-notifScope" style="margin-left:8px;color:var(--muted);font-weight:normal">（今日）</span>
+          <button class="btn" id="dec-notifLoadAll" style="margin-left:auto;padding:4px 10px;font-size:12px">載入歷史</button>
+        </h2>
         <table>
           <thead><tr><th>時間</th><th>類型</th><th>標題</th><th>頻道</th></tr></thead>
           <tbody id="dec-notifBody"></tbody>
@@ -826,6 +832,58 @@
     <div id="errBoxSched" class="errbox"></div>
     <div class="grid">
       <section class="card span-12">
+        <h2>🤖 今日 AI 任務狀態
+          <span class="small" id="sched-aiUpdatedAt" style="margin-left:8px;color:var(--muted);font-weight:normal"></span>
+          <button class="btn" onclick="showAiHelpModal()" style="margin-left:6px;padding:4px 10px;font-size:12px">❓ 如何處理異常</button>
+          <button class="btn" id="sched-aiRefresh" style="margin-left:auto;padding:4px 10px;font-size:12px">⟳ 刷新</button>
+        </h2>
+        <p class="small" style="margin-bottom:8px;color:var(--muted)">
+          Claude / Codex 兩段式研究的完成狀態。每個任務都有預計完成時間；若超過仍未完成，系統會標紅並提供處理按鈕。
+        </p>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>任務類型</th>
+              <th>狀態</th>
+              <th>Claude（預計→實際）</th>
+              <th>Codex（預計→實際）</th>
+              <th>最終決策（預計→實際）</th>
+              <th>最後更新</th>
+              <th>動作</th>
+            </tr>
+          </thead>
+          <tbody id="sched-aiBody"><tr><td colspan="7">載入中...</td></tr></tbody>
+        </table>
+      </section>
+
+      <section class="card span-12">
+        <h2>📜 執行歷史
+          <span class="small" id="sched-logPage" style="margin-left:8px;color:var(--muted);font-weight:normal">第 1 頁</span>
+        </h2>
+        <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <select id="sched-log-filter" style="padding:4px 8px">
+            <option value="">全部 Job</option>
+          </select>
+          <button class="btn" id="sched-log-refresh">⟳ 刷新</button>
+          <span style="flex:1"></span>
+          <button class="btn" id="sched-log-prev">← 上一頁</button>
+          <button class="btn" id="sched-log-next">下一頁 →</button>
+        </div>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>觸發時間</th>
+              <th>排程</th>
+              <th>狀態</th>
+              <th>耗時 (ms)</th>
+              <th>訊息</th>
+            </tr>
+          </thead>
+          <tbody id="sched-logs-body"><tr><td colspan="5">載入中...</td></tr></tbody>
+        </table>
+      </section>
+
+      <section class="card span-12">
         <h2>📅 排程 Job 清單</h2>
         <p class="small" style="margin-bottom:8px;color:var(--muted)">
           所有 Spring @Scheduled Job 的狀態與最近執行記錄。若排程 Job 沒跑到，可用「手動觸發」補。
@@ -837,7 +895,7 @@
         <table class="table" id="sched-jobs-table">
           <thead>
             <tr>
-              <th>Job</th>
+              <th>排程</th>
               <th>啟用</th>
               <th>Cron</th>
               <th>最後執行</th>
@@ -848,28 +906,6 @@
             </tr>
           </thead>
           <tbody id="sched-jobs-body"><tr><td colspan="8">載入中...</td></tr></tbody>
-        </table>
-      </section>
-
-      <section class="card span-12">
-        <h2>📜 執行歷史（最近 50 筆）</h2>
-        <div style="margin-bottom:12px">
-          <select id="sched-log-filter" style="padding:4px 8px">
-            <option value="">全部 Job</option>
-          </select>
-          <button class="btn" id="sched-log-refresh">⟳ 刷新</button>
-        </div>
-        <table class="table">
-          <thead>
-            <tr>
-              <th>觸發時間</th>
-              <th>Job</th>
-              <th>狀態</th>
-              <th>耗時 (ms)</th>
-              <th>訊息</th>
-            </tr>
-          </thead>
-          <tbody id="sched-logs-body"><tr><td colspan="5">載入中...</td></tr></tbody>
         </table>
       </section>
     </div>
@@ -1249,6 +1285,17 @@
     </div>
     <div class="form-grid">
       <div class="form-field">
+        <label>出清模式</label>
+        <select id="mc-mode">
+          <option value="FULL">全部出清</option>
+          <option value="PARTIAL">部分出清</option>
+        </select>
+      </div>
+      <div class="form-field" id="mc-qtyWrap" style="display:none">
+        <label>賣出張數 * <span class="small" id="mc-qtyHint" style="color:var(--muted)"></span></label>
+        <input id="mc-qty" type="number" step="1" min="1" />
+      </div>
+      <div class="form-field">
         <label>出清價 *</label>
         <input id="mc-closePrice" type="number" step="0.01" min="0.01" />
       </div>
@@ -1276,6 +1323,57 @@
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('modal-close-pos')">取消</button>
       <button class="btn danger" id="mc-submitBtn">確認出清</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ MODAL: AI 任務異常處理說明 ══════════════ -->
+<div class="modal-overlay" id="modal-ai-help" style="display:none" onclick="if(event.target===this)closeModal('modal-ai-help')">
+  <div class="modal-box" style="max-width:640px">
+    <div class="modal-title">
+      如何處理 AI 任務異常
+      <button class="modal-close" onclick="closeModal('modal-ai-help')">✕</button>
+    </div>
+    <div style="font-size:13px;line-height:1.7;color:#333">
+      <p><b>預計時程</b>（每個任務都有三段完成時限）：</p>
+      <table class="table" style="margin:6px 0 14px">
+        <thead><tr><th>任務</th><th>建立</th><th>Claude</th><th>Codex</th><th>最終決策</th></tr></thead>
+        <tbody>
+          <tr><td>盤前研究</td><td>08:10</td><td>≤ 08:25</td><td>≤ 08:29</td><td>08:30</td></tr>
+          <tr><td>開盤研究</td><td>09:01</td><td>≤ 09:25</td><td>≤ 09:29</td><td>09:30</td></tr>
+          <tr><td>盤中研究</td><td>11:00</td><td>≤ 11:15</td><td>≤ 11:25</td><td>11:30</td></tr>
+          <tr><td>盤後研究</td><td>15:05</td><td>≤ 15:25</td><td>≤ 15:29</td><td>15:30</td></tr>
+          <tr><td>明日策略</td><td>18:10</td><td>≤ 18:25</td><td>≤ 18:29</td><td>18:30</td></tr>
+        </tbody>
+      </table>
+      <p><b>常見異常與處理</b>：</p>
+      <ol style="padding-left:22px;margin:6px 0">
+        <li><b>PENDING 過了預計 Claude 完成時間</b><br>
+          → Claude Code Agent 可能沒啟動或沒讀檔。打開 Claude Code 視窗，輸入：<br>
+          <code style="background:#f5f5f5;padding:2px 6px;border-radius:4px">讀 D:\ai\stock\claude-research-request.json 並執行研究</code>
+        </li>
+        <li><b>CLAUDE_DONE 卡住，Codex 沒接手</b><br>
+          → Codex runner 沒跑。檢查：<br>
+          <code style="background:#f5f5f5;padding:2px 6px;border-radius:4px">ps aux | grep codex</code><br>
+          若沒跑，重啟 Codex watcher。
+        </li>
+        <li><b>CLAUDE_FAILED / CODEX_FAILED</b><br>
+          → 看「訊息」欄錯誤原因，常見為解析失敗或檔案損毀。<br>
+          → 按「⏭ 標為過期」→ 再手動建新任務或等下個週期。
+        </li>
+        <li><b>FINALIZED 沒進 → 通知沒發出</b><br>
+          → 到排程頁找對應 Notify Job（例 PremarketNotifyJob）按「▶ 手動」補發。
+        </li>
+        <li><b>過了預計時間但全部 ✓</b><br>
+          → 只是延遲，不影響結果。
+        </li>
+      </ol>
+      <p style="color:var(--muted);font-size:12px;margin-top:10px">
+        說明：系統有自動 sweep job（每 60 秒）會把 PENDING 超過 30 分鐘自動過期、CLAUDE_RUNNING 超過 20 分失敗、CODEX_RUNNING 超過 10 分失敗。
+      </p>
+    </div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn" onclick="closeModal('modal-ai-help')">了解</button>
     </div>
   </div>
 </div>
@@ -1316,14 +1414,27 @@
     "EARLY": "早盤", "MID": "中盤", "LATE": "尾盤", "CLOSED": "已收盤",
     // 整點閘道 / 監控模式
     "ON": "開啟", "OFF": "關閉", "ACTIVE": "積極監控",
+    "OFF_HARD": "今日停止", "OFF_SOFT": "暫停觀察",
+    "WATCH_ONLY": "僅觀察",
     "SKIPPED": "略過",
     // 持倉方向
     "BUY": "做多", "SELL": "做空", "LONG": "做多", "SHORT": "做空",
     // 持倉狀態
     "OPEN": "持倉中", "OPEN_POSITION": "持倉中",
-    // 通知類型
+    // 通知類型（舊碼 / 共用）
     "SYSTEM": "系統通知", "LINE_NOTIFY": "LINE通知",
     "AI_RESEARCH": "AI研究", "ALERT": "警示",
+    // 通知類型（LineTemplateService 實際 type）
+    "PREMARKET_0830": "盤前分析",
+    "FINAL_DECISION_0930": "09:30 最終決策",
+    "HOURLY_GATE": "整點閘道",
+    "MONITOR_5M": "5 分鐘監控",
+    "REVIEW_1400": "14:00 交易檢討",
+    "MIDDAY_1100": "盤中分析",
+    "TOMORROW_PLAN_1800": "明日策略",
+    "POSTMARKET_1530": "盤後選股",
+    "SYSTEM_ALERT": "系統警示",
+    "POSITION_ALERT": "持倉警報",
     // 探針狀態
     "OK": "正常", "ERROR": "異常", "WARN": "警告",
     // 估值模式（舊代碼相容）
@@ -1340,6 +1451,18 @@
     // 出場原因
     "STOP_LOSS": "停損", "TAKE_PROFIT_1": "停利一", "TAKE_PROFIT_2": "停利二",
     "TRAILING": "移動停利", "MANUAL": "手動出清",
+    // AI 任務類型
+    "PREMARKET_TASK": "盤前研究",  // 避免跟 PREMARKET 通知碼衝突
+    "OPENING": "開盤研究", "MIDDAY": "盤中研究",
+    "POSTMARKET_TASK": "盤後研究",
+    "T86_TOMORROW": "明日策略", "STOCK_EVAL": "個股評估",
+    "FINAL_DECISION_TASK": "最終決策研究",
+    // AI 任務狀態
+    "PENDING": "等待 Claude", "CLAUDE_RUNNING": "Claude 執行中",
+    "CLAUDE_DONE": "Claude 完成", "CODEX_RUNNING": "Codex 執行中",
+    "CODEX_DONE": "Codex 完成", "FINALIZED": "已完成",
+    "CLAUDE_FAILED": "Claude 失敗", "CODEX_FAILED": "Codex 失敗",
+    "EXPIRED": "已逾時",
   };
 
   /* 翻譯單一值；若查不到直接回傳原值 */
@@ -1501,21 +1624,23 @@
         api("/api/dashboard/current"),
         api("/api/pnl/summary?days=20"),
         api("/api/positions/open?size=10"),
-        api("/api/notifications?limit=10")
+        api("/api/notifications?limit=5")
       ]);
 
       setText("d-marketGrade",  dash.market?.marketGrade);
       setText("d-marketPhase",  dash.market?.marketPhase);
       setText("d-marketDecision", dash.market?.decision);
 
-      // 資料過期警示：若 market.tradingDate 不是今日，顯示 stale badge
+      // 資料過期警示：優先用後端 stale 旗標；fallback 比對 tradingDate
       const stale = $("d-marketStale");
       if (stale) {
         const marketDate = dash.market?.tradingDate;
         const today = new Date().toISOString().slice(0, 10);
-        if (marketDate && marketDate !== today) {
+        const isStale = dash.market?.stale === true
+          || (marketDate && marketDate !== today);
+        if (isStale && marketDate) {
           const md = marketDate.slice(5).replace("-", "/");
-          stale.innerHTML = `<span class="stale-badge">資料：${md}（非今日）</span>`;
+          stale.innerHTML = `<span class="stale-badge">最新資料：${md}（非今日）</span>`;
         } else {
           stale.innerHTML = "";
         }
@@ -1992,14 +2117,36 @@
   /* ─────────────────────────────────────────────
      PAGE: Decisions
   ───────────────────────────────────────────── */
+  function renderMonitorRows(monitor) {
+    $("dec-monitorBody").innerHTML = (monitor || []).length
+      ? (monitor || []).map(m => `<tr>
+          <td class="mono small">${fmtTime(m.createdAt)}</td>
+          <td>${esc(m.monitorMode)}</td>
+          <td class="small">${esc(m.triggerEvent)}</td>
+          <td class="small">${esc(m.action)}</td>
+        </tr>`).join("")
+      : `<tr class="empty-row"><td colspan="4">無資料</td></tr>`;
+  }
+
+  function renderNotifRows(notifs) {
+    $("dec-notifBody").innerHTML = (notifs || []).length
+      ? (notifs || []).map(n => `<tr>
+          <td class="mono small">${fmtTime(n.eventTime)}</td>
+          <td>${zhEsc(n.notificationType)}</td>
+          <td>${esc(n.title)}</td>
+          <td class="small">${esc(n.channel)}</td>
+        </tr>`).join("")
+      : `<tr class="empty-row"><td colspan="4">無資料</td></tr>`;
+  }
+
   async function loadDecisions() {
     clearErr("errBoxDec");
     try {
       const [history, hourly, monitor, notifs] = await Promise.all([
         api("/api/decisions/history?limit=30"),
         api("/api/decisions/hourly-gate/history?limit=20"),
-        api("/api/monitor/decisions/history?limit=20"),
-        api("/api/notifications?limit=20")
+        api("/api/monitor/decisions/history?date=today&limit=10"),
+        api("/api/notifications?date=today&limit=10")
       ]);
 
       renderDecisionChart(history || []);
@@ -2012,26 +2159,53 @@
           </tr>`).join("")
         : `<tr class="empty-row"><td colspan="3">無資料</td></tr>`;
 
-      $("dec-monitorBody").innerHTML = (monitor || []).length
-        ? (monitor || []).map(m => `<tr>
-            <td class="mono small">${fmtTime(m.createdAt)}</td>
-            <td>${esc(m.monitorMode)}</td>
-            <td class="small">${esc(m.triggerEvent)}</td>
-            <td class="small">${esc(m.action)}</td>
-          </tr>`).join("")
-        : `<tr class="empty-row"><td colspan="4">無資料</td></tr>`;
-
-      $("dec-notifBody").innerHTML = (notifs || []).length
-        ? (notifs || []).map(n => `<tr>
-            <td class="mono small">${fmtTime(n.eventTime)}</td>
-            <td>${zhEsc(n.notificationType)}</td>
-            <td>${esc(n.title)}</td>
-            <td class="small">${esc(n.channel)}</td>
-          </tr>`).join("")
-        : `<tr class="empty-row"><td colspan="4">無資料</td></tr>`;
+      // 預設只顯示當日
+      renderMonitorRows(monitor);
+      renderNotifRows(notifs);
+      const scope = $("dec-monitorScope");  if (scope)  scope.textContent = "（今日）";
+      const nscope = $("dec-notifScope");    if (nscope) nscope.textContent = "（今日）";
+      const mBtn = $("dec-monitorLoadAll");  if (mBtn) mBtn.textContent = "載入歷史";
+      const nBtn = $("dec-notifLoadAll");    if (nBtn) nBtn.textContent = "載入歷史";
 
     } catch(e) { showErr("errBoxDec", `載入失敗：${e.message}`); }
   }
+
+  async function loadMonitorHistory(all) {
+    try {
+      const url = all ? "/api/monitor/decisions/history?limit=100"
+                      : "/api/monitor/decisions/history?date=today&limit=10";
+      const monitor = await api(url);
+      renderMonitorRows(monitor);
+      const scope = $("dec-monitorScope");
+      const btn   = $("dec-monitorLoadAll");
+      if (scope) scope.textContent = all ? "（近 100 筆）" : "（今日）";
+      if (btn)   btn.textContent   = all ? "只看今日" : "載入歷史";
+    } catch(e) { showErr("errBoxDec", `載入失敗：${e.message}`); }
+  }
+
+  async function loadNotifHistory(all) {
+    try {
+      const url = all ? "/api/notifications?limit=50"
+                      : "/api/notifications?date=today&limit=10";
+      const notifs = await api(url);
+      renderNotifRows(notifs);
+      const scope = $("dec-notifScope");
+      const btn   = $("dec-notifLoadAll");
+      if (scope) scope.textContent = all ? "（近 50 筆）" : "（今日）";
+      if (btn)   btn.textContent   = all ? "只看今日" : "載入歷史";
+    } catch(e) { showErr("errBoxDec", `載入失敗：${e.message}`); }
+  }
+
+  // 切換按鈕事件（以 textContent 判斷目前狀態）
+  document.addEventListener("click", (ev) => {
+    if (ev.target && ev.target.id === "dec-monitorLoadAll") {
+      const all = ev.target.textContent === "載入歷史";
+      loadMonitorHistory(all);
+    } else if (ev.target && ev.target.id === "dec-notifLoadAll") {
+      const all = ev.target.textContent === "載入歷史";
+      loadNotifHistory(all);
+    }
+  });
 
   function renderDecisionChart(rows) {
     const chart   = $("dec-chart");
@@ -2279,20 +2453,188 @@
   async function loadScheduler() {
     clearErr("errBoxSched");
     try {
-      await Promise.all([loadSchedJobs(), loadSchedLogs()]);
+      await Promise.all([loadSchedAiTasks(), loadSchedJobs(), loadSchedLogs()]);
     } catch(e) { showErr("errBoxSched", `載入失敗：${e.message}`); }
   }
 
+  // 任務類型中文（避免跟通知碼衝突，不進 ZH_MAP）
+  const _aiTaskTypeZh = {
+    "PREMARKET": "盤前研究", "OPENING": "開盤研究", "MIDDAY": "盤中研究",
+    "POSTMARKET": "盤後研究", "T86_TOMORROW": "明日策略",
+    "STOCK_EVAL": "個股評估", "FINAL_DECISION": "最終決策研究",
+  };
+  const aiTaskTypeZh = t => _aiTaskTypeZh[t] || t || "-";
+
+  function aiStatusPill(status) {
+    const s = status || "PENDING";
+    const map = {
+      "PENDING":        ["等待 Claude",   "#eee",      "#555"],
+      "CLAUDE_RUNNING": ["Claude 執行中", "#fff3d6",   "#8a6100"],
+      "CLAUDE_DONE":    ["Claude 完成",   "#e3efff",   "#1d4aad"],
+      "CODEX_RUNNING":  ["Codex 執行中",  "#fff3d6",   "#8a6100"],
+      "CODEX_DONE":     ["Codex 完成",    "#d4f5e9",   "#0a6640"],
+      "FINALIZED":      ["已完成",        "#c8f0db",   "#0a6640"],
+      "CLAUDE_FAILED":  ["Claude 失敗",   "#ffe3e7",   "#a00020"],
+      "CODEX_FAILED":   ["Codex 失敗",    "#ffe3e7",   "#a00020"],
+      "EXPIRED":        ["已逾時",        "#ffe3e7",   "#a00020"],
+    };
+    const [label, bg, fg] = map[s] || [s, "#eee", "#555"];
+    return `<span class="pill" style="background:${bg};color:${fg}">${label}</span>`;
+  }
+
+  // AI 任務各階段預計完成時間（HH:MM）。對照 Java 排程實際時段設定。
+  const AI_TASK_SCHEDULE = {
+    PREMARKET:    { created: "08:10", claudeBy: "08:25", codexBy: "08:29", finalBy: "08:30" },
+    OPENING:      { created: "09:01", claudeBy: "09:25", codexBy: "09:29", finalBy: "09:30" },
+    MIDDAY:       { created: "11:00", claudeBy: "11:15", codexBy: "11:25", finalBy: "11:30" },
+    POSTMARKET:   { created: "15:05", claudeBy: "15:25", codexBy: "15:29", finalBy: "15:30" },
+    T86_TOMORROW: { created: "18:10", claudeBy: "18:25", codexBy: "18:29", finalBy: "18:30" },
+  };
+
+  // 把 "HH:MM" 轉今日該時間的 Date；用來跟 now 比對
+  function _todayAt(hhmm) {
+    if (!hhmm) return null;
+    const [h, m] = hhmm.split(":").map(Number);
+    const d = new Date(); d.setHours(h, m, 0, 0); return d;
+  }
+
+  // 回傳時程 cell HTML：actual 有值 → ✓；無值但未到預計 → 灰色預計；過了預計 → 紅色警告
+  function _aiScheduleCell(expectedHHMM, actualTimestamp, now) {
+    if (actualTimestamp) {
+      return `<span class="pill" style="background:#d4f5e9;color:#0a6640">✓ ${fmtTime(actualTimestamp).slice(-5)}</span>
+              <div class="small" style="color:var(--muted)">預計 ${expectedHHMM || "-"}</div>`;
+    }
+    if (!expectedHHMM) return `<span class="small" style="color:var(--muted)">—</span>`;
+    const target = _todayAt(expectedHHMM);
+    if (now > target) {
+      const lateMin = Math.floor((now - target) / 60000);
+      return `<span class="pill" style="background:#ffe3e7;color:#a00020">⚠ 預計 ${expectedHHMM}</span>
+              <div class="small" style="color:#a00020">超過 ${lateMin} 分</div>`;
+    }
+    return `<span class="small" style="color:var(--muted)">預計 ${expectedHHMM}</span>`;
+  }
+
+  function _aiActionsCell(task, sched, now) {
+    const buttons = [];
+    const st = task.status;
+    const claudeOverdue = sched && !task.claudeDoneAt && now > _todayAt(sched.claudeBy);
+    const codexOverdue  = sched && !task.codexDoneAt  && now > _todayAt(sched.codexBy);
+    const finalOverdue  = sched && !task.finalizedAt  && now > _todayAt(sched.finalBy);
+
+    // 終止狀態：允許標為過期
+    if (["PENDING", "CLAUDE_RUNNING", "CLAUDE_DONE", "CODEX_RUNNING"].includes(st)
+        && (claudeOverdue || codexOverdue || finalOverdue)) {
+      buttons.push(`<button class="btn" onclick="expireAiTask(${task.id})" style="padding:3px 8px;font-size:11px">⏭ 標為過期</button>`);
+    }
+    // 已失敗 → 可建新任務（需手動從 DataPrep 補跑）
+    if (["CLAUDE_FAILED", "CODEX_FAILED", "EXPIRED"].includes(st)) {
+      buttons.push(`<span class="small" style="color:#a00020">⚠ 需處理</span>`);
+      buttons.push(`<button class="btn" onclick="recreateAiTask('${esc(task.taskType)}')" style="padding:3px 8px;font-size:11px">♻ 重跑 DataPrep</button>`);
+    }
+    if (st === "FINALIZED") {
+      buttons.push(`<span class="small" style="color:var(--up);font-weight:600">✓ 完成</span>`);
+    }
+    if (st === "CODEX_DONE" && finalOverdue) {
+      buttons.push(`<span class="small" style="color:#a00020">最終決策未進</span>`);
+    }
+    if (!buttons.length) {
+      return `<span class="small" style="color:var(--muted)">進行中</span>`;
+    }
+    return buttons.join(" ");
+  }
+
+  window.expireAiTask = async function(id) {
+    if (!confirm(`確定將任務 #${id} 標為已過期？\n\n此操作不可復原。`)) return;
+    try {
+      await api(`/api/ai/tasks/${id}/expire`, { method: "POST" });
+      await loadSchedAiTasks();
+    } catch(e) { alert("操作失敗：" + e.message); }
+  };
+
+  // DataPrep 重跑對應 job（建立新任務）
+  const _aiTypeToTriggerKey = {
+    "PREMARKET":    "premarket-data-prep",
+    "OPENING":      "open-data-prep",
+    "POSTMARKET":   "postmarket-data-prep",
+    "T86_TOMORROW": "t86-data-prep",
+    "MIDDAY":       null, // MIDDAY 目前無 DataPrep，需用 midday-review
+  };
+  window.recreateAiTask = async function(taskType) {
+    const key = _aiTypeToTriggerKey[taskType];
+    if (!key) { alert(`${taskType} 無對應的 DataPrep job，請手動建立任務`); return; }
+    if (!confirm(`將觸發 ${key} 重跑，產生新的 ${taskType} 任務？`)) return;
+    try {
+      const res = await fetch(`/api/scheduler/trigger/${key}?force=true`, { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      await loadSchedAiTasks();
+    } catch(e) { alert("觸發失敗：" + e.message); }
+  };
+
+  window.showAiHelpModal = function() {
+    $("modal-ai-help").style.display = "flex";
+  };
+
+  async function loadSchedAiTasks() {
+    try {
+      const tasks = await api("/api/ai/tasks");
+      const body = $("sched-aiBody");
+      const now = new Date();
+      if (!tasks || !tasks.length) {
+        body.innerHTML = `<tr class="empty-row"><td colspan="7">今日尚無 AI 任務</td></tr>`;
+      } else {
+        const order = ["PREMARKET", "OPENING", "MIDDAY", "POSTMARKET", "T86_TOMORROW"];
+        const sorted = [...tasks].sort((a, b) => {
+          const ai = order.indexOf(a.taskType), bi = order.indexOf(b.taskType);
+          const ao = ai === -1 ? 999 : ai, bo = bi === -1 ? 999 : bi;
+          return ao - bo;
+        });
+        body.innerHTML = sorted.map(t => {
+          const sched = AI_TASK_SCHEDULE[t.taskType];
+          const claudeCell = _aiScheduleCell(sched?.claudeBy, t.claudeDoneAt, now);
+          const codexCell  = _aiScheduleCell(sched?.codexBy,  t.codexDoneAt,  now);
+          const finalCell  = _aiScheduleCell(sched?.finalBy,  t.finalizedAt,  now);
+          const lastUpdate = t.lastTransitionAt || t.codexDoneAt || t.claudeDoneAt || t.createdAt;
+          return `<tr>
+            <td><b>${esc(aiTaskTypeZh(t.taskType))}</b>
+              <div class="small" style="color:var(--muted)">${esc(t.taskType)}${t.targetSymbol ? " / " + esc(t.targetSymbol) : ""}${sched ? " • 建立 " + sched.created : ""}</div>
+            </td>
+            <td>${aiStatusPill(t.status)}</td>
+            <td>${claudeCell}</td>
+            <td>${codexCell}</td>
+            <td>${finalCell}</td>
+            <td class="mono small">${lastUpdate ? fmtTime(lastUpdate) : "-"}</td>
+            <td>${_aiActionsCell(t, sched, now)}</td>
+          </tr>`;
+        }).join("");
+      }
+      setText("sched-aiUpdatedAt", `更新於 ${new Date().toLocaleTimeString("zh-TW")}`);
+    } catch(e) {
+      $("sched-aiBody").innerHTML = `<tr class="empty-row"><td colspan="7">載入失敗：${esc(e.message)}</td></tr>`;
+    }
+  }
+
+  // jobName → 中文顯示名稱；(MANUAL) 手動觸發也正確映射
+  const _jobDisplayMap = {};
+  const jobDisplay = (jobName) => {
+    if (!jobName) return "-";
+    const suffix = jobName.endsWith(" (MANUAL)") ? "（手動）" : "";
+    const base = jobName.replace(/\s*\(MANUAL\)$/, "");
+    return (_jobDisplayMap[base] || base) + suffix;
+  };
+  let _schedLogPage = 0;
+  const SCHED_LOG_LIMIT = 10;
+
   async function loadSchedJobs() {
     const jobs = await api("/api/scheduler/jobs");
+    jobs.forEach(j => { _jobDisplayMap[j.jobName] = j.display; });
     const statusPillLocal = (s) => {
-      if (s === "SUCCESS") return `<span class="pill" style="background:#d4f5e9;color:#0a6640">SUCCESS</span>`;
-      if (s === "FAILED")  return `<span class="pill" style="background:#ffe3e7;color:#a00020">FAILED</span>`;
+      if (s === "SUCCESS") return `<span class="pill" style="background:#d4f5e9;color:#0a6640">成功</span>`;
+      if (s === "FAILED")  return `<span class="pill" style="background:#ffe3e7;color:#a00020">失敗</span>`;
       return `<span class="pill" style="background:#eee;color:#555">${esc(s || "-")}</span>`;
     };
     const enabledBadge = (e) => e
-      ? `<span class="pill" style="background:#d4f5e9;color:#0a6640">ON</span>`
-      : `<span class="pill" style="background:#eee;color:#888">OFF</span>`;
+      ? `<span class="pill" style="background:#d4f5e9;color:#0a6640">啟用</span>`
+      : `<span class="pill" style="background:#eee;color:#888">停用</span>`;
 
     $("sched-jobs-body").innerHTML = jobs.map(j => {
       const triggerBtn = j.triggerKey
@@ -2323,20 +2665,28 @@
 
   async function loadSchedLogs() {
     const jobFilter = $("sched-log-filter")?.value || "";
-    const q = new URLSearchParams({ limit: "50" });
+    // 多抓一筆判斷下一頁是否有資料
+    const q = new URLSearchParams({ limit: String(SCHED_LOG_LIMIT + 1), page: String(_schedLogPage) });
     if (jobFilter) q.append("jobName", jobFilter);
     const logs = await api(`/api/scheduler/logs?${q}`);
-    $("sched-logs-body").innerHTML = (logs || []).length
-      ? logs.map(l => `<tr>
+    const hasNext = (logs || []).length > SCHED_LOG_LIMIT;
+    const rows = (logs || []).slice(0, SCHED_LOG_LIMIT);
+    $("sched-logs-body").innerHTML = rows.length
+      ? rows.map(l => `<tr>
           <td class="mono small">${fmtTime(l.triggerTime)}</td>
-          <td class="small">${esc(l.jobName)}</td>
+          <td class="small">${esc(jobDisplay(l.jobName))}</td>
           <td>${l.status === "SUCCESS"
-            ? `<span class="pill" style="background:#d4f5e9;color:#0a6640">${esc(l.status)}</span>`
-            : `<span class="pill" style="background:#ffe3e7;color:#a00020">${esc(l.status)}</span>`}</td>
+            ? `<span class="pill" style="background:#d4f5e9;color:#0a6640">成功</span>`
+            : `<span class="pill" style="background:#ffe3e7;color:#a00020">失敗</span>`}</td>
           <td class="mono small">${l.durationMs ?? "-"}</td>
           <td class="small" title="${esc(l.message || "")}">${esc((l.message || "").substring(0, 100))}</td>
         </tr>`).join("")
       : `<tr class="empty-row"><td colspan="5">尚無執行記錄</td></tr>`;
+    setText("sched-logPage", `第 ${_schedLogPage + 1} 頁`);
+    const prevBtn = $("sched-log-prev");
+    const nextBtn = $("sched-log-next");
+    if (prevBtn) prevBtn.disabled = _schedLogPage === 0;
+    if (nextBtn) nextBtn.disabled = !hasNext;
   }
 
   window.triggerSchedJob = async function(triggerKey) {
@@ -2360,9 +2710,17 @@
     const refreshBtn = document.getElementById("sched-refresh");
     if (refreshBtn) refreshBtn.addEventListener("click", loadScheduler);
     const logRefresh = document.getElementById("sched-log-refresh");
-    if (logRefresh) logRefresh.addEventListener("click", loadSchedLogs);
+    if (logRefresh) logRefresh.addEventListener("click", () => { _schedLogPage = 0; loadSchedLogs(); });
     const logFilter = document.getElementById("sched-log-filter");
-    if (logFilter) logFilter.addEventListener("change", loadSchedLogs);
+    if (logFilter) logFilter.addEventListener("change", () => { _schedLogPage = 0; loadSchedLogs(); });
+    const prevBtn = document.getElementById("sched-log-prev");
+    if (prevBtn) prevBtn.addEventListener("click", () => {
+      if (_schedLogPage > 0) { _schedLogPage--; loadSchedLogs(); }
+    });
+    const nextBtn = document.getElementById("sched-log-next");
+    if (nextBtn) nextBtn.addEventListener("click", () => { _schedLogPage++; loadSchedLogs(); });
+    const aiRefresh = document.getElementById("sched-aiRefresh");
+    if (aiRefresh) aiRefresh.addEventListener("click", loadSchedAiTasks);
   });
 
   async function loadMarketHistory() {
@@ -2737,12 +3095,23 @@
 
   function openCloseModal(id) {
     const p = _openPosCache[id]; if (!p) return;
-    $("mc-title").textContent = `${p.symbol}${p.stockName ? " " + p.stockName : ""}（均價 ${p.avgCost}）`;
+    $("mc-title").textContent = `${p.symbol}${p.stockName ? " " + p.stockName : ""}（均價 ${p.avgCost}，持有 ${p.qty}）`;
+    $("mc-mode").value       = "FULL";
+    $("mc-qtyWrap").style.display = "none";
+    $("mc-qty").value        = "";
+    $("mc-qtyHint").textContent = `最多 ${p.qty}`;
+    $("mc-qty").max          = p.qty ?? "";
     $("mc-closePrice").value = "";
     $("mc-exitReason").value = "";
     $("mc-closedAt").value   = new Date().toISOString().slice(0,16);
     $("mc-note").value       = "";
     clearErr("mc-err");
+    $("mc-mode").onchange = () => {
+      const isPartial = $("mc-mode").value === "PARTIAL";
+      $("mc-qtyWrap").style.display = isPartial ? "" : "none";
+      $("mc-submitBtn").textContent = isPartial ? "確認部分出清" : "確認全部出清";
+    };
+    $("mc-submitBtn").textContent = "確認全部出清";
     $("mc-submitBtn").onclick = () => submitClosePosition(id);
     $("modal-close-pos").style.display = "flex";
   }
@@ -2800,14 +3169,33 @@
     clearErr("mc-err");
     const closePrice = $("mc-closePrice").value;
     if (!closePrice) { showErr("mc-err", "出清價為必填"); return; }
-    const body = {
+    const mode = $("mc-mode").value;
+    const common = {
       closePrice:  Number(closePrice),
       exitReason:  $("mc-exitReason").value || null,
       closedAt:    $("mc-closedAt").value ? $("mc-closedAt").value + ":00" : null,
       note:        $("mc-note").value.trim() || null,
     };
     try {
-      await api(`/api/positions/${id}/close`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
+      if (mode === "PARTIAL") {
+        const qty = $("mc-qty").value;
+        if (!qty || Number(qty) <= 0) { showErr("mc-err", "分段出清必須輸入張數"); return; }
+        const p = _openPosCache[id];
+        if (p && Number(qty) > Number(p.qty)) {
+          showErr("mc-err", `張數超過持有量（最多 ${p.qty}）`); return;
+        }
+        await api(`/api/positions/${id}/partial-close`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ qty: Number(qty), ...common })
+        });
+      } else {
+        await api(`/api/positions/${id}/close`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(common)
+        });
+      }
       closeModal("modal-close-pos");
       await Promise.all([loadOpenPositions(), loadPositionHistory()]);
     } catch(e) { showErr("mc-err", e.message); }

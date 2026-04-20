@@ -8,6 +8,7 @@ import com.austin.trading.dto.response.MonitorDecisionResponse;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 
 public class LineMessageBuilder {
@@ -64,6 +65,12 @@ public class LineMessageBuilder {
             sb.append("🚫 不進場原因\n");
             decision.rejectedReasons().stream().limit(3)
                     .forEach(reason -> sb.append("- ").append(clean(reason)).append("\n"));
+        }
+
+        String downgradeReason = inferFallbackReason(decision.rejectedReasons());
+        if (downgradeReason != null) {
+            sb.append("\nAI 狀態：").append(inferAiStatus(downgradeReason)).append("\n");
+            sb.append("降級原因：").append(downgradeReason).append("\n");
         }
 
         sb.append("\n📌 行動指令\n");
@@ -256,6 +263,24 @@ public class LineMessageBuilder {
 
     private static String firstNonBlank(String first, String second) {
         return first != null && !first.isBlank() ? first : second;
+    }
+
+    private static String inferFallbackReason(List<String> reasons) {
+        if (reasons == null || reasons.isEmpty()) return null;
+        for (String reason : reasons) {
+            String code = clean(reason);
+            if ("CODEX_MISSING".equals(code)
+                    || "AI_NOT_READY".equals(code)
+                    || "AI_TIMEOUT".equals(code)) {
+                return code;
+            }
+        }
+        return null;
+    }
+
+    private static String inferAiStatus(String fallbackReason) {
+        if ("CODEX_MISSING".equals(fallbackReason)) return "PARTIAL_AI_READY";
+        return "AI_NOT_READY";
     }
 
     private static String clean(String text) {

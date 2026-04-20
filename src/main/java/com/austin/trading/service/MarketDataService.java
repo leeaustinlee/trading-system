@@ -25,6 +25,22 @@ public class MarketDataService {
                 .map(this::toResponse);
     }
 
+    /**
+     * 今日優先查詢：
+     * 1) 先查 trading_date = today 的最新一筆；
+     * 2) 找不到才退回最近一筆，並標示 stale=true + reason=NO_TODAY_DATA。
+     */
+    public Optional<MarketCurrentResponse> getMarketPreferToday() {
+        LocalDate today = LocalDate.now();
+        Optional<MarketSnapshotEntity> todayOpt =
+                marketSnapshotRepository.findTopByTradingDateOrderByCreatedAtDesc(today);
+        if (todayOpt.isPresent()) {
+            return todayOpt.map(this::toResponse);
+        }
+        return marketSnapshotRepository.findTopByOrderByTradingDateDescCreatedAtDesc()
+                .map(e -> toStaleResponse(e, "NO_TODAY_DATA"));
+    }
+
     public List<MarketCurrentResponse> getMarketHistory(int limit) {
         int safeLimit = Math.max(1, Math.min(limit, 200));
         return marketSnapshotRepository.findAllByOrderByTradingDateDescCreatedAtDesc(PageRequest.of(0, safeLimit))
@@ -51,7 +67,23 @@ public class MarketDataService {
                 entity.getMarketPhase(),
                 entity.getDecision(),
                 entity.getPayloadJson(),
-                entity.getCreatedAt()
+                entity.getCreatedAt(),
+                false,
+                null
+        );
+    }
+
+    private MarketCurrentResponse toStaleResponse(MarketSnapshotEntity entity, String reason) {
+        return new MarketCurrentResponse(
+                entity.getId(),
+                entity.getTradingDate(),
+                entity.getMarketGrade(),
+                entity.getMarketPhase(),
+                entity.getDecision(),
+                entity.getPayloadJson(),
+                entity.getCreatedAt(),
+                true,
+                reason
         );
     }
 }

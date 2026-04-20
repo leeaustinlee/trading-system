@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -26,7 +27,15 @@ public class NotificationController {
     }
 
     @GetMapping
-    public List<NotificationResponse> getNotifications(@RequestParam(defaultValue = "20") int limit) {
+    public List<NotificationResponse> getNotifications(
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) String date) {
+        if ("today".equalsIgnoreCase(date)) {
+            return notificationService.getNotificationsByDate(LocalDate.now(), limit);
+        }
+        if (date != null && !date.isBlank()) {
+            return notificationService.getNotificationsByDate(LocalDate.parse(date), limit);
+        }
         return notificationService.getLatestNotifications(limit);
     }
 

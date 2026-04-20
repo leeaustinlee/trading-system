@@ -2,6 +2,7 @@ package com.austin.trading.repository;
 
 import com.austin.trading.entity.MarketSnapshotEntity;
 import org.springframework.data.domain.Pageable;
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -9,6 +10,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface MarketSnapshotRepository extends JpaRepository<MarketSnapshotEntity, Long> {
 
     Optional<MarketSnapshotEntity> findTopByOrderByTradingDateDescCreatedAtDesc();
+
+    Optional<MarketSnapshotEntity> findTopByTradingDateOrderByCreatedAtDesc(LocalDate tradingDate);
 
     List<MarketSnapshotEntity> findAllByOrderByTradingDateDescCreatedAtDesc(Pageable pageable);
 }

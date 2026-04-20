@@ -7,7 +7,9 @@ import com.austin.trading.repository.NotificationLogRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,6 +25,17 @@ public class NotificationService {
     public List<NotificationResponse> getLatestNotifications(int limit) {
         int safeLimit = Math.max(1, Math.min(limit, 100));
         return notificationLogRepository.findAllByOrderByEventTimeDesc(PageRequest.of(0, safeLimit))
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    public List<NotificationResponse> getNotificationsByDate(LocalDate date, int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 100));
+        LocalDateTime start = date.atStartOfDay();
+        LocalDateTime end   = date.atTime(LocalTime.MAX);
+        return notificationLogRepository.findAllByEventTimeBetweenOrderByEventTimeDesc(
+                        start, end, PageRequest.of(0, safeLimit))
                 .stream()
                 .map(this::toResponse)
                 .toList();

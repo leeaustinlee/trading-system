@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -48,7 +49,15 @@ public class MonitorController {
     }
 
     @GetMapping("/decisions/history")
-    public List<MonitorDecisionRecordResponse> getMonitorDecisionHistory(@RequestParam(defaultValue = "50") int limit) {
+    public List<MonitorDecisionRecordResponse> getMonitorDecisionHistory(
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(required = false) String date) {
+        if ("today".equalsIgnoreCase(date)) {
+            return monitorDecisionService.getHistoryByDate(LocalDate.now(), limit);
+        }
+        if (date != null && !date.isBlank()) {
+            return monitorDecisionService.getHistoryByDate(LocalDate.parse(date), limit);
+        }
         return monitorDecisionService.getHistory(limit);
     }
 

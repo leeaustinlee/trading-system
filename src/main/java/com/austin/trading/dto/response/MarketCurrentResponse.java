@@ -10,6 +10,12 @@ public record MarketCurrentResponse(
         String marketPhase,
         String decision,
         String payloadJson,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        Boolean stale,
+        String staleReason
 ) {
+    public MarketCurrentResponse(Long id, LocalDate tradingDate, String marketGrade, String marketPhase,
+                                  String decision, String payloadJson, LocalDateTime createdAt) {
+        this(id, tradingDate, marketGrade, marketPhase, decision, payloadJson, createdAt, null, null);
+    }
 }
