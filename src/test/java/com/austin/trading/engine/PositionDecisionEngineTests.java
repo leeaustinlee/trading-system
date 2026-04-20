@@ -170,6 +170,24 @@ class PositionDecisionEngineTests {
         assertThat(result.reason()).contains("假突破");
     }
 
+    @Test
+    void hitTrailingStop_reasonShouldBeTrailingLabel() {
+        // 當 effectiveStop = trailingStopPrice（高於原 stopLoss）且 currentPrice 跌破，
+        // reason 必須是「跌破移動停利」而非一般「觸發停損」
+        var input = buildInput(b -> {
+            b.entryPrice = bd("100");
+            b.currentStopLoss = bd("94");       // 原停損
+            b.trailingStopPrice = bd("105");    // 移動停利（getmax 後變 effective=105）
+            b.currentPrice = bd("105");         // 跌破
+            b.unrealizedPnlPct = bd("5");
+            b.sessionHighPrice = bd("110");
+        });
+        var result = engine.evaluate(input);
+        assertThat(result.status()).isEqualTo(PositionStatus.EXIT);
+        assertThat(result.reason()).contains("跌破移動停利");
+        assertThat(result.reason()).doesNotContain("觸發停損");
+    }
+
     // ── Helper ─────────────────────────────────────────────────────────────
 
     private static BigDecimal bd(String s) { return new BigDecimal(s); }

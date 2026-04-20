@@ -9,18 +9,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
-/**
- * 高階通知門面。
- * 負責：生成 LINE 訊息文字 → 發送 LINE → 寫入 notification_log。
- * 呼叫方只需傳入決策結果，不需處理格式與發送細節。
- */
 @Service
 public class LineTemplateService {
 
+    public static final String SOURCE = "Trading System";
     private static final Logger log = LoggerFactory.getLogger(LineTemplateService.class);
 
     private final LineSender lineSender;
@@ -32,13 +29,13 @@ public class LineTemplateService {
     }
 
     public void notifyPremarket(String marketSummary, String topCandidates, LocalDate date) {
-        String msg = LineMessageBuilder.buildPremarket(marketSummary, topCandidates, date);
-        sendAndLog("PREMARKET_0830", "08:30 盤前通知", msg);
+        sendAndLog("PREMARKET_0830", "盤前分析 " + date,
+                LineMessageBuilder.buildPremarket(marketSummary, topCandidates, date), null);
     }
 
     public void notifyFinalDecision(FinalDecisionResponse decision, LocalDate date) {
-        String msg = LineMessageBuilder.buildFinalDecision(decision, date);
-        sendAndLog("FINAL_DECISION_0930", "09:30 最終決策", msg);
+        sendAndLog("FINAL_DECISION_0930", "09:30 今日操作 " + date,
+                LineMessageBuilder.buildFinalDecision(decision, date), null);
     }
 
     public void notifyHourlyGate(HourlyGateDecisionResponse decision, LocalTime time) {
@@ -46,70 +43,81 @@ public class LineTemplateService {
             log.debug("[LineTemplateService] HourlyGate shouldNotify=false, skip LINE.");
             return;
         }
-        String msg = LineMessageBuilder.buildHourlyGate(decision, time);
-        sendAndLog("HOURLY_GATE", "整點行情閘 " + time, msg);
+        sendAndLog("HOURLY_GATE", "盤中每小時監控 " + time,
+                LineMessageBuilder.buildHourlyGate(decision, time), Duration.ofMinutes(30));
     }
 
     public void notifyMonitor(MonitorDecisionResponse decision, LocalTime time) {
         if (!decision.shouldNotify()) return;
         String msg = LineMessageBuilder.buildMonitor(decision, time);
         if (msg != null) {
-            sendAndLog("MONITOR_5M", "盤中監控 " + time, msg);
+            sendAndLog("MONITOR_5M", "5分鐘事件監控 " + decision.triggerEvent(),
+                    msg, Duration.ofMinutes(15));
         }
     }
 
     public void notifyReview1400(String reviewSummary, LocalDate date) {
-        String msg = LineMessageBuilder.buildReview1400(reviewSummary, date);
-        sendAndLog("REVIEW_1400", "14:00 交易檢討", msg);
+        sendAndLog("REVIEW_1400", "今日操作檢討 " + date,
+                LineMessageBuilder.buildReview1400(reviewSummary, date), null);
     }
 
     public void notifyMidday(String message, LocalDate date) {
-        sendAndLog("MIDDAY_1100", "11:00 盤中戰情 " + date, message);
+        sendAndLog("MIDDAY_1100", "盤中分析 " + date, ensureSource(message), null);
     }
 
     public void notifyTomorrowPlan(String message, LocalDate date) {
-        sendAndLog("TOMORROW_PLAN_1830", "18:30 明日計畫 " + date, message);
+        sendAndLog("TOMORROW_PLAN_1800", "明日計畫 " + date, ensureSource(message), null);
     }
 
     public void notifyPostmarket(String candidates, LocalDate date) {
-        String msg = LineMessageBuilder.buildPostmarket(candidates, date);
-        sendAndLog("POSTMARKET_1530", "15:30 盤後候選", msg);
+        sendAndLog("POSTMARKET_1530", "盤後選股 " + date,
+                LineMessageBuilder.buildPostmarket(candidates, date), null);
     }
 
     public void notifySystemAlert(String title, String message) {
-        sendAndLog("SYSTEM_ALERT", title, message);
+        sendAndLog("SYSTEM_ALERT", title, ensureSource(message), Duration.ofMinutes(30));
     }
 
-    /** 持倉監控警報（WEAKEN / EXIT / TRAIL_UP 時發送） */
     public void notifyPositionAlert(String symbol, String status, String reason,
                                      Double currentPrice, Double entryPrice, Double pnlPct) {
-        String priceStr = currentPrice != null ? String.format("%.2f", currentPrice) : "N/A";
-        String entryStr = entryPrice != null ? String.format("%.2f", entryPrice) : "N/A";
-        String pnlStr = pnlPct != null ? String.format("%+.2f%%", pnlPct) : "N/A";
-
-        String message = String.join("\n",
-                "--- 持倉警報 ---",
-                "標的：" + symbol,
-                "狀態：" + status,
-                "現價：" + priceStr + "  成本：" + entryStr,
-                "損益：" + pnlStr,
-                "原因：" + reason,
-                "來源：Codex"
-        );
-        sendAndLog("POSITION_ALERT", "持倉警報 " + symbol + " " + status, message);
+        if (currentPrice == null) {
+            log.warn("[LineTemplateService] Skip position alert because currentPrice is null: symbol={}, status={}",
+                    symbol, status);
+            return;
+        }
+        String message = LineMessageBuilder.buildPositionAlert(symbol, status, reason, currentPrice, entryPrice, pnlPct);
+        sendAndLog("POSITION_ALERT", "持倉警報 " + symbol + " " + status, message, Duration.ofMinutes(120));
     }
 
-    // ── 私有方法 ───────────────────────────────────────────────────────────────
-
-    private void sendAndLog(String type, String title, String message) {
+    private void sendAndLog(String type, String title, String message, Duration cooldown) {
+        if (cooldown != null) {
+            LocalDateTime after = LocalDateTime.now().minus(cooldown);
+            boolean duplicate = notificationService.existsRecent(type, title, after);
+            log.debug("[LineTemplateService] cooldown check type={} title={} after={} duplicate={}",
+                    type, title, after, duplicate);
+            if (duplicate) {
+                log.info("[LineTemplateService] Skip duplicate LINE type={} title={} cooldown={}m",
+                        type, title, cooldown.toMinutes());
+                return;
+            }
+        }
         lineSender.send(message);
         notificationService.create(new NotificationCreateRequest(
                 LocalDateTime.now(),
                 type,
-                "Codex",
+                SOURCE,
                 title,
                 message,
                 null
         ));
+    }
+
+    private String ensureSource(String message) {
+        String clean = message == null ? "" : message.trim();
+        clean = clean.replace("來源：Codex + Claude", "來源：Trading System");
+        clean = clean.replace("來源：Codex", "來源：Trading System");
+        clean = clean.replace("來源：Claude", "來源：Trading System");
+        if (clean.contains("來源：Trading System")) return clean;
+        return clean + "\n來源：Trading System";
     }
 }

@@ -68,7 +68,13 @@ public class PositionReviewService {
                         .filter(q -> q.symbol().equals(pos.getSymbol()))
                         .findFirst().orElse(null);
 
-                PositionDecisionResult decision = evaluatePosition(pos, quote);
+                // 即時報價不可用（盤外 / TWSE MIS 失敗）→ 只寫 review log，不做任何決策行為
+                boolean quoteAvailable = quote != null && quote.currentPrice() != null;
+                PositionDecisionResult decision = quoteAvailable
+                        ? evaluatePosition(pos, quote)
+                        : new PositionDecisionResult(PositionStatus.HOLD,
+                                "即時報價不可用，review 停用", null,
+                                com.austin.trading.engine.PositionDecisionEngine.TrailingAction.NONE);
                 PositionReviewLogEntity logEntry = saveReviewLog(pos, quote, decision, reviewType);
 
                 // 更新 position 狀態
@@ -76,12 +82,20 @@ public class PositionReviewService {
                 pos.setLastReviewedAt(LocalDateTime.now());
                 pos.setUpdatedAt(LocalDateTime.now());
 
-                if (decision.status() == PositionStatus.TRAIL_UP && decision.suggestedStopLoss() != null) {
+                // 只在有即時報價且 TRAIL_UP 時才更新 trailing stop（避免盤外 / stale quote 汙染）
+                if (quoteAvailable && decision.status() == PositionStatus.TRAIL_UP
+                        && decision.suggestedStopLoss() != null) {
                     pos.setTrailingStopPrice(decision.suggestedStopLoss());
                 }
 
                 positionRepository.save(pos);
-                results.add(new ReviewResult(pos, decision, logEntry.getId()));
+                results.add(new ReviewResult(
+                        pos,
+                        decision,
+                        logEntry.getId(),
+                        logEntry.getCurrentPrice(),
+                        logEntry.getPnlPct()
+                ));
 
             } catch (Exception e) {
                 log.warn("[PositionReview] 審查失敗 symbol={}: {}", pos.getSymbol(), e.getMessage());
@@ -93,7 +107,9 @@ public class PositionReviewService {
     public record ReviewResult(
             PositionEntity position,
             PositionDecisionResult decision,
-            Long reviewLogId
+            Long reviewLogId,
+            BigDecimal currentPrice,
+            BigDecimal pnlPct
     ) {}
 
     // ── 私有方法 ──────────────────────────────────────────────────────────

@@ -22,6 +22,24 @@
 6. 提交 `POST /api/ai/tasks/{id}/codex-result`。
 7. 寫 `D:\ai\stock\codex-research-latest.md`。
 
+## Windows 排程
+
+v1 PowerShell 通知任務已停用。v2 使用：
+
+| 任務名 | 時間 | Type |
+|---|---:|---|
+| `Codex-Premarket-0828` | 08:28 | `PREMARKET` |
+| `Codex-Opening-0928` | 09:28 | `OPENING` |
+| `Codex-Midday-1058` | 10:58 | `MIDDAY` |
+| `Codex-Postmarket-1528` | 15:28 | `POSTMARKET` |
+| `Codex-TomorrowPlan-1758` | 17:58 | `T86_TOMORROW` |
+
+排程執行：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File D:\ai\stock\run-codex-v2-task.ps1 -Type <TYPE>
+```
+
 ## 候選股 fallback（週一 / 假日後首個交易日必做）
 
 Java `PremarketDataPrepJob` 在 08:10 建 task 時，若「昨日」是週末或假日，

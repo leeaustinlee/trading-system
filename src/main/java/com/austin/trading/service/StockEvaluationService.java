@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -76,7 +77,7 @@ public class StockEvaluationService {
      *
      * @return 更新後的 StockEvaluationEntity
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public StockEvaluationEntity updateAiScores(String symbol, AiScoreUpdateRequest req) {
         LocalDate date = req.tradingDate() != null ? req.tradingDate() : LocalDate.now();
 

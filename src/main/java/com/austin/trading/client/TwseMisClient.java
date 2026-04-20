@@ -136,21 +136,30 @@ public class TwseMisClient {
         String symbol = str(node, "c");
         if (symbol == null) return null;
 
-        Double current  = price(node, "z");
+        Double current   = price(node, "z");
         Double prevClose = price(node, "y");
-        Double open     = price(node, "o");
-        Double high     = price(node, "h");
-        Double low      = price(node, "l");
-        Double bid      = price(node, "b");
-        Double ask      = price(node, "a");
-        Long   volume   = volume(node, "v");
-        String date     = str(node, "d");
-        String time     = str(node, "t");
-        String name     = str(node, "n");
+        Double open      = price(node, "o");
+        Double high      = price(node, "h");
+        Double low       = price(node, "l");
+        // TWSE MIS 五檔欄位 b/a 格式為「78.50_78.45_...」，需取第一筆
+        Double bid       = firstPrice(node, "b");   // 最佳買價
+        Double ask       = firstPrice(node, "a");   // 最佳賣價
+        Long   volume    = volume(node, "v");
+        String date      = str(node, "d");
+        String time      = str(node, "t");
+        String name      = str(node, "n");
+
+        // 盤中 z='-'（最近無成交）時，以最佳買賣均價估算現價
+        Double displayPrice = current;
+        if (current == null && bid != null && ask != null) {
+            displayPrice = Math.round((bid + ask) / 2.0 * 100.0) / 100.0;
+            log.debug("[TwseMisClient] {} z='-', 使用 mid-price ({}/{}={}) 估算", symbol, bid, ask, displayPrice);
+        }
+        boolean available = displayPrice != null;
 
         return new StockQuote(symbol, name, market,
-                current, prevClose, open, high, low, bid, ask,
-                volume, date, time, current != null);
+                displayPrice, prevClose, open, high, low, bid, ask,
+                volume, date, time, available);
     }
 
     private String str(JsonNode node, String field) {
@@ -165,6 +174,22 @@ public class TwseMisClient {
         if (s == null || "-".equals(s) || "--".equals(s)) return null;
         try {
             return Double.parseDouble(s.replace(",", ""));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 取五檔買賣價欄位（格式如 "78.50_78.45_78.40_78.35_78.30"）的最佳一檔價格。
+     */
+    private Double firstPrice(JsonNode node, String field) {
+        String s = str(node, field);
+        if (s == null || "-".equals(s) || "--".equals(s)) return null;
+        // 取底線分隔的第一個值
+        String first = s.split("_")[0].trim();
+        if (first.isEmpty() || "-".equals(first) || "--".equals(first)) return null;
+        try {
+            return Double.parseDouble(first.replace(",", ""));
         } catch (NumberFormatException e) {
             return null;
         }

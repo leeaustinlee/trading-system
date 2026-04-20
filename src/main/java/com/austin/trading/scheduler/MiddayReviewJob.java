@@ -23,22 +23,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
 
-/**
- * 11:00 盤中戰情更新排程。
- * <p>
- * 讀取當前市場狀態、持倉，透過 LINE 發送盤中更新。
- * 若無持倉且行情等級 C，自動附加「今日建議休息」。
- * </p>
- */
 @Component
 @ConditionalOnProperty(prefix = "trading.scheduler.midday-review", name = "enabled", havingValue = "true")
 public class MiddayReviewJob {
 
     private static final Logger log = LoggerFactory.getLogger(MiddayReviewJob.class);
 
-    private final MarketDataService   marketDataService;
+    private final MarketDataService marketDataService;
     private final TradingStateService tradingStateService;
-    private final PositionService     positionService;
+    private final PositionService positionService;
     private final LineTemplateService lineTemplateService;
     private final SchedulerLogService schedulerLogService;
     private final DailyOrchestrationService orchestrationService;
@@ -53,17 +46,17 @@ public class MiddayReviewJob {
             DailyOrchestrationService orchestrationService,
             AiTaskService aiTaskService
     ) {
-        this.marketDataService   = marketDataService;
+        this.marketDataService = marketDataService;
         this.tradingStateService = tradingStateService;
-        this.positionService     = positionService;
+        this.positionService = positionService;
         this.lineTemplateService = lineTemplateService;
         this.schedulerLogService = schedulerLogService;
         this.orchestrationService = orchestrationService;
-        this.aiTaskService       = aiTaskService;
+        this.aiTaskService = aiTaskService;
     }
 
     @Scheduled(cron = "${trading.scheduler.midday-review-cron:0 0 11 * * MON-FRI}",
-               zone  = "${trading.timezone:Asia/Taipei}")
+            zone = "${trading.timezone:Asia/Taipei}")
     public void run() {
         LocalDateTime triggerTime = LocalDateTime.now();
         String jobName = "MiddayReviewJob";
@@ -74,25 +67,26 @@ public class MiddayReviewJob {
             log.info("[{}] Step {} already DONE today, skip.", jobName, step);
             return;
         }
+
         try {
             MarketCurrentResponse market = marketDataService.getCurrentMarket().orElse(null);
-            TradingStateResponse  state  = tradingStateService.getCurrentState().orElse(null);
+            TradingStateResponse state = tradingStateService.getCurrentState().orElse(null);
             List<PositionResponse> openPositions = positionService.getOpenPositions(20);
 
-            String marketSummary = buildMarketSummary(market, state);
-            String positionSummary = buildPositionSummary(openPositions);
-            String advice = buildAdvice(market, openPositions.size());
-
-            String message = buildMessage(today, marketSummary, positionSummary, advice);
+            String message = buildMessage(
+                    today,
+                    buildMarketSummary(market, state),
+                    buildPositionSummary(openPositions),
+                    buildAdvice(market, openPositions.size())
+            );
             lineTemplateService.notifyMidday(message, today);
 
-            // 補發：若有 MIDDAY / OPENING / PREMARKET task 的 AI 研究 md，另外發一則
             String aiMd = aiTaskService.findLatestMarkdown(today, "MIDDAY", "OPENING", "PREMARKET");
             if (aiMd != null && aiMd.length() > 100) {
-                String summary = aiMd.length() > 3500
-                        ? aiMd.substring(0, 3500) + "\n...(內容過長已截斷)"
+                String summary = aiMd.length() > 2500
+                        ? aiMd.substring(0, 2500) + "\n...(內容過長已截斷，完整內容請看 AI task)"
                         : aiMd;
-                lineTemplateService.notifySystemAlert("📎 11:00 AI 研究摘要", summary);
+                lineTemplateService.notifySystemAlert("11:00 AI 研究摘要", summary);
             }
 
             String logMsg = String.format("grade=%s positions=%d",
@@ -101,7 +95,6 @@ public class MiddayReviewJob {
             log.info("[MiddayReviewJob] {}", logMsg);
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), logMsg);
             orchestrationService.markDone(today, step, logMsg);
-
         } catch (Exception e) {
             orchestrationService.markFailed(today, step, e.getMessage());
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());
@@ -109,50 +102,49 @@ public class MiddayReviewJob {
         }
     }
 
-    // ── 私有方法 ─────────────────────────────────────────────────────────────────
-
     private String buildMarketSummary(MarketCurrentResponse market, TradingStateResponse state) {
-        if (market == null) return "（市場資料尚未更新）";
+        if (market == null) return "尚未取得市場快照，禁止用本則做進場依據。";
         StringBuilder sb = new StringBuilder();
-        sb.append("行情等級 ").append(market.marketGrade());
-        sb.append("，階段：").append(market.marketPhase());
+        sb.append("盤勢：").append(market.marketGrade()).append("｜階段：").append(market.marketPhase());
         if (state != null) {
-            sb.append("\n監控：").append(state.monitorMode());
-            sb.append("，閘：").append(state.hourlyGate());
-            sb.append("，鎖定：").append(state.decisionLock());
+            sb.append("\n五分鐘監控：").append(state.monitorMode())
+                    .append("｜Gate：").append(state.hourlyGate())
+                    .append("｜決策鎖：").append(state.decisionLock());
         }
         return sb.toString();
     }
 
     private String buildPositionSummary(List<PositionResponse> positions) {
-        if (positions.isEmpty()) return "（目前無持倉）";
+        if (positions.isEmpty()) return "目前無開放持倉。";
         return positions.stream()
-                .map(p -> String.format(Locale.ROOT, "%s %s × %.0f 股 成本 %.2f",
+                .limit(5)
+                .map(p -> String.format(Locale.ROOT, "%s %s %.0f 股，成本 %.2f",
                         p.symbol(), p.side(), p.qty().doubleValue(), p.avgCost().doubleValue()))
                 .collect(Collectors.joining("\n"));
     }
 
     private String buildAdvice(MarketCurrentResponse market, int positionCount) {
-        if (market == null) return "等待市場資料。";
+        if (market == null) return "等市場資料恢復，不新增交易。";
         String grade = market.marketGrade();
-        if ("C".equals(grade)) {
-            return "行情等級 C，建議今日休息，避免新進場。";
-        }
-        if ("A".equals(grade) && positionCount == 0) {
-            return "A 級行情，可留意突破型機會，等候 09:30 計畫內標的。";
-        }
-        if (positionCount > 0) {
-            return "持倉期間密切監控關鍵停利/停損價位。";
-        }
-        return "B 級震盪，謹慎操作，倉位勿超過資金 30%。";
+        if ("C".equals(grade)) return "盤勢不適合新增交易，只保留持倉風控。";
+        if ("A".equals(grade) && positionCount == 0) return "仍需等 09:30/盤中決策條件，不追高。";
+        if (positionCount > 0) return "持倉優先看停損、移動停利與減碼條件。";
+        return "B 盤只觀察，不主動追價。";
     }
 
     private String buildMessage(LocalDate date, String market, String position, String advice) {
-        return "\n📊 【11:00 盤中戰情】" + date + "\n" +
-               "━━━━━━━━━━━━━━\n" +
-               "📈 市場\n" + market + "\n\n" +
-               "📋 持倉\n" + position + "\n\n" +
-               "💡 " + advice + "\n\n" +
-               "來源：Codex";
+        return String.join("\n",
+                "【盤中分析】" + date,
+                "",
+                "📊 市場",
+                market,
+                "",
+                "📌 持倉",
+                position,
+                "",
+                "🎯 行動",
+                advice,
+                "",
+                "來源：Trading System");
     }
 }

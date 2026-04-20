@@ -56,7 +56,7 @@ public class AiCodexClient {
             String markdown = "# " + title + "\n\n" +
                     "> 生成時間：" + timestamp + "\n" +
                     (symbolLine.isEmpty() ? "" : "> " + symbolLine) +
-                    "\n---\n\n" + content + "\n\n---\n_來源：Claude_\n";
+                    "\n---\n\n" + content + "\n\n---\n_研究來源：Claude_\n";
 
             Path path = Paths.get(outputPath);
             // 確保父目錄存在

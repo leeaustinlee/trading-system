@@ -83,7 +83,10 @@ public class PositionDecisionEngine {
         BigDecimal effectiveStop = effectiveStopLoss(in);
         if (effectiveStop != null && in.currentPrice() != null
                 && in.currentPrice().compareTo(effectiveStop) <= 0) {
-            return exit("觸發停損 (stop=" + effectiveStop.toPlainString() + ")");
+            boolean trailingTriggered = in.trailingStopPrice() != null
+                    && effectiveStop.compareTo(in.trailingStopPrice()) == 0;
+            String label = trailingTriggered ? "跌破移動停利" : "觸發停損";
+            return exit(label + " (stop=" + effectiveStop.toPlainString() + ")");
         }
 
         // ─ 2. 虧損超過上限 → EXIT ──────────────────────────────────────────

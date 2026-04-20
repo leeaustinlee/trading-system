@@ -114,21 +114,30 @@ public class FiveMinuteMonitorJob {
 
             lineTemplateService.notifyMonitor(decision, LocalTime.now());
 
-            // ── 持倉監控（新增）──────────────────────────────────────────
+            // ── 持倉監控 ───────────────────────────────────────────────
+            // monitorMode=OFF 時只寫 review log，不發 LINE（避免無事件噪音）
             try {
                 var reviews = positionReviewService.reviewAllOpenPositions("INTRADAY");
                 boolean lineEnabled = scoreConfig.getBoolean("scheduling.line_notify_enabled", false);
+                String monitorMode = decision.monitorMode() == null ? "OFF" : decision.monitorMode();
+                boolean monitorActive = !"OFF".equalsIgnoreCase(monitorMode);
+
                 for (ReviewResult r : reviews) {
                     PositionStatus s = r.decision().status();
-                    if (lineEnabled && (s == PositionStatus.WEAKEN || s == PositionStatus.EXIT || s == PositionStatus.TRAIL_UP)) {
+                    boolean isActionable =
+                            s == PositionStatus.WEAKEN || s == PositionStatus.EXIT || s == PositionStatus.TRAIL_UP;
+                    // 即時報價不可用 → 只記 review log 不發 LINE（由 LineTemplateService 二次把關）
+                    boolean hasValidQuote = r.currentPrice() != null;
+                    if (lineEnabled && monitorActive && isActionable && hasValidQuote) {
                         lineTemplateService.notifyPositionAlert(
                                 r.position().getSymbol(), s.name(), r.decision().reason(),
+                                r.currentPrice().doubleValue(),
                                 r.position().getAvgCost() != null ? r.position().getAvgCost().doubleValue() : null,
-                                r.position().getAvgCost() != null ? r.position().getAvgCost().doubleValue() : null,
-                                null);
+                                r.pnlPct() != null ? r.pnlPct().doubleValue() : null);
                     }
                 }
-                log.info("[FiveMinuteMonitorJob] 持倉監控完成，共 {} 筆", reviews.size());
+                log.info("[FiveMinuteMonitorJob] 持倉監控完成，共 {} 筆 (monitorMode={}, lineEnabled={})",
+                        reviews.size(), monitorMode, lineEnabled);
             } catch (Exception pe) {
                 log.warn("[FiveMinuteMonitorJob] 持倉監控失敗: {}", pe.getMessage());
             }

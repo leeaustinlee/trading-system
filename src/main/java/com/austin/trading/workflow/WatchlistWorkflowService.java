@@ -111,7 +111,7 @@ public class WatchlistWorkflowService {
                                 + " (連續" + w.getConsecutiveStrongDays() + "天)")
                         .collect(Collectors.joining("\n"));
                 lineTemplateService.notifySystemAlert("Watchlist READY 更新",
-                        "READY 名單：\n" + readyText + "\n來源：Codex");
+                        "READY 名單：\n" + readyText + "\n來源：Trading System");
             }
         }
 

@@ -7,6 +7,7 @@ import com.austin.trading.repository.NotificationLogRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,6 +45,11 @@ public class NotificationService {
         entity.setContent(request.content());
         entity.setPayloadJson(request.payloadJson());
         return toResponse(notificationLogRepository.save(entity));
+    }
+
+    public boolean existsRecent(String notificationType, String title, LocalDateTime after) {
+        return notificationLogRepository.existsByNotificationTypeAndTitleAndEventTimeAfter(
+                notificationType, title, after);
     }
 
     private NotificationResponse toResponse(NotificationLogEntity entity) {

@@ -18,25 +18,17 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
-/**
- * 18:30 明日計畫排程（T86DataPrepJob 18:10 完成後執行）。
- * <p>
- * 整合今日候選股（含 T86 法人資料已更新至 payload）及市場狀態，
- * 建立明日盤前計畫並發送 LINE 通知。
- * </p>
- */
 @Component
 @ConditionalOnProperty(prefix = "trading.scheduler.tomorrow-plan", name = "enabled", havingValue = "true")
 public class TomorrowPlan1800Job {
 
     private static final Logger log = LoggerFactory.getLogger(TomorrowPlan1800Job.class);
 
-    private final MarketDataService   marketDataService;
+    private final MarketDataService marketDataService;
     private final CandidateScanService candidateScanService;
-    private final LineTemplateService  lineTemplateService;
-    private final SchedulerLogService  schedulerLogService;
+    private final LineTemplateService lineTemplateService;
+    private final SchedulerLogService schedulerLogService;
     private final DailyOrchestrationService orchestrationService;
     private final AiTaskService aiTaskService;
 
@@ -48,16 +40,16 @@ public class TomorrowPlan1800Job {
             DailyOrchestrationService orchestrationService,
             AiTaskService aiTaskService
     ) {
-        this.marketDataService   = marketDataService;
+        this.marketDataService = marketDataService;
         this.candidateScanService = candidateScanService;
-        this.lineTemplateService  = lineTemplateService;
-        this.schedulerLogService  = schedulerLogService;
+        this.lineTemplateService = lineTemplateService;
+        this.schedulerLogService = schedulerLogService;
         this.orchestrationService = orchestrationService;
-        this.aiTaskService        = aiTaskService;
+        this.aiTaskService = aiTaskService;
     }
 
     @Scheduled(cron = "${trading.scheduler.tomorrow-plan-cron:0 30 18 * * MON-FRI}",
-               zone  = "${trading.timezone:Asia/Taipei}")
+            zone = "${trading.timezone:Asia/Taipei}")
     public void run() {
         LocalDateTime triggerTime = LocalDateTime.now();
         String jobName = "TomorrowPlan1800Job";
@@ -68,27 +60,25 @@ public class TomorrowPlan1800Job {
             log.info("[{}] Step {} already DONE today, skip.", jobName, step);
             return;
         }
+
         try {
             MarketCurrentResponse market = marketDataService.getCurrentMarket().orElse(null);
             List<CandidateResponse> candidates = candidateScanService.getCurrentCandidates(10);
 
-            String message = buildMessage(today, market, candidates);
-            lineTemplateService.notifyTomorrowPlan(message, today);
+            lineTemplateService.notifyTomorrowPlan(buildMessage(today, market, candidates), today);
 
-            // 補發：T86_TOMORROW / POSTMARKET 任一 AI 研究 md
             String aiMd = aiTaskService.findLatestMarkdown(today, "T86_TOMORROW", "POSTMARKET");
             if (aiMd != null && aiMd.length() > 100) {
-                String summary = aiMd.length() > 3500
-                        ? aiMd.substring(0, 3500) + "\n...(內容過長已截斷)"
+                String summary = aiMd.length() > 2500
+                        ? aiMd.substring(0, 2500) + "\n...(內容過長已截斷，完整內容請看 AI task)"
                         : aiMd;
-                lineTemplateService.notifySystemAlert("📎 18:00 明日研究摘要", summary);
+                lineTemplateService.notifySystemAlert("18:00 明日研究摘要", summary);
             }
 
             log.info("[TomorrowPlan1800Job] candidates={}", candidates.size());
             String msg = "candidates=" + candidates.size();
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), msg);
             orchestrationService.markDone(today, step, msg);
-
         } catch (Exception e) {
             orchestrationService.markFailed(today, step, e.getMessage());
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());
@@ -96,41 +86,32 @@ public class TomorrowPlan1800Job {
         }
     }
 
-    // ── 私有方法 ─────────────────────────────────────────────────────────────────
-
-    private String buildMessage(
-            LocalDate today,
-            MarketCurrentResponse market,
-            List<CandidateResponse> candidates
-    ) {
+    private String buildMessage(LocalDate today, MarketCurrentResponse market, List<CandidateResponse> candidates) {
         StringBuilder sb = new StringBuilder();
-        sb.append("\n📅 【18:30 明日計畫】").append(today).append("\n");
-        sb.append("━━━━━━━━━━━━━━\n");
-
-        // 今日市場結算
+        sb.append("【明日計畫】").append(today).append("\n\n");
         if (market != null) {
-            sb.append("📊 今日行情：")
-              .append(market.marketGrade()).append(" ─ ")
-              .append(market.marketPhase()).append("\n\n");
+            sb.append("📊 今日盤勢\n")
+                    .append("等級：").append(market.marketGrade())
+                    .append("｜階段：").append(market.marketPhase())
+                    .append("\n\n");
         }
 
-        // 明日候選名單（含 T86 更新後的法人資訊）
-        sb.append("🔵 明日觀察候選（").append(candidates.size()).append(" 檔）\n");
+        sb.append("🎯 明日候選 ").append(candidates.size()).append(" 檔\n");
         if (candidates.isEmpty()) {
-            sb.append("  （無候選資料，請確認盤後掃描）\n");
+            sb.append("- 目前沒有有效候選，明日先觀察大盤與主流族群。\n");
         } else {
-            for (CandidateResponse c : candidates) {
-                sb.append("  ▶ ").append(c.symbol());
+            candidates.stream().limit(10).forEach(c -> {
+                sb.append("- ").append(c.symbol());
                 if (c.stockName() != null) sb.append(" ").append(c.stockName());
-                if (c.entryPriceZone() != null) sb.append("  區：").append(c.entryPriceZone());
-                if (c.valuationMode() != null) sb.append("  估值：").append(c.valuationMode());
+                if (c.entryPriceZone() != null) sb.append("｜進場區：").append(c.entryPriceZone());
+                if (c.riskRewardRatio() != null) sb.append("｜風報比：").append(c.riskRewardRatio());
                 sb.append("\n");
-            }
+            });
         }
 
-        sb.append("\n⚠️ 以上為今日收盤候選，含最新三大法人資料\n");
-        sb.append("08:30 盤前通知將依美股 / ADR 再次篩選\n\n");
-        sb.append("來源：Codex");
+        sb.append("\n📌 行動\n");
+        sb.append("08:30 看盤前風向，09:30 依現價、題材一致性與風報比做最終決策。\n");
+        sb.append("來源：Trading System");
         return sb.toString();
     }
 }
