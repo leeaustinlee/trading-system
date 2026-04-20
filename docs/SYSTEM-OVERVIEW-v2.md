@@ -4,7 +4,7 @@
 >
 > **位置**：`D:\ai\stock\SYSTEM-OVERVIEW-v2.md`（WSL：`/mnt/d/ai/stock/SYSTEM-OVERVIEW-v2.md`）
 >
-> **最後更新**：2026-04-20（Codex v2 PowerShell 遷移完成）
+> **最後更新**：2026-04-20（持倉警報降噪 + 來源統一 Trading System）
 
 ---
 
@@ -195,6 +195,18 @@ POST /api/orchestration/recover?date=...     補跑缺漏 step
 | 全市場冷卻 | 當日虧損 2% 或連虧 2 筆 | MarketCooldownService |
 | 單檔資金 | 3-5 萬 | 手動檢查 |
 
+### 持倉警報降噪規則（2026-04-20 新增）
+
+| 規則 | 實作位置 | 行為 |
+|---|---|---|
+| `monitorMode=OFF` 不發持倉 LINE | `FiveMinuteMonitorJob` | Review log 仍寫，但不呼叫 `notifyPositionAlert` |
+| 即時報價不可用不更新 trailing | `PositionReviewService` | quote null 或 unavailable → status 強制 HOLD、不更新 `trailingStopPrice` |
+| POSITION_ALERT cooldown | `LineTemplateService` | 同 `symbol + status` 120 分鐘內不重發（`sendAndLog` 查 `notification_log`） |
+| SYSTEM_ALERT cooldown | `LineTemplateService` | 30 分鐘 |
+| MONITOR_5M cooldown | `LineTemplateService` | 15 分鐘 |
+| LINE 來源統一 | `LineTemplateService.ensureSource()` | 所有 `來源：Codex / Claude / Codex+Claude` 發送前替換為 `來源：Trading System` |
+| trailing stop reason 區分 | `PositionDecisionEngine` | `effectiveStop == trailingStopPrice` 時 reason = 「跌破移動停利」，否則 = 「觸發停損」 |
+
 ---
 
 ## 🔧 維運指令
@@ -294,6 +306,7 @@ T86_TOMORROW   FINALIZED
 
 | 日期 | 變更 | commit / PR |
 |---|---|---|
+| 2026-04-20 | **持倉警報降噪 + 來源統一 Trading System**：monitorMode=OFF 不發持倉 LINE、quote 不可用不更新 trailing、LINE 全部署名 Trading System、hit trailingStop 時 reason 區分「跌破移動停利」；新增 `hitTrailingStop` 單元測試 | 60e0c17 |
 | 2026-04-20 | **Codex v2 PowerShell 遷移完成**：v1 排程全 Disable，建立 5 個 Codex-xxx-HHMM runner + `run-codex-v2-task.ps1`；AI_RULES_INDEX / codex-role-v2-prompt / codex-handoff 同步更新 | Codex 側（D:\ 檔案） |
 | 2026-04-20 | 候選即時報價 last-price cache（30 秒內 MIS null 不跳昨收）| f4dd54e |
 | 2026-04-20 | docs/SYSTEM-OVERVIEW-v2.md 納入 git 追蹤 | 7a997d0 |
