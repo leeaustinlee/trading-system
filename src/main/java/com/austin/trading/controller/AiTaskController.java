@@ -174,7 +174,9 @@ public class AiTaskController {
         map.put("promptSummary",         task.getPromptSummary());
         map.put("promptFilePath",        task.getPromptFilePath());
         map.put("targetCandidatesJson",  task.getTargetCandidatesJson());
+        map.put("claudeResultMarkdown",  task.getClaudeResultMarkdown());
         map.put("claudeScoresJson",      task.getClaudeScoresJson());
+        map.put("codexResultMarkdown",   task.getCodexResultMarkdown());
         map.put("codexScoresJson",       task.getCodexScoresJson());
         map.put("codexVetoSymbolsJson",  task.getCodexVetoSymbolsJson());
         map.put("errorMessage",          task.getErrorMessage());
