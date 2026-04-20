@@ -4,7 +4,7 @@
 >
 > **位置**：`D:\ai\stock\SYSTEM-OVERVIEW-v2.md`（WSL：`/mnt/d/ai/stock/SYSTEM-OVERVIEW-v2.md`）
 >
-> **最後更新**：2026-04-20
+> **最後更新**：2026-04-20（Codex v2 PowerShell 遷移完成）
 
 ---
 
@@ -104,6 +104,30 @@
 - `D:\ai\stock\market-snapshot.json` — 共同快照（Codex 更新）
 - `D:\ai\stock\claude-submit\*.json` — File Bridge 入口（Claude 寫，Watcher 處理後 rename `.processed.json`）
 - `D:\ai\stock\capital-summary.md` — 資金 / 持倉總表（手動更新）
+- `D:\ai\stock\codex-role-v2-prompt.md` — Codex v2 執行規格（入口）
+- `D:\ai\stock\run-codex-v2-task.ps1` — Codex v2 runner（Windows 排程呼叫）
+- `D:\ai\stock\codex-v2-task.md` — Codex v2 任務實作規格
+- `D:\ai\stock\SYSTEM-OVERVIEW-v2.md` — **本檔（系統入口文件）**
+
+### Codex v2 Windows 排程
+
+v1 PowerShell 通知任務已全部 **Disabled**（保留歷史不刪）：
+`AustinStock*`、`CodexDataPrep-*`、`ClaudeBridge-*`、`AustinTaiwanStockMonitor`、`AustinStockHourlyIntradayGate`、`AustinStockT86Confirm1810`
+
+v2 新排程（5 個，MON-FRI）：
+
+| 任務名 | 時間 | Type |
+|---|---:|---|
+| `Codex-Premarket-0828` | 08:28 | `PREMARKET` |
+| `Codex-Opening-0928` | 09:28 | `OPENING` |
+| `Codex-Midday-1058` | 10:58 | `MIDDAY` |
+| `Codex-Postmarket-1528` | 15:28 | `POSTMARKET` |
+| `Codex-TomorrowPlan-1758` | 17:58 | `T86_TOMORROW` |
+
+排程動作統一為：
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\ai\stock\run-codex-v2-task.ps1" -Type <TYPE>
+```
 
 ### 關鍵 API
 
@@ -270,6 +294,9 @@ T86_TOMORROW   FINALIZED
 
 | 日期 | 變更 | commit / PR |
 |---|---|---|
+| 2026-04-20 | **Codex v2 PowerShell 遷移完成**：v1 排程全 Disable，建立 5 個 Codex-xxx-HHMM runner + `run-codex-v2-task.ps1`；AI_RULES_INDEX / codex-role-v2-prompt / codex-handoff 同步更新 | Codex 側（D:\ 檔案） |
+| 2026-04-20 | 候選即時報價 last-price cache（30 秒內 MIS null 不跳昨收）| f4dd54e |
+| 2026-04-20 | docs/SYSTEM-OVERVIEW-v2.md 納入 git 追蹤 | 7a997d0 |
 | 2026-04-20 | 初版建立（架構圖、時程表、三方邊界、風控門檻） | f5cd020 (UI 二輪改進) |
 | 2026-04-20 | Java File Bridge 上線（Claude 不能連 localhost 的方案） | d26b78a |
 | 2026-04-20 | IntradayDecision + Midday/Postmarket/TomorrowPlan 皆補發 AI 摘要 LINE | 707b10d |
