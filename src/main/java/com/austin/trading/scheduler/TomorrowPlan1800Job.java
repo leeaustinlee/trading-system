@@ -3,6 +3,7 @@ package com.austin.trading.scheduler;
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.dto.response.MarketCurrentResponse;
 import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.CandidateScanService;
 import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.MarketDataService;
@@ -37,19 +38,22 @@ public class TomorrowPlan1800Job {
     private final LineTemplateService  lineTemplateService;
     private final SchedulerLogService  schedulerLogService;
     private final DailyOrchestrationService orchestrationService;
+    private final AiTaskService aiTaskService;
 
     public TomorrowPlan1800Job(
             MarketDataService marketDataService,
             CandidateScanService candidateScanService,
             LineTemplateService lineTemplateService,
             SchedulerLogService schedulerLogService,
-            DailyOrchestrationService orchestrationService
+            DailyOrchestrationService orchestrationService,
+            AiTaskService aiTaskService
     ) {
         this.marketDataService   = marketDataService;
         this.candidateScanService = candidateScanService;
         this.lineTemplateService  = lineTemplateService;
         this.schedulerLogService  = schedulerLogService;
         this.orchestrationService = orchestrationService;
+        this.aiTaskService        = aiTaskService;
     }
 
     @Scheduled(cron = "${trading.scheduler.tomorrow-plan-cron:0 30 18 * * MON-FRI}",
@@ -70,6 +74,15 @@ public class TomorrowPlan1800Job {
 
             String message = buildMessage(today, market, candidates);
             lineTemplateService.notifyTomorrowPlan(message, today);
+
+            // 補發：T86_TOMORROW / POSTMARKET 任一 AI 研究 md
+            String aiMd = aiTaskService.findLatestMarkdown(today, "T86_TOMORROW", "POSTMARKET");
+            if (aiMd != null && aiMd.length() > 100) {
+                String summary = aiMd.length() > 3500
+                        ? aiMd.substring(0, 3500) + "\n...(內容過長已截斷)"
+                        : aiMd;
+                lineTemplateService.notifySystemAlert("📎 18:00 明日研究摘要", summary);
+            }
 
             log.info("[TomorrowPlan1800Job] candidates={}", candidates.size());
             String msg = "candidates=" + candidates.size();

@@ -132,7 +132,7 @@ public class PremarketWorkflowService {
     private AiTaskEntity findLatestTask(LocalDate tradingDate, String taskType) {
         return aiTaskService.getByDate(tradingDate).stream()
                 .filter(t -> taskType.equalsIgnoreCase(t.getTaskType()))
-                .reduce((first, second) -> second)
+                .findFirst()  // getByDate 已 desc
                 .orElse(null);
     }
 

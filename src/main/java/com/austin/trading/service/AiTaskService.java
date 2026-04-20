@@ -269,6 +269,28 @@ public class AiTaskService {
                 : aiTaskRepository.findByStatusAndTaskTypeOrderByCreatedAtAsc(STATUS_PENDING, taskType);
     }
 
+    /**
+     * 依優先序找當日最新有內容的 AI 研究 markdown（供 LINE 通知補發 AI 摘要用）。
+     * 對每個 taskType 優先 Codex，其次 Claude；依參數順序第一個命中的就回傳。
+     */
+    public String findLatestMarkdown(LocalDate tradingDate, String... taskTypes) {
+        List<AiTaskEntity> tasks = aiTaskRepository.findByTradingDateOrderByCreatedAtDesc(tradingDate);
+        for (String type : taskTypes) {
+            AiTaskEntity task = tasks.stream()
+                    .filter(t -> type.equalsIgnoreCase(t.getTaskType()))
+                    .findFirst()   // findByTradingDateOrderByCreatedAtDesc 已 desc，取第一筆=最新
+                    .orElse(null);
+            if (task == null) continue;
+            if (task.getCodexResultMarkdown() != null && !task.getCodexResultMarkdown().isBlank()) {
+                return "【" + type + " Codex】\n" + task.getCodexResultMarkdown();
+            }
+            if (task.getClaudeResultMarkdown() != null && !task.getClaudeResultMarkdown().isBlank()) {
+                return "【" + type + " Claude】\n" + task.getClaudeResultMarkdown();
+            }
+        }
+        return null;
+    }
+
     // ── 私有：解析 + 回寫 stock_evaluation ────────────────────────────────────
 
     private void autoWriteClaudeScores(LocalDate date, ClaudeSubmitRequest req) {

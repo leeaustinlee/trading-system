@@ -118,6 +118,15 @@ public class PostmarketWorkflowService {
             String candidateText = formatCandidates(notifyList);
             lineTemplateService.notifyPostmarket(candidateText, tradingDate);
             log.info("[PostmarketWorkflow] LINE 盤後通知已發送，候選股={} 檔", notifyList.size());
+
+            // 補發：POSTMARKET / AFTERMARKET / MIDDAY 任一 AI 研究 md
+            String aiMd = aiTaskService.findLatestMarkdown(tradingDate, "POSTMARKET", "MIDDAY");
+            if (aiMd != null && aiMd.length() > 100) {
+                String summary = aiMd.length() > 3500
+                        ? aiMd.substring(0, 3500) + "\n...(內容過長已截斷)"
+                        : aiMd;
+                lineTemplateService.notifySystemAlert("📎 15:30 AI 研究摘要", summary);
+            }
         } else {
             log.info("[PostmarketWorkflow] LINE 通知未啟用（scheduling.line_notify_enabled=false）");
         }

@@ -4,6 +4,7 @@ import com.austin.trading.dto.response.MarketCurrentResponse;
 import com.austin.trading.dto.response.PositionResponse;
 import com.austin.trading.dto.response.TradingStateResponse;
 import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.MarketDataService;
 import com.austin.trading.service.OrchestrationStep;
@@ -41,6 +42,7 @@ public class MiddayReviewJob {
     private final LineTemplateService lineTemplateService;
     private final SchedulerLogService schedulerLogService;
     private final DailyOrchestrationService orchestrationService;
+    private final AiTaskService aiTaskService;
 
     public MiddayReviewJob(
             MarketDataService marketDataService,
@@ -48,7 +50,8 @@ public class MiddayReviewJob {
             PositionService positionService,
             LineTemplateService lineTemplateService,
             SchedulerLogService schedulerLogService,
-            DailyOrchestrationService orchestrationService
+            DailyOrchestrationService orchestrationService,
+            AiTaskService aiTaskService
     ) {
         this.marketDataService   = marketDataService;
         this.tradingStateService = tradingStateService;
@@ -56,6 +59,7 @@ public class MiddayReviewJob {
         this.lineTemplateService = lineTemplateService;
         this.schedulerLogService = schedulerLogService;
         this.orchestrationService = orchestrationService;
+        this.aiTaskService       = aiTaskService;
     }
 
     @Scheduled(cron = "${trading.scheduler.midday-review-cron:0 0 11 * * MON-FRI}",
@@ -81,6 +85,15 @@ public class MiddayReviewJob {
 
             String message = buildMessage(today, marketSummary, positionSummary, advice);
             lineTemplateService.notifyMidday(message, today);
+
+            // 補發：若有 MIDDAY / OPENING / PREMARKET task 的 AI 研究 md，另外發一則
+            String aiMd = aiTaskService.findLatestMarkdown(today, "MIDDAY", "OPENING", "PREMARKET");
+            if (aiMd != null && aiMd.length() > 100) {
+                String summary = aiMd.length() > 3500
+                        ? aiMd.substring(0, 3500) + "\n...(內容過長已截斷)"
+                        : aiMd;
+                lineTemplateService.notifySystemAlert("📎 11:00 AI 研究摘要", summary);
+            }
 
             String logMsg = String.format("grade=%s positions=%d",
                     market != null ? market.marketGrade() : "N/A",
