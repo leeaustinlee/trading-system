@@ -1,0 +1,57 @@
+# ──────────────────────────────────────────────────────────────
+# Local profile 範本（對應 SPRING_PROFILES_ACTIVE=local）
+# 使用：複製為 application-local.yml（被 .gitignore 忽略，不會入 git）
+# WSL 用 /mnt/d/... 路徑；Windows 原生用 D:/... 路徑
+# ──────────────────────────────────────────────────────────────
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3330/trading_system?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Taipei}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:replace_me}
+  jpa:
+    hibernate:
+      ddl-auto: update      # 自動建表；首次啟動後也會自動 ALTER 新欄位
+    show-sql: true
+
+logging:
+  level:
+    root: INFO
+    com.austin.trading: DEBUG
+
+trading:
+  mock-data-loader:
+    enabled: false          # 正式跑後關閉 mock；真實資料由 Codex/Claude 寫入
+  scheduler:
+    hourly-gate:            { enabled: true }
+    final-decision:         { enabled: true }
+    five-minute-monitor:    { enabled: true }
+    premarket-data-prep:    { enabled: true }
+    postmarket-data-prep:   { enabled: true }
+    premarket-notify:       { enabled: true }
+    aftermarket-review:     { enabled: true }
+    postmarket-analysis:    { enabled: true }
+    t86-data-prep:          { enabled: true }
+    midday-review:          { enabled: true }
+    tomorrow-plan:          { enabled: true }
+    open-data-prep:         { enabled: true }
+    external-probe-health:  { enabled: true }
+    watchlist-refresh:      { enabled: true }
+    weekly-trade-review:    { enabled: true }
+    daily-health-check:     { enabled: true }
+  ai:
+    claude:
+      research-output-path: ${CLAUDE_RESEARCH_OUTPUT_PATH:/mnt/d/ai/stock/claude-research-latest.md}
+      request-output-path:  ${CLAUDE_REQUEST_OUTPUT_PATH:/mnt/d/ai/stock/claude-research-request.json}
+  claude-submit:
+    enabled: true
+    watch-dir: /mnt/d/ai/stock/claude-submit
+    scan-interval-ms: 30000
+
+# v2.1 Claude file bridge 路徑（WSL；若在 Windows 原生改 D:/... ）
+ai:
+  file_bridge:
+    processed_dir: /mnt/d/ai/stock/claude-submit/processed
+    failed_dir:    /mnt/d/ai/stock/claude-submit/failed
+    retry_dir:     /mnt/d/ai/stock/claude-submit/retry
+    allow_auto_create_task: false
+    required_stable_seconds: 2
