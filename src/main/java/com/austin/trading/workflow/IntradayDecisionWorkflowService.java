@@ -1,7 +1,9 @@
 package com.austin.trading.workflow;
 
 import com.austin.trading.dto.response.FinalDecisionResponse;
+import com.austin.trading.entity.AiTaskEntity;
 import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.FinalDecisionService;
 import com.austin.trading.service.MarketDataService;
 import com.austin.trading.service.ScoreConfigService;
@@ -10,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * 09:30 最終決策工作流編排器。
@@ -31,17 +34,20 @@ public class IntradayDecisionWorkflowService {
     private final FinalDecisionService finalDecisionService;
     private final LineTemplateService  lineTemplateService;
     private final ScoreConfigService   config;
+    private final AiTaskService        aiTaskService;
 
     public IntradayDecisionWorkflowService(
             MarketDataService marketDataService,
             FinalDecisionService finalDecisionService,
             LineTemplateService lineTemplateService,
-            ScoreConfigService config
+            ScoreConfigService config,
+            AiTaskService aiTaskService
     ) {
         this.marketDataService    = marketDataService;
         this.finalDecisionService = finalDecisionService;
         this.lineTemplateService  = lineTemplateService;
         this.config               = config;
+        this.aiTaskService        = aiTaskService;
     }
 
     /**
@@ -66,10 +72,48 @@ public class IntradayDecisionWorkflowService {
         boolean lineEnabled = config.getBoolean("scheduling.line_notify_enabled", false);
         if (lineEnabled) {
             lineTemplateService.notifyFinalDecision(result, tradingDate);
-            log.info("[IntradayDecisionWorkflow] LINE 通知已發送");
+            log.info("[IntradayDecisionWorkflow] LINE 最終決策已發送");
+
+            // 額外：若有 Claude / Codex 研究 markdown，補發一則「AI 研究摘要」LINE
+            String aiMd = findAiMarkdown(tradingDate);
+            if (aiMd != null && aiMd.length() > 100) {
+                String summary = aiMd.length() > 3500
+                        ? aiMd.substring(0, 3500) + "\n...(內容過長已截斷，詳見 claude-research-latest.md)"
+                        : aiMd;
+                lineTemplateService.notifySystemAlert("📎 09:30 AI 研究摘要", summary);
+                log.info("[IntradayDecisionWorkflow] LINE AI 研究摘要已補發 ({} chars)", aiMd.length());
+            } else {
+                log.info("[IntradayDecisionWorkflow] 無可用 AI 研究 md 補發");
+            }
         } else {
             log.info("[IntradayDecisionWorkflow] LINE 通知未啟用（scheduling.line_notify_enabled=false）");
         }
+    }
+
+    /**
+     * 取今日最新的 AI 研究 markdown。優先順序：
+     * 1. OPENING task 的 codexResultMarkdown
+     * 2. OPENING task 的 claudeResultMarkdown
+     * 3. PREMARKET task 的 codexResultMarkdown（若 OPENING 未完成）
+     * 4. PREMARKET task 的 claudeResultMarkdown
+     */
+    private String findAiMarkdown(LocalDate tradingDate) {
+        List<AiTaskEntity> tasks = aiTaskService.getByDate(tradingDate);
+        // 先找 OPENING
+        for (String type : new String[]{"OPENING", "PREMARKET"}) {
+            AiTaskEntity task = tasks.stream()
+                    .filter(t -> type.equalsIgnoreCase(t.getTaskType()))
+                    .reduce((a, b) -> b)
+                    .orElse(null);
+            if (task == null) continue;
+            if (task.getCodexResultMarkdown() != null && !task.getCodexResultMarkdown().isBlank()) {
+                return "【" + type + " Codex】\n" + task.getCodexResultMarkdown();
+            }
+            if (task.getClaudeResultMarkdown() != null && !task.getClaudeResultMarkdown().isBlank()) {
+                return "【" + type + " Claude】\n" + task.getClaudeResultMarkdown();
+            }
+        }
+        return null;
     }
 
     /** 供外部直接取得結果（不重複計算）的入口 */

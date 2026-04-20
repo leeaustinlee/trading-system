@@ -12,4 +12,7 @@ public interface StockEvaluationRepository extends JpaRepository<StockEvaluation
     List<StockEvaluationEntity> findByTradingDate(LocalDate tradingDate);
 
     Optional<StockEvaluationEntity> findByTradingDateAndSymbol(LocalDate tradingDate, String symbol);
+
+    /** 按日期刪除（admin cleanup 用） */
+    long deleteByTradingDate(LocalDate tradingDate);
 }

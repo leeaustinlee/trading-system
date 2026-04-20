@@ -5,11 +5,15 @@ import com.austin.trading.dto.request.CandidateBatchItemRequest;
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.dto.response.LiveQuoteResponse;
 import com.austin.trading.entity.StockEvaluationEntity;
+import com.austin.trading.repository.CandidateStockRepository;
+import com.austin.trading.repository.StockEvaluationRepository;
 import com.austin.trading.service.CandidateScanService;
 import com.austin.trading.service.StockEvaluationService;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -33,6 +37,8 @@ public class CandidateController {
 
     private final CandidateScanService    candidateScanService;
     private final StockEvaluationService stockEvaluationService;
+    @Autowired private CandidateStockRepository candidateStockRepository;
+    @Autowired private StockEvaluationRepository stockEvaluationRepository;
 
     public CandidateController(CandidateScanService candidateScanService,
                                StockEvaluationService stockEvaluationService) {
@@ -152,6 +158,25 @@ public class CandidateController {
             return ResponseEntity.badRequest().body(Map.of("success", false,
                     "error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
         }
+    }
+
+    /**
+     * 按日期刪除候選股 + stock_evaluation（admin cleanup 用，例如清 mock 殘留）。
+     * <p>用法：{@code DELETE /api/candidates/by-date/2026-04-17}</p>
+     */
+    @DeleteMapping("/by-date/{date}")
+    @Transactional
+    public Map<String, Object> deleteByDate(
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+    ) {
+        long cands = candidateStockRepository.deleteByTradingDate(date);
+        long evals = stockEvaluationRepository.deleteByTradingDate(date);
+        return Map.of(
+                "success", true,
+                "tradingDate", date.toString(),
+                "deletedCandidates", cands,
+                "deletedEvaluations", evals
+        );
     }
 
     /** 切換今日候選股「納入最終計畫」狀態（toggle） */

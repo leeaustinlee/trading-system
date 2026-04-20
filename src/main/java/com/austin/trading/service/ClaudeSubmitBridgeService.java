@@ -52,17 +52,28 @@ public class ClaudeSubmitBridgeService {
 
             Long taskId = resolveTaskId(req);
             if (taskId == null) {
-                throw new IllegalStateException(
-                        "No task found for taskType=" + req.taskType() + " date=" + req.tradingDate()
-                                + "（請確認 Java DataPrepJob 已跑）");
+                // 找不到對應 task → 自動建一個 PENDING task（應對 Java 還沒有對應 DataPrepJob 的時段，例如 OPENING / MIDDAY / T86_TOMORROW）
+                if (req.taskType() == null || req.taskType().isBlank()) {
+                    throw new IllegalStateException("JSON 缺 taskType，且沒有 taskId 可用");
+                }
+                LocalDate date = Optional.ofNullable(req.tradingDate()).orElse(LocalDate.now());
+                AiTaskEntity newTask = aiTaskService.createTask(
+                        date, req.taskType().toUpperCase(), null, java.util.List.of(),
+                        "Auto-created by ClaudeSubmitBridge (" + fileName + ")",
+                        "claude-submit:" + fileName
+                );
+                taskId = newTask.getId();
+                log.info("[ClaudeSubmitBridge] ⚙️ 自動建新 task id={} type={} date={}",
+                        taskId, req.taskType(), date);
             }
 
-            AiTaskEntity task = aiTaskService.getById(taskId)
-                    .orElseThrow(() -> new IllegalStateException("Task not found: " + taskId));
+            final Long resolvedTaskId = taskId;
+            AiTaskEntity task = aiTaskService.getById(resolvedTaskId)
+                    .orElseThrow(() -> new IllegalStateException("Task not found: " + resolvedTaskId));
 
             // 若 task 是 PENDING → 先 claim 變 CLAUDE_RUNNING
             if ("PENDING".equalsIgnoreCase(task.getStatus())) {
-                aiTaskService.claim(taskId);
+                aiTaskService.claim(resolvedTaskId);
             }
 
             ClaudeSubmitRequest submitReq = new ClaudeSubmitRequest(
@@ -71,7 +82,7 @@ public class ClaudeSubmitBridgeService {
                     req.thesis(),
                     req.riskFlags()
             );
-            AiTaskEntity saved = aiTaskService.submitClaudeResult(taskId, submitReq);
+            AiTaskEntity saved = aiTaskService.submitClaudeResult(resolvedTaskId, submitReq);
 
             moveTo(file, ".processed.json");
             log.info("[ClaudeSubmitBridge] ✅ {} → task {} ({}) status={}, scores={}",

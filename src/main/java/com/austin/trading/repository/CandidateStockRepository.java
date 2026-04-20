@@ -18,4 +18,7 @@ public interface CandidateStockRepository extends JpaRepository<CandidateStockEn
 
     /** 取得最新一筆（用於推算最後有效交易日） */
     Optional<CandidateStockEntity> findTopByOrderByTradingDateDesc();
+
+    /** 按日期刪除（admin cleanup 用） */
+    long deleteByTradingDate(LocalDate tradingDate);
 }
