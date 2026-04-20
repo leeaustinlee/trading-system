@@ -81,3 +81,8 @@ trading:
     claude:
       research-output-path: ${CLAUDE_RESEARCH_OUTPUT_PATH:}
       request-output-path: ${CLAUDE_REQUEST_OUTPUT_PATH:}
+
+  claude-submit:
+    enabled: ${CLAUDE_SUBMIT_BRIDGE_ENABLED:true}
+    watch-dir: ${CLAUDE_SUBMIT_WATCH_DIR:D:/ai/stock/claude-submit}
+    scan-interval-ms: 30000
