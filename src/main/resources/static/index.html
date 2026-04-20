@@ -375,6 +375,16 @@
     .dec-btn.active-decision[id="mkt-dec-ENTER"] { background:#d4f5e9; color:#0a6640; border-color:#0a6640; }
     .dec-btn.active-decision[id="mkt-dec-WATCH"] { background:#fff3cc; color:#7a5000; border-color:#e8ca7a; }
     .dec-btn.active-decision[id="mkt-dec-REST"]  { background:#ffe3e7; color:#a00020; border-color:#f3bcbe; }
+    /* AI 建議 badge */
+    .ai-badge { display:inline-block; padding:3px 8px; border-radius:8px; font-size:12px; font-weight:600; max-width:180px; word-break:break-all; line-height:1.3; }
+    .badge-hold { background:#fff8e6; color:#b07000; border:1px solid #f0c040; }
+    .badge-exit { background:#fff0f2; color:#c8001e; border:1px solid #f5a0a8; }
+    .badge-stop { background:#fff0f2; color:#c8001e; border:1px solid #f5a0a8; }
+    .badge-neutral { background:#f0f2f5; color:#5a6a80; border:1px solid #d0d8e4; }
+    /* 資料過期警示 */
+    .stale-badge { background:#fff3cd; color:#856404; border:1px solid #ffc107; border-radius:6px; font-size:11px; padding:2px 7px; margin-left:8px; font-weight:600; }
+    /* 損益圖表最小高度（class 為 pnl-chart-wrap，id 為 pnl-chart）*/
+    #pnl-chart, .pnl-chart-wrap { min-height: 220px; }
   </style>
 </head>
 <body>
@@ -385,6 +395,8 @@
   <button class="nav-tab" data-page="pageCandidates">候選股</button>
   <button class="nav-tab" data-page="pagePositions">持倉</button>
   <button class="nav-tab" data-page="pagePnl">損益</button>
+  <button class="nav-tab" data-page="pageDecisions">決策歷史</button>
+  <button class="nav-tab" data-page="pageAiResearch">AI 研究</button>
   <div class="nav-more" style="position:relative;display:inline-block">
     <button class="nav-tab" id="navMoreBtn" onclick="toggleNavMore()">進階 ▾</button>
     <div id="navMoreMenu" style="
@@ -393,8 +405,6 @@
       box-shadow:0 8px 24px rgba(18,35,62,.12); padding:6px; min-width:130px;
       margin-top:4px;
     ">
-      <button class="nav-tab" data-page="pageDecisions"  style="display:block;width:100%;text-align:left">決策歷史</button>
-      <button class="nav-tab" data-page="pageAiResearch" style="display:block;width:100%;text-align:left">AI 研究</button>
       <button class="nav-tab" data-page="pageScheduler"  style="display:block;width:100%;text-align:left">排程</button>
       <button class="nav-tab" data-page="pageSystem"     style="display:block;width:100%;text-align:left">系統</button>
       <button class="nav-tab" data-page="pageSettings"   style="display:block;width:100%;text-align:left">設定</button>
@@ -459,6 +469,7 @@
 
       <section class="card span-4">
         <h2>市場狀態
+          <span id="d-marketStale"></span>
           <button class="btn" id="d-marketEditBtn" style="margin-left:auto;padding:4px 12px;font-size:12px">⚙ 設定</button>
         </h2>
         <div class="kv">
@@ -622,6 +633,7 @@
             <th>代號</th><th>名稱</th><th>方向</th><th>股數</th><th>均價</th>
             <th>停損</th><th>停利1</th><th>停利2</th>
             <th>距停損</th><th>現值</th><th>預估損益</th>
+            <th>AI 建議</th>
             <th>開倉時間</th><th>備註</th><th style="width:130px">操作</th>
           </tr></thead>
           <tbody id="p-openBody"></tbody>
@@ -1495,6 +1507,19 @@
       setText("d-marketGrade",  dash.market?.marketGrade);
       setText("d-marketPhase",  dash.market?.marketPhase);
       setText("d-marketDecision", dash.market?.decision);
+
+      // 資料過期警示：若 market.tradingDate 不是今日，顯示 stale badge
+      const stale = $("d-marketStale");
+      if (stale) {
+        const marketDate = dash.market?.tradingDate;
+        const today = new Date().toISOString().slice(0, 10);
+        if (marketDate && marketDate !== today) {
+          const md = marketDate.slice(5).replace("-", "/");
+          stale.innerHTML = `<span class="stale-badge">資料：${md}（非今日）</span>`;
+        } else {
+          stale.innerHTML = "";
+        }
+      }
       setText("d-decisionLock", dash.tradingState?.decisionLock);
       setText("d-timeDecay",    dash.tradingState?.timeDecayStage);
       setText("d-hourlyGate",   dash.tradingState?.hourlyGate);
@@ -1799,9 +1824,20 @@
             const pnlPct = unrealized != null && cost && cost > 0
               ? ((unrealized / cost) * 100).toFixed(2) : null;
 
-            const valueCell = currentValue != null
-              ? `<span class="quote-price" style="font-size:14px">${fmtPrice(currentValue)}</span>`
-              : `<span class="quote-meta">--</span>`;
+            // 現值 fallback：沒即時報價時顯示 payloadJson.unrealized_pnl_ref
+            let valueCell;
+            if (currentValue != null) {
+              valueCell = `<span class="quote-price" style="font-size:14px">${fmtPrice(currentValue)}</span>`;
+            } else {
+              let refText = null;
+              try {
+                const pj = JSON.parse(p.payloadJson || "{}");
+                if (pj.unrealized_pnl_ref) refText = pj.unrealized_pnl_ref;
+              } catch(_) {}
+              valueCell = refText
+                ? `<span style="opacity:.6;font-size:11px">估 ${esc(refText)}</span>`
+                : `<span class="quote-meta">--</span>`;
+            }
             const pnlCell = unrealized != null
               ? `${numHtml(unrealized)}${pnlPct != null ? `<br><span class="quote-meta">${pnlPct > 0 ? '+' : ''}${pnlPct}%</span>` : ""}`
               : `<span class="quote-meta">--</span>`;
@@ -1817,6 +1853,7 @@
               <td style="text-align:right">${distToStop(cur ?? p.currentPrice, p.stopLossPrice, p.side)}</td>
               <td style="text-align:right">${valueCell}</td>
               <td style="text-align:right">${pnlCell}</td>
+              <td>${renderAiAdvice(p)}</td>
               <td class="small mono">${fmtTime(p.openedAt)}</td>
               <td class="small">${esc(p.note)}</td>
               <td style="white-space:nowrap">
@@ -1827,7 +1864,7 @@
               </td>
             </tr>`;
           }).join("")
-        : `<tr class="empty-row"><td colspan="14">無持倉</td></tr>`;
+        : `<tr class="empty-row"><td colspan="15">無持倉</td></tr>`;
     } catch(e) { showErr("errBoxPos", `載入失敗：${e.message}`); }
   }
 
@@ -2455,6 +2492,32 @@
     if (v == null) return "-";
     return Number(v).toLocaleString("zh-TW", { minimumFractionDigits:2, maximumFractionDigits:2 });
   }
+  // 盤外 currentPrice=null 時改顯示 prevClose + 灰色「昨」標記
+  function fmtPriceWithFallback(q) {
+    if (q.currentPrice != null) return Number(q.currentPrice).toFixed(2);
+    if (q.prevClose != null) {
+      return `<span style="color:#bbb">${Number(q.prevClose).toFixed(2)} <small>昨</small></span>`;
+    }
+    return "–";
+  }
+  // 持倉 AI 建議（從 payloadJson 解析 ai_advice / strategy / note 擇一）
+  function renderAiAdvice(pos) {
+    let advice = "–";
+    let cls = "badge-neutral";
+    if (pos.payloadJson) {
+      try {
+        const p = JSON.parse(pos.payloadJson);
+        if (p.ai_advice)       advice = p.ai_advice;
+        else if (p.strategy)   advice = p.strategy;
+        else if (p.note)       advice = p.note;
+      } catch(_) {}
+    }
+    if (advice === "–" && pos.note) advice = pos.note;
+    if (advice.includes("移動停利") || advice.includes("續抱") || advice.includes("持有")) cls = "badge-hold";
+    if (advice.includes("出場") || advice.includes("減碼")) cls = "badge-exit";
+    if (advice.includes("停損")) cls = "badge-stop";
+    return `<span class="ai-badge ${cls}">${esc(advice)}</span>`;
+  }
   function fmtVol(v) {
     if (v == null) return "-";
     return Number(v).toLocaleString("zh-TW");
@@ -2478,7 +2541,7 @@
     return `<tr id="lq-row-${q.symbol}">
       <td class="mono">${esc(q.symbol)}</td>
       <td>${esc(q.stockName)}</td>
-      <td id="${priceId}" class="quote-price ${cls === "up" ? "num-pos" : cls === "dn" ? "num-neg" : ""}">${fmtPrice(q.currentPrice)}</td>
+      <td id="${priceId}" class="quote-price ${cls === "up" ? "num-pos" : cls === "dn" ? "num-neg" : ""}">${fmtPriceWithFallback(q)}</td>
       <td class="quote-change ${cls}">${changeSign(q.changeAmount)} ${showPct ? changePctText(q.changePercent) : ""}</td>
       ${showPct ? `<td class="quote-meta">${fmtPrice(q.open)}</td>` : ""}
       <td class="quote-meta">${fmtPrice(q.dayHigh)}</td>
@@ -2531,41 +2594,66 @@
       setLiveStatus("d-liveDot","d-liveStatus", statusText, dotState);
       setLiveStatus("c-liveDot","c-liveStatus", statusText, dotState);
 
-      // Dashboard 精簡版（含評分欄，無開盤/昨收/更新欄）
+      // 按 Score 排序（穩定化），null 視為 0
+      const sortedData = [...data].sort((a, b) => {
+        const sa = (_candidateScoreCache[a.symbol]?.score) ?? 0;
+        const sb = (_candidateScoreCache[b.symbol]?.score) ?? 0;
+        return sb - sa;
+      });
+
+      // Dashboard 精簡版（含評分欄）— 若行數相同做逐 cell 更新，避免閃爍
       const dBody = $("d-liveBody");
       if (dBody) {
-        dBody.innerHTML = data.map(q => {
-          const cls  = changeClass(q.changePercent);
-          const cand = _candidateScoreCache[q.symbol];
-          const scoreCell = cand?.score != null
-            ? `<td class="small" style="color:var(--up);font-weight:600">${cand.score}</td>`
-            : `<td class="small" style="color:var(--muted)">-</td>`;
-          return `<tr id="lq-row-${q.symbol}">
-            <td class="mono">${esc(q.symbol)}</td>
-            <td>${esc(q.stockName)}</td>
-            ${scoreCell}
-            <td id="lq-price-${q.symbol}" class="quote-price ${cls==="up"?"num-pos":cls==="dn"?"num-neg":""}">${fmtPrice(q.currentPrice)}</td>
-            <td class="quote-change ${cls}">${changeSign(q.changeAmount)} ${changePctText(q.changePercent)}</td>
-            <td class="quote-meta">${fmtPrice(q.dayHigh)}</td>
-            <td class="quote-meta">${fmtPrice(q.dayLow)}</td>
-            <td class="quote-meta">${fmtVol(q.volume)}</td>
-          </tr>`;
-        }).join("");
+        if (dBody.children.length === sortedData.length) {
+          sortedData.forEach(q => {
+            const row = document.getElementById(`d-lq-row-${q.symbol}`);
+            if (!row) return;
+            const cls = changeClass(q.changePercent);
+            const cells = row.querySelectorAll("td");
+            if (cells.length >= 8) {
+              cells[3].textContent = fmtPriceWithFallback(q);
+              cells[3].className = `quote-price ${cls==="up"?"num-pos":cls==="dn"?"num-neg":""}`;
+              cells[4].innerHTML = changeSign(q.changeAmount) + " " + changePctText(q.changePercent);
+              cells[4].className = `quote-change ${cls}`;
+              cells[5].textContent = fmtPrice(q.dayHigh);
+              cells[6].textContent = fmtPrice(q.dayLow);
+              cells[7].textContent = fmtVol(q.volume);
+            }
+          });
+        } else {
+          dBody.innerHTML = sortedData.map(q => {
+            const cls  = changeClass(q.changePercent);
+            const cand = _candidateScoreCache[q.symbol];
+            const scoreCell = cand?.score != null
+              ? `<td class="small" style="color:var(--up);font-weight:600">${cand.score}</td>`
+              : `<td class="small" style="color:var(--muted)">-</td>`;
+            return `<tr id="d-lq-row-${q.symbol}">
+              <td class="mono">${esc(q.symbol)}</td>
+              <td>${esc(q.stockName)}</td>
+              ${scoreCell}
+              <td class="quote-price ${cls==="up"?"num-pos":cls==="dn"?"num-neg":""}">${fmtPriceWithFallback(q)}</td>
+              <td class="quote-change ${cls}">${changeSign(q.changeAmount)} ${changePctText(q.changePercent)}</td>
+              <td class="quote-meta">${fmtPrice(q.dayHigh)}</td>
+              <td class="quote-meta">${fmtPrice(q.dayLow)}</td>
+              <td class="quote-meta">${fmtVol(q.volume)}</td>
+            </tr>`;
+          }).join("");
+        }
       }
 
       // Candidates 完整版（含所有欄位）
       const cBody = $("c-liveBody");
       if (cBody) {
         // 若 tbody 已有資料（非首次），逐行更新避免閃爍
-        if (cBody.children.length === data.length) {
-          data.forEach(q => {
+        if (cBody.children.length === sortedData.length) {
+          sortedData.forEach(q => {
             applyFlash(q.symbol, q.currentPrice);
             const row = document.getElementById(`lq-row-${q.symbol}`);
             if (row) {
               const cls = changeClass(q.changePercent);
               const priceEl = document.getElementById(`lq-price-${q.symbol}`);
               if (priceEl) {
-                priceEl.textContent = fmtPrice(q.currentPrice);
+                priceEl.innerHTML = fmtPriceWithFallback(q);
                 priceEl.className = `quote-price ${cls === "up" ? "num-pos" : cls === "dn" ? "num-neg" : ""}`;
               }
               const cells = row.querySelectorAll("td");
@@ -2576,7 +2664,7 @@
             }
           });
         } else {
-          cBody.innerHTML = data.map(q => renderLiveRow(q, true)).join("");
+          cBody.innerHTML = sortedData.map(q => renderLiveRow(q, true)).join("");
         }
       }
 

@@ -50,12 +50,21 @@ public class PositionController {
         return positionService.getHistoryFiltered(symbol, dateFrom, dateTo, page, size);
     }
 
-    /** 持倉即時報價（TSE→OTC fallback） */
+    /** 持倉即時報價（TSE→OTC fallback）。symbols 為空時自動撈 open positions 的代號 */
     @GetMapping("/live-quotes")
     public List<LiveQuoteResponse> getLiveQuotes(@RequestParam(required = false) String symbols) {
-        if (symbols == null || symbols.isBlank()) return List.of();
-        List<String> syms = Arrays.stream(symbols.split(","))
-                .map(String::trim).filter(s -> !s.isEmpty()).toList();
+        List<String> syms;
+        if (symbols == null || symbols.isBlank()) {
+            syms = positionService.getOpenPositions(50).stream()
+                    .map(p -> p.symbol())
+                    .filter(s -> s != null && !s.isBlank())
+                    .distinct()
+                    .toList();
+        } else {
+            syms = Arrays.stream(symbols.split(","))
+                    .map(String::trim).filter(s -> !s.isEmpty()).toList();
+        }
+        if (syms.isEmpty()) return List.of();
         return candidateScanService.getLiveQuotesBySymbols(syms);
     }
 

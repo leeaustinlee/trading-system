@@ -107,7 +107,7 @@ public class TwseMisClient {
                             .queryParam("_", System.currentTimeMillis())
                             .build())
                     .header("Referer", "https://mis.twse.com.tw/stock/index.jsp")
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                     .retrieve()
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(10))
