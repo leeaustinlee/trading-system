@@ -2492,9 +2492,23 @@
     if (v == null) return "-";
     return Number(v).toLocaleString("zh-TW", { minimumFractionDigits:2, maximumFractionDigits:2 });
   }
-  // 盤外 currentPrice=null 時改顯示 prevClose + 灰色「昨」標記
+  // 記憶最後一次有效的現價（避免 TWSE MIS 間歇性 null 時畫面亂跳）
+  // { symbol -> { price, ts } }
+  const _lastLivePrice = {};
+  const STALE_PRICE_MS = 30_000;  // 30 秒內用 cache，超過才 fallback 到昨收
+
   function fmtPriceWithFallback(q) {
-    if (q.currentPrice != null) return Number(q.currentPrice).toFixed(2);
+    // 1. 最新現價 → 更新 cache 並顯示
+    if (q.currentPrice != null) {
+      _lastLivePrice[q.symbol] = { price: q.currentPrice, ts: Date.now() };
+      return Number(q.currentPrice).toFixed(2);
+    }
+    // 2. 沒現價但 30 秒內有 cache → 用 cache（等下一次 polling 再試）
+    const cached = _lastLivePrice[q.symbol];
+    if (cached && (Date.now() - cached.ts) < STALE_PRICE_MS) {
+      return Number(cached.price).toFixed(2);
+    }
+    // 3. 真的沒有（盤外或持續抓不到）→ 顯示昨收 + 灰「昨」badge
     if (q.prevClose != null) {
       return `<span style="color:#bbb">${Number(q.prevClose).toFixed(2)} <small>昨</small></span>`;
     }
@@ -2594,11 +2608,12 @@
       setLiveStatus("d-liveDot","d-liveStatus", statusText, dotState);
       setLiveStatus("c-liveDot","c-liveStatus", statusText, dotState);
 
-      // 按 Score 排序（穩定化），null 視為 0
+      // 按 Score 排序（穩定化），null 視為 0；分數相同時以代號字母序穩定排序
       const sortedData = [...data].sort((a, b) => {
         const sa = (_candidateScoreCache[a.symbol]?.score) ?? 0;
         const sb = (_candidateScoreCache[b.symbol]?.score) ?? 0;
-        return sb - sa;
+        if (sb !== sa) return sb - sa;
+        return a.symbol.localeCompare(b.symbol);
       });
 
       // Dashboard 精簡版（含評分欄）— 若行數相同做逐 cell 更新，避免閃爍
@@ -2611,9 +2626,9 @@
             const cls = changeClass(q.changePercent);
             const cells = row.querySelectorAll("td");
             if (cells.length >= 8) {
-              cells[3].textContent = fmtPriceWithFallback(q);
+              cells[3].innerHTML = fmtPriceWithFallback(q);  // innerHTML: 支援「昨」HTML badge
               cells[3].className = `quote-price ${cls==="up"?"num-pos":cls==="dn"?"num-neg":""}`;
-              cells[4].innerHTML = changeSign(q.changeAmount) + " " + changePctText(q.changePercent);
+              cells[4].textContent = changeSign(q.changeAmount) + " " + changePctText(q.changePercent);
               cells[4].className = `quote-change ${cls}`;
               cells[5].textContent = fmtPrice(q.dayHigh);
               cells[6].textContent = fmtPrice(q.dayLow);
