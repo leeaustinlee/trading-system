@@ -60,10 +60,10 @@ public class IntradayDecisionWorkflowService {
             log.warn("[IntradayDecisionWorkflow] 無市場快照，以預設 B 級執行");
         }
 
-        // Step 2~4: FinalDecisionService.evaluateAndPersist 已整合 Veto + 評分 + Final
-        // Phase 2 將在此加入 VetoEngine.batchEvaluate + WeightedScoringEngine.computeRanking
+        // Step 2~4: 分層管線 — Regime → Theme → Ranking → Setup → Timing → Risk → Execution
+        log.info("[IntradayDecisionWorkflow] 啟動分層管線：Regime → Theme → Ranking → Setup → Timing → Risk → Execution");
         var result = finalDecisionService.evaluateAndPersist(tradingDate);
-        log.info("[IntradayDecisionWorkflow] 決策={}，入選={} 檔",
+        log.info("[IntradayDecisionWorkflow] 管線完成 — 決策={} 入選={} 檔",
                 result.decision(), result.selectedStocks().size());
 
         // Step 5: LINE 通知（由 scheduling.line_notify_enabled 控制）

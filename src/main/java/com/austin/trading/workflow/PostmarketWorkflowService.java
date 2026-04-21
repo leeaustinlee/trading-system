@@ -4,6 +4,8 @@ import com.austin.trading.dto.request.AiTaskCandidateRef;
 import com.austin.trading.dto.request.DailyPnlCreateRequest;
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.dto.response.LiveQuoteResponse;
+import com.austin.trading.dto.internal.MarketRegimeDecision;
+import com.austin.trading.dto.internal.ThemeStrengthDecision;
 import com.austin.trading.engine.ThemeSelectionEngine;
 import com.austin.trading.entity.StockThemeMappingEntity;
 import com.austin.trading.entity.ThemeSnapshotEntity;
@@ -14,8 +16,11 @@ import com.austin.trading.repository.StockThemeMappingRepository;
 import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.CandidateScanService;
 import com.austin.trading.service.ClaudeCodeRequestWriterService;
+import com.austin.trading.service.MarketRegimeService;
 import com.austin.trading.service.PnlService;
 import com.austin.trading.service.ScoreConfigService;
+import com.austin.trading.service.ThemeStrengthService;
+import com.austin.trading.service.TradeReviewService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -24,16 +29,21 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
  * 盤後工作流編排器（15:30 觸發）。
  *
  * <pre>
- * Step 1: 整理當日倉位損益 → upsert daily_pnl
- * Step 2: 全市場題材強弱掃描 → ThemeSelectionEngine.computeAndSaveAllThemes()
- * Step 3: 以今日候選股為基礎，寫出明日 Claude 研究請求
- * Step 4: LINE 盤後通知
+ * Step 1 : 整理當日倉位損益 → upsert daily_pnl
+ * Step 1a: 每日交易回顧 + 歸因 → TradeReviewService + TradeAttributionService  (P1.2/P1.3)
+ * Step 2 : 全市場題材快照分數 → ThemeSelectionEngine.computeAndSaveAllThemes()
+ * Step 2b: 題材強度決策層     → ThemeStrengthService.evaluateAll()              (P1.1/P1.3)
+ * Step 3 : 以今日候選股為基礎，寫出明日 Claude 研究請求
+ * Step 4 : LINE 盤後通知
+ *
+ * 分層管線 (P1.3)：Regime → Theme → Ranking → Setup → Timing → Risk → Execution → Review
  * </pre>
  */
 @Service
@@ -43,6 +53,9 @@ public class PostmarketWorkflowService {
 
     private final CandidateScanService           candidateScanService;
     private final ThemeSelectionEngine           themeSelectionEngine;
+    private final ThemeStrengthService           themeStrengthService;
+    private final MarketRegimeService            marketRegimeService;
+    private final TradeReviewService             tradeReviewService;
     private final StockThemeMappingRepository    stockThemeMappingRepository;
     private final PositionRepository             positionRepository;
     private final DailyPnlRepository             dailyPnlRepository;
@@ -55,6 +68,9 @@ public class PostmarketWorkflowService {
     public PostmarketWorkflowService(
             CandidateScanService candidateScanService,
             ThemeSelectionEngine themeSelectionEngine,
+            ThemeStrengthService themeStrengthService,
+            MarketRegimeService marketRegimeService,
+            TradeReviewService tradeReviewService,
             StockThemeMappingRepository stockThemeMappingRepository,
             PositionRepository positionRepository,
             DailyPnlRepository dailyPnlRepository,
@@ -64,26 +80,37 @@ public class PostmarketWorkflowService {
             ScoreConfigService config,
             AiTaskService aiTaskService
     ) {
-        this.candidateScanService       = candidateScanService;
-        this.themeSelectionEngine       = themeSelectionEngine;
+        this.candidateScanService        = candidateScanService;
+        this.themeSelectionEngine        = themeSelectionEngine;
+        this.themeStrengthService        = themeStrengthService;
+        this.marketRegimeService         = marketRegimeService;
+        this.tradeReviewService          = tradeReviewService;
         this.stockThemeMappingRepository = stockThemeMappingRepository;
-        this.positionRepository         = positionRepository;
-        this.dailyPnlRepository         = dailyPnlRepository;
-        this.pnlService                 = pnlService;
-        this.requestWriterService       = requestWriterService;
-        this.lineTemplateService        = lineTemplateService;
-        this.config                     = config;
-        this.aiTaskService              = aiTaskService;
+        this.positionRepository          = positionRepository;
+        this.dailyPnlRepository          = dailyPnlRepository;
+        this.pnlService                  = pnlService;
+        this.requestWriterService        = requestWriterService;
+        this.lineTemplateService         = lineTemplateService;
+        this.config                      = config;
+        this.aiTaskService               = aiTaskService;
     }
 
     public void execute(LocalDate tradingDate) {
         log.info("[PostmarketWorkflow] 開始 tradingDate={}", tradingDate);
 
+        log.info("[PostmarketWorkflow] 分層管線：Regime → Theme → Ranking → Setup → Timing → Risk → Execution → Review");
+
         // Step 1: 整理當日倉位損益
         consolidateDailyPnl(tradingDate);
 
-        // Step 2: 全市場題材強弱掃描
+        // Step 1a: 每日交易回顧 + 歸因 (P1.2/P1.3)
+        runDailyTradeReview(tradingDate);
+
+        // Step 2: 全市場題材快照分數
         computeThemeScores(tradingDate);
+
+        // Step 2b: 題材強度決策層 (P1.1/P1.3)
+        computeThemeStrength(tradingDate);
 
         // Step 3: 以今日候選股為基礎，寫出明日 Claude 研究請求
         int researchMax = config.getInt("candidate.research.maxCount", 3);
@@ -204,6 +231,35 @@ public class PostmarketWorkflowService {
 
         } catch (Exception e) {
             log.warn("[PostmarketWorkflow] computeThemeScores 失敗: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Step 1a：觸發每日交易回顧，TradeReviewService 內部會呼叫 TradeAttributionService。
+     * 任何新關閉的持倉都會在此取得 review + attribution 記錄。
+     */
+    private void runDailyTradeReview(LocalDate tradingDate) {
+        try {
+            int count = tradeReviewService.generateForAllUnreviewed();
+            log.info("[PostmarketWorkflow] 每日交易回顧+歸因完成，新增 {} 筆 ({})", count, tradingDate);
+        } catch (Exception e) {
+            log.warn("[PostmarketWorkflow] runDailyTradeReview 失敗: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Step 2b：取當日 regime，呼叫 ThemeStrengthService.evaluateAll 產生
+     * theme_strength_decision 記錄，供隔日歸因查詢使用。
+     */
+    private void computeThemeStrength(LocalDate tradingDate) {
+        try {
+            MarketRegimeDecision regime = marketRegimeService.getLatestForToday().orElse(null);
+            Map<String, ThemeStrengthDecision> result =
+                    themeStrengthService.evaluateAll(tradingDate, regime);
+            log.info("[PostmarketWorkflow] ThemeStrength 評估完成，共 {} 個題材 ({})",
+                    result.size(), tradingDate);
+        } catch (Exception e) {
+            log.warn("[PostmarketWorkflow] computeThemeStrength 失敗: {}", e.getMessage());
         }
     }
 

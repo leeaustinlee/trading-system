@@ -10,6 +10,11 @@ spring:
       ddl-auto: update
     open-in-view: false
 
+server:
+  error:
+    include-message: always         # 讓 409/400 response body 帶 message（含 INSUFFICIENT_CASH 等）
+    include-binding-errors: always
+
 management:
   endpoints:
     web:
@@ -79,12 +84,12 @@ trading:
 
   ai:
     claude:
-      research-output-path: ${CLAUDE_RESEARCH_OUTPUT_PATH:}
-      request-output-path: ${CLAUDE_REQUEST_OUTPUT_PATH:}
+      research-output-path: ${CLAUDE_RESEARCH_OUTPUT_PATH:/mnt/d/ai/stock/claude-research-latest.md}
+      request-output-path: ${CLAUDE_REQUEST_OUTPUT_PATH:/mnt/d/ai/stock/claude-research-request.json}
 
   claude-submit:
     enabled: ${CLAUDE_SUBMIT_BRIDGE_ENABLED:true}
-    watch-dir: ${CLAUDE_SUBMIT_WATCH_DIR:D:/ai/stock/claude-submit}
+    watch-dir: ${CLAUDE_SUBMIT_WATCH_DIR:/mnt/d/ai/stock/claude-submit}
     scan-interval-ms: 30000
 
 # v2.1 AI Orchestration 規格（docs/workflow-correctness-ai-orchestration-spec.md）
@@ -92,9 +97,9 @@ ai:
   file_bridge:
     use_tmp_protocol: true
     required_stable_seconds: 2
-    processed_dir: ${CLAUDE_SUBMIT_WATCH_DIR:D:/ai/stock/claude-submit}/processed
-    failed_dir: ${CLAUDE_SUBMIT_WATCH_DIR:D:/ai/stock/claude-submit}/failed
-    retry_dir: ${CLAUDE_SUBMIT_WATCH_DIR:D:/ai/stock/claude-submit}/retry
+    processed_dir: ${CLAUDE_SUBMIT_WATCH_DIR:/mnt/d/ai/stock/claude-submit}/processed
+    failed_dir: ${CLAUDE_SUBMIT_WATCH_DIR:/mnt/d/ai/stock/claude-submit}/failed
+    retry_dir: ${CLAUDE_SUBMIT_WATCH_DIR:/mnt/d/ai/stock/claude-submit}/retry
     allow_auto_create_task: false
   task:
     claude:

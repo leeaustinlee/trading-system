@@ -34,22 +34,25 @@ public class TradeReviewService {
     private final StockEvaluationRepository stockEvaluationRepository;
     private final ScoreConfigService config;
     private final ObjectMapper objectMapper;
+    private final TradeAttributionService tradeAttributionService;
 
     public TradeReviewService(TradeReviewEngine tradeReviewEngine,
                                TradeReviewRepository tradeReviewRepository,
                                PositionRepository positionRepository,
                                StockEvaluationRepository stockEvaluationRepository,
                                ScoreConfigService config,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               TradeAttributionService tradeAttributionService) {
         this.tradeReviewEngine = tradeReviewEngine;
         this.tradeReviewRepository = tradeReviewRepository;
         this.positionRepository = positionRepository;
         this.stockEvaluationRepository = stockEvaluationRepository;
         this.config = config;
         this.objectMapper = objectMapper;
+        this.tradeAttributionService = tradeAttributionService;
     }
 
-    /** 為指定 position 產生 trade review */
+    /** 為指定 position 產生 trade review，並觸發 attribution 計算。 */
     @Transactional
     public Optional<TradeReviewEntity> generateForPosition(PositionEntity pos) {
         if (!"CLOSED".equals(pos.getStatus())) return Optional.empty();
@@ -61,6 +64,10 @@ public class TradeReviewService {
             TradeReviewEntity saved = tradeReviewRepository.save(entity);
             log.info("[TradeReview] {} → {} grade={} tag={}", pos.getSymbol(),
                     input.pnlPct(), result.reviewGrade(), result.primaryTag());
+
+            // P1.2: trigger attribution after review (mfe/mae now available)
+            tradeAttributionService.computeForPosition(pos);
+
             return Optional.of(saved);
         } catch (Exception e) {
             log.warn("[TradeReview] 產生失敗 posId={}: {}", pos.getId(), e.getMessage());

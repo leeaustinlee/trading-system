@@ -14,4 +14,6 @@ public interface ThemeSnapshotRepository extends JpaRepository<ThemeSnapshotEnti
     List<ThemeSnapshotEntity> findByTradingDateOrderByRankingOrderAsc(LocalDate tradingDate);
 
     Optional<ThemeSnapshotEntity> findByTradingDateAndThemeTag(LocalDate tradingDate, String themeTag);
+
+    List<ThemeSnapshotEntity> findByTradingDateBetween(LocalDate startDate, LocalDate endDate);
 }

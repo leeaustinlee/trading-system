@@ -1,5 +1,13 @@
 package com.austin.trading.service;
 
+import com.austin.trading.dto.internal.ExecutionDecisionInput;
+import com.austin.trading.dto.internal.ExecutionTimingDecision;
+import com.austin.trading.dto.internal.ThemeStrengthDecision;
+import com.austin.trading.dto.internal.MarketRegimeDecision;
+import com.austin.trading.dto.internal.PortfolioRiskDecision;
+import com.austin.trading.dto.internal.RankedCandidate;
+import com.austin.trading.dto.internal.SetupDecision;
+import com.austin.trading.dto.internal.TimingEvaluationInput;
 import com.austin.trading.dto.request.FinalDecisionCandidateRequest;
 import com.austin.trading.dto.request.FinalDecisionEvaluateRequest;
 import com.austin.trading.domain.enums.StrategyType;
@@ -20,7 +28,6 @@ import com.austin.trading.engine.StopLossTakeProfitEngine;
 import com.austin.trading.engine.VetoEngine;
 import com.austin.trading.engine.WeightedScoringEngine;
 import com.austin.trading.entity.AiTaskEntity;
-import com.austin.trading.entity.CapitalConfigEntity;
 import com.austin.trading.entity.FinalDecisionEntity;
 import com.austin.trading.entity.PositionEntity;
 import com.austin.trading.entity.StockEvaluationEntity;
@@ -38,12 +45,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -82,6 +93,13 @@ public class FinalDecisionService {
     private final AiTaskService             aiTaskService;
     private final ObjectMapper              objectMapper;
     private final MomentumDecisionService   momentumDecisionService;
+    private final MarketRegimeService       marketRegimeService;
+    private final StockRankingService       stockRankingService;
+    private final SetupValidationService    setupValidationService;
+    private final ExecutionTimingService    executionTimingService;
+    private final PortfolioRiskService      portfolioRiskService;
+    private final ExecutionDecisionService  executionDecisionService;
+    private final ThemeStrengthService      themeStrengthService;
 
     public FinalDecisionService(
             ConsensusScoringEngine consensusScoringEngine,
@@ -104,7 +122,14 @@ public class FinalDecisionService {
             ScoreConfigService scoreConfigService,
             AiTaskService aiTaskService,
             ObjectMapper objectMapper,
-            MomentumDecisionService momentumDecisionService
+            MomentumDecisionService momentumDecisionService,
+            MarketRegimeService marketRegimeService,
+            StockRankingService stockRankingService,
+            SetupValidationService setupValidationService,
+            ExecutionTimingService executionTimingService,
+            PortfolioRiskService portfolioRiskService,
+            ExecutionDecisionService executionDecisionService,
+            ThemeStrengthService themeStrengthService
     ) {
         this.consensusScoringEngine     = consensusScoringEngine;
         this.finalDecisionEngine        = finalDecisionEngine;
@@ -127,6 +152,13 @@ public class FinalDecisionService {
         this.aiTaskService              = aiTaskService;
         this.objectMapper               = objectMapper;
         this.momentumDecisionService    = momentumDecisionService;
+        this.marketRegimeService        = marketRegimeService;
+        this.stockRankingService        = stockRankingService;
+        this.setupValidationService     = setupValidationService;
+        this.executionTimingService     = executionTimingService;
+        this.portfolioRiskService       = portfolioRiskService;
+        this.executionDecisionService   = executionDecisionService;
+        this.themeStrengthService       = themeStrengthService;
     }
 
     @Transactional
@@ -185,22 +217,19 @@ public class FinalDecisionService {
                 marketGrade, decisionLock, timeDecay,
                 state == null ? "NONE_TODAY" : "today-" + state.updatedAt());
 
-        // ── Step 0: 持倉滿倉檢查 ──────────────────────────────────────────────
+        // ── Step 0: Portfolio-gate Risk Check (P0.5) ─────────────────────────
         List<PositionEntity> openPositions = positionRepository.findByStatus("OPEN");
         int maxPos = scoreConfigService.getInt("portfolio.max_open_positions", 3);
         boolean hasPosition = !openPositions.isEmpty();
 
-        if (openPositions.size() >= maxPos) {
-            boolean allowWhenFullStrong = scoreConfigService.getBoolean(
-                    "portfolio.allow_new_when_full_strong", false);
-            boolean allStrong = openPositions.stream().allMatch(p ->
-                    "STRONG".equals(p.getReviewStatus()) || "HOLD".equals(p.getReviewStatus()));
-            if (!allowWhenFullStrong || !allStrong) {
-                log.info("[FinalDecision] 持倉已滿 ({}/{}), 不開新倉", openPositions.size(), maxPos);
-                return persistAndReturn(tradingDate, new FinalDecisionResponse(
-                        "REST", List.of(), List.of("持倉已滿 (" + openPositions.size() + "/" + maxPos + ")"),
-                        "持倉已滿，不開新倉。"), readiness);
-            }
+        PortfolioRiskDecision portfolioGate =
+                portfolioRiskService.evaluatePortfolioGate(openPositions, tradingDate);
+        if (!portfolioGate.approved()) {
+            String reason = portfolioGate.blockReason() + " (" + portfolioGate.openPositionCount()
+                    + "/" + portfolioGate.maxPositions() + ")";
+            log.info("[FinalDecision] portfolio gate blocked: {}", reason);
+            return persistAndReturn(tradingDate, new FinalDecisionResponse(
+                    "REST", List.of(), List.of(reason), reason), readiness);
         }
 
         // ── Step 0.1: 全市場冷卻檢查（連續虧損 / 當日虧損上限）──────────────
@@ -212,6 +241,22 @@ public class FinalDecisionService {
                     readiness);
         }
 
+        // ── Step 0.2: Regime Gate (P0.1) — PANIC_VOLATILITY blocks all new entries ──
+        MarketRegimeDecision regime = marketRegimeService.getLatestForToday()
+                .or(marketRegimeService::getLatest)
+                .orElse(null);
+        if (regime != null && !regime.tradeAllowed()) {
+            String reason = "REGIME_BLOCKED: " + regime.regimeType()
+                    + " (riskMultiplier=" + regime.riskMultiplier() + ")";
+            log.info("[FinalDecision] {}", reason);
+            return persistAndReturn(tradingDate, new FinalDecisionResponse(
+                    "REST", List.of(), List.of(reason), regime.summary()), readiness);
+        }
+        if (regime != null) {
+            log.info("[FinalDecision] regime={} riskMultiplier={} tradeAllowed={}",
+                    regime.regimeType(), regime.riskMultiplier(), regime.tradeAllowed());
+        }
+
         int maxCount = scoreConfigService.getInt("candidate.scan.maxCount", 8);
         List<FinalDecisionCandidateRequest> rawCandidates =
                 candidateScanService.loadFinalDecisionCandidates(tradingDate, maxCount);
@@ -220,45 +265,116 @@ public class FinalDecisionService {
         List<FinalDecisionCandidateRequest> scoredCandidates =
                 applyScoringPipeline(rawCandidates, tradingDate, marketGrade, decisionLock, timeDecay);
 
-        // ── Step 0.5: 同 symbol 重複持倉 + cooldown + 同題材集中度 veto ──────────
-        List<String> heldSymbols = openPositions.stream().map(PositionEntity::getSymbol).toList();
-        int sameThemeMax = scoreConfigService.getInt("portfolio.same_theme_max", 1);
+        // ── Step 0.55: Theme Strength Layer (P1.1) — tradability / stage / decay ──
+        Map<String, ThemeStrengthDecision> themeDecisions =
+                themeStrengthService.evaluateAll(tradingDate, regime);
 
-        scoredCandidates = scoredCandidates.stream().filter(c -> {
-            if (heldSymbols.contains(c.stockCode())) {
-                log.info("[FinalDecision] 排除 {} — 已有 OPEN 持倉", c.stockCode());
-                return false;
-            }
-            if (cooldownService.isInCooldown(c.stockCode(), null)) {
-                log.info("[FinalDecision] 排除 {} — 冷卻期中", c.stockCode());
-                return false;
-            }
-            return true;
-        }).toList();
+        // ── Step 0.5: Ranking Layer (P0.2→P1.1) — held / cooldown / veto / selectionScore ──
+        List<RankedCandidate> ranked = stockRankingService.rank(scoredCandidates, tradingDate, regime, themeDecisions);
+        Map<String, RankedCandidate> rankMap = ranked.stream()
+                .collect(Collectors.toMap(RankedCandidate::symbol, r -> r, (a, b) -> a));
+
+        scoredCandidates = scoredCandidates.stream()
+                .filter(c -> {
+                    RankedCandidate r = rankMap.get(c.stockCode());
+                    if (r == null || !r.eligibleForSetup()) {
+                        String why = r == null ? "NOT_IN_RANKING" : r.rejectionReason();
+                        log.info("[FinalDecision] 排除 {} — {}", c.stockCode(), why);
+                        return false;
+                    }
+                    return true;
+                })
+                .toList();
 
         // ── Step 0.6: Score gap 保護 — 新倉需高出 STRONG 持股最低分 ──────────────
+        // NOTE: STRONG positions are alreadyHeld=true → StockRankingEngine sets their
+        // selectionScore to 0. Must NOT look them up in rankMap; use stockEvaluation DB
+        // (which holds finalRankScore from the scoring pipeline) as the reference score.
         BigDecimal scoreGap = scoreConfigService.getDecimal("portfolio.replace_strong_score_gap", new BigDecimal("1.5"));
         BigDecimal strongMinScore = openPositions.stream()
                 .filter(p -> "STRONG".equals(p.getReviewStatus()))
-                .map(p -> {
-                    // 從 stock_evaluation 取 finalRankScore
-                    return stockEvaluationRepository.findByTradingDateAndSymbol(tradingDate, p.getSymbol())
-                            .map(StockEvaluationEntity::getFinalRankScore).orElse(BigDecimal.ZERO);
-                })
+                .map(p -> stockEvaluationRepository
+                        .findByTradingDateAndSymbol(tradingDate, p.getSymbol())
+                        .map(StockEvaluationEntity::getFinalRankScore).orElse(BigDecimal.ZERO))
                 .min(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
 
         if (strongMinScore.compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal requiredMin = strongMinScore.add(scoreGap);
             scoredCandidates = scoredCandidates.stream().filter(c -> {
-                BigDecimal fs = c.finalRankScore();
-                if (fs != null && fs.compareTo(requiredMin) < 0) {
-                    log.info("[FinalDecision] 排除 {} — finalRank {} 未超過 STRONG 持股最低分+gap ({})",
-                            c.stockCode(), fs, requiredMin);
+                RankedCandidate r = rankMap.get(c.stockCode());
+                BigDecimal sel = r != null ? r.selectionScore() : c.finalRankScore();
+                if (sel != null && sel.compareTo(requiredMin) < 0) {
+                    log.info("[FinalDecision] 排除 {} — selectionScore {} 未超過 STRONG 持股最低分+gap ({})",
+                            c.stockCode(), sel, requiredMin);
                     return false;
                 }
                 return true;
             }).toList();
         }
+
+        // ── Step 0.7: Timing Layer (P0.4) — score alone cannot bypass timing ──────
+        // 1. Generate setup for any candidate that doesn't have one in DB yet.
+        //    (If a pre-market job already ran SetupValidationService, this is a no-op for those symbols.)
+        // 2. Evaluate timing window using setup + intraday signal flags.
+        Map<String, SetupDecision> setupMap =
+                buildOrLoadSetups(scoredCandidates, rankMap, regime, tradingDate, themeDecisions);
+
+        List<TimingEvaluationInput> timingInputs = scoredCandidates.stream()
+                .map(c -> new TimingEvaluationInput(
+                        rankMap.get(c.stockCode()),
+                        setupMap.get(c.stockCode()),        // null → timing will block (NO_SETUP)
+                        regime,
+                        Boolean.TRUE.equals(c.nearDayHigh()),
+                        Boolean.TRUE.equals(c.belowOpen()),
+                        Boolean.TRUE.equals(c.belowPrevClose()),
+                        Boolean.TRUE.equals(c.entryTriggered()),
+                        Boolean.TRUE.equals(c.volumeSpike()),
+                        0                                   // fresh signal = evaluated today
+                ))
+                .toList();
+
+        List<ExecutionTimingDecision> timings =
+                executionTimingService.evaluateAll(timingInputs, tradingDate);
+        Map<String, ExecutionTimingDecision> timingMap = timings.stream()
+                .collect(Collectors.toMap(ExecutionTimingDecision::symbol, t -> t, (a, b) -> a));
+
+        scoredCandidates = scoredCandidates.stream()
+                .filter(c -> {
+                    ExecutionTimingDecision t = timingMap.get(c.stockCode());
+                    if (t == null || !t.approved()) {
+                        String why = t == null ? "NO_TIMING_DECISION" : t.rejectionReason();
+                        log.info("[FinalDecision] 排除 {} — timing: {}", c.stockCode(), why);
+                        return false;
+                    }
+                    return true;
+                })
+                .toList();
+
+        // ── Step 0.8: Per-candidate Risk Layer (P0.5) ─────────────────────────
+        // size is computed only after hard checks pass (Codex gate C)
+        List<RankedCandidate> timingPassedRanked = scoredCandidates.stream()
+                .map(c -> rankMap.get(c.stockCode()))
+                .filter(Objects::nonNull)
+                .toList();
+
+        List<PortfolioRiskDecision> riskDecisions =
+                portfolioRiskService.evaluateCandidates(timingPassedRanked, openPositions, tradingDate);
+        Map<String, PortfolioRiskDecision> riskMap = riskDecisions.stream()
+                .collect(Collectors.toMap(
+                        PortfolioRiskDecision::symbol,
+                        r -> r, (a, b) -> a));
+
+        scoredCandidates = scoredCandidates.stream()
+                .filter(c -> {
+                    PortfolioRiskDecision r = riskMap.get(c.stockCode());
+                    if (r == null || !r.approved()) {
+                        String why = r == null ? "NO_RISK_DECISION" : r.blockReason();
+                        log.info("[FinalDecision] 排除 {} — risk: {}", c.stockCode(), why);
+                        return false;
+                    }
+                    return true;
+                })
+                .toList();
 
         FinalDecisionEvaluateRequest request = new FinalDecisionEvaluateRequest(
                 marketGrade,
@@ -274,10 +390,8 @@ public class FinalDecisionService {
         Map<String, FinalDecisionCandidateRequest> candidateMap = scoredCandidates.stream()
                 .collect(Collectors.toMap(FinalDecisionCandidateRequest::stockCode, c -> c, (a, b) -> a));
 
-        // 從 capital_config 取得可動用現金，計算倉位上限
-        CapitalConfigEntity capitalCfg = capitalService.getConfig();
-        double availCash = capitalCfg.getAvailableCash() != null
-                ? capitalCfg.getAvailableCash().doubleValue() : 0.0;
+        // v3：可動用現金由 ledger 推導（cashBalance − reservedCash），不再讀 capital_config.available_cash
+        double availCash = capitalService.getAvailableCash().doubleValue();
         double baseCapital = availCash > 0 ? availCash : DEFAULT_BASE_CAPITAL;
         // Level 4 規則：單檔最多 3-5 萬，且不超過可動用現金 35%
         double maxSingle = availCash > 0
@@ -320,6 +434,25 @@ public class FinalDecisionService {
         // 合併 selected_stocks（Setup 在前、Momentum 在後）
         List<FinalDecisionSelectedStockResponse> merged = new java.util.ArrayList<>(setupEnriched);
         merged.addAll(momentumEnriched);
+
+        // ── Step 0.9: Execution Layer (P0.6) — log ENTER/SKIP after Momentum merge ──
+        // enterSymbols must be derived from the fully merged list so Momentum ENTER
+        // candidates are not incorrectly logged as SKIP.
+        {
+            Set<String> enterSymbols = merged.stream()
+                    .map(FinalDecisionSelectedStockResponse::stockCode)
+                    .collect(Collectors.toSet());
+            List<ExecutionDecisionInput> execInputs = scoredCandidates.stream()
+                    .map(c -> new ExecutionDecisionInput(
+                            rankMap.get(c.stockCode()),
+                            enterSymbols.contains(c.stockCode()) ? "ENTER" : "SKIP",
+                            regime,
+                            setupMap.get(c.stockCode()),
+                            timingMap.get(c.stockCode()),
+                            riskMap.get(c.stockCode())
+                    )).toList();
+            executionDecisionService.logDecisions(execInputs, tradingDate);
+        }
 
         // 決定最終 decision 與 strategy_type
         String finalDecisionCode = decision.decision();
@@ -786,6 +919,107 @@ public class FinalDecisionService {
             });
         } catch (Exception e) {
             log.warn("[FinalDecisionService] persistScores failed for {}: {}", symbol, e.getMessage());
+        }
+    }
+
+    // ── Setup generation helpers (P0.4) ──────────────────────────────────────
+
+    /**
+     * Returns valid setup decisions for the given candidates.
+     * Re-uses any row already in DB for today; generates new rows on-the-fly for
+     * candidates that have no setup yet (e.g. when no pre-market job has run).
+     */
+    private Map<String, SetupDecision> buildOrLoadSetups(
+            List<FinalDecisionCandidateRequest> candidates,
+            Map<String, RankedCandidate> rankMap,
+            MarketRegimeDecision regime,
+            LocalDate tradingDate,
+            Map<String, ThemeStrengthDecision> themeDecisions) {
+
+        Map<String, SetupDecision> result = new HashMap<>();
+        setupValidationService.getValidByDate(tradingDate)
+                .forEach(s -> result.put(s.symbol(), s));
+
+        List<com.austin.trading.dto.internal.SetupEvaluationInput> toGenerate = candidates.stream()
+                .filter(c -> !result.containsKey(c.stockCode()))
+                .map(c -> toSetupInput(c, rankMap.get(c.stockCode()), regime,
+                        themeDecisions.get(rankMap.containsKey(c.stockCode())
+                                ? rankMap.get(c.stockCode()).themeTag() : null)))
+                .filter(Objects::nonNull)
+                .toList();
+
+        if (!toGenerate.isEmpty()) {
+            log.info("[FinalDecision] generating setup on-the-fly for {} candidates", toGenerate.size());
+            setupValidationService.evaluateAll(toGenerate).stream()
+                    .filter(SetupDecision::valid)
+                    .forEach(d -> result.put(d.symbol(), d));
+        }
+        return result;
+    }
+
+    /**
+     * Build a {@link com.austin.trading.dto.internal.SetupEvaluationInput} from
+     * available candidate request fields. Returns {@code null} when
+     * {@code entryPriceZone} is absent or unparseable (setup skipped for that candidate).
+     */
+    /** Backward-compatible overload — no ThemeStrengthDecision (used by tests). */
+    com.austin.trading.dto.internal.SetupEvaluationInput toSetupInput(
+            FinalDecisionCandidateRequest c,
+            RankedCandidate ranked,
+            MarketRegimeDecision regime) {
+        return toSetupInput(c, ranked, regime, null);
+    }
+
+    com.austin.trading.dto.internal.SetupEvaluationInput toSetupInput(
+            FinalDecisionCandidateRequest c,
+            RankedCandidate ranked,
+            MarketRegimeDecision regime,
+            ThemeStrengthDecision themeDecision) {
+
+        BigDecimal[] zone = parseEntryZone(c.entryPriceZone());
+        if (zone == null) return null;
+
+        BigDecimal currentPrice = zone[0].add(zone[1])
+                .divide(new BigDecimal("2"), 4, RoundingMode.HALF_UP);
+        BigDecimal baseHigh = zone[1];
+        BigDecimal baseLow  = c.stopLossPrice() != null
+                ? BigDecimal.valueOf(c.stopLossPrice()) : null;
+        // Pullback proxy: zone low as ma5 support, stop loss as ma10 anchor
+        BigDecimal ma5  = zone[0];
+        BigDecimal ma10 = baseLow;
+
+        boolean eventDriven = c.entryType() != null
+                && c.entryType().toUpperCase().contains("EVENT");
+        int consolDays = eventDriven ? 5 : 0;
+
+        return new com.austin.trading.dto.internal.SetupEvaluationInput(
+                ranked, regime, themeDecision,
+                currentPrice, null,
+                ma5, ma10,
+                baseHigh, baseLow,
+                null, null,
+                null, null,   // skip volume — not in request
+                consolDays, eventDriven
+        );
+    }
+
+    /** Parse "low-high" or single-price entryPriceZone string. Returns null if unparseable. */
+    private static BigDecimal[] parseEntryZone(String zone) {
+        if (zone == null || zone.isBlank()) return null;
+        try {
+            String trimmed = zone.trim();
+            String[] parts = trimmed.split("-");
+            if (parts.length == 2) {
+                return new BigDecimal[]{ new BigDecimal(parts[0].trim()),
+                                         new BigDecimal(parts[1].trim()) };
+            }
+            if (parts.length == 1) {
+                BigDecimal p = new BigDecimal(parts[0].trim());
+                return new BigDecimal[]{ p, p };
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
         }
     }
 

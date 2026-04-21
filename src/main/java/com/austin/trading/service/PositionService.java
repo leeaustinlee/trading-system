@@ -4,7 +4,9 @@ import com.austin.trading.dto.request.PositionCloseRequest;
 import com.austin.trading.dto.request.PositionCreateRequest;
 import com.austin.trading.dto.request.PositionPartialCloseRequest;
 import com.austin.trading.dto.request.PositionUpdateRequest;
+import com.austin.trading.dto.request.StopLossTakeProfitEvaluateRequest;
 import com.austin.trading.dto.response.PositionResponse;
+import com.austin.trading.engine.StopLossTakeProfitEngine;
 import com.austin.trading.entity.PositionEntity;
 import com.austin.trading.repository.PositionRepository;
 import org.springframework.data.domain.PageRequest;
@@ -28,13 +30,23 @@ public class PositionService {
     private final PnlService pnlService;
     private final TradeReviewService tradeReviewService;
     private final ScoreConfigService scoreConfigService;
+    private final StopLossTakeProfitEngine stopLossTakeProfitEngine;
+    // v3：所有現金變動透過 ledger service 記帳
+    private final CapitalLedgerService ledgerService;
+    private final CapitalService capitalService;
 
     public PositionService(PositionRepository positionRepository, PnlService pnlService,
-                            TradeReviewService tradeReviewService, ScoreConfigService scoreConfigService) {
+                            TradeReviewService tradeReviewService, ScoreConfigService scoreConfigService,
+                            StopLossTakeProfitEngine stopLossTakeProfitEngine,
+                            CapitalLedgerService ledgerService,
+                            CapitalService capitalService) {
         this.positionRepository = positionRepository;
         this.pnlService = pnlService;
         this.tradeReviewService = tradeReviewService;
         this.scoreConfigService = scoreConfigService;
+        this.stopLossTakeProfitEngine = stopLossTakeProfitEngine;
+        this.ledgerService = ledgerService;
+        this.capitalService = capitalService;
     }
 
     public List<PositionResponse> getOpenPositions(int limit) {
@@ -69,12 +81,37 @@ public class PositionService {
                 .stream().map(this::toResponse).toList();
     }
 
+    /**
+     * 新增持倉。
+     * <p>v3：建倉同時寫 ledger — {@code BUY_OPEN(-cost)} + {@code FEE(-買方手續費)}。
+     * 若可動用現金不足以支付 cost + fee，回 HTTP 409 {@code INSUFFICIENT_CASH}。</p>
+     *
+     * <p>SHORT（做空）部位目前不實際扣現金（券商模擬），
+     * 為避免誤扣，暫只對 LONG 執行現金聯動；未來若納入保證金模型再擴充。</p>
+     */
+    @Transactional
     public PositionResponse create(PositionCreateRequest request) {
         // 重複持倉防護：同 symbol 不可有多個 OPEN position
         positionRepository.findTopBySymbolAndStatus(request.symbol(), "OPEN").ifPresent(existing -> {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "已有 OPEN 持倉: " + request.symbol() + " (id=" + existing.getId() + ")");
         });
+
+        boolean    isLong = !isShortSide(request.side());
+        BigDecimal cost   = request.avgCost().multiply(request.qty());
+        BigDecimal fee    = isLong ? estimateFee(cost) : BigDecimal.ZERO;
+
+        // 現金檢查（LONG）
+        if (isLong) {
+            BigDecimal required = cost.add(fee);
+            BigDecimal avail    = capitalService.getAvailableCash();
+            if (avail.compareTo(required) < 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "INSUFFICIENT_CASH: available=" + avail
+                                + " required=" + required
+                                + " (cost=" + cost + " fee=" + fee + ")");
+            }
+        }
 
         PositionEntity entity = new PositionEntity();
         entity.setSymbol(request.symbol());
@@ -89,7 +126,6 @@ public class PositionService {
         entity.setOpenedAt(request.openedAt() == null ? LocalDateTime.now() : request.openedAt());
         entity.setNote(request.note());
         entity.setPayloadJson(request.payloadJson());
-        // v2.3: strategy_type 預設 SETUP；前端/API 可覆寫為 MOMENTUM_CHASE
         entity.setStrategyType(request.strategyType() == null ? "SETUP" : request.strategyType());
 
         // v2.3: Momentum 建倉若未指定停損，以 momentum.stop_loss_pct 自動補上
@@ -103,7 +139,21 @@ public class PositionService {
                     .setScale(4, RoundingMode.HALF_UP);
             entity.setStopLossPrice(stop);
         }
-        return toResponse(positionRepository.save(entity));
+        autofillMissingTargets(entity);
+        PositionEntity saved = positionRepository.save(entity);
+
+        // v3：寫入 ledger（LONG 才聯動現金）
+        if (isLong) {
+            LocalDate tradeDate = saved.getOpenedAt() != null
+                    ? saved.getOpenedAt().toLocalDate() : LocalDate.now();
+            ledgerService.recordBuyOpen(saved.getId(), saved.getSymbol(), cost, tradeDate,
+                    "建倉 " + saved.getSymbol() + " " + saved.getQty() + " 股 @" + saved.getAvgCost());
+            if (fee.signum() > 0) {
+                ledgerService.recordFee(saved.getId(), saved.getSymbol(), fee, tradeDate,
+                        "建倉手續費");
+            }
+        }
+        return toResponse(saved);
     }
 
     /**
@@ -132,6 +182,9 @@ public class PositionService {
      * 出清持倉：設定 closedAt、closePrice、exitReason、realizedPnl，狀態改為 CLOSED。
      * realizedPnl = (closePrice - avgCost) × qty（LONG），SHORT 反向計算。
      * 出清後自動更新當日 DailyPnl 記錄。
+     *
+     * <p>v3：LONG 持倉同步寫 ledger — {@code SELL_CLOSE(+proceeds)} + {@code FEE(-賣方費)} + {@code TAX(-)}。
+     * realizedPnl 仍寫回 position 作為歷史紀錄，但不再直接改現金（現金等於 proceeds − fee − tax）。</p>
      */
     @Transactional
     public PositionResponse close(Long id, PositionCloseRequest request) {
@@ -150,6 +203,9 @@ public class PositionService {
         entity.setRealizedPnl(computePnl(entity, request.closePrice()));
 
         PositionEntity saved = positionRepository.save(entity);
+
+        // v3：現金聯動（LONG）
+        writeSellLedger(saved, saved.getQty(), request.closePrice(), LedgerSellKind.FULL);
 
         // 自動更新當日損益
         pnlService.recordClosedPosition(saved, saved.getRealizedPnl());
@@ -215,11 +271,70 @@ public class PositionService {
         entity.setQty(remaining.subtract(sellQty));
         positionRepository.save(entity);
 
+        // v3：現金聯動（LONG 部分賣出，position_id 指向原持倉）
+        // 用原持倉 id 便於追蹤，symbol 用 savedLeg 的（等同原 symbol）
+        writeSellLedger(entity, sellQty, request.closePrice(), LedgerSellKind.PARTIAL);
+
         // 更新當日損益
         pnlService.recordClosedPosition(savedLeg, savedLeg.getRealizedPnl());
 
         // 分段出清不自動產生 trade review（避免多次重複），全清時才產生
         return toResponse(savedLeg);
+    }
+
+    // ── ledger integration helpers ──────────────────────────────────────
+
+    private enum LedgerSellKind { FULL, PARTIAL }
+
+    /**
+     * 寫賣出相關 ledger：SELL_CLOSE / SELL_PARTIAL + FEE + TAX。
+     * 僅對 LONG 部位聯動現金；SHORT 暫不處理（見 create() 註解）。
+     */
+    private void writeSellLedger(PositionEntity pos, BigDecimal sellQty, BigDecimal closePrice,
+                                  LedgerSellKind kind) {
+        if (isShortSide(pos.getSide())) return;
+        if (sellQty == null || closePrice == null || sellQty.signum() <= 0) return;
+
+        BigDecimal proceeds = closePrice.multiply(sellQty);
+        BigDecimal fee      = estimateFee(proceeds);
+        BigDecimal tax      = estimateTax(pos.getSymbol(), proceeds);
+        LocalDate tradeDate = pos.getClosedAt() != null
+                ? pos.getClosedAt().toLocalDate() : LocalDate.now();
+        String note = (kind == LedgerSellKind.FULL ? "出清 " : "部分出清 ")
+                + pos.getSymbol() + " " + sellQty + " 股 @" + closePrice;
+
+        if (kind == LedgerSellKind.FULL) {
+            ledgerService.recordSellClose(pos.getId(), pos.getSymbol(), proceeds, tradeDate, note);
+        } else {
+            ledgerService.recordSellPartial(pos.getId(), pos.getSymbol(), proceeds, tradeDate, note);
+        }
+        if (fee.signum() > 0) {
+            ledgerService.recordFee(pos.getId(), pos.getSymbol(), fee, tradeDate,
+                    (kind == LedgerSellKind.FULL ? "出清手續費" : "部分出清手續費"));
+        }
+        if (tax.signum() > 0) {
+            ledgerService.recordTax(pos.getId(), pos.getSymbol(), tax, tradeDate,
+                    (kind == LedgerSellKind.FULL ? "出清交易稅" : "部分出清交易稅"));
+        }
+    }
+
+    private static boolean isShortSide(String side) {
+        return "SHORT".equalsIgnoreCase(side) || "做空".equals(side);
+    }
+
+    /** 券商手續費：0.1425%，每邊最低 20 元。 */
+    private static BigDecimal estimateFee(BigDecimal value) {
+        if (value == null || value.signum() <= 0) return BigDecimal.ZERO;
+        double fee = Math.max(20.0, value.doubleValue() * 0.001425);
+        return BigDecimal.valueOf(fee).setScale(0, RoundingMode.HALF_UP);
+    }
+
+    /** 交易稅：ETF（代號開頭 0）0.1%，一般股 0.3%。 */
+    private static BigDecimal estimateTax(String symbol, BigDecimal sellValue) {
+        if (sellValue == null || sellValue.signum() <= 0) return BigDecimal.ZERO;
+        boolean isEtf = symbol != null && symbol.startsWith("0");
+        double tax = sellValue.doubleValue() * (isEtf ? 0.001 : 0.003);
+        return BigDecimal.valueOf(tax).setScale(0, RoundingMode.HALF_UP);
     }
 
     private BigDecimal computePnl(PositionEntity entity, BigDecimal closePrice) {
@@ -229,6 +344,52 @@ public class PositionService {
             priceDiff = priceDiff.negate();
         }
         return priceDiff.multiply(entity.getQty()).setScale(0, RoundingMode.HALF_UP);
+    }
+
+    private void autofillMissingTargets(PositionEntity entity) {
+        if (entity.getAvgCost() == null || entity.getAvgCost().signum() <= 0) return;
+        if (entity.getStopLossPrice() != null && entity.getTakeProfit1() != null && entity.getTakeProfit2() != null) return;
+
+        boolean momentum = "MOMENTUM_CHASE".equalsIgnoreCase(entity.getStrategyType());
+        BigDecimal stopLossPct = momentum
+                ? scoreConfigService.getDecimal("momentum.stop_loss_pct", new BigDecimal("-0.025")).abs()
+                : new BigDecimal("6.0");
+        BigDecimal takeProfit1Pct = momentum
+                ? scoreConfigService.getDecimal("momentum.take_profit_1_pct", new BigDecimal("0.06"))
+                .multiply(new BigDecimal("100"))
+                : new BigDecimal("8.0");
+        BigDecimal takeProfit2Pct = momentum
+                ? scoreConfigService.getDecimal("momentum.take_profit_2_pct", new BigDecimal("0.10"))
+                .multiply(new BigDecimal("100"))
+                : new BigDecimal("13.0");
+
+        var suggestion = stopLossTakeProfitEngine.evaluate(new StopLossTakeProfitEvaluateRequest(
+                entity.getAvgCost().doubleValue(),
+                stopLossPct.doubleValue(),
+                takeProfit1Pct.doubleValue(),
+                takeProfit2Pct.doubleValue(),
+                false
+        ));
+
+        if (entity.getStopLossPrice() == null) {
+            entity.setStopLossPrice(BigDecimal.valueOf(suggestion.stopLossPrice()));
+        }
+        if (entity.getTakeProfit1() == null) {
+            entity.setTakeProfit1(BigDecimal.valueOf(suggestion.takeProfit1()));
+        }
+        if (entity.getTakeProfit2() == null) {
+            entity.setTakeProfit2(BigDecimal.valueOf(suggestion.takeProfit2()));
+        }
+        entity.setNote(appendSystemSuggestionNote(
+                entity.getNote(),
+                momentum ? "AI auto-filled SL/TP from momentum defaults"
+                        : "AI auto-filled SL/TP from setup defaults"));
+    }
+
+    private String appendSystemSuggestionNote(String note, String marker) {
+        if (note == null || note.isBlank()) return marker;
+        if (note.contains(marker)) return note;
+        return note + "\n" + marker;
     }
 
     private PositionResponse toResponse(PositionEntity entity) {

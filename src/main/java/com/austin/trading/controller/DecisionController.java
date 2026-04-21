@@ -20,8 +20,11 @@ import com.austin.trading.engine.MarketGateEngine;
 import com.austin.trading.engine.PositionSizingEngine;
 import com.austin.trading.engine.StockEvaluationEngine;
 import com.austin.trading.engine.StopLossTakeProfitEngine;
+import com.austin.trading.dto.internal.MarketRegimeDecision;
+import com.austin.trading.dto.internal.MarketRegimeInput;
 import com.austin.trading.service.FinalDecisionService;
 import com.austin.trading.service.HourlyGateDecisionService;
+import com.austin.trading.service.MarketRegimeService;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -47,6 +50,7 @@ public class DecisionController {
     private final PositionSizingEngine positionSizingEngine;
     private final StopLossTakeProfitEngine stopLossTakeProfitEngine;
     private final StockEvaluationEngine stockEvaluationEngine;
+    private final MarketRegimeService marketRegimeService;
 
     public DecisionController(
             MarketGateEngine marketGateEngine,
@@ -56,7 +60,8 @@ public class DecisionController {
             HourlyGateDecisionService hourlyGateDecisionService,
             PositionSizingEngine positionSizingEngine,
             StopLossTakeProfitEngine stopLossTakeProfitEngine,
-            StockEvaluationEngine stockEvaluationEngine
+            StockEvaluationEngine stockEvaluationEngine,
+            MarketRegimeService marketRegimeService
     ) {
         this.marketGateEngine = marketGateEngine;
         this.hourlyGateEngine = hourlyGateEngine;
@@ -66,6 +71,7 @@ public class DecisionController {
         this.positionSizingEngine = positionSizingEngine;
         this.stopLossTakeProfitEngine = stopLossTakeProfitEngine;
         this.stockEvaluationEngine = stockEvaluationEngine;
+        this.marketRegimeService = marketRegimeService;
     }
 
     @GetMapping("/current")
@@ -107,6 +113,42 @@ public class DecisionController {
     @PostMapping("/market-gate/evaluate")
     public MarketGateDecisionResponse evaluateMarketGate(@Valid @RequestBody MarketGateEvaluateRequest request) {
         return marketGateEngine.evaluate(request);
+    }
+
+    // ── v3 Regime layer (P0.1) ────────────────────────────────────────
+
+    /**
+     * Evaluate market regime from the latest market_snapshot and persist.
+     * Returns {@code 204 No Content} if no snapshot is available.
+     */
+    @PostMapping("/regime/evaluate")
+    public ResponseEntity<MarketRegimeDecision> evaluateRegime() {
+        return marketRegimeService.evaluateAndPersist()
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    /**
+     * Evaluate regime with a caller-supplied input (manual override / testing).
+     * Use this when market_snapshot does not yet have structured breadth/leader
+     * fields — downstream jobs can short-circuit to this endpoint.
+     */
+    @PostMapping("/regime/evaluate-custom")
+    public MarketRegimeDecision evaluateRegimeCustom(@RequestBody MarketRegimeInput input) {
+        return marketRegimeService.evaluateAndPersist(input, null);
+    }
+
+    @GetMapping("/regime/current")
+    public ResponseEntity<MarketRegimeDecision> getCurrentRegime() {
+        return marketRegimeService.getLatestForToday()
+                .or(marketRegimeService::getLatest)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    @GetMapping("/regime/history")
+    public List<MarketRegimeDecision> getRegimeHistory(@RequestParam(defaultValue = "50") int limit) {
+        return marketRegimeService.getHistory(limit);
     }
 
     @PostMapping("/hourly-gate/evaluate")

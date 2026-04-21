@@ -1,8 +1,12 @@
 package com.austin.trading.service;
 
+import com.austin.trading.dto.internal.MarketRegimeDecision;
+import com.austin.trading.dto.internal.ThemeStrengthDecision;
 import com.austin.trading.dto.response.LiveQuoteResponse;
+import com.austin.trading.engine.ExitRegimeIntegrationEngine;
 import com.austin.trading.engine.PositionDecisionEngine;
 import com.austin.trading.engine.PositionDecisionEngine.*;
+import com.austin.trading.engine.StopLossTakeProfitEngine;
 import com.austin.trading.entity.PositionEntity;
 import com.austin.trading.entity.PositionReviewLogEntity;
 import com.austin.trading.repository.PositionReviewLogRepository;
@@ -30,21 +34,36 @@ public class PositionReviewService {
 
     private static final Logger log = LoggerFactory.getLogger(PositionReviewService.class);
 
-    private final PositionRepository positionRepository;
-    private final PositionReviewLogRepository reviewLogRepository;
-    private final PositionDecisionEngine positionDecisionEngine;
-    private final CandidateScanService candidateScanService;
+    private final PositionRepository             positionRepository;
+    private final PositionReviewLogRepository    reviewLogRepository;
+    private final PositionDecisionEngine         positionDecisionEngine;
+    private final ExitRegimeIntegrationEngine    exitRegimeEngine;
+    private final CandidateScanService           candidateScanService;
+    private final StopLossTakeProfitEngine       stopLossTakeProfitEngine;
+    private final ScoreConfigService             scoreConfigService;
+    private final MarketRegimeService            marketRegimeService;
+    private final ThemeStrengthService           themeStrengthService;
 
     public PositionReviewService(
             PositionRepository positionRepository,
             PositionReviewLogRepository reviewLogRepository,
             PositionDecisionEngine positionDecisionEngine,
-            CandidateScanService candidateScanService
+            ExitRegimeIntegrationEngine exitRegimeEngine,
+            CandidateScanService candidateScanService,
+            StopLossTakeProfitEngine stopLossTakeProfitEngine,
+            ScoreConfigService scoreConfigService,
+            MarketRegimeService marketRegimeService,
+            ThemeStrengthService themeStrengthService
     ) {
-        this.positionRepository = positionRepository;
-        this.reviewLogRepository = reviewLogRepository;
+        this.positionRepository   = positionRepository;
+        this.reviewLogRepository  = reviewLogRepository;
         this.positionDecisionEngine = positionDecisionEngine;
-        this.candidateScanService = candidateScanService;
+        this.exitRegimeEngine     = exitRegimeEngine;
+        this.candidateScanService  = candidateScanService;
+        this.stopLossTakeProfitEngine = stopLossTakeProfitEngine;
+        this.scoreConfigService   = scoreConfigService;
+        this.marketRegimeService  = marketRegimeService;
+        this.themeStrengthService = themeStrengthService;
     }
 
     /**
@@ -61,6 +80,11 @@ public class PositionReviewService {
         List<String> symbols = openPositions.stream().map(PositionEntity::getSymbol).distinct().toList();
         List<LiveQuoteResponse> quotes = candidateScanService.getLiveQuotesBySymbols(symbols);
 
+        // P2.3: load current regime and theme strength once for all positions
+        MarketRegimeDecision regime    = marketRegimeService.getLatestForToday().orElse(null);
+        String               regimeType = regime != null ? regime.regimeType() : null;
+        LocalDate            today     = LocalDate.now();
+
         List<ReviewResult> results = new ArrayList<>();
         for (PositionEntity pos : openPositions) {
             try {
@@ -75,10 +99,24 @@ public class PositionReviewService {
                         : new PositionDecisionResult(PositionStatus.HOLD,
                                 "即時報價不可用，review 停用", null,
                                 com.austin.trading.engine.PositionDecisionEngine.TrailingAction.NONE);
+
+                // P2.3: apply regime/theme decay override
+                ThemeStrengthDecision themeDecision =
+                        themeStrengthService.findForSymbol(pos.getSymbol(), today).orElse(null);
+                String themeStage = themeDecision != null ? themeDecision.themeStage() : null;
+                PositionDecisionResult overridden = exitRegimeEngine.applyOverride(decision, regimeType, themeStage);
+                if (overridden != decision) {
+                    log.info("[PositionReview] P2.3 override {} {} → {} (regime={} theme={})",
+                            pos.getSymbol(), decision.status(), overridden.status(),
+                            regimeType, themeStage);
+                    decision = overridden;
+                }
+
                 PositionReviewLogEntity logEntry = saveReviewLog(pos, quote, decision, reviewType);
 
                 // 更新 position 狀態
                 pos.setReviewStatus(decision.status().name());
+                backfillMissingTargets(pos);
                 pos.setLastReviewedAt(LocalDateTime.now());
                 pos.setUpdatedAt(LocalDateTime.now());
 
@@ -102,6 +140,54 @@ public class PositionReviewService {
             }
         }
         return results;
+    }
+
+    private void backfillMissingTargets(PositionEntity pos) {
+        if (pos.getAvgCost() == null || pos.getAvgCost().signum() <= 0) return;
+        if (pos.getStopLossPrice() != null && pos.getTakeProfit1() != null && pos.getTakeProfit2() != null) return;
+
+        boolean momentum = "MOMENTUM_CHASE".equalsIgnoreCase(pos.getStrategyType());
+        BigDecimal stopLossPct = momentum
+                ? scoreConfigService.getDecimal("momentum.stop_loss_pct", new BigDecimal("-0.025")).abs()
+                : new BigDecimal("6.0");
+        BigDecimal takeProfit1Pct = momentum
+                ? scoreConfigService.getDecimal("momentum.take_profit_1_pct", new BigDecimal("0.06"))
+                .multiply(new BigDecimal("100"))
+                : new BigDecimal("8.0");
+        BigDecimal takeProfit2Pct = momentum
+                ? scoreConfigService.getDecimal("momentum.take_profit_2_pct", new BigDecimal("0.10"))
+                .multiply(new BigDecimal("100"))
+                : new BigDecimal("13.0");
+
+        var suggestion = stopLossTakeProfitEngine.evaluate(
+                new com.austin.trading.dto.request.StopLossTakeProfitEvaluateRequest(
+                        pos.getAvgCost().doubleValue(),
+                        stopLossPct.doubleValue(),
+                        takeProfit1Pct.doubleValue(),
+                        takeProfit2Pct.doubleValue(),
+                        false
+                )
+        );
+
+        if (pos.getStopLossPrice() == null) {
+            pos.setStopLossPrice(BigDecimal.valueOf(suggestion.stopLossPrice()));
+        }
+        if (pos.getTakeProfit1() == null) {
+            pos.setTakeProfit1(BigDecimal.valueOf(suggestion.takeProfit1()));
+        }
+        if (pos.getTakeProfit2() == null) {
+            pos.setTakeProfit2(BigDecimal.valueOf(suggestion.takeProfit2()));
+        }
+        pos.setNote(appendSystemSuggestionNote(
+                pos.getNote(),
+                momentum ? "AI auto-filled SL/TP from momentum defaults"
+                        : "AI auto-filled SL/TP from setup defaults"));
+    }
+
+    private String appendSystemSuggestionNote(String note, String marker) {
+        if (note == null || note.isBlank()) return marker;
+        if (note.contains(marker)) return note;
+        return note + "\n" + marker;
     }
 
     public record ReviewResult(

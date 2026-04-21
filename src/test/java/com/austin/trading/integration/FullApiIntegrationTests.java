@@ -382,6 +382,12 @@ class FullApiIntegrationTests {
 
     @Test
     void position_createOpenCloseFlow_shouldCalculatePnl() throws Exception {
+        // v3：ledger-backed — 先補現金（cost=80000 + fee ≈ 115）
+        mockMvc.perform(post("/api/capital/deposit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":200000,\"note\":\"test seed\"}"))
+                .andExpect(status().isOk());
+
         String createReq = """
                 {
                   "symbol": "2317",
@@ -424,6 +430,12 @@ class FullApiIntegrationTests {
 
     @Test
     void position_openAtLoss_realizedPnlShouldBeNegative() throws Exception {
+        // v3：ledger-backed — 先補現金（cost=70000 + fee ≈ 100）
+        mockMvc.perform(post("/api/capital/deposit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":200000,\"note\":\"test seed\"}"))
+                .andExpect(status().isOk());
+
         String createReq = """
                 {
                   "symbol": "TEST_LOSS_1802",

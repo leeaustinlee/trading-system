@@ -28,9 +28,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 每日排程狀態 + 補跑 API。
@@ -47,6 +50,10 @@ import java.util.Map;
 public class OrchestrationController {
 
     private static final Logger log = LoggerFactory.getLogger(OrchestrationController.class);
+    private static final List<String> PRIMARY_AI_TASK_ORDER = List.of(
+            "PREMARKET", "OPENING", "MIDDAY", "POSTMARKET", "T86_TOMORROW"
+    );
+    private static final Set<String> PRIMARY_AI_TASK_TYPES = new LinkedHashSet<>(PRIMARY_AI_TASK_ORDER);
 
     private final DailyOrchestrationService orchestrationService;
     private final PremarketWorkflowService premarketWorkflow;
@@ -235,10 +242,45 @@ public class OrchestrationController {
     @GetMapping("/tasks/today")
     public List<Map<String, Object>> aiTasksToday() {
         LocalDate today = LocalDate.now();
-        List<AiTaskEntity> tasks = aiTaskService.getByDate(today);
+        List<AiTaskEntity> tasks = aiTaskService.getByDate(today).stream()
+                .filter(t -> t.getTaskType() != null && PRIMARY_AI_TASK_TYPES.contains(t.getTaskType()))
+                .toList();
         List<FinalDecisionRecordResponse> decisions = finalDecisionService.getHistory(100)
                 .stream().filter(d -> today.equals(d.tradingDate())).toList();
-        return tasks.stream().map(t -> toAiOrchestrationRow(t, decisions)).toList();
+
+        Map<String, AiTaskEntity> latestByType = new LinkedHashMap<>();
+        for (AiTaskEntity task : tasks) {
+            AiTaskEntity current = latestByType.get(task.getTaskType());
+            if (current == null || compareAiTaskRecency(task, current) > 0) {
+                latestByType.put(task.getTaskType(), task);
+            }
+        }
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (String taskType : PRIMARY_AI_TASK_ORDER) {
+            AiTaskEntity task = latestByType.get(taskType);
+            if (task != null) {
+                rows.add(toAiOrchestrationRow(task, decisions));
+            }
+        }
+        return rows;
+    }
+
+    private int compareAiTaskRecency(AiTaskEntity a, AiTaskEntity b) {
+        Comparator<AiTaskEntity> comparator = Comparator
+                .comparing(OrchestrationController::aiTaskSortTime,
+                        Comparator.nullsFirst(Comparator.naturalOrder()))
+                .thenComparing(AiTaskEntity::getId, Comparator.nullsFirst(Comparator.naturalOrder()));
+        return comparator.compare(a, b);
+    }
+
+    private static LocalDateTime aiTaskSortTime(AiTaskEntity task) {
+        if (task.getLastTransitionAt() != null) return task.getLastTransitionAt();
+        if (task.getFinalizedAt() != null) return task.getFinalizedAt();
+        if (task.getCodexDoneAt() != null) return task.getCodexDoneAt();
+        if (task.getClaudeDoneAt() != null) return task.getClaudeDoneAt();
+        if (task.getCreatedAt() != null) return task.getCreatedAt();
+        return null;
     }
 
     /**

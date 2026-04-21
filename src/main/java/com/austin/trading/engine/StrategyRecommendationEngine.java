@@ -6,15 +6,22 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 策略建議引擎。
  *
  * <p>從聚合統計產出參數調整建議。不直接改 config，只輸出建議。</p>
  * <p>sample size 保護：分組 < min_sample_size 時 confidence 降為 LOW 或跳過。</p>
+ *
+ * <p><b>P2.1 Bounded Learning</b>: 只有列在 {@code learning.allowed.keys} 白名單內的
+ * {@code targetKey} 才能產出 PARAM_ADJUST / TAG_FREQUENCY / RISK_CONTROL 建議。
+ * INFO / OBSERVATION 類型不受限制（不直接修改參數）。</p>
  */
 @Component
 public class StrategyRecommendationEngine {
@@ -51,9 +58,24 @@ public class StrategyRecommendationEngine {
             Map<String, Object> supportingMetrics
     ) {}
 
+    /** Attribution-based stats fed from TradeAttributionService (P1.2/P2.1). */
+    public record AttributionStats(
+            BigDecimal timingPoorRate,
+            BigDecimal exitPoorRate,
+            BigDecimal avgDelayPct,
+            Map<String, BigDecimal> setupTypeWinRates,
+            int attributionCount
+    ) {}
+
     // ── 主要邏輯 ──────────────────────────────────────────────────────────
 
+    /** Analyze without attribution data (backward-compatible). */
     public List<Recommendation> analyze(AggregatedStats stats) {
+        return analyze(stats, null);
+    }
+
+    /** Analyze with optional attribution data; applies bounded guard before returning. */
+    public List<Recommendation> analyze(AggregatedStats stats, AttributionStats attrStats) {
         List<Recommendation> recs = new ArrayList<>();
         int minSample = config.getInt("recommendation.min_sample_size", 10);
 
@@ -86,7 +108,14 @@ public class StrategyRecommendationEngine {
         // 6. 勝率分析 → 整體建議
         analyzeOverallWinRate(stats, recs);
 
-        return recs;
+        // 7. Attribution-based analyses (P2.1)
+        if (attrStats != null && attrStats.attributionCount() >= config.getInt("learning.min_attribution_sample", 5)) {
+            analyzeTimingQuality(attrStats, stats.currentConfig(), recs);
+            analyzeSetupTypePerformance(attrStats, recs);
+        }
+
+        // P2.1 Bounded guard: filter out PARAM_ADJUST/TAG_FREQUENCY/RISK_CONTROL for non-approved keys
+        return applyBoundedGuard(recs, stats.currentConfig());
     }
 
     // ── 私有方法 ──────────────────────────────────────────────────────────
@@ -177,5 +206,73 @@ public class StrategyRecommendationEngine {
                             + "% 偏低，建議檢視進場門檻是否需提高",
                     Map.of("winRate", stats.overallWinRate(), "totalTrades", stats.totalTrades())));
         }
+    }
+
+    // ── P2.1 Attribution-based analyses ──────────────────────────────────────
+
+    /**
+     * If POOR timing rate exceeds threshold, suggest tightening timing.tolerance.delay_pct_max.
+     */
+    private void analyzeTimingQuality(AttributionStats attr, Map<String, String> cfg,
+                                       List<Recommendation> recs) {
+        if (attr.timingPoorRate() == null) return;
+        BigDecimal threshold = new BigDecimal(
+                cfg.getOrDefault("learning.timing_poor_rate_threshold", "30.0"));
+        if (attr.timingPoorRate().compareTo(threshold) < 0) return;
+
+        String currentStr = cfg.getOrDefault("timing.tolerance.delay_pct_max", "2.0");
+        BigDecimal current = new BigDecimal(currentStr);
+        BigDecimal suggested = current.subtract(new BigDecimal("0.5")).max(new BigDecimal("1.0"));
+
+        recs.add(new Recommendation("PARAM_ADJUST", "timing.tolerance.delay_pct_max",
+                currentStr, suggested.toPlainString(), "MEDIUM",
+                "進場時機 POOR 佔比 " + attr.timingPoorRate().setScale(1, RoundingMode.HALF_UP)
+                        + "% 超過門檻，建議收緊最大進場延遲容忍度",
+                Map.of("timingPoorRate", attr.timingPoorRate(),
+                       "avgDelayPct", attr.avgDelayPct() != null ? attr.avgDelayPct() : "N/A",
+                       "attributionCount", attr.attributionCount())));
+    }
+
+    /**
+     * Emit OBSERVATION for setup types with win rate below 30% (no parameter change).
+     */
+    private void analyzeSetupTypePerformance(AttributionStats attr, List<Recommendation> recs) {
+        if (attr.setupTypeWinRates() == null || attr.setupTypeWinRates().isEmpty()) return;
+
+        for (var entry : attr.setupTypeWinRates().entrySet()) {
+            String setupType = entry.getKey();
+            BigDecimal winRate = entry.getValue();
+            if (winRate != null && winRate.compareTo(new BigDecimal("30")) < 0) {
+                recs.add(new Recommendation("OBSERVATION", "setup.type." + setupType,
+                        null, null, "LOW",
+                        "Setup 類型 " + setupType + " 勝率僅 "
+                                + winRate.setScale(1, RoundingMode.HALF_UP) + "%，建議檢視進場條件",
+                        Map.of("setupType", setupType, "winRate", winRate)));
+            }
+        }
+    }
+
+    // ── P2.1 Bounded guard ────────────────────────────────────────────────────
+
+    private static final Set<String> BOUNDED_TYPES = Set.of("PARAM_ADJUST", "TAG_FREQUENCY", "RISK_CONTROL");
+
+    /**
+     * Filters out parameter-changing recommendations whose targetKey is not in the
+     * {@code learning.allowed.keys} whitelist. INFO and OBSERVATION always pass through.
+     * If {@code learning.allowed.keys} is absent or blank, no filtering is applied (backward compat).
+     */
+    private List<Recommendation> applyBoundedGuard(List<Recommendation> recs, Map<String, String> cfg) {
+        String allowedStr = cfg.getOrDefault("learning.allowed.keys", "");
+        if (allowedStr.isBlank()) return recs;
+
+        Set<String> allowed = Arrays.stream(allowedStr.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toSet());
+
+        return recs.stream()
+                .filter(r -> !BOUNDED_TYPES.contains(r.recommendationType())
+                             || allowed.contains(r.targetKey()))
+                .toList();
     }
 }

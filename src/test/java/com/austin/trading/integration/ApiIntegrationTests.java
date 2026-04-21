@@ -80,6 +80,12 @@ class ApiIntegrationTests {
 
     @Test
     void closePositionShouldCalculateRealizedPnl() throws Exception {
+        // v3：ledger-backed — 建倉前確保現金足夠（cost=1000 + fee<=30）
+        mockMvc.perform(post("/api/capital/deposit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":100000,\"note\":\"test seed\"}"))
+                .andExpect(status().isOk());
+
         String createRequest = """
                 {
                   "symbol": "2330",

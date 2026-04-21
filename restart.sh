@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# 快速重啟 trading-system 本機 server（WSL）。
-# 流程：kill 舊 process → mvn clean package → 背景啟動 → 等 "Started TradingApplication"
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,22 +8,24 @@ PROFILE="${SPRING_PROFILES_ACTIVE:-local}"
 
 cd "$PROJECT_DIR"
 
-# 1) 停舊 process
+# 1) Stop the previous app process if it is still running.
 OLD_PID=$(ps aux | grep 'trading-system-0.0.1-SNAPSHOT.jar' | grep -v grep | awk '{print $2}' | head -1 || true)
 if [[ -n "$OLD_PID" ]]; then
   echo "[restart] killing pid $OLD_PID"
   kill "$OLD_PID"
   for i in {1..30}; do
-    if ! ps -p "$OLD_PID" > /dev/null 2>&1; then break; fi
+    if ! ps -p "$OLD_PID" > /dev/null 2>&1; then
+      break
+    fi
     sleep 1
   done
 fi
 
-# 2) build（略過測試以加速；要完整測試請自行 mvn verify）
+# 2) Rebuild without `clean` to avoid Windows/WSL file lock failures in target/.
 echo "[restart] building..."
-mvn -q clean package -DskipTests
+mvn -q package -DskipTests
 
-# 3) 載 .env 並背景啟動
+# 3) Load local environment variables if present.
 if [[ -f "$PROJECT_DIR/.env" ]]; then
   set -a
   # shellcheck disable=SC1091
@@ -33,6 +33,7 @@ if [[ -f "$PROJECT_DIR/.env" ]]; then
   set +a
 fi
 
+# 4) Start the packaged jar in the background.
 echo "[restart] starting (profile=$PROFILE, log=$LOG)..."
 nohup java -Xms512m -Xmx1536m \
   -Dspring.profiles.active="$PROFILE" \
@@ -41,7 +42,7 @@ disown
 NEW_PID=$!
 echo "[restart] pid=$NEW_PID"
 
-# 4) 等 "Started TradingApplication"
+# 5) Wait until Spring Boot startup is visible in the log.
 for i in {1..60}; do
   if grep -q "Started TradingApplication" "$LOG" 2>/dev/null; then
     echo "[restart] UP @ $(grep -m1 'Started TradingApplication' "$LOG" | awk '{print $1}')"

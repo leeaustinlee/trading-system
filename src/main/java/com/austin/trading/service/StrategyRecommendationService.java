@@ -1,5 +1,6 @@
 package com.austin.trading.service;
 
+import com.austin.trading.dto.internal.TradeAttributionOutput;
 import com.austin.trading.engine.StrategyRecommendationEngine;
 import com.austin.trading.engine.StrategyRecommendationEngine.*;
 import com.austin.trading.entity.StrategyRecommendationEntity;
@@ -25,22 +26,25 @@ public class StrategyRecommendationService {
     private final StrategyRecommendationEngine engine;
     private final StrategyRecommendationRepository repository;
     private final TradeReviewRepository tradeReviewRepository;
+    private final TradeAttributionService tradeAttributionService;
     private final ScoreConfigService configService;
     private final ObjectMapper objectMapper;
 
     public StrategyRecommendationService(StrategyRecommendationEngine engine,
                                           StrategyRecommendationRepository repository,
                                           TradeReviewRepository tradeReviewRepository,
+                                          TradeAttributionService tradeAttributionService,
                                           ScoreConfigService configService,
                                           ObjectMapper objectMapper) {
         this.engine = engine;
         this.repository = repository;
         this.tradeReviewRepository = tradeReviewRepository;
+        this.tradeAttributionService = tradeAttributionService;
         this.configService = configService;
         this.objectMapper = objectMapper;
     }
 
-    /** 從所有 trade review 聚合統計，產生建議 */
+    /** 從所有 trade review + attribution 聚合統計，產生建議 (P2.1) */
     @Transactional
     public List<StrategyRecommendationEntity> generate(Long sourceRunId) {
         List<TradeReviewEntity> reviews = tradeReviewRepository.findAllByOrderByCreatedAtDesc();
@@ -50,7 +54,10 @@ public class StrategyRecommendationService {
         }
 
         AggregatedStats stats = aggregate(reviews);
-        List<Recommendation> recs = engine.analyze(stats);
+        List<TradeAttributionOutput> attributions = tradeAttributionService.findAll();
+        AttributionStats attrStats = buildAttributionStats(attributions);
+        log.info("[StrategyRec] attribution records={}", attrStats.attributionCount());
+        List<Recommendation> recs = engine.analyze(stats, attrStats);
 
         List<StrategyRecommendationEntity> saved = new ArrayList<>();
         for (Recommendation rec : recs) {
@@ -147,6 +154,58 @@ public class StrategyRecommendationService {
         return new AggregatedStats(overallWinRate, avgReturn, total,
                 winRateByTag, Map.of(), countByTag,
                 avgMfe, avgMae, avgDays, maxConsecutiveLoss, configSnapshot);
+    }
+
+    /**
+     * Builds AttributionStats from TradeAttribution records for P2.1 analysis.
+     */
+    private AttributionStats buildAttributionStats(List<TradeAttributionOutput> attributions) {
+        if (attributions.isEmpty()) {
+            return new AttributionStats(null, null, null, Map.of(), 0);
+        }
+
+        int total = attributions.size();
+        int timingPoor = 0;
+        int exitPoor = 0;
+        BigDecimal sumDelay = BigDecimal.ZERO;
+        int delayCount = 0;
+
+        Map<String, int[]> setupWinLoss = new LinkedHashMap<>();
+
+        for (TradeAttributionOutput a : attributions) {
+            if ("POOR".equals(a.timingQuality())) timingPoor++;
+            if ("POOR".equals(a.exitQuality())) exitPoor++;
+            if (a.delayPct() != null) {
+                sumDelay = sumDelay.add(a.delayPct());
+                delayCount++;
+            }
+            if (a.setupType() != null && a.pnlPct() != null) {
+                int[] wl = setupWinLoss.computeIfAbsent(a.setupType(), k -> new int[2]);
+                if (a.pnlPct().signum() > 0) wl[0]++;
+                else wl[1]++;
+            }
+        }
+
+        BigDecimal totalBd = new BigDecimal(total);
+        BigDecimal timingPoorRate = new BigDecimal(timingPoor)
+                .divide(totalBd, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100"));
+        BigDecimal exitPoorRate = new BigDecimal(exitPoor)
+                .divide(totalBd, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100"));
+        BigDecimal avgDelayPct = delayCount > 0
+                ? sumDelay.divide(new BigDecimal(delayCount), 4, RoundingMode.HALF_UP) : null;
+
+        Map<String, BigDecimal> setupWinRates = new LinkedHashMap<>();
+        for (var entry : setupWinLoss.entrySet()) {
+            int w = entry.getValue()[0], l = entry.getValue()[1];
+            int t = w + l;
+            if (t > 0) {
+                setupWinRates.put(entry.getKey(),
+                        new BigDecimal(w).divide(new BigDecimal(t), 4, RoundingMode.HALF_UP)
+                                .multiply(new BigDecimal("100")));
+            }
+        }
+
+        return new AttributionStats(timingPoorRate, exitPoorRate, avgDelayPct, setupWinRates, total);
     }
 
     private String toJson(Object obj) {
