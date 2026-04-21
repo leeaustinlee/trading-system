@@ -1,10 +1,14 @@
 package com.austin.trading.scheduler;
 
+import com.austin.trading.dto.request.AiTaskCandidateRef;
+import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.dto.response.MarketCurrentResponse;
 import com.austin.trading.dto.response.PositionResponse;
 import com.austin.trading.dto.response.TradingStateResponse;
 import com.austin.trading.notify.LineTemplateService;
 import com.austin.trading.service.AiTaskService;
+import com.austin.trading.service.CandidateScanService;
+import com.austin.trading.service.ClaudeCodeRequestWriterService;
 import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.MarketDataService;
 import com.austin.trading.service.OrchestrationStep;
@@ -19,8 +23,11 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Component
@@ -36,6 +43,9 @@ public class MiddayReviewJob {
     private final SchedulerLogService schedulerLogService;
     private final DailyOrchestrationService orchestrationService;
     private final AiTaskService aiTaskService;
+    // v2.5 MIDDAY 契約
+    private final CandidateScanService candidateScanService;
+    private final ClaudeCodeRequestWriterService requestWriterService;
 
     public MiddayReviewJob(
             MarketDataService marketDataService,
@@ -44,7 +54,9 @@ public class MiddayReviewJob {
             LineTemplateService lineTemplateService,
             SchedulerLogService schedulerLogService,
             DailyOrchestrationService orchestrationService,
-            AiTaskService aiTaskService
+            AiTaskService aiTaskService,
+            CandidateScanService candidateScanService,
+            ClaudeCodeRequestWriterService requestWriterService
     ) {
         this.marketDataService = marketDataService;
         this.tradingStateService = tradingStateService;
@@ -53,6 +65,8 @@ public class MiddayReviewJob {
         this.schedulerLogService = schedulerLogService;
         this.orchestrationService = orchestrationService;
         this.aiTaskService = aiTaskService;
+        this.candidateScanService = candidateScanService;
+        this.requestWriterService = requestWriterService;
     }
 
     @Scheduled(cron = "${trading.scheduler.midday-review-cron:0 0 11 * * MON-FRI}",
@@ -73,6 +87,12 @@ public class MiddayReviewJob {
             TradingStateResponse state = tradingStateService.getCurrentState().orElse(null);
             List<PositionResponse> openPositions = positionService.getOpenPositions(20);
 
+            // v2.5：先建 MIDDAY task + writeRequest，讓 Claude 有正式 request 可讀
+            //   universe = 今日候選 10 檔 + 當前 OPEN 持倉（去重，保留順序）
+            MiddayUniverse universe = buildMiddayUniverse(today, openPositions);
+            Long middayTaskId = createMiddayTask(today, universe);
+            writeMiddayRequest(today, middayTaskId, universe, market, state, openPositions);
+
             String message = buildMessage(
                     today,
                     buildMarketSummary(market, state),
@@ -89,9 +109,11 @@ public class MiddayReviewJob {
                 lineTemplateService.notifySystemAlert("11:00 AI 研究摘要", summary);
             }
 
-            String logMsg = String.format("grade=%s positions=%d",
+            String logMsg = String.format("grade=%s positions=%d middayTaskId=%s universe=%d",
                     market != null ? market.marketGrade() : "N/A",
-                    openPositions.size());
+                    openPositions.size(),
+                    middayTaskId == null ? "N/A" : middayTaskId,
+                    universe.symbols().size());
             log.info("[MiddayReviewJob] {}", logMsg);
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), logMsg);
             orchestrationService.markDone(today, step, logMsg);
@@ -101,6 +123,81 @@ public class MiddayReviewJob {
             throw e;
         }
     }
+
+    // ── v2.5 MIDDAY 契約 helpers ─────────────────────────────────────────
+
+    /** MIDDAY universe = 今日候選 10 檔 + OPEN 持倉（去重、保留順序，上限 20） */
+    private MiddayUniverse buildMiddayUniverse(LocalDate today, List<PositionResponse> openPositions) {
+        List<CandidateResponse> candidates;
+        try {
+            candidates = candidateScanService.getCurrentCandidates(10);
+        } catch (Exception e) {
+            log.warn("[MiddayReviewJob] getCurrentCandidates 失敗，僅用持倉: {}", e.getMessage());
+            candidates = List.of();
+        }
+
+        Set<String> ordered = new LinkedHashSet<>();
+        List<AiTaskCandidateRef> refs = new ArrayList<>();
+
+        for (CandidateResponse c : candidates) {
+            if (c.symbol() == null || c.symbol().isBlank()) continue;
+            if (ordered.add(c.symbol().trim())) {
+                refs.add(new AiTaskCandidateRef(
+                        c.symbol(), c.stockName(), c.themeTag(), c.javaStructureScore()));
+            }
+        }
+        for (PositionResponse p : openPositions) {
+            if (p.symbol() == null || p.symbol().isBlank()) continue;
+            if (ordered.add(p.symbol().trim())) {
+                refs.add(new AiTaskCandidateRef(p.symbol(), p.stockName(), null, null));
+            }
+            if (ordered.size() >= 20) break;
+        }
+        return new MiddayUniverse(new ArrayList<>(ordered), refs);
+    }
+
+    /** 建立 MIDDAY ai_task；universe 為空時回 null（不建空 task）。 */
+    private Long createMiddayTask(LocalDate today, MiddayUniverse universe) {
+        if (universe.symbols().isEmpty()) {
+            log.info("[MiddayReviewJob] universe 為空，略過建 MIDDAY task");
+            return null;
+        }
+        try {
+            var task = aiTaskService.createTask(
+                    today, "MIDDAY", null, universe.refs(),
+                    "11:00 盤中分析（候選 " + universe.symbols().size()
+                            + " 檔含持倉），等 Claude 11:15 / Codex 11:25 接手",
+                    "D:/ai/stock/claude-research-request.json"
+            );
+            return task.getId();
+        } catch (Exception e) {
+            log.warn("[MiddayReviewJob] createTask 失敗: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /** 寫 Claude request.json 供 Claude Code Agent 讀取。 */
+    private void writeMiddayRequest(LocalDate today, Long taskId, MiddayUniverse universe,
+                                     MarketCurrentResponse market,
+                                     TradingStateResponse state,
+                                     List<PositionResponse> openPositions) {
+        try {
+            String context = String.format(
+                    "{\"source\":\"midday_review\",\"grade\":\"%s\",\"phase\":\"%s\",\"positions\":%d,\"candidates\":%d}",
+                    market == null ? "N/A" : market.marketGrade(),
+                    market == null ? "N/A" : market.marketPhase(),
+                    openPositions.size(),
+                    universe.symbols().size()
+            );
+            requestWriterService.writeRequest(taskId, "MIDDAY", today, universe.symbols(), context);
+        } catch (Exception e) {
+            log.warn("[MiddayReviewJob] writeRequest 失敗: {}", e.getMessage());
+        }
+    }
+
+    private record MiddayUniverse(List<String> symbols, List<AiTaskCandidateRef> refs) {}
+
+    // ── 舊 helpers（原 v1 LINE 通知）──────────────────────────────────────
 
     private String buildMarketSummary(MarketCurrentResponse market, TradingStateResponse state) {
         if (market == null) return "尚未取得市場快照，禁止用本則做進場依據。";

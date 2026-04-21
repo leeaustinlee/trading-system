@@ -59,6 +59,16 @@ public class ClaudeCodeRequestWriterService {
             "D:/ai/stock/market-gate-self-optimization-engine.md"
     );
 
+    /** v2.5：Claude 研究輸出契約（提醒必讀）*/
+    private static final String CONTRACT_FILE = "D:/ai/stock/claude-research-contract.md";
+    private static final String VALIDATOR_PY  = "D:/ai/stock/validate-claude-submit.py";
+    private static final String VALIDATOR_MJS = "D:/ai/stock/validate-claude-submit.mjs";
+    private static final String PROMPT_REMINDER =
+            "【契約必讀】執行前務必讀 " + CONTRACT_FILE
+            + "；rename .tmp → .json 前必跑 "
+            + VALIDATOR_PY + "（或 " + VALIDATOR_MJS + "）本地驗證；"
+            + "scores/thesis keys 必須 ⊆ allowed_symbols，違反 Java 會 400。";
+
     private final AiClaudeConfig config;
     private final ObjectMapper   objectMapper;
 
@@ -160,6 +170,13 @@ public class ClaudeCodeRequestWriterService {
                         String.format("claude-%s-%s-%s-task-%d.json",
                                 type, tradingDate, hhmm, taskId));
             }
+
+            // v2.5：研究輸出契約提醒（路徑 + 驗證腳本）
+            root.put("contract_file", CONTRACT_FILE);
+            ArrayNode validators = root.putArray("local_validators");
+            validators.add(VALIDATOR_PY);
+            validators.add(VALIDATOR_MJS);
+            root.put("contract_reminder", PROMPT_REMINDER);
 
             String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
             Path dest = Paths.get(path);
