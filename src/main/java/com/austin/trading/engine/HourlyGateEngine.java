@@ -19,18 +19,27 @@ public class HourlyGateEngine {
 
         String timeDecay = resolveTimeDecay(request.evaluationTime());
         boolean forceHardOffByTime = "LATE".equals(timeDecay) && !request.hasPosition() && !"A".equals(marketGrade);
+        boolean earlyOrMid = "EARLY".equals(timeDecay) || "MID".equals(timeDecay);
 
+        // v2.4：decisionLock 只在真正的硬風控情境才 LOCKED，
+        //       盤前 / 早盤 B 市場 + decision=REST 不直接鎖死整天。
         String decisionLock;
-        if ("C".equals(marketGrade) || "REST".equals(decision) || (!request.hasPosition() && !request.hasCandidate()) || forceHardOffByTime) {
-            decisionLock = "LOCKED";
+        if ("C".equals(marketGrade)) {
+            decisionLock = "LOCKED";                        // 市場 C 硬鎖
+        } else if (forceHardOffByTime) {
+            decisionLock = "LOCKED";                        // 10:30 後非 A 且無持倉
+        } else if (!request.hasPosition() && !request.hasCandidate() && !earlyOrMid) {
+            decisionLock = "LOCKED";                        // 無持倉無候選且已進 LATE 才鎖
         } else if ("LOCKED".equals(prevLock) && ("A".equals(marketGrade) || "B".equals(marketGrade)) && request.hasCriticalEvent()) {
             decisionLock = "RELEASED";
         } else {
-            decisionLock = "NONE";
+            decisionLock = "NONE";                          // 盤前 / 早盤 / B 市場 / REST 全走 NONE
         }
 
+        // hourlyGate：early/mid 時最多 OFF_SOFT；只有市場 C / forceHardOffByTime 才 OFF_HARD
         String hourlyGate;
-        if (forceHardOffByTime || "C".equals(marketGrade) || "LOCKED".equals(decisionLock) && !request.hasPosition()) {
+        if (forceHardOffByTime || "C".equals(marketGrade)
+                || ("LOCKED".equals(decisionLock) && !request.hasPosition())) {
             hourlyGate = "OFF_HARD";
         } else if ("B".equals(marketGrade) && !request.hasPosition() && !request.hasCriticalEvent()) {
             hourlyGate = "OFF_SOFT";

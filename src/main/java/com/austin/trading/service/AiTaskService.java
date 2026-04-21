@@ -197,7 +197,10 @@ public class AiTaskService {
         task.setStatus(STATUS_CODEX_RUNNING);
         task.setCodexStartedAt(LocalDateTime.now());
         recordTransition(task, "claim-codex");
-        return aiTaskRepository.save(task);
+        AiTaskEntity saved = aiTaskRepository.save(task);
+        log.info("[AiTaskService] CLAIM Codex id={} type={} → CODEX_RUNNING",
+                saved.getId(), saved.getTaskType());
+        return saved;
     }
 
     // ── 提交結果 ────────────────────────────────────────────────────────────
@@ -315,11 +318,15 @@ public class AiTaskService {
     public AiTaskEntity failTask(Long taskId, String errorMessage) {
         AiTaskEntity task = requireTask(taskId);
         if (STATUS_FAILED.equals(task.getStatus())) return task;
+        String prev = task.getStatus();
         requireState(task, Set.of(STATUS_PENDING, STATUS_CLAUDE_RUNNING, STATUS_CODEX_RUNNING), "fail");
         task.setStatus(STATUS_FAILED);
         task.setErrorMessage(truncate(errorMessage, 1000));
         recordTransition(task, "fail: " + truncate(errorMessage, 60));
-        return aiTaskRepository.save(task);
+        AiTaskEntity saved = aiTaskRepository.save(task);
+        log.warn("[AiTaskService] FAIL id={} type={} prev={} reason={}",
+                saved.getId(), saved.getTaskType(), prev, errorMessage);
+        return saved;
     }
 
     /**

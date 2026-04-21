@@ -161,6 +161,8 @@ public class AiTaskController {
         // P0-5: scores key 必須是單一台股代號（3-6 位英數，不含空白），不合法直接 400。
         String invalidKey = findInvalidScoreKey(req.scores());
         if (invalidKey != null) {
+            log.warn("[AiTaskController] submit-codex REJECT id={} INVALID_SCORE_SYMBOL_KEY='{}' scores={}",
+                    id, invalidKey, req.scores());
             Map<String, Object> err = new LinkedHashMap<>();
             err.put("success", false);
             err.put("errorCode", "INVALID_SCORE_SYMBOL_KEY");

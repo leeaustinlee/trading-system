@@ -5,6 +5,8 @@ import com.austin.trading.dto.request.FinalDecisionEvaluateRequest;
 import com.austin.trading.dto.response.FinalDecisionResponse;
 import com.austin.trading.dto.response.FinalDecisionSelectedStockResponse;
 import com.austin.trading.service.ScoreConfigService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -36,6 +38,8 @@ import java.util.Locale;
 @Component
 public class FinalDecisionEngine {
 
+    private static final Logger log = LoggerFactory.getLogger(FinalDecisionEngine.class);
+
     private final ScoreConfigService config;
 
     public FinalDecisionEngine(ScoreConfigService config) {
@@ -50,12 +54,16 @@ public class FinalDecisionEngine {
 
         // ── 市場層級硬性休息條件 ──────────────────────────────────────────────
         if ("C".equals(marketGrade)) {
+            log.info("[FinalDecisionEngine] REST: market_grade=C");
             return rest("市場等級為 C，今日建議休息。", List.of("market_grade=C"));
         }
         if ("LOCKED".equals(decisionLock)) {
+            log.warn("[FinalDecisionEngine] REST: decision_lock=LOCKED (grade={}, timeDecay={}, hasPos={})",
+                    marketGrade, timeDecay, hasPosition);
             return rest("決策鎖啟用，暫不進場。", List.of("decision_lock=LOCKED"));
         }
         if ("LATE".equals(timeDecay) && !"A".equals(marketGrade) && !hasPosition) {
+            log.info("[FinalDecisionEngine] REST: late_session_force_rest grade={} hasPos=false", marketGrade);
             return rest("10:30 後且市場非 A，無持倉時強制休息。", List.of("late_session_force_rest"));
         }
 

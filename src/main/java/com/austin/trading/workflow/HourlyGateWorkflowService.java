@@ -72,7 +72,8 @@ public class HourlyGateWorkflowService {
         }
 
         var market = marketOpt.get();
-        TradingStateResponse previousState = tradingStateService.getCurrentState().orElse(null);
+        // v2.4：只讀今日 state，避免跨日污染
+        TradingStateResponse previousState = tradingStateService.getStateByDate(tradingDate).orElse(null);
 
         // Step 2: 組裝請求並執行 HourlyGateEngine
         HourlyGateEvaluateRequest request = new HourlyGateEvaluateRequest(

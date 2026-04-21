@@ -13,7 +13,9 @@ public class MonitorDecisionEngine {
     public MonitorDecisionResponse evaluate(MonitorEvaluateRequest request) {
         String marketGrade = normalize(request.marketGrade());
         String decision = normalize(request.decision());
-        String timeDecay = normalizeOrDefault(request.timeDecayStage(), resolveTimeDecay(request.evaluationTime()));
+        // v2.4：以 evaluationTime 為準重新計算 timeDecay，不盲信 request 的 stale 輸入
+        //       09:05 必定 EARLY，避免昨日 LATE 跨日污染
+        String timeDecay = resolveTimeDecay(request.evaluationTime());
         String decisionLock = normalizeOrDefault(request.decisionLock(), "NONE");
 
         String monitorMode;

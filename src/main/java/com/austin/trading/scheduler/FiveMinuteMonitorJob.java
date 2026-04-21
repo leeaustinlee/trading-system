@@ -83,8 +83,11 @@ public class FiveMinuteMonitorJob {
                 return;
             }
 
-            TradingStateResponse state = tradingStateService.getCurrentState().orElse(null);
+            // v2.4：只讀今日 state，避免跨日污染（例如前日 LATE/LOCKED 被沿用到今日 09:05）
+            TradingStateResponse state = tradingStateService.getTodayState().orElse(null);
 
+            // v2.4：timeDecayStage 一律由 MonitorDecisionEngine 依 evaluationTime 重算，
+            //       這裡不再把可能 stale 的 state.timeDecayStage() 塞進 request。
             MonitorEvaluateRequest request = new MonitorEvaluateRequest(
                     safe(market.marketGrade(), "B"),
                     safe(market.decision(), "WATCH"),
@@ -95,8 +98,8 @@ public class FiveMinuteMonitorJob {
                     false,
                     true,
                     false,
-                    state == null ? "NONE" : state.decisionLock(),
-                    state == null ? null : state.timeDecayStage()
+                    state == null ? "NONE" : safe(state.decisionLock(), "NONE"),
+                    null  // 顯式傳 null，engine 會以 LocalTime.now() 重算
             );
 
             MonitorDecisionResponse decision = monitorDecisionEngine.evaluate(request);

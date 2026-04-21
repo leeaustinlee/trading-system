@@ -174,11 +174,16 @@ public class FinalDecisionService {
         }
 
         MarketCurrentResponse market = marketDataService.getCurrentMarket().orElse(null);
-        TradingStateResponse state = tradingStateService.getCurrentState().orElse(null);
+        // v2.4：只讀今日 state，避免跨日污染
+        TradingStateResponse state = tradingStateService.getStateByDate(tradingDate).orElse(null);
 
         String marketGrade  = market == null ? "B" : safe(market.marketGrade(), "B");
         String decisionLock = state == null ? "NONE" : safe(state.decisionLock(), "NONE");
-        String timeDecay    = state == null ? "EARLY" : safe(state.timeDecayStage(), "EARLY");
+        // v2.4：timeDecay 一律依現在時間算，不採用 state 帶入值（避免 stale）
+        String timeDecay    = TradingStateService.resolveTimeDecayForNow();
+        log.info("[FinalDecision] marketGrade={} decisionLock={} timeDecay={} (state={})",
+                marketGrade, decisionLock, timeDecay,
+                state == null ? "NONE_TODAY" : "today-" + state.updatedAt());
 
         // ── Step 0: 持倉滿倉檢查 ──────────────────────────────────────────────
         List<PositionEntity> openPositions = positionRepository.findByStatus("OPEN");
