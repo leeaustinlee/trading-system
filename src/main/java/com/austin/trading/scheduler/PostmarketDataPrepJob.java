@@ -124,28 +124,30 @@ public class PostmarketDataPrepJob {
             // 4. 儲存收盤市場快照
             breadth.ifPresent(b -> saveCloseSnapshot(today, b));
 
+            // v2.5：先建 AI task 拿 taskId，再 writeRequest 帶 taskId + allowed_symbols
+            Long postmarketTaskId = null;
+            try {
+                List<AiTaskCandidateRef> refs = candidates.stream()
+                        .map(c -> new AiTaskCandidateRef(
+                                c.symbol(), c.stockName(), c.themeTag(), c.javaStructureScore()))
+                        .collect(Collectors.toList());
+                var task = aiTaskService.createTask(
+                        today, "POSTMARKET", null, refs,
+                        "15:05 盤後候選（共 " + refs.size() + " 檔），等 Claude 15:20 / Codex 15:28 接手",
+                        "D:/ai/stock/claude-research-request.json"
+                );
+                postmarketTaskId = task.getId();
+            } catch (Exception e) {
+                log.warn("[PostmarketDataPrepJob] createTask 失敗: {}", e.getMessage());
+            }
+
             // 寫出研究請求給 Claude Code 排程 Agent（15:20 執行）
             String breadthContext = breadth.map(b ->
                     String.format("{\"advances\":%d,\"declines\":%d,\"index_change\":%s}",
                             b.advances(), b.declines(),
                             b.indexChangePercent() == null ? "null" : b.indexChangePercent().toString())
             ).orElse(null);
-            requestWriterService.writeRequest("POSTMARKET", today, symbols, breadthContext);
-
-            // v2.1：建 POSTMARKET ai_task（正式規格由 DataPrep 負責建 task，PostmarketAnalysis 只讀）
-            try {
-                List<AiTaskCandidateRef> refs = candidates.stream()
-                        .map(c -> new AiTaskCandidateRef(
-                                c.symbol(), c.stockName(), c.themeTag(), c.javaStructureScore()))
-                        .collect(Collectors.toList());
-                aiTaskService.createTask(
-                        today, "POSTMARKET", null, refs,
-                        "15:05 盤後候選（共 " + refs.size() + " 檔），等 Claude 15:20 / Codex 15:28 接手",
-                        "D:/ai/stock/claude-research-request.json"
-                );
-            } catch (Exception e) {
-                log.warn("[PostmarketDataPrepJob] createTask 失敗: {}", e.getMessage());
-            }
+            requestWriterService.writeRequest(postmarketTaskId, "POSTMARKET", today, symbols, breadthContext);
 
             String msg = String.format("breadth=%s candidates=%d updated=%d",
                     breadth.map(b -> b.advances() + "/" + b.declines()).orElse("N/A"),

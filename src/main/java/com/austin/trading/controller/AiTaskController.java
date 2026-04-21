@@ -146,6 +146,15 @@ public class AiTaskController {
             body.put("status", result.task().getStatus());
             body.put("autoScored", req.scores() == null ? Map.of() : req.scores());
             return ResponseEntity.ok(body);
+        } catch (IllegalArgumentException e) {
+            if (e.getMessage() != null && e.getMessage().startsWith("CLAUDE_SCORES_SYMBOL_MISMATCH:")) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "errorCode", "CLAUDE_SCORES_SYMBOL_MISMATCH",
+                        "message", e.getMessage()
+                ));
+            }
+            return ResponseEntity.badRequest().body(Map.of("success", false, "error", e.getMessage()));
         } catch (AiTaskInvalidStateException e) {
             return invalidState(e);
         } catch (Exception e) {

@@ -19,6 +19,8 @@ public record CandidateBatchItemRequest(
         String stockName,
         BigDecimal score,
         String reason,
+        String themeTag,
+        String sector,
         String payloadJson,
 
         // ── 評估欄位（選填）── //

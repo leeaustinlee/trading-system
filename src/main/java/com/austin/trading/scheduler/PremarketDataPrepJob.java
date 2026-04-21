@@ -117,23 +117,26 @@ public class PremarketDataPrepJob {
             String payload = buildPayload(txf.orElse(null), quoteSummary);
             saveOrUpdateSnapshot(today, payload);
 
-            // 寫出研究請求給 Claude Code 排程 Agent（08:20 執行）
-            requestWriterService.writeRequest("PREMARKET", today, symbols, buildPayload(txf.orElse(null), quoteSummary));
-
-            // 建立 AI 任務供 Claude/Codex 認領（給 20 分鐘窗口至 08:30 Notify 前完成）
+            // v2.5：先建 AI task 拿 taskId，再 writeRequest 帶 taskId + allowed_symbols
+            Long premarketTaskId = null;
             try {
                 List<AiTaskCandidateRef> refs = candidates.stream()
                         .map(c -> new AiTaskCandidateRef(
                                 c.symbol(), c.stockName(), c.themeTag(), c.javaStructureScore()))
                         .collect(Collectors.toList());
-                aiTaskService.createTask(
+                var task = aiTaskService.createTask(
                         today, "PREMARKET", null, refs,
                         "今日盤前研究請求，共 " + refs.size() + " 檔",
                         "D:/ai/stock/claude-research-request.json"
                 );
+                premarketTaskId = task.getId();
             } catch (Exception e) {
                 log.warn("[PremarketDataPrepJob] createTask 失敗: {}", e.getMessage());
             }
+
+            // 寫出研究請求給 Claude Code 排程 Agent（08:20 執行）
+            requestWriterService.writeRequest(premarketTaskId, "PREMARKET", today, symbols,
+                    buildPayload(txf.orElse(null), quoteSummary));
 
             String msg = "txf=" + txfSummary + " candidates=" + candidates.size();
             log.info("[PremarketDataPrepJob] {}", msg);

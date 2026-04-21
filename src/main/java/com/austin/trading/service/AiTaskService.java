@@ -23,6 +23,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -214,6 +215,7 @@ public class AiTaskService {
     @Transactional
     public SubmitResult submitClaudeResult(Long taskId, ClaudeSubmitRequest req) {
         AiTaskEntity task = requireTask(taskId);
+        validateClaudeScoresAgainstTaskCandidates(task, req);
 
         // 計算 request hash（用於 idempotent check）
         String hash = computeClaudeHash(req);
@@ -545,6 +547,59 @@ public class AiTaskService {
             } catch (Exception ex) {
                 log.warn("[AiTaskService] Failed to write Claude score for symbol={}: {}", symbol, ex.getMessage());
             }
+        }
+    }
+
+    private void validateClaudeScoresAgainstTaskCandidates(AiTaskEntity task, ClaudeSubmitRequest req) {
+        if (req == null || req.scores() == null || req.scores().isEmpty()) return;
+        if (task.getTargetCandidatesJson() == null || task.getTargetCandidatesJson().isBlank()) return;
+
+        try {
+            List<AiTaskCandidateRef> refs = objectMapper.readValue(
+                    task.getTargetCandidatesJson(),
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, AiTaskCandidateRef.class)
+            );
+            if (refs == null || refs.isEmpty()) return;
+
+            Set<String> allowedSymbols = new HashSet<>();
+            for (AiTaskCandidateRef ref : refs) {
+                if (ref != null && ref.symbol() != null && !ref.symbol().isBlank()) {
+                    allowedSymbols.add(ref.symbol().trim());
+                }
+            }
+            if (allowedSymbols.isEmpty()) return;
+
+            List<String> invalidSymbols = new ArrayList<>();
+            if (req.scores() != null) {
+                for (String symbol : req.scores().keySet()) {
+                    if (symbol == null || symbol.isBlank()) continue;
+                    String trimmed = symbol.trim();
+                    if (!allowedSymbols.contains(trimmed)) {
+                        invalidSymbols.add(trimmed);
+                    }
+                }
+            }
+            // v2.5：thesis keys 也必須是 candidates 子集
+            if (req.thesis() != null) {
+                for (String symbol : req.thesis().keySet()) {
+                    if (symbol == null || symbol.isBlank()) continue;
+                    String trimmed = symbol.trim();
+                    if (!allowedSymbols.contains(trimmed) && !invalidSymbols.contains(trimmed)) {
+                        invalidSymbols.add(trimmed);
+                    }
+                }
+            }
+            if (!invalidSymbols.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "CLAUDE_SCORES_SYMBOL_MISMATCH: task candidates=" + allowedSymbols
+                                + ", invalid submitted symbols=" + invalidSymbols
+                );
+            }
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("[AiTaskService] skip Claude score symbol validation task={} due to parse error: {}",
+                    task.getId(), e.getMessage());
         }
     }
 

@@ -103,25 +103,27 @@ public class T86DataPrepJob {
             List<String> symbols = candidates.stream()
                     .map(CandidateStockEntity::getSymbol)
                     .collect(Collectors.toList());
+            Long t86TaskId = null;
             try {
                 List<AiTaskCandidateRef> refs = candidates.stream()
                         .map(c -> new AiTaskCandidateRef(
                                 c.getSymbol(), c.getStockName(), c.getThemeTag(), null))
                         .collect(Collectors.toList());
-                aiTaskService.createTask(
+                var task = aiTaskService.createTask(
                         today, "T86_TOMORROW", null, refs,
                         "18:10 T86 確認後候選（共 " + refs.size() + " 檔），等 Claude 17:50 / Codex 17:58 接手",
                         "D:/ai/stock/claude-research-request.json"
                 );
+                t86TaskId = task.getId();
             } catch (Exception e) {
                 log.warn("[T86DataPrepJob] createTask 失敗: {}", e.getMessage());
             }
 
-            // 寫 Claude 研究請求檔，通知 Claude Code Agent 執行明日策略研究
+            // v2.5：寫 Claude 研究請求檔帶 taskId + allowed_symbols
             try {
                 String context = String.format("{\"t86_rows\":%d,\"candidates_with_flow\":%d}",
                         flows.size(), updated);
-                requestWriterService.writeRequest("T86_TOMORROW", today, symbols, context);
+                requestWriterService.writeRequest(t86TaskId, "T86_TOMORROW", today, symbols, context);
             } catch (Exception e) {
                 log.warn("[T86DataPrepJob] writeRequest 失敗: {}", e.getMessage());
             }

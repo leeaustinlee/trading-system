@@ -8,6 +8,7 @@ import com.austin.trading.entity.CandidateStockEntity;
 import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.CandidateScanService;
+import com.austin.trading.service.ClaudeCodeRequestWriterService;
 import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
@@ -44,6 +45,7 @@ public class OpenDataPrepJob {
     private final SchedulerLogService      schedulerLogService;
     private final DailyOrchestrationService orchestrationService;
     private final AiTaskService            aiTaskService;
+    private final ClaudeCodeRequestWriterService requestWriterService;
 
     public OpenDataPrepJob(
             TwseMisClient twseMisClient,
@@ -51,7 +53,8 @@ public class OpenDataPrepJob {
             CandidateStockRepository candidateStockRepository,
             SchedulerLogService schedulerLogService,
             DailyOrchestrationService orchestrationService,
-            AiTaskService aiTaskService
+            AiTaskService aiTaskService,
+            ClaudeCodeRequestWriterService requestWriterService
     ) {
         this.twseMisClient           = twseMisClient;
         this.candidateScanService    = candidateScanService;
@@ -59,6 +62,7 @@ public class OpenDataPrepJob {
         this.schedulerLogService     = schedulerLogService;
         this.orchestrationService    = orchestrationService;
         this.aiTaskService           = aiTaskService;
+        this.requestWriterService    = requestWriterService;
     }
 
     @Scheduled(cron = "${trading.scheduler.open-data-prep-cron:0 1 9 * * MON-FRI}",
@@ -107,18 +111,29 @@ public class OpenDataPrepJob {
             }
 
             // v2.1：建 OPENING ai_task（供 Claude 09:20 / Codex 09:28 接手，09:30 FinalDecision 讀取）
+            Long openingTaskId = null;
             try {
                 List<AiTaskCandidateRef> refs = candidates.stream()
                         .map(c -> new AiTaskCandidateRef(
                                 c.symbol(), c.stockName(), c.themeTag(), c.javaStructureScore()))
                         .collect(Collectors.toList());
-                aiTaskService.createTask(
+                var task = aiTaskService.createTask(
                         today, "OPENING", null, refs,
                         "09:01 開盤候選（共 " + refs.size() + " 檔），等 Claude 09:20 / Codex 09:28 接手",
                         "D:/ai/stock/claude-research-request.json"
                 );
+                openingTaskId = task.getId();
             } catch (Exception e) {
                 log.warn("[OpenDataPrepJob] createTask 失敗: {}", e.getMessage());
+            }
+
+            // v2.5：必寫 request.json 更新為 OPENING 候選，避免 Claude 讀到 08:10 PREMARKET 殘留內容
+            try {
+                String context = String.format("{\"source\":\"open_data_prep\",\"quotes\":%d,\"updated\":%d}",
+                        quotes.size(), updated);
+                requestWriterService.writeRequest(openingTaskId, "OPENING", today, symbols, context);
+            } catch (Exception e) {
+                log.warn("[OpenDataPrepJob] writeRequest 失敗: {}", e.getMessage());
             }
 
             String msg = String.format("symbols=%d quotes=%d updated=%d",

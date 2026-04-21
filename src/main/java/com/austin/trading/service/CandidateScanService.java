@@ -146,6 +146,8 @@ public class CandidateScanService {
             if (item.stockName()   != null) entity.setStockName(item.stockName());
             if (item.score()       != null) entity.setScore(item.score());
             if (item.reason()      != null) entity.setReason(item.reason());
+            if (item.themeTag()    != null) entity.setThemeTag(item.themeTag());
+            if (item.sector()      != null) entity.setSector(item.sector());
             if (item.payloadJson() != null) entity.setPayloadJson(item.payloadJson());
             candidateStockRepository.save(entity);
 
@@ -414,6 +416,8 @@ public class CandidateScanService {
         if (req.score()     != null) cand.setScore(req.score());
         if (req.reason()    != null) cand.setReason(req.reason());
         if (req.stockName() != null) cand.setStockName(req.stockName());
+        if (req.themeTag()  != null) cand.setThemeTag(req.themeTag());
+        if (req.sector()    != null) cand.setSector(req.sector());
         candidateStockRepository.save(cand);
 
         StockEvaluationEntity eval = stockEvaluationRepository

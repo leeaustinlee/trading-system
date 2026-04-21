@@ -68,15 +68,40 @@ public class ClaudeCodeRequestWriterService {
     }
 
     /**
-     * 寫出研究請求 JSON 給 Claude Code 排程 Agent 讀取。
-     *
-     * @param type             研究類型（PREMARKET / POSTMARKET / STOCK_EVAL / FINAL_DECISION / MIDDAY）
-     * @param tradingDate      交易日
-     * @param candidateSymbols 候選股代號清單（可為空）
-     * @param contextPayload   補充 context（已整理的 JSON 字串，可為 null）
-     * @return 是否成功寫入
+     * 舊版 API：不帶 taskId。為向下相容保留。
+     * <b>新程式碼請改用帶 taskId 的 overload。</b>
      */
     public boolean writeRequest(
+            String type,
+            LocalDate tradingDate,
+            List<String> candidateSymbols,
+            String contextPayload
+    ) {
+        return writeRequest(null, type, tradingDate, candidateSymbols, contextPayload);
+    }
+
+    /**
+     * v2.5：寫出研究請求 JSON。新版契約加入 <b>taskId + allowed_symbols</b>，
+     * 讓 Claude Code Agent 有絕對、可驗證的 score universe，避免跨時段沿用上一輪 symbols。
+     *
+     * <pre>{@code
+     * {
+     *   "taskId": 8,
+     *   "taskType": "OPENING",
+     *   "type": "OPENING",                    // 舊鍵名保留，= taskType
+     *   "trading_date": "2026-04-21",
+     *   "candidates": ["3189","4958",...],     // 舊鍵名保留
+     *   "allowed_symbols": ["3189","4958",...], // v2.5 明確契約：score/thesis keys 必須 ⊆ 此 set
+     *   "contract_note": "scores.keys 與 thesis.keys 必須是 allowed_symbols 子集；其他 symbol 一律丟棄",
+     *   "market_context": "...",
+     *   "rules_files": [...],
+     *   "output_path": ".../claude-research-latest.md",
+     *   "submit_filename_hint": "claude-OPENING-2026-04-21-0920-task-8.json"
+     * }
+     * }</pre>
+     */
+    public boolean writeRequest(
+            Long taskId,
             String type,
             LocalDate tradingDate,
             List<String> candidateSymbols,
@@ -91,14 +116,27 @@ public class ClaudeCodeRequestWriterService {
         try {
             ObjectNode root = objectMapper.createObjectNode();
             root.put("requested_at", LocalDateTime.now().format(DT_FMT));
-            root.put("type", type);
+
+            // v2.5 明確 routing
+            if (taskId != null) root.put("taskId", taskId);
+            if (type != null)   root.put("taskType", type);
+            root.put("type", type);                           // 舊欄位保留
             root.put("trading_date", tradingDate.toString());
 
-            // 候選股
-            ArrayNode symbols = root.putArray("candidates");
+            // 候選股（舊鍵名 + 明確 allowed_symbols 重複一次）
+            ArrayNode candidates = root.putArray("candidates");
+            ArrayNode allowed    = root.putArray("allowed_symbols");
             if (candidateSymbols != null) {
-                candidateSymbols.forEach(symbols::add);
+                for (String s : candidateSymbols) {
+                    if (s == null || s.isBlank()) continue;
+                    candidates.add(s.trim());
+                    allowed.add(s.trim());
+                }
             }
+            root.put("contract_note",
+                    "scores.keys 與 thesis.keys 必須是 allowed_symbols 的子集；"
+                            + "不在此清單的 symbol 一律丟棄。前一輪（例如 PREMARKET）的 symbols 僅可作為背景，"
+                            + "嚴禁直接複製到本輪 scores/thesis。");
 
             // 補充 context（由 caller 傳入，如 txf 報價、大盤漲跌家數等）
             if (contextPayload != null && !contextPayload.isBlank()) {
@@ -115,14 +153,22 @@ public class ClaudeCodeRequestWriterService {
                 root.put("output_path", outputPath);
             }
 
+            // 建議檔名（包含 taskId，bridge 可直接從檔名解 routing）
+            if (taskId != null) {
+                String hhmm = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HHmm"));
+                root.put("submit_filename_hint",
+                        String.format("claude-%s-%s-%s-task-%d.json",
+                                type, tradingDate, hhmm, taskId));
+            }
+
             String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
             Path dest = Paths.get(path);
             if (dest.getParent() != null) {
                 Files.createDirectories(dest.getParent());
             }
             Files.writeString(dest, json, StandardCharsets.UTF_8);
-            log.info("[ClaudeCodeRequestWriter] Written type={} candidates={} to {}",
-                    type, candidateSymbols == null ? 0 : candidateSymbols.size(), path);
+            log.info("[ClaudeCodeRequestWriter] Written taskId={} type={} candidates={} to {}",
+                    taskId, type, candidateSymbols == null ? 0 : candidateSymbols.size(), path);
             return true;
 
         } catch (Exception e) {

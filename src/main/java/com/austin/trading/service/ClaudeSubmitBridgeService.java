@@ -177,6 +177,17 @@ public class ClaudeSubmitBridgeService {
                     e.getErrorCode().name(), e.getMessage(), fileHash);
             moveToFailed(file, displayName, e);
             sendSystemAlert(displayName, e.getErrorCode().name(), e.getMessage());
+        } catch (IllegalArgumentException e) {
+            // v2.5：CLAUDE_SCORES_SYMBOL_MISMATCH / 其他內容驗證錯誤 → 走 failed（重試也無意義，是 symbol mismatch）
+            String msg = e.getMessage() == null ? "" : e.getMessage();
+            String code = msg.startsWith("CLAUDE_SCORES_SYMBOL_MISMATCH:")
+                    ? "CLAUDE_SCORES_SYMBOL_MISMATCH"
+                    : "VALIDATION_ERROR";
+            log.warn("[ClaudeSubmitBridge] ❌ {} rejected ({}): {}", displayName, code, msg);
+            logError(displayName, resolvedTaskId, resolvedTaskType, resolvedTradingDate,
+                    code, msg, fileHash);
+            moveToFailed(file, displayName, e);
+            sendSystemAlert(displayName, code, msg);
         } catch (Exception e) {
             log.error("[ClaudeSubmitBridge] ❌ {}: {}", displayName, e.getMessage(), e);
             logError(displayName, resolvedTaskId, resolvedTaskType, resolvedTradingDate,
