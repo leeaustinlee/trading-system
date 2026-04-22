@@ -39,7 +39,10 @@ import com.austin.trading.repository.PositionRepository;
 import com.austin.trading.repository.StockEvaluationRepository;
 import com.austin.trading.repository.WatchlistStockRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -378,15 +381,32 @@ public class FinalDecisionService {
                 })
                 .toList();
 
+        // v2.8：依 AI source taskType 決定盤中 vs 盤後規劃模式
+        com.austin.trading.domain.enums.DecisionPlanningMode planningMode =
+                com.austin.trading.domain.enums.DecisionPlanningMode.fromTaskType(
+                        readiness == null ? null : readiness.sourceTaskType());
+
+        // 盤後規劃模式忽略 decisionLock（日內 gate 不應污染明日規劃）
+        String effectiveDecisionLock = planningMode.isPostClosePlanning()
+                ? "NONE"
+                : decisionLock;
+
         FinalDecisionEvaluateRequest request = new FinalDecisionEvaluateRequest(
                 marketGrade,
-                decisionLock,
+                effectiveDecisionLock,
                 timeDecay,
                 hasPosition,
                 scoredCandidates
         );
 
-        FinalDecisionResponse decision = finalDecisionEngine.evaluate(request);
+        log.info("[FinalDecision] planningMode={} sourceTaskType={} effectiveDecisionLock={}",
+                planningMode, readiness == null ? null : readiness.sourceTaskType(), effectiveDecisionLock);
+
+        FinalDecisionResponse decision = finalDecisionEngine.evaluate(
+                request,
+                com.austin.trading.domain.enums.MarketSession.fromTime(
+                        java.time.LocalTime.now(java.time.ZoneId.of("Asia/Taipei"))),
+                planningMode);
 
         // 建立 candidateMap 以便回查估值模式
         Map<String, FinalDecisionCandidateRequest> candidateMap = scoredCandidates.stream()
@@ -479,8 +499,10 @@ public class FinalDecisionService {
                     String.join(",", momentumSummary) + "）；倉位已壓低、停損收緊。";
         }
 
+        // v2.8：保留原 decision 的 planningPayload（盤後規劃模式用）
         FinalDecisionResponse enrichedDecision = new FinalDecisionResponse(
-                finalDecisionCode, merged, decision.rejectedReasons(), summary);
+                finalDecisionCode, merged, decision.rejectedReasons(), summary,
+                decision.planningPayload());
 
         // v2.2: 走 persistAndReturn 確保「產生 FinalDecision → finalize AI task」原子執行
         return persistAndReturnWithStrategy(tradingDate, enrichedDecision, readiness, strategyType);
@@ -896,14 +918,18 @@ public class FinalDecisionService {
 
     private String toPayload(FinalDecisionResponse decision) {
         try {
-            return objectMapper.writeValueAsString(Map.of(
-                    "decision",        decision.decision() == null ? "" : decision.decision(),
-                    "selected_count",  decision.selectedStocks().size(),
-                    "rejected_count",  decision.rejectedReasons().size(),
-                    "selected_stocks", decision.selectedStocks(),
-                    "rejected_reasons",decision.rejectedReasons(),
-                    "summary",         decision.summary() == null ? "" : decision.summary()
-            ));
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("decision",         decision.decision() == null ? "" : decision.decision());
+            body.put("selected_count",   decision.selectedStocks().size());
+            body.put("rejected_count",   decision.rejectedReasons().size());
+            body.put("selected_stocks",  decision.selectedStocks());
+            body.put("rejected_reasons", decision.rejectedReasons());
+            body.put("summary",          decision.summary() == null ? "" : decision.summary());
+            // v2.8：盤後規劃模式帶 planningPayload（primary/backup/sectorIndicators/avoidSymbols/tomorrowExecutionNotes）
+            if (decision.planningPayload() != null && !decision.planningPayload().isEmpty()) {
+                body.put("planning", decision.planningPayload());
+            }
+            return objectMapper.writeValueAsString(body);
         } catch (JsonProcessingException e) {
             log.warn("toPayload serialization failed", e);
             return "{\"decision\":\"" + decision.decision() + "\"," +
@@ -1064,68 +1090,65 @@ public class FinalDecisionService {
     private String buildVetoTracePayload(BigDecimal rawRank, BigDecimal penalty,
                                           List<String> hardReasons, List<String> penaltyReasons,
                                           String bucket, String existingPayload) {
-        String hardJson    = jsonStringArray(hardReasons);
-        String penaltyJson = jsonStringArray(penaltyReasons);
-        String trace = String.format(
-                "\"veto_trace\":{\"bucket\":%s,\"raw_rank\":%s,\"penalty\":%s," +
-                "\"final_rank\":%s,\"hard_reasons\":%s,\"penalty_reasons\":%s}",
-                bucket == null ? "null" : "\"" + bucket + "\"",
-                rawRank == null ? "null" : rawRank.toPlainString(),
-                penalty == null ? "null" : penalty.toPlainString(),
-                rawRank == null || penalty == null
-                        ? "null"
-                        : rawRank.subtract(penalty).max(BigDecimal.ZERO).toPlainString(),
-                hardJson, penaltyJson
-        );
-
-        if (existingPayload == null || existingPayload.isBlank()
-                || !existingPayload.trim().startsWith("{")) {
-            return "{" + trace + "}";
+        try {
+            ObjectNode root = parsePayloadObject(existingPayload);
+            ObjectNode vetoTrace = objectMapper.createObjectNode();
+            if (bucket != null) {
+                vetoTrace.put("bucket", bucket);
+            } else {
+                vetoTrace.putNull("bucket");
+            }
+            if (rawRank != null) {
+                vetoTrace.put("raw_rank", rawRank);
+            } else {
+                vetoTrace.putNull("raw_rank");
+            }
+            if (penalty != null) {
+                vetoTrace.put("penalty", penalty);
+            } else {
+                vetoTrace.putNull("penalty");
+            }
+            BigDecimal finalRank = rawRank == null || penalty == null
+                    ? null
+                    : rawRank.subtract(penalty).max(BigDecimal.ZERO);
+            if (finalRank != null) {
+                vetoTrace.put("final_rank", finalRank);
+            } else {
+                vetoTrace.putNull("final_rank");
+            }
+            vetoTrace.set("hard_reasons", toArrayNode(hardReasons));
+            vetoTrace.set("penalty_reasons", toArrayNode(penaltyReasons));
+            root.set("veto_trace", vetoTrace);
+            return objectMapper.writeValueAsString(root);
+        } catch (Exception e) {
+            log.warn("[FinalDecisionService] buildVetoTracePayload failed, fallback to minimal payload", e);
+            return "{\"veto_trace\":{\"bucket\":\""
+                    + (bucket == null ? "" : bucket.replace("\"", "\\\""))
+                    + "\"}}";
         }
-        String trimmed = existingPayload.trim();
-        if (trimmed.equals("{}")) return "{" + trace + "}";
-        // 合併：保留原物件，把 veto_trace 覆寫/加入
-        // 簡化處理：若已有 veto_trace 字串就丟棄舊的再加新
-        int vtIdx = trimmed.indexOf("\"veto_trace\"");
-        if (vtIdx >= 0) {
-            // 粗略移除舊 veto_trace（找到對應的 } 與末尾逗號）
-            return "{" + trace + "," +
-                    stripVetoTrace(trimmed.substring(1, trimmed.length() - 1)) + "}";
-        }
-        return "{" + trace + "," + trimmed.substring(1);
     }
 
-    private String jsonStringArray(List<String> values) {
-        if (values == null || values.isEmpty()) return "[]";
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < values.size(); i++) {
-            if (i > 0) sb.append(',');
-            sb.append('"').append(values.get(i).replace("\"", "\\\"")).append('"');
+    private ArrayNode toArrayNode(List<String> values) {
+        ArrayNode array = objectMapper.createArrayNode();
+        if (values != null) {
+            values.forEach(array::add);
         }
-        return sb.append(']').toString();
+        return array;
     }
 
-    /** 粗略移除舊 veto_trace 區塊；因 payload 小 + 手寫格式固定，用字串操作即可。 */
-    private String stripVetoTrace(String inner) {
-        int start = inner.indexOf("\"veto_trace\"");
-        if (start < 0) return inner;
-        int braceStart = inner.indexOf('{', start);
-        if (braceStart < 0) return inner;
-        int depth = 1;
-        int i = braceStart + 1;
-        while (i < inner.length() && depth > 0) {
-            char ch = inner.charAt(i);
-            if (ch == '{') depth++;
-            else if (ch == '}') depth--;
-            i++;
+    private ObjectNode parsePayloadObject(String existingPayload) {
+        if (existingPayload == null || existingPayload.isBlank()) {
+            return objectMapper.createObjectNode();
         }
-        String before = start > 0 ? inner.substring(0, start) : "";
-        String after  = i < inner.length() ? inner.substring(i) : "";
-        // 清理連續逗號
-        if (before.endsWith(",")) before = before.substring(0, before.length() - 1);
-        if (after.startsWith(","))  after  = after.substring(1);
-        if (!before.isEmpty() && !after.isEmpty()) return before + "," + after;
-        return before + after;
+        try {
+            JsonNode node = objectMapper.readTree(existingPayload);
+            if (node != null && node.isObject()) {
+                return (ObjectNode) node.deepCopy();
+            }
+        } catch (Exception e) {
+            log.warn("[FinalDecisionService] invalid existing payload_json, reset veto_trace payload: {}", e.getMessage());
+        }
+        return objectMapper.createObjectNode();
     }
 
     /**

@@ -98,6 +98,32 @@ public class DecisionController {
         return finalDecisionService.evaluateAndPersist(date != null ? date : LocalDate.now());
     }
 
+    /**
+     * v2.8：手動指定 AI source taskType 重算（盤後明日規劃常用）。
+     *
+     * <p>範例：</p>
+     * <pre>
+     * POST /api/decisions/final/evaluate-persist-by-source?date=2026-04-22&amp;taskType=T86_TOMORROW
+     * </pre>
+     *
+     * <p>taskType 允許值：{@code PREMARKET / OPENING / MIDDAY / POSTMARKET / T86_TOMORROW}。
+     * 若指定 taskType 有對應 task 存在，會嚴格使用該 task 作為 AI source，
+     * 不再 fallback 到 OPENING/PREMARKET。</p>
+     *
+     * <p>POSTMARKET / T86_TOMORROW 會自動進入 {@code POSTCLOSE_TOMORROW_PLAN} 模式，
+     * 輸出 primary/backup/sectorIndicators/avoidSymbols 結構化明日規劃。</p>
+     */
+    @PostMapping("/final/evaluate-persist-by-source")
+    public FinalDecisionResponse evaluateAndPersistBySource(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam String taskType
+    ) {
+        return finalDecisionService.evaluateAndPersist(
+                date != null ? date : LocalDate.now(),
+                taskType);
+    }
+
     @GetMapping("/hourly-gate/current")
     public ResponseEntity<HourlyGateDecisionRecordResponse> getCurrentHourlyGate() {
         return hourlyGateDecisionService.getCurrent()

@@ -1,5 +1,6 @@
 package com.austin.trading.engine;
 
+import com.austin.trading.domain.enums.DecisionPlanningMode;
 import com.austin.trading.domain.enums.MarketSession;
 import com.austin.trading.dto.request.FinalDecisionCandidateRequest;
 import com.austin.trading.dto.request.FinalDecisionEvaluateRequest;
@@ -15,8 +16,10 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * 最終決策引擎（v2.6 MVP Refactor：三層分級）。
@@ -55,19 +58,44 @@ public class FinalDecisionEngine {
     }
 
     public FinalDecisionResponse evaluate(FinalDecisionEvaluateRequest request) {
-        return evaluate(request, MarketSession.fromTime(LocalTime.now(MARKET_ZONE)));
+        return evaluate(request, MarketSession.fromTime(LocalTime.now(MARKET_ZONE)),
+                DecisionPlanningMode.INTRADAY_ENTRY);
     }
 
     /**
-     * v2.7 Session-Aware overload：允許呼叫方（或測試）明確指定 session。
-     *
-     * <p>非 {@link MarketSession#LIVE_TRADING} 時直接回 {@code WAIT}：
-     * <ul>
-     *   <li>PREMARKET（08:30-09:00）：試撮時段，不可用試撮價做決策</li>
-     *   <li>OPEN_VALIDATION（09:00-09:30）：開盤驗證中，資料更新但未到決策時機</li>
-     * </ul>
+     * v2.7 Session-Aware overload（維持向下相容）：預設盤中進場模式。
      */
     public FinalDecisionResponse evaluate(FinalDecisionEvaluateRequest request, MarketSession session) {
+        return evaluate(request, session, DecisionPlanningMode.INTRADAY_ENTRY);
+    }
+
+    /**
+     * v2.8 主入口：允許呼叫方明確指定 session + planning mode。
+     *
+     * <h3>兩種模式差異</h3>
+     * <ul>
+     *   <li>{@link DecisionPlanningMode#INTRADAY_ENTRY} — 盤中進場（原行為）：
+     *       受 session gate、受 decisionLock 管控，輸出 ENTER/REST/WAIT + A+/A/B bucket</li>
+     *   <li>{@link DecisionPlanningMode#POSTCLOSE_TOMORROW_PLAN} — 盤後明日規劃：
+     *       忽略 session（盤後本來就是收盤後）、忽略 decisionLock（日內 lock 不該污染明日規劃）、
+     *       輸出 decision=PLAN + primary/backup/sectorIndicators/avoidSymbols，
+     *       summary 改為人可讀的盤後語意</li>
+     * </ul>
+     */
+    public FinalDecisionResponse evaluate(FinalDecisionEvaluateRequest request,
+                                           MarketSession session,
+                                           DecisionPlanningMode mode) {
+        if (mode == DecisionPlanningMode.POSTCLOSE_TOMORROW_PLAN) {
+            return evaluatePostclosePlan(request);
+        }
+        return evaluateIntradayEntry(request, session);
+    }
+
+    /**
+     * 盤中進場模式（v2.7 session-aware + v2.6 三層分級）。
+     */
+    private FinalDecisionResponse evaluateIntradayEntry(FinalDecisionEvaluateRequest request,
+                                                          MarketSession session) {
         // v2.7 Session-Aware gate
         if (!session.allowsFinalDecision()) {
             String summary = session == MarketSession.PREMARKET
@@ -259,6 +287,182 @@ public class FinalDecisionEngine {
 
     private FinalDecisionResponse rest(String summary, List<String> rejectedReasons) {
         return new FinalDecisionResponse("REST", List.of(), rejectedReasons, summary);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // v2.8 盤後明日規劃模式 (POSTCLOSE_TOMORROW_PLAN)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * 盤後明日規劃：不輸出 ENTER/REST，而是輸出明日準備清單。
+     *
+     * <p>與 INTRADAY_ENTRY 差異：</p>
+     * <ul>
+     *   <li>忽略 {@code decisionLock}（日內 gate，不該污染明日規劃）</li>
+     *   <li>忽略 session（盤後本來就不在 LIVE_TRADING 時段）</li>
+     *   <li>market=C 時仍輸出 PLAN（盤後看明日，今日 C 不等於明日 C）</li>
+     *   <li>分組：primary（首選）/ backup（備援）/ sectorIndicators（族群燈號不追）/ avoid（明確排除）</li>
+     *   <li>summary 為人可讀盤後語意：「明日首選 8150，備援 6770；2454/8028 族群燈號不追價」</li>
+     * </ul>
+     */
+    private FinalDecisionResponse evaluatePostclosePlan(FinalDecisionEvaluateRequest request) {
+        BigDecimal gradeApMin       = config.getDecimal("scoring.grade_ap_min", new BigDecimal("8.5"));
+        BigDecimal gradeAMin        = config.getDecimal("scoring.grade_a_min",  new BigDecimal("7.6"));
+        BigDecimal gradeBMin        = config.getDecimal("scoring.grade_b_min",  new BigDecimal("6.8"));
+        BigDecimal planSectorHigh   = config.getDecimal("plan.sector_indicator_min", new BigDecimal("7.8"));
+        BigDecimal planAvoidMax     = config.getDecimal("plan.avoid_score_max",      new BigDecimal("4.5"));
+        BigDecimal mainStreamBoost  = config.getDecimal("ranking.main_stream_boost", new BigDecimal("0.3"));
+        int maxPrimary              = config.getInt("plan.max_primary", 2);
+        int maxBackup               = config.getInt("plan.max_backup",  3);
+
+        List<FinalDecisionCandidateRequest> candidates =
+                request.candidates() == null ? List.of() : request.candidates();
+
+        List<FinalDecisionCandidateRequest> primary         = new ArrayList<>();
+        List<FinalDecisionCandidateRequest> backup          = new ArrayList<>();
+        List<FinalDecisionCandidateRequest> sectorIndicator = new ArrayList<>();
+        List<String> avoidSymbols = new ArrayList<>();
+        List<String> rejected     = new ArrayList<>();
+
+        for (FinalDecisionCandidateRequest c : candidates) {
+            if (Boolean.TRUE.equals(c.isVetoed())) {
+                avoidSymbols.add(c.stockCode() + " [HARD_VETOED]");
+                continue;
+            }
+            if (Boolean.TRUE.equals(c.falseBreakout())) {
+                avoidSymbols.add(c.stockCode() + " [FALSE_BREAKOUT]");
+                continue;
+            }
+
+            BigDecimal rankScore = c.finalRankScore();
+            if (rankScore == null) {
+                rejected.add(c.stockCode() + " 無排序分數");
+                continue;
+            }
+
+            double rr = c.riskRewardRatio() == null ? 0.0 : c.riskRewardRatio();
+            BigDecimal adjustedRank = rankScore;
+            if (Boolean.TRUE.equals(c.mainStream())) {
+                adjustedRank = rankScore.add(mainStreamBoost);
+            }
+
+            // 分類規則（盤後語意）：
+            // - score >= sector_indicator_min (7.8) 且 extended（如漲停）→ sectorIndicator（不追）
+            // - score >= grade_a_min (7.6)            → primary（明日首選）
+            // - score >= grade_b_min (6.8)            → backup（明日備援）
+            // - score <= avoid_score_max (4.5)        → avoidSymbols（明確排除）
+            // - 其他                                   → 平庸（不入規劃但不排除）
+            boolean extended = Boolean.TRUE.equals(c.entryTooExtended());
+            if (adjustedRank.compareTo(planSectorHigh) >= 0 && extended) {
+                sectorIndicator.add(c);
+            } else if (adjustedRank.compareTo(gradeAMin) >= 0) {
+                primary.add(c);
+            } else if (adjustedRank.compareTo(gradeBMin) >= 0) {
+                backup.add(c);
+            } else if (adjustedRank.compareTo(planAvoidMax) <= 0) {
+                avoidSymbols.add(c.stockCode() + " [LOW_SCORE score=" + rankScore + "]");
+            } else {
+                rejected.add(c.stockCode() + " 中段評分，非主規劃（score=" + rankScore + "）");
+            }
+        }
+
+        // 各桶按 rank 降序
+        Comparator<FinalDecisionCandidateRequest> byScoreDesc = Comparator.comparing(
+                (FinalDecisionCandidateRequest c) -> c.finalRankScore() == null
+                        ? 0.0 : c.finalRankScore().doubleValue()
+        ).reversed();
+        primary.sort(byScoreDesc);
+        backup.sort(byScoreDesc);
+        sectorIndicator.sort(byScoreDesc);
+
+        // trim to max
+        if (primary.size() > maxPrimary) primary = primary.subList(0, maxPrimary);
+        if (backup.size()  > maxBackup)  backup  = backup.subList(0, maxBackup);
+
+        // 建 selectedStocks（primary 合併 backup）方便向下相容的 UI 顯示
+        List<FinalDecisionSelectedStockResponse> selected = new ArrayList<>();
+        primary.forEach(c -> selected.add(toSelected(c)));
+        backup.forEach(c -> selected.add(toSelected(c)));
+
+        // 人可讀 summary
+        String summary = buildPostcloseSummary(primary, backup, sectorIndicator, avoidSymbols);
+
+        // 結構化 planningPayload
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("primaryCandidates",  primary.stream().map(FinalDecisionCandidateRequest::stockCode).toList());
+        payload.put("backupCandidates",   backup.stream().map(FinalDecisionCandidateRequest::stockCode).toList());
+        payload.put("sectorIndicators",   sectorIndicator.stream().map(FinalDecisionCandidateRequest::stockCode).toList());
+        payload.put("avoidSymbols",       avoidSymbols);
+        payload.put("tomorrowExecutionNotes", buildExecutionNotes(primary, backup, sectorIndicator));
+        payload.put("mode", "POSTCLOSE_TOMORROW_PLAN");
+
+        log.info("[FinalDecisionEngine] PLAN primary={} backup={} sector={} avoid={}",
+                primary.size(), backup.size(), sectorIndicator.size(), avoidSymbols.size());
+
+        return new FinalDecisionResponse(
+                "PLAN",
+                selected,
+                rejected,
+                summary,
+                payload
+        );
+    }
+
+    private String buildPostcloseSummary(List<FinalDecisionCandidateRequest> primary,
+                                          List<FinalDecisionCandidateRequest> backup,
+                                          List<FinalDecisionCandidateRequest> sectorIndicator,
+                                          List<String> avoidSymbols) {
+        StringBuilder sb = new StringBuilder();
+        if (primary.isEmpty() && backup.isEmpty() && sectorIndicator.isEmpty()) {
+            sb.append("明日無主規劃標的（評分全 C）；持倉管理為主。");
+        } else {
+            if (!primary.isEmpty()) {
+                sb.append("明日首選 ")
+                  .append(primary.stream().map(FinalDecisionCandidateRequest::stockCode)
+                          .reduce((a, b) -> a + "/" + b).orElse(""));
+            }
+            if (!backup.isEmpty()) {
+                if (sb.length() > 0) sb.append("，");
+                sb.append("備援 ")
+                  .append(backup.stream().map(FinalDecisionCandidateRequest::stockCode)
+                          .reduce((a, b) -> a + "/" + b).orElse(""));
+            }
+            if (!sectorIndicator.isEmpty()) {
+                if (sb.length() > 0) sb.append("；");
+                sb.append(sectorIndicator.stream().map(FinalDecisionCandidateRequest::stockCode)
+                         .reduce((a, b) -> a + "/" + b).orElse(""))
+                  .append(" 為族群燈號不追價");
+            }
+            sb.append("。");
+        }
+        if (!avoidSymbols.isEmpty()) {
+            sb.append(" 排除 ").append(avoidSymbols.size()).append(" 檔。");
+        }
+        return sb.toString();
+    }
+
+    private List<String> buildExecutionNotes(List<FinalDecisionCandidateRequest> primary,
+                                              List<FinalDecisionCandidateRequest> backup,
+                                              List<FinalDecisionCandidateRequest> sectorIndicator) {
+        List<String> notes = new ArrayList<>();
+        primary.forEach(c -> notes.add(
+                String.format("%s 明日主攻：進場 %s / 停損 %s / TP1 %s / TP2 %s",
+                        c.stockCode(),
+                        c.entryPriceZone() == null ? "-" : c.entryPriceZone(),
+                        c.stopLossPrice() == null ? "-" : c.stopLossPrice(),
+                        c.takeProfit1()   == null ? "-" : c.takeProfit1(),
+                        c.takeProfit2()   == null ? "-" : c.takeProfit2())));
+        backup.forEach(c -> notes.add(
+                String.format("%s 備援：守 %s 可試 / 跌破即降級",
+                        c.stockCode(),
+                        c.stopLossPrice() == null ? "-" : c.stopLossPrice())));
+        if (!sectorIndicator.isEmpty()) {
+            notes.add("族群燈號觀察：" +
+                    sectorIndicator.stream().map(FinalDecisionCandidateRequest::stockCode)
+                            .reduce((a, b) -> a + "/" + b).orElse("") +
+                    " 漲停打開爆量長黑即全面降級");
+        }
+        return notes;
     }
 
     private String normalize(String value) {

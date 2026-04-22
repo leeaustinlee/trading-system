@@ -1,5 +1,6 @@
 package com.austin.trading.engine;
 
+import com.austin.trading.domain.enums.DecisionPlanningMode;
 import com.austin.trading.domain.enums.MarketSession;
 import com.austin.trading.dto.request.FinalDecisionCandidateRequest;
 import com.austin.trading.dto.request.FinalDecisionEvaluateRequest;
@@ -12,6 +13,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -36,9 +38,14 @@ class FinalDecisionEngineTests {
         when(config.getDecimal(eq("scoring.grade_b_min"),  any())).thenReturn(new BigDecimal("6.8"));
         when(config.getDecimal(eq("scoring.rr_min_ap"),    any())).thenReturn(new BigDecimal("2.2"));
         when(config.getDecimal(eq("ranking.main_stream_boost"), any())).thenReturn(new BigDecimal("0.3"));
+        // v2.8 盤後規劃 config
+        when(config.getDecimal(eq("plan.sector_indicator_min"), any())).thenReturn(new BigDecimal("7.8"));
+        when(config.getDecimal(eq("plan.avoid_score_max"),      any())).thenReturn(new BigDecimal("4.5"));
         when(config.getInt(eq("decision.max_pick_aplus"), anyInt())).thenReturn(2);
         when(config.getInt(eq("decision.max_pick_a"),     anyInt())).thenReturn(2);
         when(config.getInt(eq("decision.max_pick_b"),     anyInt())).thenReturn(1);
+        when(config.getInt(eq("plan.max_primary"),        anyInt())).thenReturn(2);
+        when(config.getInt(eq("plan.max_backup"),         anyInt())).thenReturn(3);
         when(config.getBoolean(eq("decision.require_entry_trigger"), anyBoolean())).thenReturn(true);
         when(config.getString(any(), any())).thenReturn("A");
         engine = new FinalDecisionEngine(config);
@@ -261,6 +268,89 @@ class FinalDecisionEngineTests {
                 "LIVE_TRADING 時 belowOpen=true 應被 validateBasicConditions 擋");
     }
 
+    // ── v2.8 POSTCLOSE_TOMORROW_PLAN 模式 ───────────────────────────────────
+
+    @Test
+    void postclosePlan_mixedCandidates_bucketsCorrectly() {
+        // primary(A score≥7.6) + backup(B score≥6.8) + avoid(score≤4.5)
+        FinalDecisionResponse result = engine.evaluate(
+                new FinalDecisionEvaluateRequest("B", "NONE", "EARLY", false, List.of(
+                        candidate("8150", 2.0, "VALUE_FAIR", new BigDecimal("7.8")),   // primary
+                        candidate("6770", 2.0, "VALUE_FAIR", new BigDecimal("7.0")),   // backup
+                        candidate("2337", 2.0, "VALUE_FAIR", new BigDecimal("4.0"))    // avoid
+                )),
+                MarketSession.LIVE_TRADING,
+                DecisionPlanningMode.POSTCLOSE_TOMORROW_PLAN);
+
+        assertEquals("PLAN", result.decision());
+        assertTrue(result.summary().contains("8150") || result.summary().contains("首選"),
+                "summary 應含首選：" + result.summary());
+        assertNotNull(result.planningPayload());
+        Object primary = result.planningPayload().get("primaryCandidates");
+        assertTrue(primary instanceof List && ((List<?>) primary).contains("8150"));
+        Object backup = result.planningPayload().get("backupCandidates");
+        assertTrue(backup instanceof List && ((List<?>) backup).contains("6770"));
+        Object avoid = result.planningPayload().get("avoidSymbols");
+        assertTrue(avoid instanceof List);
+        assertTrue(((List<?>) avoid).stream().anyMatch(s -> s.toString().contains("2337")));
+    }
+
+    @Test
+    void postclosePlan_ignoresDecisionLock() {
+        // LOCKED 在盤後模式下應被忽略（日內 gate，不污染明日規劃）
+        FinalDecisionResponse result = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "LOCKED", "EARLY", false, List.of(
+                        candidate("8150", 2.0, "VALUE_FAIR", new BigDecimal("7.8"))
+                )),
+                MarketSession.LIVE_TRADING,
+                DecisionPlanningMode.POSTCLOSE_TOMORROW_PLAN);
+        assertEquals("PLAN", result.decision(),
+                "POSTCLOSE_TOMORROW_PLAN 模式應忽略 decisionLock");
+    }
+
+    @Test
+    void postclosePlan_notAffectedBySession() {
+        // 盤後一定不在 LIVE_TRADING，但 plan 模式不用 session gate
+        FinalDecisionResponse result = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(
+                        candidate("8150", 2.0, "VALUE_FAIR", new BigDecimal("7.8"))
+                )),
+                MarketSession.PREMARKET,  // 盤前試撮時段
+                DecisionPlanningMode.POSTCLOSE_TOMORROW_PLAN);
+        assertEquals("PLAN", result.decision(),
+                "POSTCLOSE_TOMORROW_PLAN 不受 session gate 限制");
+    }
+
+    @Test
+    void postclosePlan_extendedHighScore_becomesSectorIndicator() {
+        // 高分 + extended（如鎖漲停）→ 歸為族群燈號不追價
+        FinalDecisionResponse result = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(
+                        candidateCustom("2454", 2.5, "VALUE_FAIR",
+                                new BigDecimal("8.2"),  // >= sector_indicator_min 7.8
+                                /*mainStream*/ true,
+                                /*entryTriggered*/ true,
+                                /*belowOpen*/ false,
+                                /*entryTooExtended*/ true)
+                )),
+                MarketSession.LIVE_TRADING,
+                DecisionPlanningMode.POSTCLOSE_TOMORROW_PLAN);
+        Object sectorInd = result.planningPayload().get("sectorIndicators");
+        assertTrue(sectorInd instanceof List && ((List<?>) sectorInd).contains("2454"),
+                "extended 高分股應進 sectorIndicators：" + sectorInd);
+    }
+
+    @Test
+    void postclosePlan_emptyCandidates_fallbackSummary() {
+        FinalDecisionResponse result = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of()),
+                MarketSession.LIVE_TRADING,
+                DecisionPlanningMode.POSTCLOSE_TOMORROW_PLAN);
+        assertEquals("PLAN", result.decision());
+        assertTrue(result.summary().contains("無主規劃") || result.summary().contains("持倉管理"),
+                "無候選時應輸出『持倉管理為主』類 summary：" + result.summary());
+    }
+
     // ── Hard veto skip ───────────────────────────────────────────────────────
 
     @Test
@@ -288,14 +378,14 @@ class FinalDecisionEngineTests {
                                                               String valuationMode, BigDecimal finalRankScore,
                                                               boolean vetoed) {
         return buildCandidate(code, rr, valuationMode, finalRankScore, vetoed,
-                /*mainStream*/ true, /*entryTriggered*/ true, /*belowOpen*/ false);
+                /*mainStream*/ true, /*entryTriggered*/ true, /*belowOpen*/ false, /*entryTooExtended*/ false);
     }
 
     private FinalDecisionCandidateRequest candidateCustom(String code, double rr,
                                                            String valuationMode, BigDecimal finalRankScore,
                                                            boolean mainStream, boolean entryTriggered) {
         return buildCandidate(code, rr, valuationMode, finalRankScore, false,
-                mainStream, entryTriggered, false);
+                mainStream, entryTriggered, false, false);
     }
 
     private FinalDecisionCandidateRequest candidateCustom(String code, double rr,
@@ -303,13 +393,22 @@ class FinalDecisionEngineTests {
                                                            boolean mainStream, boolean entryTriggered,
                                                            boolean belowOpen) {
         return buildCandidate(code, rr, valuationMode, finalRankScore, false,
-                mainStream, entryTriggered, belowOpen);
+                mainStream, entryTriggered, belowOpen, false);
+    }
+
+    private FinalDecisionCandidateRequest candidateCustom(String code, double rr,
+                                                           String valuationMode, BigDecimal finalRankScore,
+                                                           boolean mainStream, boolean entryTriggered,
+                                                           boolean belowOpen, boolean entryTooExtended) {
+        return buildCandidate(code, rr, valuationMode, finalRankScore, false,
+                mainStream, entryTriggered, belowOpen, entryTooExtended);
     }
 
     private FinalDecisionCandidateRequest buildCandidate(String code, double rr,
                                                           String valuationMode, BigDecimal finalRankScore,
                                                           boolean vetoed, boolean mainStream,
-                                                          boolean entryTriggered, boolean belowOpen) {
+                                                          boolean entryTriggered, boolean belowOpen,
+                                                          boolean entryTooExtended) {
         return new FinalDecisionCandidateRequest(
                 code,
                 "TEST-" + code,
@@ -333,7 +432,7 @@ class FinalDecisionEngineTests {
                 null, null,         // baseScore, hasTheme
                 null, null,         // themeRank, finalThemeScore
                 null, null,         // consensusScore, disagreementPenalty
-                null, null, null,   // volumeSpike, priceNotBreakHigh, entryTooExtended
+                null, null, entryTooExtended,   // volumeSpike, priceNotBreakHigh, entryTooExtended
                 entryTriggered
         );
     }
