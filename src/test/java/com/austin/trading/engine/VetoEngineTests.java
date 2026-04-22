@@ -154,11 +154,24 @@ class VetoEngineTests {
 
     @Test
     void scoreDivergenceHigh_isSoftPenalty() {
+        // v2.8 P0.9: 改比 |claude - codex|（非 java-claude）
         VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
-                .javaScore(new BigDecimal("9.0"))
-                .claudeScore(new BigDecimal("6.0")).build());
+                .claudeScore(new BigDecimal("9.0"))
+                .codexScore(new BigDecimal("6.0")).build());
         assertFalse(result.vetoed());
         assertTrue(result.penaltyReasons().contains("PENALTY:SCORE_DIVERGENCE_HIGH"));
+    }
+
+    @Test
+    void javaClaudeDivergence_noLongerTriggersPenalty() {
+        // v2.8 P0.9：|java - claude| 不再觸發 SCORE_DIVERGENCE_HIGH penalty（避免 double penalty）
+        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
+                .javaScore(new BigDecimal("5.0"))
+                .claudeScore(new BigDecimal("9.0"))
+                .codexScore(new BigDecimal("8.5"))  // claude/codex 差 0.5 < 2.5
+                .build());
+        assertFalse(result.penaltyReasons().contains("PENALTY:SCORE_DIVERGENCE_HIGH"),
+                "v2.8: java vs claude 分歧不再扣 SCORE_DIVERGENCE penalty");
     }
 
     @Test

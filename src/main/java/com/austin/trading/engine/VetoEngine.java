@@ -212,9 +212,12 @@ public class VetoEngine {
         }
 
         // SCORE_DIVERGENCE_HIGH
+        // v2.8 P0.9：改比 |claude - codex|（跟 ConsensusScoringEngine 同維度，避免 double penalty）
+        // 原實作比 |java - claude|，但 v2.7 Consensus 去 Java 化後 java 不再是 AI 維度，
+        // 加上 consensus 已對 claude/codex 分歧做 disagreement_penalty，不該再重覆扣。
         BigDecimal divergenceMax = config.getDecimal("veto.score_divergence_max", new BigDecimal("2.5"));
-        if (input.javaScore() != null && input.claudeScore() != null) {
-            if (input.javaScore().subtract(input.claudeScore()).abs().compareTo(divergenceMax) >= 0) {
+        if (input.claudeScore() != null && input.codexScore() != null) {
+            if (input.claudeScore().subtract(input.codexScore()).abs().compareTo(divergenceMax) >= 0) {
                 penalty = penalty.add(config.getDecimal("penalty.score_divergence_high", new BigDecimal("1.5")));
                 penaltyReasons.add("PENALTY:SCORE_DIVERGENCE_HIGH");
             }
@@ -256,9 +259,10 @@ public class VetoEngine {
         if ("C".equalsIgnoreCase(input.marketGrade())) hardReasons.add("MARKET_GRADE_C");
         if ("LOCKED".equalsIgnoreCase(input.decisionLock())) hardReasons.add("DECISION_LOCKED");
 
+        // v2.8 P0.9：MOMENTUM 分支也改比 |claude - codex|（跟 SETUP 一致）
         BigDecimal divergenceMax = config.getDecimal("veto.score_divergence_max", new BigDecimal("2.5"));
-        if (input.javaScore() != null && input.claudeScore() != null) {
-            if (input.javaScore().subtract(input.claudeScore()).abs().compareTo(divergenceMax) >= 0) {
+        if (input.claudeScore() != null && input.codexScore() != null) {
+            if (input.claudeScore().subtract(input.codexScore()).abs().compareTo(divergenceMax) >= 0) {
                 hardReasons.add("SCORE_DIVERGENCE_HIGH");
             }
         }

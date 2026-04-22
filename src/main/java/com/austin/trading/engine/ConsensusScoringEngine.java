@@ -7,34 +7,42 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * 共識評分引擎（v2.7 MVP Refactor — 去 Java 化）。
+ * 共識評分引擎（v2.8 P0.9：單邊 AI 支援 + aiConfidenceMode trace）。
  *
- * <h3>設計變更（v2.7）</h3>
- * <p>原 v2.0 算法把 Java 結構分同時當 base 下限 + 分歧懲罰來源，
- * 讓 AI 雙高（Claude/Codex 高）但 Java 結構中等的強股被雙重打壓。
- * v2.7 改為只看 Claude/Codex 之間的一致性：</p>
- *
+ * <h3>v2.8 算法</h3>
  * <pre>
- * // v2.7
- * base    = min(claude, codex)
- * penalty = |claude - codex| * consensus.penalty_cx
- * consensus_score = max(base - penalty, 0)
+ * // FULL_AI（claude + codex 都有）
+ * consensus = max(min(claude, codex) - |claude-codex|*cx, 0)
+ * mode      = FULL_AI
  *
- * // 若 claude 或 codex 其中一方為 null → 回傳 null，由呼叫方 fallback 到 weighted_score
+ * // CLAUDE_ONLY（只有 claude）
+ * consensus = claude        （合理 fallback：單邊 AI 正向）
+ * mode      = CLAUDE_ONLY
+ *
+ * // CODEX_ONLY（只有 codex）
+ * consensus = codex
+ * mode      = CODEX_ONLY
+ *
+ * // AI_MISSING（兩邊都沒）
+ * consensus = null          （呼叫方 fallback 到 weighted / java-only）
+ * mode      = AI_MISSING
  * </pre>
  *
- * <p>Java 結構分繼續在 {@code WeightedScoringEngine} 扮演 40% 權重角色，
- * 不再介入共識懲罰。</p>
+ * <p>Java 結構分不進共識（v2.7 去 Java 化保留）。</p>
  *
  * <h3>Config</h3>
  * <ul>
  *   <li>{@code consensus.penalty_cx} — Claude 與 Codex 分歧懲罰係數（預設 0.20）</li>
- *   <li>{@code consensus.penalty_jc} — <b>廢棄</b>（v2.7 不再讀取）</li>
- *   <li>{@code consensus.penalty_jx} — <b>廢棄</b>（v2.7 不再讀取）</li>
+ *   <li>{@code consensus.single_ai_confidence_factor} — 單邊 AI 時 consensus 乘以此係數（預設 1.0，不降）</li>
  * </ul>
  */
 @Component
 public class ConsensusScoringEngine {
+
+    public static final String MODE_FULL_AI     = "FULL_AI";
+    public static final String MODE_CLAUDE_ONLY = "CLAUDE_ONLY";
+    public static final String MODE_CODEX_ONLY  = "CODEX_ONLY";
+    public static final String MODE_AI_MISSING  = "AI_MISSING";
 
     private final ScoreConfigService config;
 
@@ -48,49 +56,56 @@ public class ConsensusScoringEngine {
             BigDecimal codexScore
     ) {}
 
+    /**
+     * v2.8：含 aiConfidenceMode trace。
+     */
     public record ConsensusResult(
             BigDecimal consensusScore,
-            BigDecimal disagreementPenalty
-    ) {}
+            BigDecimal disagreementPenalty,
+            String aiConfidenceMode
+    ) {
+        /** v2.7 legacy 2-arg constructor（不帶 mode，預設 FULL_AI）。 */
+        public ConsensusResult(BigDecimal consensusScore, BigDecimal disagreementPenalty) {
+            this(consensusScore, disagreementPenalty, MODE_FULL_AI);
+        }
+    }
 
-    /**
-     * 計算 AI 共識分與分歧懲罰（v2.7）。
-     *
-     * <p>算法：
-     * <ul>
-     *   <li>若 {@code claudeScore} 與 {@code codexScore} 都有值 →
-     *       base=min(claude,codex)，penalty=|diff|×{@code consensus.penalty_cx}，
-     *       consensus=max(base−penalty, 0)</li>
-     *   <li>若其中一方為 null → 無法判斷 AI 共識，
-     *       回傳 {@code consensusScore=null}（呼叫方應 fallback 到 weighted_score）</li>
-     *   <li>若兩方都為 null → 同上，回傳 null</li>
-     * </ul>
-     *
-     * <p>{@code javaScore} 僅作為輸入欄位保留（向下相容 ConsensusInput 結構），
-     * v2.7 後不再用於計算。</p>
-     */
     public ConsensusResult compute(ConsensusInput input) {
         BigDecimal claude = input.claudeScore();
         BigDecimal codex  = input.codexScore();
 
-        // v2.7: 只看 Claude/Codex 之間的一致性
-        // 若任一方為 null → AI 層無共識可言，回 null 讓下游 fallback
-        if (claude == null || codex == null) {
-            return new ConsensusResult(null, BigDecimal.ZERO);
+        boolean hasClaude = claude != null;
+        boolean hasCodex  = codex  != null;
+
+        // v2.8 AI_MISSING：兩邊皆無 → 回 null，呼叫方 fallback 到 weighted
+        if (!hasClaude && !hasCodex) {
+            return new ConsensusResult(null, BigDecimal.ZERO, MODE_AI_MISSING);
         }
 
+        // 單邊 AI：consensus = 該側分數（原則 A/B：合理 fallback 不壓低）
+        if (!hasClaude) {
+            return new ConsensusResult(scale(codex), BigDecimal.ZERO, MODE_CODEX_ONLY);
+        }
+        if (!hasCodex) {
+            return new ConsensusResult(scale(claude), BigDecimal.ZERO, MODE_CLAUDE_ONLY);
+        }
+
+        // FULL_AI：claude + codex 都有，算一致性與懲罰
         BigDecimal penaltyWeight = config.getDecimal("consensus.penalty_cx", new BigDecimal("0.20"));
         BigDecimal diff = claude.subtract(codex).abs();
         BigDecimal penalty = diff.multiply(penaltyWeight);
 
         BigDecimal base = claude.min(codex);
-        BigDecimal consensus = base.subtract(penalty)
-                .max(BigDecimal.ZERO)
-                .setScale(3, RoundingMode.HALF_UP);
+        BigDecimal consensus = base.subtract(penalty).max(BigDecimal.ZERO);
 
         return new ConsensusResult(
-                consensus,
-                penalty.setScale(3, RoundingMode.HALF_UP)
+                scale(consensus),
+                scale(penalty),
+                MODE_FULL_AI
         );
+    }
+
+    private static BigDecimal scale(BigDecimal v) {
+        return v == null ? null : v.setScale(3, RoundingMode.HALF_UP);
     }
 }

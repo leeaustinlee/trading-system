@@ -38,9 +38,11 @@ class FinalDecisionEngineTests {
         when(config.getDecimal(eq("scoring.grade_b_min"),  any())).thenReturn(new BigDecimal("6.8"));
         when(config.getDecimal(eq("scoring.rr_min_ap"),    any())).thenReturn(new BigDecimal("2.2"));
         when(config.getDecimal(eq("ranking.main_stream_boost"), any())).thenReturn(new BigDecimal("0.3"));
-        // v2.8 盤後規劃 config
+        // v2.8 盤後規劃 config（P0.9：plan.* 專用門檻，比盤中 A/B 低 ~1.5）
+        when(config.getDecimal(eq("plan.primary_min"),          any())).thenReturn(new BigDecimal("5.5"));
+        when(config.getDecimal(eq("plan.backup_min"),           any())).thenReturn(new BigDecimal("4.0"));
         when(config.getDecimal(eq("plan.sector_indicator_min"), any())).thenReturn(new BigDecimal("7.8"));
-        when(config.getDecimal(eq("plan.avoid_score_max"),      any())).thenReturn(new BigDecimal("4.5"));
+        when(config.getDecimal(eq("plan.avoid_score_max"),      any())).thenReturn(new BigDecimal("3.5"));
         when(config.getInt(eq("decision.max_pick_aplus"), anyInt())).thenReturn(2);
         when(config.getInt(eq("decision.max_pick_a"),     anyInt())).thenReturn(2);
         when(config.getInt(eq("decision.max_pick_b"),     anyInt())).thenReturn(1);
@@ -272,12 +274,13 @@ class FinalDecisionEngineTests {
 
     @Test
     void postclosePlan_mixedCandidates_bucketsCorrectly() {
-        // primary(A score≥7.6) + backup(B score≥6.8) + avoid(score≤4.5)
+        // P0.9 盤後門檻：primary>=5.5, backup>=4.0, avoid<=3.5
+        // 注意 mainStream=true 會加 +0.3 boost
         FinalDecisionResponse result = engine.evaluate(
                 new FinalDecisionEvaluateRequest("B", "NONE", "EARLY", false, List.of(
-                        candidate("8150", 2.0, "VALUE_FAIR", new BigDecimal("7.8")),   // primary
-                        candidate("6770", 2.0, "VALUE_FAIR", new BigDecimal("7.0")),   // backup
-                        candidate("2337", 2.0, "VALUE_FAIR", new BigDecimal("4.0"))    // avoid
+                        candidate("8150", 2.0, "VALUE_FAIR", new BigDecimal("5.8")),   // +0.3 → 6.1 → primary
+                        candidate("6770", 2.0, "VALUE_FAIR", new BigDecimal("4.2")),   // +0.3 → 4.5 → backup
+                        candidate("2337", 2.0, "VALUE_FAIR", new BigDecimal("2.5"))    // +0.3 → 2.8 → avoid
                 )),
                 MarketSession.LIVE_TRADING,
                 DecisionPlanningMode.POSTCLOSE_TOMORROW_PLAN);
@@ -300,7 +303,7 @@ class FinalDecisionEngineTests {
         // LOCKED 在盤後模式下應被忽略（日內 gate，不污染明日規劃）
         FinalDecisionResponse result = engine.evaluate(
                 new FinalDecisionEvaluateRequest("A", "LOCKED", "EARLY", false, List.of(
-                        candidate("8150", 2.0, "VALUE_FAIR", new BigDecimal("7.8"))
+                        candidate("8150", 2.0, "VALUE_FAIR", new BigDecimal("6.0"))
                 )),
                 MarketSession.LIVE_TRADING,
                 DecisionPlanningMode.POSTCLOSE_TOMORROW_PLAN);
@@ -313,7 +316,7 @@ class FinalDecisionEngineTests {
         // 盤後一定不在 LIVE_TRADING，但 plan 模式不用 session gate
         FinalDecisionResponse result = engine.evaluate(
                 new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(
-                        candidate("8150", 2.0, "VALUE_FAIR", new BigDecimal("7.8"))
+                        candidate("8150", 2.0, "VALUE_FAIR", new BigDecimal("6.0"))
                 )),
                 MarketSession.PREMARKET,  // 盤前試撮時段
                 DecisionPlanningMode.POSTCLOSE_TOMORROW_PLAN);

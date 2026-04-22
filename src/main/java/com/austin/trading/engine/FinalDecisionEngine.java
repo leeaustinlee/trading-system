@@ -306,11 +306,13 @@ public class FinalDecisionEngine {
      * </ul>
      */
     private FinalDecisionResponse evaluatePostclosePlan(FinalDecisionEvaluateRequest request) {
-        BigDecimal gradeApMin       = config.getDecimal("scoring.grade_ap_min", new BigDecimal("8.5"));
-        BigDecimal gradeAMin        = config.getDecimal("scoring.grade_a_min",  new BigDecimal("7.6"));
-        BigDecimal gradeBMin        = config.getDecimal("scoring.grade_b_min",  new BigDecimal("6.8"));
+        // v2.8 P0.9：盤後規劃專用門檻。盤中 grade_a/b 對 RR/NOT_IN_PLAN 等常態 penalty
+        // 後的 finalRank 分佈太嚴，導致盤後規劃永遠全 REJECTED。
+        // 盤後門檻預設比盤中低 ~1.5 分，配合實際 penalty 後分佈。
+        BigDecimal planPrimaryMin   = config.getDecimal("plan.primary_min",         new BigDecimal("5.5"));
+        BigDecimal planBackupMin    = config.getDecimal("plan.backup_min",          new BigDecimal("4.0"));
         BigDecimal planSectorHigh   = config.getDecimal("plan.sector_indicator_min", new BigDecimal("7.8"));
-        BigDecimal planAvoidMax     = config.getDecimal("plan.avoid_score_max",      new BigDecimal("4.5"));
+        BigDecimal planAvoidMax     = config.getDecimal("plan.avoid_score_max",      new BigDecimal("3.5"));
         BigDecimal mainStreamBoost  = config.getDecimal("ranking.main_stream_boost", new BigDecimal("0.3"));
         int maxPrimary              = config.getInt("plan.max_primary", 2);
         int maxBackup               = config.getInt("plan.max_backup",  3);
@@ -346,18 +348,18 @@ public class FinalDecisionEngine {
                 adjustedRank = rankScore.add(mainStreamBoost);
             }
 
-            // 分類規則（盤後語意）：
+            // v2.8 P0.9 分類規則（盤後語意，用 plan.* 專用門檻避免被盤中 A/B 門檻誤殺）：
             // - score >= sector_indicator_min (7.8) 且 extended（如漲停）→ sectorIndicator（不追）
-            // - score >= grade_a_min (7.6)            → primary（明日首選）
-            // - score >= grade_b_min (6.8)            → backup（明日備援）
-            // - score <= avoid_score_max (4.5)        → avoidSymbols（明確排除）
-            // - 其他                                   → 平庸（不入規劃但不排除）
+            // - score >= plan.primary_min (5.5)    → primary（明日首選）
+            // - score >= plan.backup_min  (4.0)    → backup（明日備援）
+            // - score <= plan.avoid_score_max (3.5) → avoidSymbols（明確排除）
+            // - 其他                                → 平庸（不入規劃但不排除）
             boolean extended = Boolean.TRUE.equals(c.entryTooExtended());
             if (adjustedRank.compareTo(planSectorHigh) >= 0 && extended) {
                 sectorIndicator.add(c);
-            } else if (adjustedRank.compareTo(gradeAMin) >= 0) {
+            } else if (adjustedRank.compareTo(planPrimaryMin) >= 0) {
                 primary.add(c);
-            } else if (adjustedRank.compareTo(gradeBMin) >= 0) {
+            } else if (adjustedRank.compareTo(planBackupMin) >= 0) {
                 backup.add(c);
             } else if (adjustedRank.compareTo(planAvoidMax) <= 0) {
                 avoidSymbols.add(c.stockCode() + " [LOW_SCORE score=" + rankScore + "]");

@@ -1012,16 +1012,20 @@ public class FinalDecisionService {
                             veto.scoringPenalty() == null ? BigDecimal.ZERO : veto.scoringPenalty()
                       ).max(BigDecimal.ZERO);
 
-            // 5. 回寫 stock_evaluation（含 v2.6 MVP veto trace）
+            // 5. 回寫 stock_evaluation（含 v2.6 MVP veto trace + v2.8 P0.9 scoring trace）
             double rrForBucket = c.riskRewardRatio() == null ? 0.0 : c.riskRewardRatio();
             String bucket = computeBucket(finalRank, rrForBucket, veto.vetoed());
+            List<String> missingAiScores = new ArrayList<>();
+            if (claudeScore == null) missingAiScores.add("claude");
+            if (codexScore  == null) missingAiScores.add("codex");
             persistScores(tradingDate, c.stockCode(), javaScore, claudeScore, codexScore,
                     aiWeighted, finalRank, consensusScore, disagreementPenalty,
                     veto.vetoed(),
                     veto.reasons().isEmpty() ? null : String.join(",", veto.reasons()),
                     rankingOrder,
                     rawRank, veto.scoringPenalty(),
-                    veto.hardReasons(), veto.penaltyReasons(), bucket);
+                    veto.hardReasons(), veto.penaltyReasons(), bucket,
+                    consensusResult.aiConfidenceMode(), missingAiScores);
 
             // 6. 產生帶完整分數的新 request
             result.add(new FinalDecisionCandidateRequest(
@@ -1054,7 +1058,10 @@ public class FinalDecisionService {
                                BigDecimal scoringPenalty,
                                List<String> hardReasons,
                                List<String> penaltyReasons,
-                               String bucket) {
+                               String bucket,
+                               // v2.8 P0.9 scoring trace
+                               String aiConfidenceMode,
+                               List<String> missingAiScores) {
         try {
             stockEvaluationRepository.findByTradingDateAndSymbol(date, symbol).ifPresent(eval -> {
                 eval.setJavaStructureScore(javaScore);
@@ -1066,16 +1073,18 @@ public class FinalDecisionService {
                 eval.setDisagreementPenalty(disagreementPenalty);
                 eval.setIsVetoed(isVetoed);
                 eval.setRankingOrder(rankingOrder);
-                eval.setScoreVersion(scoreConfigService.getString("scoring.version", "v2.6-mvp-refactor"));
+                eval.setScoreVersion(scoreConfigService.getString("scoring.version", "v2.8-p09-scoring-trace"));
                 if (vetoReasons != null) {
                     String vetoJson = "[\"" + vetoReasons.replace(",", "\",\"") + "\"]";
                     eval.setVetoReasonsJson(vetoJson);
                     eval.setJavaVetoFlags(vetoJson);
                 }
-                // v2.6 MVP：把結構化 veto trace 寫進 payload_json，讓 debug 與 bounded learning 可消費
+                // v2.6 MVP veto_trace + v2.8 P0.9 scoring_trace
                 eval.setPayloadJson(buildVetoTracePayload(
                         rawRankBeforePenalty, scoringPenalty,
                         hardReasons, penaltyReasons, bucket,
+                        javaScore, claudeScore, codexScore,
+                        aiConfidenceMode, missingAiScores,
                         eval.getPayloadJson()));
                 stockEvaluationRepository.save(eval);
             });
@@ -1086,10 +1095,14 @@ public class FinalDecisionService {
 
     /**
      * v2.6 MVP: 建構 veto_trace 區塊，保留既有 payload_json 其他欄位。
+     * v2.8 P0.9：加 scoring_trace（aiConfidenceMode / weightedScoreInputs / weightedScoreWeightsUsed / missingAiScores）。
      */
     private String buildVetoTracePayload(BigDecimal rawRank, BigDecimal penalty,
                                           List<String> hardReasons, List<String> penaltyReasons,
-                                          String bucket, String existingPayload) {
+                                          String bucket,
+                                          BigDecimal javaScore, BigDecimal claudeScore, BigDecimal codexScore,
+                                          String aiConfidenceMode, List<String> missingAiScores,
+                                          String existingPayload) {
         try {
             ObjectNode root = parsePayloadObject(existingPayload);
             ObjectNode vetoTrace = objectMapper.createObjectNode();
@@ -1119,6 +1132,32 @@ public class FinalDecisionService {
             vetoTrace.set("hard_reasons", toArrayNode(hardReasons));
             vetoTrace.set("penalty_reasons", toArrayNode(penaltyReasons));
             root.set("veto_trace", vetoTrace);
+
+            // v2.8 P0.9 scoring_trace
+            ObjectNode scoringTrace = objectMapper.createObjectNode();
+            scoringTrace.put("aiConfidenceMode", aiConfidenceMode == null ? "UNKNOWN" : aiConfidenceMode);
+
+            ObjectNode inputs = objectMapper.createObjectNode();
+            if (javaScore   != null) inputs.put("java",   javaScore);   else inputs.putNull("java");
+            if (claudeScore != null) inputs.put("claude", claudeScore); else inputs.putNull("claude");
+            if (codexScore  != null) inputs.put("codex",  codexScore);  else inputs.putNull("codex");
+            scoringTrace.set("weightedScoreInputs", inputs);
+
+            // 實際使用的權重（對應 WeightedScoringEngine v2.8 P0.9 修法：null 分數權重不計）
+            BigDecimal jw = scoreConfigService.getDecimal("scoring.java_weight",   new BigDecimal("0.40"));
+            BigDecimal cw = scoreConfigService.getDecimal("scoring.claude_weight", new BigDecimal("0.35"));
+            BigDecimal xw = scoreConfigService.getDecimal("scoring.codex_weight",  new BigDecimal("0.25"));
+            boolean codexEnabled = scoreConfigService.getBoolean("scoring.enable_codex_review", true);
+            ObjectNode weights = objectMapper.createObjectNode();
+            if (javaScore   != null) weights.put("java",   jw); else weights.putNull("java");
+            if (claudeScore != null) weights.put("claude", cw); else weights.putNull("claude");
+            if (codexEnabled && codexScore != null) weights.put("codex", xw);
+            else weights.putNull("codex");
+            scoringTrace.set("weightedScoreWeightsUsed", weights);
+
+            scoringTrace.set("missingAiScores", toArrayNode(missingAiScores));
+            root.set("scoring_trace", scoringTrace);
+
             return objectMapper.writeValueAsString(root);
         } catch (Exception e) {
             log.warn("[FinalDecisionService] buildVetoTracePayload failed, fallback to minimal payload", e);

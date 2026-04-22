@@ -99,36 +99,56 @@ class ConsensusScoringEngineTests {
         assertThat(result.consensusScore()).isEqualByComparingTo(BigDecimal.ZERO);
     }
 
-    // ── null fallback：無法計算 AI 共識 → 回 null ────────────────────────
+    // ── v2.8 P0.9：單邊 AI fallback（原 v2.7 回 null，現改用該分數當 consensus） ──
 
     @Test
-    void missingClaude_returnsNullConsensus() {
-        // claude null → 無法判斷 AI 層共識 → 回 null，呼叫方應 fallback 到 weighted
+    void claudeOnly_consensusEqualsClaude() {
+        // codex null → CLAUDE_ONLY：consensus = claude，不再壓成 null
         ConsensusScoringEngine.ConsensusResult result = engine.compute(
                 new ConsensusScoringEngine.ConsensusInput(
-                        new BigDecimal("8.0"),
+                        new BigDecimal("5.2"),   // java
+                        new BigDecimal("8.0"),   // claude
+                        null));                  // codex
+        assertThat(result.consensusScore()).isEqualByComparingTo(new BigDecimal("8.000"));
+        assertThat(result.aiConfidenceMode())
+                .isEqualTo(ConsensusScoringEngine.MODE_CLAUDE_ONLY);
+        assertThat(result.disagreementPenalty()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    void codexOnly_consensusEqualsCodex() {
+        // claude null → CODEX_ONLY：consensus = codex
+        ConsensusScoringEngine.ConsensusResult result = engine.compute(
+                new ConsensusScoringEngine.ConsensusInput(
+                        new BigDecimal("5.2"),
                         null,
-                        new BigDecimal("7.0")));
-        assertNull(result.consensusScore(), "Claude 缺席 → consensus 應 null");
+                        new BigDecimal("7.5")));
+        assertThat(result.consensusScore()).isEqualByComparingTo(new BigDecimal("7.500"));
+        assertThat(result.aiConfidenceMode())
+                .isEqualTo(ConsensusScoringEngine.MODE_CODEX_ONLY);
     }
 
     @Test
-    void missingCodex_returnsNullConsensus() {
-        ConsensusScoringEngine.ConsensusResult result = engine.compute(
-                new ConsensusScoringEngine.ConsensusInput(
-                        new BigDecimal("8.0"),
-                        new BigDecimal("7.0"),
-                        null));
-        assertNull(result.consensusScore(), "Codex 缺席 → consensus 應 null");
-    }
-
-    @Test
-    void bothAiNull_returnsNullConsensus() {
+    void bothAiNull_consensusNull_modeAiMissing() {
+        // 兩邊皆 null → AI_MISSING，consensus 仍 null
         ConsensusScoringEngine.ConsensusResult result = engine.compute(
                 new ConsensusScoringEngine.ConsensusInput(
                         new BigDecimal("8.0"),
                         null, null));
-        assertNull(result.consensusScore());
-        assertEquals(0, result.disagreementPenalty().compareTo(BigDecimal.ZERO));
+        assertThat(result.consensusScore()).isNull();
+        assertThat(result.aiConfidenceMode())
+                .isEqualTo(ConsensusScoringEngine.MODE_AI_MISSING);
+        assertThat(result.disagreementPenalty()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    void fullAi_modeIsFullAi() {
+        ConsensusScoringEngine.ConsensusResult result = engine.compute(
+                new ConsensusScoringEngine.ConsensusInput(
+                        new BigDecimal("5.2"),
+                        new BigDecimal("8.0"),
+                        new BigDecimal("6.0")));
+        assertThat(result.aiConfidenceMode())
+                .isEqualTo(ConsensusScoringEngine.MODE_FULL_AI);
     }
 }

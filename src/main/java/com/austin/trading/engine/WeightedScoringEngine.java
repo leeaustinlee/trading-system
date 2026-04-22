@@ -41,19 +41,22 @@ public class WeightedScoringEngine {
 
         boolean codexEnabled = config.getBoolean("scoring.enable_codex_review", true);
 
-        // 若 Codex 未啟用或無分數，其權重按比例分給 java & claude
-        BigDecimal totalWeight;
-        BigDecimal sum = BigDecimal.ZERO;
+        // v2.8 P0.9：對稱處理任一 AI 分數 null 的情況。
+        // 只把「實際有分數」的權重加入 totalWeight，避免分母稀釋。
+        BigDecimal totalWeight = BigDecimal.ZERO;
+        BigDecimal sum         = BigDecimal.ZERO;
 
+        if (javaScore != null) {
+            totalWeight = totalWeight.add(jw);
+            sum         = sum.add(jw.multiply(javaScore));
+        }
+        if (claudeScore != null) {
+            totalWeight = totalWeight.add(cw);
+            sum         = sum.add(cw.multiply(claudeScore));
+        }
         if (codexEnabled && codexScore != null) {
-            totalWeight = jw.add(cw).add(xw);
-            if (javaScore   != null) sum = sum.add(jw.multiply(javaScore));
-            if (claudeScore != null) sum = sum.add(cw.multiply(claudeScore));
-            sum = sum.add(xw.multiply(codexScore));
-        } else {
-            totalWeight = jw.add(cw);
-            if (javaScore   != null) sum = sum.add(jw.multiply(javaScore));
-            if (claudeScore != null) sum = sum.add(cw.multiply(claudeScore));
+            totalWeight = totalWeight.add(xw);
+            sum         = sum.add(xw.multiply(codexScore));
         }
 
         if (totalWeight.compareTo(BigDecimal.ZERO) == 0) return BigDecimal.ZERO;
