@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * "Step 0.7 只讀 setup，不生產 setup，會把候選幾乎全擋成 NO_SETUP"
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles("integration")
 class TimingPipelineIntegrationTests {
 
     @Autowired FinalDecisionService              finalDecisionService;

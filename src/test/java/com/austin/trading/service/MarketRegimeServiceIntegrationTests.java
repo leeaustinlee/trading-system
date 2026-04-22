@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * regime decisions produced by schedulers.</p>
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles("integration")
 class MarketRegimeServiceIntegrationTests {
 
     @Autowired MarketRegimeService             service;

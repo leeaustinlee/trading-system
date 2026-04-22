@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * P1.1 Theme Strength Layer — persistence + round-trip integration tests.
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles("integration")
 class ThemeStrengthServiceIntegrationTests {
 
     @Autowired ThemeStrengthService             service;

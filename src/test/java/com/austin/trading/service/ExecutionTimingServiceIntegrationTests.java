@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * P0.4 Timing Layer — persistence + round-trip integration tests.
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles("integration")
 class ExecutionTimingServiceIntegrationTests {
 
     @Autowired ExecutionTimingService            service;

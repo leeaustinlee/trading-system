@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * P0.6 Execution Layer — persistence + round-trip integration tests.
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles("integration")
 class ExecutionDecisionServiceIntegrationTests {
 
     @Autowired ExecutionDecisionService       service;

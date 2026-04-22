@@ -24,7 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
  * v2.5 驗收：Claude submit scores/thesis key 必須是 task candidates 子集。
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles("integration")
 class AiTaskServiceSymbolMismatchTests {
 
     @Autowired AiTaskService aiTaskService;

@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 並寫一筆 {@link LedgerType#INITIAL_BALANCE} 作為測試基準。</p>
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles("integration")
 class CapitalLedgerIntegrationTests {
 
     @Autowired CapitalLedgerService    ledgerService;

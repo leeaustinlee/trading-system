@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * P0.5 Risk Layer — persistence + round-trip integration tests.
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles("integration")
 class PortfolioRiskServiceIntegrationTests {
 
     @Autowired PortfolioRiskService           service;

@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * P1.2 Trade Attribution Layer — persistence + round-trip integration tests.
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles("integration")
 class TradeAttributionServiceIntegrationTests {
 
     @Autowired TradeAttributionService   service;

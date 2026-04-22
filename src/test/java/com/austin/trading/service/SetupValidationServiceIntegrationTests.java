@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * P0.3 Setup Layer — persistence + round-trip integration tests.
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles("integration")
 class SetupValidationServiceIntegrationTests {
 
     @Autowired SetupValidationService  service;

@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Each test uses a unique trading_date to avoid cross-test pollution.
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles("integration")
 class StockRankingServiceIntegrationTests {
 
     @Autowired StockRankingService           service;
