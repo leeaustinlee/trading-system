@@ -78,7 +78,9 @@ public class ThemeStrengthEngine {
         double raw = mb * wMb + heat * wHeat + cont * wCont + breadth * wBreadth;
         BigDecimal strengthScore = bd(raw).min(TEN).max(ZERO);
 
-        BigDecimal decayRisk = computeDecayRisk(cont, heat, in.hasRiskFlag());
+        // v2.8: 傳原始 BigDecimal 讓 computeDecayRisk 能區分 null (未打分) 與 0 (已打分但低)
+        BigDecimal decayRisk = computeDecayRisk(
+                in.claudeContinuationScore(), in.claudeHeatScore(), in.hasRiskFlag());
 
         double minStrength  = cfg("theme.tradable.min_strength", 3.0);
         double maxDecay     = cfg("theme.decay.max_allowed",     0.6);
@@ -103,8 +105,32 @@ public class ThemeStrengthEngine {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    /** decayRisk ∈ [0, 1] — increases when continuation low, heat low, or risk flag set. */
-    private BigDecimal computeDecayRisk(double cont, double heat, boolean hasRiskFlag) {
+    /**
+     * decayRisk ∈ [0, 1] — increases when continuation low, heat low, or risk flag set.
+     *
+     * <p>v2.8: 區分「Claude 尚未打分」與「Claude 已打分但低」：
+     * <ul>
+     *   <li>heat 與 cont **皆 null**（Claude 未對題材打分）且無 risk flag
+     *       → 資料不足，回 0.30 中性值（< maxDecay 0.6，不觸發 DECAY gate）</li>
+     *   <li>有任一 AI 分數 或 風險旗標
+     *       → 照原 formula 計算 decayRisk</li>
+     * </ul>
+     *
+     * <p>動機：原實作 null→0→base=0.40 + heatPenalty=0.25 = 0.65，
+     * 把「尚未研究的題材」誤判為「衰退題材」，造成所有新題材 tradable=false。
+     * 本修復與 {@code MarketRegimeEngine} v2.7 null→LOW_CONFIDENCE 是同一哲學。</p>
+     */
+    private BigDecimal computeDecayRisk(BigDecimal contBd, BigDecimal heatBd, boolean hasRiskFlag) {
+        boolean claudeScored = (contBd != null && contBd.signum() > 0)
+                            || (heatBd != null && heatBd.signum() > 0);
+
+        if (!claudeScored && !hasRiskFlag) {
+            // Claude 尚未對題材打分 + 無風險旗標 → 資料不足，視為中性
+            return bd(0.30).setScale(4, RoundingMode.HALF_UP);
+        }
+
+        double cont = safe(contBd);
+        double heat = safe(heatBd);
         double base = (1.0 - cont / 10.0) * 0.40;
         double heatPenalty = heat < 3.0 ? 0.25 : 0.0;
         double riskPenalty = hasRiskFlag ? 0.35 : 0.0;

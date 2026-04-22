@@ -73,6 +73,63 @@ class ThemeStrengthEngineTests {
         assertThat(d.strengthScore()).isEqualByComparingTo(BigDecimal.ZERO);
     }
 
+    // ── v2.8 P0 fix：Claude 尚未打分時不應誤判為 DECAY ─────────────────────
+
+    @Test
+    void claudeNotScored_decayRiskIsNeutral() {
+        // 4/22 實例：mb=10 市場強勢，但 Claude heat/cont 尚未回填
+        // 原 bug：decay=0.65 > 0.6 → DECAY、tradable=false
+        // 修後：decay=0.30 中性，不觸發 DECAY gate
+        ThemeStrengthInput in = new ThemeStrengthInput(DATE, "UNSCORED",
+                BigDecimal.TEN,  // marketBehaviorScore (mb)
+                null,            // breadthScore
+                null,            // catalystHintScore
+                null,            // claudeHeatScore — null
+                null,            // claudeContinuationScore — null
+                "政策",
+                false);          // hasRiskFlag
+        ThemeStrengthDecision d = engine.evaluate(in, null);
+
+        assertThat(d.decayRisk()).isEqualByComparingTo(new BigDecimal("0.30"));
+        assertThat(d.themeStage()).isNotEqualTo(ThemeStrengthEngine.STAGE_DECAY);
+    }
+
+    @Test
+    void claudeNotScored_mb10_isTradable() {
+        // mb=10 單獨貢獻 strength=4.0，claude 都 null 不應再打壓
+        // 修後應 tradable=true（strength 4.0 > 3.0, decay 0.30 < 0.6）
+        ThemeStrengthInput in = new ThemeStrengthInput(DATE, "MB10_UNSCORED",
+                BigDecimal.TEN, null, null, null, null, "政策", false);
+        ThemeStrengthDecision d = engine.evaluate(in, null);
+
+        assertThat(d.tradable()).isTrue();
+    }
+
+    @Test
+    void claudeNotScored_butRiskFlag_stillPenalized() {
+        // 即使 Claude 沒打分，有 risk flag 時仍走原 formula（保留風險控制）
+        ThemeStrengthInput in = new ThemeStrengthInput(DATE, "RISK_UNSCORED",
+                BigDecimal.TEN, null, null, null, null, "政策", true);
+        ThemeStrengthDecision d = engine.evaluate(in, null);
+
+        // hasRiskFlag=true → 走原 formula: base=0.40 + heatPenalty=0.25 + riskPenalty=0.35 = 1.0
+        assertThat(d.decayRisk()).isGreaterThan(new BigDecimal("0.6"));
+    }
+
+    @Test
+    void claudePartiallyScored_usesFormula() {
+        // Claude 只給 heat 分，cont 還沒給 → 有 AI 分數就走 formula
+        ThemeStrengthInput in = new ThemeStrengthInput(DATE, "HEAT_ONLY",
+                bd(8), null, null,
+                bd(7),     // heat 有
+                null,      // cont 仍 null
+                "政策", false);
+        ThemeStrengthDecision d = engine.evaluate(in, null);
+
+        // cont=0（null 走 safe()=0）, heat=7 → base=0.40, heatPenalty=0 (heat≥3), decay=0.40
+        assertThat(d.decayRisk()).isEqualByComparingTo(new BigDecimal("0.40"));
+    }
+
     // ── Theme stage ───────────────────────────────────────────────────────────
 
     @Test
