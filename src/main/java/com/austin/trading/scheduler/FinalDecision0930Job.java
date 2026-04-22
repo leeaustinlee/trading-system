@@ -52,10 +52,11 @@ public class FinalDecision0930Job {
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(),
                     "workflow completed decision=" + decision);
 
-            // v2.7: WAIT 時 orchestration step 不 markDone（維持 RUNNING 狀態待 09:30+ 再重試）
-            // 避免 09:30 前手動觸發就把 step 鎖死成 DONE
+            // v2.7 P0 fix: WAIT 時把 step 重置為 PENDING（非 DONE 也非 RUNNING），
+            // 避免 09:30 cron 因 RUNNING 未 stale 被 skip（原 markRunning 對 RUNNING 需等 15 分 stale）
             if ("WAIT".equalsIgnoreCase(decision)) {
-                log.info("[FinalDecision0930Job] decision=WAIT → step 保留 RUNNING，等 09:30+ 重新觸發");
+                orchestrationService.resetStepToPending(today, step);
+                log.info("[FinalDecision0930Job] decision=WAIT → step 重置為 PENDING，允許 09:30 cron 正常觸發");
             } else {
                 orchestrationService.markDone(today, step, "workflow completed: " + decision);
             }

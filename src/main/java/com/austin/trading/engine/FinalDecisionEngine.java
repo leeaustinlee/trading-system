@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -44,6 +45,9 @@ public class FinalDecisionEngine {
 
     private static final Logger log = LoggerFactory.getLogger(FinalDecisionEngine.class);
 
+    /** v2.7 P1 fix: 明確綁定台股時區，避免 JVM 預設時區（如 UTC）造成 session 切點誤判。 */
+    private static final ZoneId MARKET_ZONE = ZoneId.of("Asia/Taipei");
+
     private final ScoreConfigService config;
 
     public FinalDecisionEngine(ScoreConfigService config) {
@@ -51,7 +55,7 @@ public class FinalDecisionEngine {
     }
 
     public FinalDecisionResponse evaluate(FinalDecisionEvaluateRequest request) {
-        return evaluate(request, MarketSession.fromTime(LocalTime.now()));
+        return evaluate(request, MarketSession.fromTime(LocalTime.now(MARKET_ZONE)));
     }
 
     /**

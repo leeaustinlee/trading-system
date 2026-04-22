@@ -139,6 +139,26 @@ class DailyOrchestrationServiceTests {
         assertThat(e.getStepFinalDecision()).isEqualTo(DailyOrchestrationService.STATUS_RUNNING);
     }
 
+    // ── 4b. v2.7 P0 fix: resetStepToPending 後 markRunning → true ──────────
+    @Test
+    void resetStepToPending_thenMarkRunning_shouldAllowRetry() {
+        // 模擬 WAIT 情境：
+        // 1) 手動觸發 → markRunning(FINAL_DECISION) = true (RUNNING)
+        // 2) decision=WAIT → resetStepToPending 把 FINAL_DECISION 回 PENDING
+        // 3) 09:30 cron → markRunning 應該 allow（PENDING 允許重試）
+        LocalDate today = LocalDate.of(2026, 4, 20);
+
+        assertThat(service.markRunning(today, OrchestrationStep.FINAL_DECISION)).isTrue();
+        service.resetStepToPending(today, OrchestrationStep.FINAL_DECISION);
+
+        DailyOrchestrationStatusEntity e = store.get(today);
+        assertThat(e.getStepFinalDecision()).isEqualTo(DailyOrchestrationService.STATUS_PENDING);
+
+        // 09:30 cron 觸發（應放行，不因 RUNNING 未 stale 被擋）
+        boolean retry = service.markRunning(today, OrchestrationStep.FINAL_DECISION);
+        assertThat(retry).as("WAIT 後 reset 到 PENDING，09:30 cron 應能重新取得執行權").isTrue();
+    }
+
     // ── 5. markDone 後 markRunning → false ────────────────────────────────
     @Test
     void markDone_thenMarkRunning_shouldReturnFalse() {
