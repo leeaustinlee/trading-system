@@ -180,8 +180,8 @@ public class PositionReviewService {
         }
         pos.setNote(appendSystemSuggestionNote(
                 pos.getNote(),
-                momentum ? "AI auto-filled SL/TP from momentum defaults"
-                        : "AI auto-filled SL/TP from setup defaults"));
+                momentum ? "系統已依追價策略自動補上停損/停利"
+                        : "系統已依一般策略自動補上停損/停利"));
     }
 
     private String appendSystemSuggestionNote(String note, String marker) {

@@ -18,6 +18,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -85,9 +86,9 @@ public class TomorrowPlan1800Job {
             String aiMd = aiTaskService.findLatestMarkdown(today, "T86_TOMORROW", "POSTMARKET");
             if (aiMd != null && aiMd.length() > 100) {
                 String summary = aiMd.length() > 2500
-                        ? aiMd.substring(0, 2500) + "\n...(內容過長已截斷，完整內容請看 AI task)"
+                        ? aiMd.substring(0, 2500) + "\n...(更多內容請查看 AI task 詳細結果)"
                         : aiMd;
-                lineTemplateService.notifySystemAlert("18:00 明日研究摘要", summary);
+                lineTemplateService.notifySystemAlert("18:00 隔日計畫 AI 摘要", summary);
             }
 
             log.info("[TomorrowPlan1800Job] candidates={}, reviewedPositions={}", candidates.size(), reviewedCount);
@@ -106,46 +107,75 @@ public class TomorrowPlan1800Job {
                                 List<PositionResponse> openPositions) {
         StringBuilder sb = new StringBuilder();
         sb.append("【明日計畫】").append(today).append("\n\n");
+
         if (market != null) {
-            sb.append("📊 今日盤勢\n")
-                    .append("等級：").append(market.marketGrade())
-                    .append("｜階段：").append(market.marketPhase())
+            sb.append("市場背景\n")
+                    .append("市場等級：").append(market.marketGrade())
+                    .append("｜行情階段：").append(market.marketPhase())
                     .append("\n\n");
         }
 
-        sb.append("🎯 明日候選 ").append(candidates.size()).append(" 檔\n");
+        sb.append("候選股 ").append(candidates.size()).append(" 檔\n");
         if (candidates.isEmpty()) {
-            sb.append("- 目前沒有有效候選，明日先觀察大盤與主流族群。\n");
+            sb.append("- 目前沒有候選股，明早先觀察盤勢再決定。\n");
         } else {
             candidates.stream().limit(10).forEach(c -> {
                 sb.append("- ").append(c.symbol());
                 if (c.stockName() != null) sb.append(" ").append(c.stockName());
                 if (c.entryPriceZone() != null) sb.append("｜進場區：").append(c.entryPriceZone());
-                if (c.riskRewardRatio() != null) sb.append("｜風報比：").append(c.riskRewardRatio());
+                if (c.riskRewardRatio() != null) sb.append("｜RR：").append(c.riskRewardRatio());
                 sb.append("\n");
             });
         }
 
-        sb.append("\n📌 行動\n");
-        sb.append("08:30 看盤前風向，09:30 依現價、題材一致性與風報比做最終決策。\n");
+        sb.append("\n明日執行\n");
+        sb.append("08:30 先看盤前摘要；09:30 再看正式決策與盤中確認。\n");
         sb.append("來源：Trading System");
-        sb.append("\n?? 持倉關鍵價\n");
+
+        sb.append("\n\n持倉明日建議\n");
         if (openPositions == null || openPositions.isEmpty()) {
-            sb.append("- 目前無持倉\n");
+            sb.append("- 目前沒有持倉。\n");
         } else {
             openPositions.stream().limit(10).forEach(p -> {
                 sb.append("- ").append(p.symbol());
                 if (p.stockName() != null) sb.append(" ").append(p.stockName());
-                if (p.avgCost() != null) sb.append(" 成本 ").append(p.avgCost());
-                if (p.stopLossPrice() != null) sb.append(" / 停損 ").append(p.stopLossPrice());
-                if (p.takeProfit1() != null) sb.append(" / 停利1 ").append(p.takeProfit1());
-                if (p.takeProfit2() != null) sb.append(" / 停利2 ").append(p.takeProfit2());
-                sb.append("\n");
+                sb.append("｜").append(buildTomorrowAdvice(p)).append("\n");
             });
         }
 
-        sb.append("\n?? 隔日判讀\n");
-        sb.append("盤後已重跑持倉檢視並更新缺少的停損/停利；隔日先看這些關鍵價，再判斷是否續抱、減碼或等待新倉。\n");
+        sb.append("\n盤後重點\n");
+        sb.append("持倉已納入每日檢視與隔日計畫；若有停損停利缺值，系統會先補齊，再整理成明日建議。\n");
         return sb.toString();
+    }
+
+    private String buildTomorrowAdvice(PositionResponse p) {
+        StringBuilder sb = new StringBuilder("續抱觀察");
+        if (p.avgCost() != null) {
+            sb.append("｜成本 ").append(formatNumber(p.avgCost()));
+        }
+        if (p.stopLossPrice() != null) {
+            sb.append("｜防守 ").append(formatNumber(p.stopLossPrice()));
+        }
+        if (p.takeProfit1() != null) {
+            sb.append("｜續強看 ").append(formatNumber(p.takeProfit1()));
+        }
+        if (p.takeProfit2() != null) {
+            sb.append(" / ").append(formatNumber(p.takeProfit2()));
+        }
+        String note = p.note();
+        if (note != null && !note.isBlank()) {
+            if (note.contains("系統已依追價策略")) {
+                sb.append("｜停損停利已依追價策略補齊");
+            } else if (note.contains("系統已依一般策略")
+                    || note.contains("setup defaults")
+                    || note.contains("momentum defaults")) {
+                sb.append("｜停損停利已由系統補齊");
+            }
+        }
+        return sb.toString();
+    }
+
+    private String formatNumber(BigDecimal value) {
+        return value.stripTrailingZeros().toPlainString();
     }
 }

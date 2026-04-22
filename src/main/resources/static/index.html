@@ -56,7 +56,7 @@
     .nav-brand {
       font-weight: 700; font-size: 16px; margin-right: 20px;
       white-space: nowrap; color: var(--accent);
-      display: flex; align-items: center; gap: 6px;
+      display: flex; align-items: center; gap: 6px; cursor: pointer;
     }
     .nav-brand::before {
       content: "📊";
@@ -1545,6 +1545,17 @@
 
   /* ── Nav routing ── */
   const tabs = document.querySelectorAll(".nav-tab[data-page]");
+  function activatePage(pageId) {
+    tabs.forEach(x => x.classList.toggle("active", x.dataset.page === pageId));
+    document.querySelectorAll(".page").forEach(p => p.classList.toggle("active", p.id === pageId));
+    loadPageData(pageId);
+    if (pageId === "pageDashboard" || pageId === "pageCandidates") {
+      startLivePolling();
+    } else {
+      stopLivePolling();
+    }
+    closeNavMore();
+  }
   tabs.forEach(t => t.addEventListener("click", () => {
     tabs.forEach(x => x.classList.remove("active"));
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
@@ -1555,6 +1566,11 @@
     // 點擊下拉內項目後關閉選單
     closeNavMore();
   }));
+
+  const navBrand = document.querySelector(".nav-brand");
+  if (navBrand) {
+    navBrand.addEventListener("click", () => activatePage("pageDashboard"));
+  }
 
   window.toggleNavMore = function() {
     const m = $("navMoreMenu");
@@ -1683,7 +1699,11 @@
         const cands = await api("/api/candidates/current");
         _candidateScoreCache = {};
         (cands || []).forEach(c => {
-          _candidateScoreCache[c.symbol] = { score: c.score, entryPriceZone: c.entryPriceZone };
+          _candidateScoreCache[c.symbol] = {
+            sortScore: resolveCandidateSortScore(c),
+            displayScore: resolveCandidateDisplayScore(c),
+            entryPriceZone: c.entryPriceZone
+          };
         });
       } catch(_) { /* 不影響主 Dashboard */ }
 
@@ -1734,12 +1754,50 @@
   ───────────────────────────────────────────── */
   let _candidateCache = {};  // symbol -> CandidateResponse，供編輯 modal 使用
 
+  function resolveCandidateSortScore(c) {
+    const toNum = v => v == null ? null : Number(v);
+    return toNum(c?.finalRankScore)
+      ?? toNum(c?.consensusScore)
+      ?? toNum(c?.aiWeightedScore)
+      ?? toNum(c?.score)
+      ?? 0;
+  }
+
+  function resolveCandidateDisplayScore(c) {
+    const score = resolveCandidateSortScore(c);
+    return Number.isFinite(score) ? score.toFixed(1) : "-";
+  }
+
+  function sortCandidatesByScore(items) {
+    return [...(items || [])].sort((a, b) => {
+      const sa = resolveCandidateSortScore(a);
+      const sb = resolveCandidateSortScore(b);
+      if (sb !== sa) return sb - sa;
+      return String(a.symbol || "").localeCompare(String(b.symbol || ""));
+    });
+  }
+
+  function renderDashboardScoreCell(symbol) {
+    const cand = _candidateScoreCache[symbol];
+    if (!cand || cand.displayScore == null) {
+      return `<td class="small" style="color:var(--muted)">-</td>`;
+    }
+    return `<td style="text-align:center"><span class="score-badge" style="background:${scoreBg(cand.sortScore)}">${cand.displayScore}</span></td>`;
+  }
+
   async function loadCandidates() {
     clearErr("errBoxCand");
     try {
-      const data = await api("/api/candidates/current");
+      const data = sortCandidatesByScore(await api("/api/candidates/current"));
       _candidateCache = {};
-      (data || []).forEach(c => { _candidateCache[c.symbol] = c; });
+      (data || []).forEach(c => {
+        _candidateCache[c.symbol] = c;
+        _candidateScoreCache[c.symbol] = {
+          sortScore: resolveCandidateSortScore(c),
+          displayScore: resolveCandidateDisplayScore(c),
+          entryPriceZone: c.entryPriceZone
+        };
+      });
       $("c-currentBody").innerHTML = (data || []).length
         ? (data || []).map(c => {
             const jScore  = c.javaStructureScore != null ? Number(c.javaStructureScore).toFixed(1) : "–";
@@ -1990,9 +2048,9 @@
               <td style="text-align:right">${distToStop(cur ?? p.currentPrice, p.stopLossPrice, p.side)}</td>
               <td style="text-align:right">${valueCell}</td>
               <td style="text-align:right">${pnlCell}</td>
-              <td>${renderAiAdvice(p)}</td>
+              <td>${renderAiAdvice(p, cur ?? p.currentPrice)}</td>
               <td class="small mono">${fmtTime(p.openedAt)}</td>
-              <td class="small">${esc(p.note)}</td>
+              <td class="small">${esc(renderPositionNote(p.note, p.strategyType))}</td>
               <td style="white-space:nowrap">
                 <button class="btn" style="padding:3px 10px;font-size:12px;margin-right:4px"
                   onclick="openEditModal(${p.id})">編輯</button>
@@ -2027,7 +2085,7 @@
             <td>${esc(p.closePrice)}</td>
             <td class="small">${zhEsc(p.exitReason)}</td>
             <td>${numHtml(p.realizedPnl)}</td>
-            <td class="small">${esc(p.note)}</td>
+            <td class="small">${esc(renderPositionNote(p.note, p.strategyType))}</td>
             <td class="small mono">${fmtTime(p.closedAt)}</td>
           </tr>`).join("")
         : `<tr class="empty-row"><td colspan="11">無資料</td></tr>`;
@@ -2985,9 +3043,23 @@
     }
     return "–";
   }
-  // 持倉 AI 建議（從 payloadJson 解析 ai_advice / strategy / note 擇一）
-  function renderAiAdvice(pos) {
-    let advice = "–";
+  function prettifySystemNote(note, strategyType) {
+    if (!note) return "";
+    let text = String(note)
+      .replaceAll("AI auto-filled SL/TP from setup defaults", "系統已依一般策略自動補上停損/停利")
+      .replaceAll("AI auto-filled SL/TP from momentum defaults", "系統已依追價策略自動補上停損/停利");
+    if (!text.trim() && strategyType === "MOMENTUM_CHASE") return "追價策略持倉";
+    return text;
+  }
+
+  function renderPositionNote(note, strategyType) {
+    const text = prettifySystemNote(note, strategyType);
+    return text || "–";
+  }
+
+  // 持倉 AI 建議：優先顯示可執行中文，其次依停損停利生成
+  function renderAiAdvice(pos, currentPrice) {
+    let advice = "";
     let cls = "badge-neutral";
     if (pos.payloadJson) {
       try {
@@ -2997,7 +3069,20 @@
         else if (p.note)       advice = p.note;
       } catch(_) {}
     }
-    if (advice === "–" && pos.note) advice = pos.note;
+    if (!advice && pos.note) advice = prettifySystemNote(pos.note, pos.strategyType);
+    if (!advice && pos.stopLossPrice != null && pos.takeProfit1 != null) {
+      const cp = currentPrice != null ? Number(currentPrice) : null;
+      const sl = Number(pos.stopLossPrice);
+      const tp1 = Number(pos.takeProfit1);
+      if (cp != null && !Number.isNaN(cp)) {
+        if (cp <= sl) advice = `跌破 ${fmtPrice(sl)} 需出場`;
+        else if (cp >= tp1) advice = `接近停利一 ${fmtPrice(tp1)}，可續抱或分批落袋`;
+        else advice = `續抱觀察｜防守 ${fmtPrice(sl)}｜續強看 ${fmtPrice(tp1)}`;
+      } else {
+        advice = `續抱觀察｜防守 ${fmtPrice(sl)}｜續強看 ${fmtPrice(tp1)}`;
+      }
+    }
+    if (!advice) advice = "續抱觀察";
     if (advice.includes("移動停利") || advice.includes("續抱") || advice.includes("持有")) cls = "badge-hold";
     if (advice.includes("出場") || advice.includes("減碼")) cls = "badge-exit";
     if (advice.includes("停損")) cls = "badge-stop";
@@ -3081,8 +3166,8 @@
 
       // 按 Score 排序（穩定化），null 視為 0；分數相同時以代號字母序穩定排序
       const sortedData = [...data].sort((a, b) => {
-        const sa = (_candidateScoreCache[a.symbol]?.score) ?? 0;
-        const sb = (_candidateScoreCache[b.symbol]?.score) ?? 0;
+        const sa = (_candidateScoreCache[a.symbol]?.sortScore) ?? 0;
+        const sb = (_candidateScoreCache[b.symbol]?.sortScore) ?? 0;
         if (sb !== sa) return sb - sa;
         return a.symbol.localeCompare(b.symbol);
       });
@@ -3090,7 +3175,7 @@
       // Dashboard 精簡版（含評分欄）— 若行數相同做逐 cell 更新，避免閃爍
       const dBody = $("d-liveBody");
       if (dBody) {
-        if (dBody.children.length === sortedData.length) {
+        if (false && dBody.children.length === sortedData.length) {
           sortedData.forEach(q => {
             const row = document.getElementById(`d-lq-row-${q.symbol}`);
             if (!row) return;
@@ -3109,10 +3194,7 @@
         } else {
           dBody.innerHTML = sortedData.map(q => {
             const cls  = changeClass(q.changePercent);
-            const cand = _candidateScoreCache[q.symbol];
-            const scoreCell = cand?.score != null
-              ? `<td class="small" style="color:var(--up);font-weight:600">${cand.score}</td>`
-              : `<td class="small" style="color:var(--muted)">-</td>`;
+            const scoreCell = renderDashboardScoreCell(q.symbol);
             return `<tr id="d-lq-row-${q.symbol}">
               <td class="mono">${esc(q.symbol)}</td>
               <td>${esc(q.stockName)}</td>
@@ -3131,7 +3213,7 @@
       const cBody = $("c-liveBody");
       if (cBody) {
         // 若 tbody 已有資料（非首次），逐行更新避免閃爍
-        if (cBody.children.length === sortedData.length) {
+        if (false && cBody.children.length === sortedData.length) {
           sortedData.forEach(q => {
             applyFlash(q.symbol, q.currentPrice);
             const row = document.getElementById(`lq-row-${q.symbol}`);
