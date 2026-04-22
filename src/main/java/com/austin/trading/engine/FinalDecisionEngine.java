@@ -1,5 +1,6 @@
 package com.austin.trading.engine;
 
+import com.austin.trading.domain.enums.MarketSession;
 import com.austin.trading.dto.request.FinalDecisionCandidateRequest;
 import com.austin.trading.dto.request.FinalDecisionEvaluateRequest;
 import com.austin.trading.dto.response.FinalDecisionResponse;
@@ -10,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -49,6 +51,33 @@ public class FinalDecisionEngine {
     }
 
     public FinalDecisionResponse evaluate(FinalDecisionEvaluateRequest request) {
+        return evaluate(request, MarketSession.fromTime(LocalTime.now()));
+    }
+
+    /**
+     * v2.7 Session-Aware overload：允許呼叫方（或測試）明確指定 session。
+     *
+     * <p>非 {@link MarketSession#LIVE_TRADING} 時直接回 {@code WAIT}：
+     * <ul>
+     *   <li>PREMARKET（08:30-09:00）：試撮時段，不可用試撮價做決策</li>
+     *   <li>OPEN_VALIDATION（09:00-09:30）：開盤驗證中，資料更新但未到決策時機</li>
+     * </ul>
+     */
+    public FinalDecisionResponse evaluate(FinalDecisionEvaluateRequest request, MarketSession session) {
+        // v2.7 Session-Aware gate
+        if (!session.allowsFinalDecision()) {
+            String summary = session == MarketSession.PREMARKET
+                    ? "盤前觀察中，09:30 再出決策。"
+                    : "開盤驗證中，等 09:30 決策。";
+            log.info("[FinalDecisionEngine] WAIT: session={}", session);
+            return new FinalDecisionResponse(
+                    "WAIT",
+                    List.of(),
+                    List.of("session=" + session.name()),
+                    summary
+            );
+        }
+
         String marketGrade = normalize(request.marketGrade());
         String decisionLock = normalize(request.decisionLock());
         String timeDecay = normalize(request.timeDecayStage());
@@ -70,13 +99,14 @@ public class FinalDecisionEngine {
         }
 
         // ── 讀取分級門檻 ──────────────────────────────────────────────────────
-        BigDecimal gradeApMin = config.getDecimal("scoring.grade_ap_min", new BigDecimal("8.5"));
-        BigDecimal gradeAMin  = config.getDecimal("scoring.grade_a_min",  new BigDecimal("7.6"));
-        BigDecimal gradeBMin  = config.getDecimal("scoring.grade_b_min",  new BigDecimal("6.8"));
-        BigDecimal rrMinAp    = config.getDecimal("scoring.rr_min_ap",    new BigDecimal("2.2"));
-        int maxPickAPlus      = config.getInt("decision.max_pick_aplus",  2);
-        int maxPickA          = config.getInt("decision.max_pick_a",      2);
-        int maxPickB          = config.getInt("decision.max_pick_b",      1);
+        BigDecimal gradeApMin       = config.getDecimal("scoring.grade_ap_min", new BigDecimal("8.5"));
+        BigDecimal gradeAMin        = config.getDecimal("scoring.grade_a_min",  new BigDecimal("7.6"));
+        BigDecimal gradeBMin        = config.getDecimal("scoring.grade_b_min",  new BigDecimal("6.8"));
+        BigDecimal rrMinAp          = config.getDecimal("scoring.rr_min_ap",    new BigDecimal("2.2"));
+        BigDecimal mainStreamBoost  = config.getDecimal("ranking.main_stream_boost", new BigDecimal("0.3"));
+        int maxPickAPlus            = config.getInt("decision.max_pick_aplus",  2);
+        int maxPickA                = config.getInt("decision.max_pick_a",      2);
+        int maxPickB                = config.getInt("decision.max_pick_b",      1);
 
         List<FinalDecisionCandidateRequest> candidates =
                 request.candidates() == null ? List.of() : request.candidates();
@@ -92,8 +122,8 @@ public class FinalDecisionEngine {
                 continue;
             }
 
-            // 基本市場條件驗證（非 veto 層的過濾）
-            String basicReject = validateBasicConditions(c, marketGrade);
+            // 基本市場條件驗證（非 veto 層的過濾；v2.7 依 session 差異化）
+            String basicReject = validateBasicConditions(c, marketGrade, session);
             if (basicReject != null) {
                 rejected.add(c.stockCode() + " " + basicReject);
                 continue;
@@ -107,15 +137,23 @@ public class FinalDecisionEngine {
                 continue;
             }
 
-            // 分桶：A+ / A / B / C
-            if (rankScore.compareTo(gradeApMin) >= 0 && rr >= rrMinAp.doubleValue()) {
+            // v2.7 A6: mainStream 從 hard block 改 ranking boost（主流族群標的加分）
+            BigDecimal adjustedRank = rankScore;
+            if (Boolean.TRUE.equals(c.mainStream())) {
+                adjustedRank = rankScore.add(mainStreamBoost);
+            }
+
+            // 分桶：A+ / A / B / C（用 adjustedRank）
+            if (adjustedRank.compareTo(gradeApMin) >= 0 && rr >= rrMinAp.doubleValue()) {
                 apBucket.add(c);
-            } else if (rankScore.compareTo(gradeAMin) >= 0) {
+            } else if (adjustedRank.compareTo(gradeAMin) >= 0) {
                 aBucket.add(c);
-            } else if (rankScore.compareTo(gradeBMin) >= 0) {
+            } else if (adjustedRank.compareTo(gradeBMin) >= 0) {
                 bBucket.add(c);
             } else {
-                rejected.add(c.stockCode() + " 等級 C（score=" + rankScore + "）");
+                rejected.add(c.stockCode() + " 等級 C（rank=" + rankScore
+                        + (Boolean.TRUE.equals(c.mainStream()) ? " +boost=" + mainStreamBoost : "")
+                        + "）");
             }
         }
 
@@ -167,29 +205,33 @@ public class FinalDecisionEngine {
     }
 
     /**
-     * 基本市場條件驗證（補充 VetoEngine 未涵蓋的量價/技術條件）。
-     * 回傳 null 表示通過；回傳字串說明被過濾原因。
+     * 基本市場條件驗證（v2.7：依 session 差異化）。
+     *
+     * <p>v2.7 變更：</p>
+     * <ul>
+     *   <li>A5: {@code entryTriggered} 檢查移到 {@link ExecutionTimingEngine}，本方法不再檢查</li>
+     *   <li>A6: {@code mainStream} 從 hard block 改 ranking boost，本方法不再檢查</li>
+     *   <li>A7: {@code belowOpen} / {@code belowPrevClose} 只在 {@link MarketSession#LIVE_TRADING} 做 hard block</li>
+     * </ul>
+     *
+     * @return null 表示通過；非 null 為排除原因
      */
-    private String validateBasicConditions(FinalDecisionCandidateRequest c, String marketGrade) {
-        if (!Boolean.TRUE.equals(c.mainStream())) {
-            return "非主流族群";
-        }
+    private String validateBasicConditions(FinalDecisionCandidateRequest c, String marketGrade,
+                                            MarketSession session) {
         if (Boolean.TRUE.equals(c.falseBreakout())) {
             return "假突破風險";
         }
-        if (Boolean.TRUE.equals(c.belowOpen()) || Boolean.TRUE.equals(c.belowPrevClose())) {
-            return "跌破開盤或昨收";
+
+        // v2.7 A7: 盤前試撮 / 開盤驗證中，belowOpen/belowPrevClose 不可作為 hard block
+        if (session.allowsPriceGateHardBlock()) {
+            if (Boolean.TRUE.equals(c.belowOpen()) || Boolean.TRUE.equals(c.belowPrevClose())) {
+                return "跌破開盤或昨收";
+            }
         }
 
         String entryType = normalize(c.entryType());
         if (!("PULLBACK".equals(entryType) || "BREAKOUT".equals(entryType) || "REVERSAL".equals(entryType))) {
             return "不符合允許進場型態";
-        }
-
-        // entry trigger 檢查：需有明確進場訊號
-        boolean requireTrigger = config.getBoolean("decision.require_entry_trigger", true);
-        if (requireTrigger && !Boolean.TRUE.equals(c.entryTriggered())) {
-            return "尚未觸發進場訊號（突破/回測未確認）";
         }
 
         return null;

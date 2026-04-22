@@ -50,8 +50,10 @@ public class IntradayDecisionWorkflowService {
 
     /**
      * 執行 09:30 最終決策流程。
+     *
+     * @return FinalDecisionResponse（含 ENTER/REST/WAIT），v2.7 新增回傳值讓 scheduler 判斷 orchestration 狀態
      */
-    public void execute(LocalDate tradingDate) {
+    public FinalDecisionResponse execute(LocalDate tradingDate) {
         log.info("[IntradayDecisionWorkflow] 開始 tradingDate={}", tradingDate);
 
         // Step 1: 市場等級確認
@@ -65,6 +67,12 @@ public class IntradayDecisionWorkflowService {
         var result = finalDecisionService.evaluateAndPersist(tradingDate);
         log.info("[IntradayDecisionWorkflow] 管線完成 — 決策={} 入選={} 檔",
                 result.decision(), result.selectedStocks().size());
+
+        // v2.7: WAIT 不發單獨 LINE 訊息（Austin 2026-04-22 拍板：08:30 + 09:30 兩則）
+        if ("WAIT".equalsIgnoreCase(result.decision())) {
+            log.info("[IntradayDecisionWorkflow] decision=WAIT，跳過 LINE 發送（session 未到 LIVE_TRADING）");
+            return result;
+        }
 
         // Step 5: LINE 通知（由 scheduling.line_notify_enabled 控制）
         boolean lineEnabled = config.getBoolean("scheduling.line_notify_enabled", false);
@@ -86,6 +94,7 @@ public class IntradayDecisionWorkflowService {
         } else {
             log.info("[IntradayDecisionWorkflow] LINE 通知未啟用（scheduling.line_notify_enabled=false）");
         }
+        return result;
     }
 
 

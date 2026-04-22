@@ -1,5 +1,6 @@
 package com.austin.trading.scheduler;
 
+import com.austin.trading.dto.response.FinalDecisionResponse;
 import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
@@ -45,10 +46,19 @@ public class FinalDecision0930Job {
             return;
         }
         try {
-            workflowService.execute(today);
-            log.info("[FinalDecision0930Job] completed");
-            schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), "workflow completed");
-            orchestrationService.markDone(today, step, "workflow completed");
+            FinalDecisionResponse response = workflowService.execute(today);
+            String decision = response == null ? "UNKNOWN" : response.decision();
+            log.info("[FinalDecision0930Job] completed decision={}", decision);
+            schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(),
+                    "workflow completed decision=" + decision);
+
+            // v2.7: WAIT 時 orchestration step 不 markDone（維持 RUNNING 狀態待 09:30+ 再重試）
+            // 避免 09:30 前手動觸發就把 step 鎖死成 DONE
+            if ("WAIT".equalsIgnoreCase(decision)) {
+                log.info("[FinalDecision0930Job] decision=WAIT → step 保留 RUNNING，等 09:30+ 重新觸發");
+            } else {
+                orchestrationService.markDone(today, step, "workflow completed: " + decision);
+            }
         } catch (Exception e) {
             orchestrationService.markFailed(today, step, e.getMessage());
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());

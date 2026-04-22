@@ -7,31 +7,31 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * 共識評分引擎（v2.0 BC Sniper）。
+ * 共識評分引擎（v2.7 MVP Refactor — 去 Java 化）。
  *
- * <h3>設計邏輯</h3>
- * <p>在加權平均之外，額外計算「AI 一致性分數」，懲罰分歧大的標的。
- * 最終 final_rank_score = min(ai_weighted_score, consensus_score)，
- * 確保三個 AI 分歧時分數不會虛高。</p>
+ * <h3>設計變更（v2.7）</h3>
+ * <p>原 v2.0 算法把 Java 結構分同時當 base 下限 + 分歧懲罰來源，
+ * 讓 AI 雙高（Claude/Codex 高）但 Java 結構中等的強股被雙重打壓。
+ * v2.7 改為只看 Claude/Codex 之間的一致性：</p>
  *
  * <pre>
- * consensus_base      = min(java, claude, codex)
+ * // v2.7
+ * base    = min(claude, codex)
+ * penalty = |claude - codex| * consensus.penalty_cx
+ * consensus_score = max(base - penalty, 0)
  *
- * disagreement_penalty =
- *   |java - claude| * weight_jc
- *   + |java - codex|  * weight_jx
- *   + |claude - codex|* weight_cx
- *
- * consensus_score = max(consensus_base - disagreement_penalty, 0)
+ * // 若 claude 或 codex 其中一方為 null → 回傳 null，由呼叫方 fallback 到 weighted_score
  * </pre>
  *
- * <p>所有懲罰係數均可透過 score_config 調整：
+ * <p>Java 結構分繼續在 {@code WeightedScoringEngine} 扮演 40% 權重角色，
+ * 不再介入共識懲罰。</p>
+ *
+ * <h3>Config</h3>
  * <ul>
- *   <li>{@code consensus.penalty_jc} — java vs claude 懲罰係數（預設 0.25）</li>
- *   <li>{@code consensus.penalty_jx} — java vs codex  懲罰係數（預設 0.20）</li>
- *   <li>{@code consensus.penalty_cx} — claude vs codex 懲罰係數（預設 0.20）</li>
+ *   <li>{@code consensus.penalty_cx} — Claude 與 Codex 分歧懲罰係數（預設 0.20）</li>
+ *   <li>{@code consensus.penalty_jc} — <b>廢棄</b>（v2.7 不再讀取）</li>
+ *   <li>{@code consensus.penalty_jx} — <b>廢棄</b>（v2.7 不再讀取）</li>
  * </ul>
- * </p>
  */
 @Component
 public class ConsensusScoringEngine {
@@ -54,53 +54,43 @@ public class ConsensusScoringEngine {
     ) {}
 
     /**
-     * 計算共識分與分歧懲罰。
+     * 計算 AI 共識分與分歧懲罰（v2.7）。
      *
-     * <p>若任一分數為 null，只用現有分數計算；
-     * 若三個全為 null，回傳 consensusScore=0, penalty=0。</p>
+     * <p>算法：
+     * <ul>
+     *   <li>若 {@code claudeScore} 與 {@code codexScore} 都有值 →
+     *       base=min(claude,codex)，penalty=|diff|×{@code consensus.penalty_cx}，
+     *       consensus=max(base−penalty, 0)</li>
+     *   <li>若其中一方為 null → 無法判斷 AI 共識，
+     *       回傳 {@code consensusScore=null}（呼叫方應 fallback 到 weighted_score）</li>
+     *   <li>若兩方都為 null → 同上，回傳 null</li>
+     * </ul>
+     *
+     * <p>{@code javaScore} 僅作為輸入欄位保留（向下相容 ConsensusInput 結構），
+     * v2.7 後不再用於計算。</p>
      */
     public ConsensusResult compute(ConsensusInput input) {
-        BigDecimal java   = input.javaScore();
         BigDecimal claude = input.claudeScore();
         BigDecimal codex  = input.codexScore();
 
-        // 找出所有非 null 分數中的最小值（consensus_base）
-        BigDecimal base = minOf(java, claude, codex);
-        if (base == null) {
-            return new ConsensusResult(BigDecimal.ZERO, BigDecimal.ZERO);
+        // v2.7: 只看 Claude/Codex 之間的一致性
+        // 若任一方為 null → AI 層無共識可言，回 null 讓下游 fallback
+        if (claude == null || codex == null) {
+            return new ConsensusResult(null, BigDecimal.ZERO);
         }
 
-        // 分歧懲罰係數（可從 config 調整）
-        BigDecimal wJC = config.getDecimal("consensus.penalty_jc", new BigDecimal("0.25"));
-        BigDecimal wJX = config.getDecimal("consensus.penalty_jx", new BigDecimal("0.20"));
-        BigDecimal wCX = config.getDecimal("consensus.penalty_cx", new BigDecimal("0.20"));
+        BigDecimal penaltyWeight = config.getDecimal("consensus.penalty_cx", new BigDecimal("0.20"));
+        BigDecimal diff = claude.subtract(codex).abs();
+        BigDecimal penalty = diff.multiply(penaltyWeight);
 
-        BigDecimal penalty = BigDecimal.ZERO;
-        if (java != null && claude != null) {
-            penalty = penalty.add(java.subtract(claude).abs().multiply(wJC));
-        }
-        if (java != null && codex != null) {
-            penalty = penalty.add(java.subtract(codex).abs().multiply(wJX));
-        }
-        if (claude != null && codex != null) {
-            penalty = penalty.add(claude.subtract(codex).abs().multiply(wCX));
-        }
+        BigDecimal base = claude.min(codex);
+        BigDecimal consensus = base.subtract(penalty)
+                .max(BigDecimal.ZERO)
+                .setScale(3, RoundingMode.HALF_UP);
 
-        BigDecimal rawConsensus = base.subtract(penalty);
-        BigDecimal consensus = rawConsensus.max(BigDecimal.ZERO).setScale(3, RoundingMode.HALF_UP);
-
-        return new ConsensusResult(consensus, penalty.setScale(3, RoundingMode.HALF_UP));
-    }
-
-    // ── 私有工具 ──────────────────────────────────────────────────────────────
-
-    /** 回傳所有非 null 值中的最小值，若全為 null 則回傳 null */
-    private BigDecimal minOf(BigDecimal... values) {
-        BigDecimal min = null;
-        for (BigDecimal v : values) {
-            if (v == null) continue;
-            min = (min == null) ? v : v.min(min);
-        }
-        return min;
+        return new ConsensusResult(
+                consensus,
+                penalty.setScale(3, RoundingMode.HALF_UP)
+        );
     }
 }
