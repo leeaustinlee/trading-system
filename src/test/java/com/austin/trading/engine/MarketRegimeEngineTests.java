@@ -172,4 +172,70 @@ class MarketRegimeEngineTests {
         assertThat(d.reasonsJson()).isNotNull();
         assertThat(d.reasonsJson()).startsWith("[").endsWith("]");
     }
+
+    // ── v2.6 MVP: confidence + missingSignals ────────────────────────────────
+
+    @Test
+    void fullInput_confidenceHigh() {
+        MarketRegimeDecision d = engine.evaluate(baseBuilder().build());
+        assertThat(d.confidenceLevel()).isEqualTo(MarketRegimeDecision.CONFIDENCE_HIGH);
+        assertThat(d.missingSignals()).isEmpty();
+    }
+
+    @Test
+    void oneMissing_confidenceMedium() {
+        MarketRegimeDecision d = engine.evaluate(baseBuilder()
+                .leadersStrongRatio(null)
+                .build());
+        assertThat(d.confidenceLevel()).isEqualTo(MarketRegimeDecision.CONFIDENCE_MEDIUM);
+        assertThat(d.missingSignals()).containsExactly("leadersStrong");
+    }
+
+    @Test
+    void twoMissing_confidenceMedium() {
+        MarketRegimeDecision d = engine.evaluate(baseBuilder()
+                .breadthPositiveRatio(null)
+                .indexDistanceFromMa10Pct(null)
+                .build());
+        assertThat(d.confidenceLevel()).isEqualTo(MarketRegimeDecision.CONFIDENCE_MEDIUM);
+        assertThat(d.missingSignals()).hasSize(2);
+    }
+
+    @Test
+    void threeMissing_confidenceLow() {
+        MarketRegimeDecision d = engine.evaluate(baseBuilder()
+                .breadthPositiveRatio(null)
+                .breadthNegativeRatio(null)
+                .leadersStrongRatio(null)
+                .build());
+        assertThat(d.confidenceLevel()).isEqualTo(MarketRegimeDecision.CONFIDENCE_LOW);
+        assertThat(d.missingSignals()).hasSize(3);
+    }
+
+    @Test
+    void allMissing_confidenceLow_andNotHardBiasedWeak() {
+        // 全部關鍵 signals 缺 → LOW confidence，但不因此被判為 WEAK_DOWNTREND
+        // （原本 null→fallback→neutral 會落 RANGE_CHOP，仍保留此行為，confidence 標 LOW 供下游判斷）
+        MarketRegimeDecision d = engine.evaluate(baseBuilder()
+                .breadthPositiveRatio(null)
+                .breadthNegativeRatio(null)
+                .leadersStrongRatio(null)
+                .indexDistanceFromMa10Pct(null)
+                .indexDistanceFromMa20Pct(null)
+                .intradayVolatilityPct(null)
+                .build());
+        assertThat(d.confidenceLevel()).isEqualTo(MarketRegimeDecision.CONFIDENCE_LOW);
+        assertThat(d.regimeType()).isEqualTo(MarketRegimeEngine.REGIME_RANGE_CHOP);
+        // 關鍵：不偏弱勢（WEAK_DOWNTREND）
+        assertThat(d.regimeType()).isNotEqualTo(MarketRegimeEngine.REGIME_WEAK_DOWNTREND);
+    }
+
+    @Test
+    void missingSignals_listedInReasons() {
+        MarketRegimeDecision d = engine.evaluate(baseBuilder()
+                .leadersStrongRatio(null)
+                .build());
+        assertThat(d.reasonsJson()).contains("missing_signals=leadersStrong");
+        assertThat(d.reasonsJson()).contains("confidence=MEDIUM");
+    }
 }

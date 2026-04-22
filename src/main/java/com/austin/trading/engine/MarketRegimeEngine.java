@@ -68,6 +68,15 @@ public class MarketRegimeEngine {
     public MarketRegimeDecision evaluate(MarketRegimeInput input) {
         List<String> reasons = new ArrayList<>();
 
+        // v2.6 MVP：追蹤 null input 以產出 confidence level + missingSignals
+        List<String> missingSignals = new ArrayList<>();
+        if (input.breadthPositiveRatio()     == null) missingSignals.add("breadthPositive");
+        if (input.breadthNegativeRatio()     == null) missingSignals.add("breadthNegative");
+        if (input.leadersStrongRatio()       == null) missingSignals.add("leadersStrong");
+        if (input.indexDistanceFromMa10Pct() == null) missingSignals.add("ma10Dist");
+        if (input.indexDistanceFromMa20Pct() == null) missingSignals.add("ma20Dist");
+        if (input.intradayVolatilityPct()    == null) missingSignals.add("volatility");
+
         BigDecimal breadthPos  = safe(input.breadthPositiveRatio(), new BigDecimal("0.50"));
         BigDecimal breadthNeg  = safe(input.breadthNegativeRatio(), new BigDecimal("0.50"));
         BigDecimal leaders     = safe(input.leadersStrongRatio(),   new BigDecimal("0.50"));
@@ -124,10 +133,18 @@ public class MarketRegimeEngine {
         boolean tradeAllowed = !REGIME_PANIC_VOLATILITY.equals(regimeType);
         List<String> allowedSetups = resolveAllowedSetups(regimeType);
 
+        // v2.6 MVP：計算 confidence level
+        String confidenceLevel = computeConfidenceLevel(missingSignals.size());
+        if (!missingSignals.isEmpty()) {
+            reasons.add("missing_signals=" + String.join(",", missingSignals)
+                    + " confidence=" + confidenceLevel);
+        }
+
         String summary = String.format(
-                "regime=%s trade_allowed=%b risk_mult=%s grade=%s breadth_pos=%s leaders=%s ma10=%s ma20=%s vol=%s",
+                "regime=%s trade_allowed=%b risk_mult=%s grade=%s conf=%s miss=%d breadth_pos=%s leaders=%s ma10=%s ma20=%s vol=%s",
                 regimeType, tradeAllowed, riskMultiplier,
                 grade.isEmpty() ? "?" : grade,
+                confidenceLevel, missingSignals.size(),
                 breadthPos, leaders, ma10Dist, ma20Dist, volatility);
 
         String reasonsJson = serializeReasons(reasons);
@@ -144,8 +161,24 @@ public class MarketRegimeEngine {
                 allowedSetups,
                 summary,
                 reasonsJson,
-                inputSnapshotJson
+                inputSnapshotJson,
+                confidenceLevel,
+                List.copyOf(missingSignals)
         );
+    }
+
+    /**
+     * v2.6 MVP: 依缺資料數量計算 confidence。
+     * <ul>
+     *   <li>0 個缺 → HIGH</li>
+     *   <li>1~2 個缺 → MEDIUM</li>
+     *   <li>3+ 個缺 → LOW</li>
+     * </ul>
+     */
+    private String computeConfidenceLevel(int missingCount) {
+        if (missingCount == 0) return MarketRegimeDecision.CONFIDENCE_HIGH;
+        if (missingCount <= 2) return MarketRegimeDecision.CONFIDENCE_MEDIUM;
+        return MarketRegimeDecision.CONFIDENCE_LOW;
     }
 
     public boolean isTradeAllowed(MarketRegimeDecision decision) {

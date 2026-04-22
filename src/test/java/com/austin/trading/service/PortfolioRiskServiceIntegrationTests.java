@@ -71,11 +71,13 @@ class PortfolioRiskServiceIntegrationTests {
 
     @Test
     void evaluatePortfolioGate_portfolioFull_blocked() {
-        // 3 non-STRONG positions with default max=3
+        // MVP v2.6: max_open_positions 已從 3 調整為 4。
+        // 4 non-STRONG positions → 等於 max → portfolio full → block
         List<PositionEntity> positions = List.of(
                 openPosition("A", "HOLD", new BigDecimal("1000"), new BigDecimal("50")),
                 openPosition("B", "WEAK", new BigDecimal("1000"), new BigDecimal("50")),
-                openPosition("C", "HOLD", new BigDecimal("1000"), new BigDecimal("50"))
+                openPosition("C", "HOLD", new BigDecimal("1000"), new BigDecimal("50")),
+                openPosition("D", "HOLD", new BigDecimal("1000"), new BigDecimal("50"))
         );
 
         PortfolioRiskDecision d = service.evaluatePortfolioGate(positions, uniqueDate);

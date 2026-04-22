@@ -13,6 +13,9 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+/**
+ * VetoEngine tests — v2.6 MVP Refactor：SETUP 分支 hard + soft penalty 分流。
+ */
 class VetoEngineTests {
 
     private VetoEngine engine;
@@ -31,150 +34,189 @@ class VetoEngineTests {
         when(config.getInt(eq("veto.theme_rank_max"), anyInt())).thenReturn(2);
         when(config.getDecimal(eq("veto.final_theme_score_min"), any())).thenReturn(new BigDecimal("7.5"));
         when(config.getDecimal(eq("veto.score_divergence_max"), any())).thenReturn(new BigDecimal("2.5"));
+        // v2.6 MVP penalty defaults
+        when(config.getDecimal(eq("penalty.rr_below_min"), any())).thenReturn(new BigDecimal("1.5"));
+        when(config.getDecimal(eq("penalty.not_in_final_plan"), any())).thenReturn(new BigDecimal("0.5"));
+        when(config.getDecimal(eq("penalty.high_val_weak_market"), any())).thenReturn(new BigDecimal("0.8"));
+        when(config.getDecimal(eq("penalty.no_theme"), any())).thenReturn(new BigDecimal("1.0"));
+        when(config.getDecimal(eq("penalty.codex_low"), any())).thenReturn(new BigDecimal("1.0"));
+        when(config.getDecimal(eq("penalty.theme_not_top"), any())).thenReturn(new BigDecimal("0.8"));
+        when(config.getDecimal(eq("penalty.theme_score_too_low"), any())).thenReturn(new BigDecimal("0.8"));
+        when(config.getDecimal(eq("penalty.score_divergence_high"), any())).thenReturn(new BigDecimal("1.5"));
+        when(config.getDecimal(eq("penalty.entry_too_extended"), any())).thenReturn(new BigDecimal("1.0"));
         engine = new VetoEngine(config);
     }
 
-    // ── v1.0 規則 ────────────────────────────────────────────────────────────
+    // ── HARD VETO（真正風險紅線，觸發 vetoed=true）────────────────────────────
 
     @Test
-    void marketGradeCVeto() {
+    void marketGradeC_isHardVeto() {
         VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
                 .marketGrade("C").build());
         assertTrue(result.vetoed());
-        assertTrue(result.reasons().contains("MARKET_GRADE_C"));
+        assertTrue(result.hardReasons().contains("MARKET_GRADE_C"));
+        assertEquals(BigDecimal.ZERO, result.scoringPenalty(),
+                "hard veto 觸發時不累 penalty");
     }
 
     @Test
-    void decisionLockedVeto() {
+    void decisionLocked_isHardVeto() {
         VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
                 .decisionLock("LOCKED").build());
         assertTrue(result.vetoed());
-        assertTrue(result.reasons().contains("DECISION_LOCKED"));
+        assertTrue(result.hardReasons().contains("DECISION_LOCKED"));
     }
 
     @Test
-    void rrBelowMinForGradeA() {
-        // Grade A，rr < 2.2 → veto
+    void noStopLoss_isHardVeto() {
         VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
-                .riskRewardRatio(new BigDecimal("2.0")).build());
+                .stopLossPrice(null).build());
         assertTrue(result.vetoed());
-        assertTrue(result.reasons().contains("RR_BELOW_MIN"));
+        assertTrue(result.hardReasons().contains("NO_STOP_LOSS"));
     }
 
     @Test
-    void rrAboveMinShouldPass() {
-        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder().build());
-        assertFalse(result.reasons().contains("RR_BELOW_MIN"));
-    }
-
-    // ── v2.0 BC Sniper 規則 ───────────────────────────────────────────────────
-
-    @Test
-    void noThemeVetoWhenRequireThemeIsTrue() {
+    void timeDecayLate_inNonAMarket_isHardVeto() {
         VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
-                .hasTheme(false).build());
+                .marketGrade("B").timeDecayStage("LATE").build());
         assertTrue(result.vetoed());
-        assertTrue(result.reasons().contains("NO_THEME"));
+        assertTrue(result.hardReasons().contains("TIME_DECAY_LATE"));
     }
 
     @Test
-    void hasThemeShouldNotTriggerNoTheme() {
-        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder().build());
-        assertFalse(result.reasons().contains("NO_THEME"));
-    }
-
-    @Test
-    void codexScoreLowVeto() {
-        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
-                .codexScore(new BigDecimal("5.0")).build());
-        assertTrue(result.vetoed());
-        assertTrue(result.reasons().contains("CODEX_SCORE_LOW"));
-    }
-
-    @Test
-    void codexScoreAboveMinShouldPass() {
-        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
-                .codexScore(new BigDecimal("7.0")).build());
-        assertFalse(result.reasons().contains("CODEX_SCORE_LOW"));
-    }
-
-    @Test
-    void themeNotInTopVeto() {
-        // themeRank > 2 → veto
-        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
-                .themeRank(3).build());
-        assertTrue(result.vetoed());
-        assertTrue(result.reasons().contains("THEME_NOT_IN_TOP"));
-    }
-
-    @Test
-    void themeRankWithinLimitShouldPass() {
-        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
-                .themeRank(2).build());
-        assertFalse(result.reasons().contains("THEME_NOT_IN_TOP"));
-    }
-
-    @Test
-    void themeScoreTooLowVeto() {
-        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
-                .finalThemeScore(new BigDecimal("6.0")).build());
-        assertTrue(result.vetoed());
-        assertTrue(result.reasons().contains("THEME_SCORE_TOO_LOW"));
-    }
-
-    @Test
-    void scoreDivergenceHighVeto() {
-        // |java - claude| = |9.0 - 6.0| = 3.0 >= 2.5 → veto
-        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
-                .javaScore(new BigDecimal("9.0"))
-                .claudeScore(new BigDecimal("6.0")).build());
-        assertTrue(result.vetoed());
-        assertTrue(result.reasons().contains("SCORE_DIVERGENCE_HIGH"));
-    }
-
-    @Test
-    void scoreDivergenceBelowMaxShouldPass() {
-        // |9.0 - 7.0| = 2.0 < 2.5 → pass
-        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
-                .javaScore(new BigDecimal("9.0"))
-                .claudeScore(new BigDecimal("7.0")).build());
-        assertFalse(result.reasons().contains("SCORE_DIVERGENCE_HIGH"));
-    }
-
-    @Test
-    void volumeSpikeWithoutBreakoutVeto() {
+    void volumeSpikeWithoutBreakout_isHardVeto() {
         VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
                 .volumeSpike(true).priceNotBreakHigh(true).build());
         assertTrue(result.vetoed());
-        assertTrue(result.reasons().contains("VOLUME_SPIKE_NO_BREAKOUT"));
+        assertTrue(result.hardReasons().contains("VOLUME_SPIKE_NO_BREAKOUT"));
     }
 
+    // ── SOFT PENALTY（扣分但 vetoed=false、仍進排序）──────────────────────────
+
     @Test
-    void volumeSpikeButPriceBreakHighShouldPass() {
-        // 有量且有突破 → 不 veto
+    void rrBelowMin_isSoftPenalty() {
         VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
-                .volumeSpike(true).priceNotBreakHigh(false).build());
-        assertFalse(result.reasons().contains("VOLUME_SPIKE_NO_BREAKOUT"));
+                .riskRewardRatio(new BigDecimal("2.0")).build());
+        assertFalse(result.vetoed(), "RR_BELOW_MIN 改 soft penalty，不再 hard veto");
+        assertTrue(result.penaltyReasons().contains("PENALTY:RR_BELOW_MIN"));
+        assertEquals(new BigDecimal("1.5"), result.scoringPenalty());
     }
 
     @Test
-    void entryTooExtendedVeto() {
+    void notInFinalPlan_isSoftPenalty() {
+        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
+                .includeInFinalPlan(false).build());
+        assertFalse(result.vetoed());
+        assertTrue(result.penaltyReasons().contains("PENALTY:NOT_IN_FINAL_PLAN"));
+        assertEquals(new BigDecimal("0.5"), result.scoringPenalty());
+    }
+
+    @Test
+    void highValWeakMarket_isSoftPenalty() {
+        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
+                .marketGrade("B").valuationMode("VALUE_HIGH").build());
+        assertFalse(result.vetoed());
+        assertTrue(result.penaltyReasons().contains("PENALTY:HIGH_VAL_WEAK_MARKET"));
+    }
+
+    @Test
+    void noTheme_isSoftPenalty() {
+        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
+                .hasTheme(false).build());
+        assertFalse(result.vetoed(), "NO_THEME 改 soft penalty，不再 hard veto");
+        assertTrue(result.penaltyReasons().contains("PENALTY:NO_THEME"));
+        assertEquals(new BigDecimal("1.0"), result.scoringPenalty());
+    }
+
+    @Test
+    void codexScoreLow_isSoftPenalty() {
+        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
+                .codexScore(new BigDecimal("5.0")).build());
+        assertFalse(result.vetoed());
+        assertTrue(result.penaltyReasons().contains("PENALTY:CODEX_SCORE_LOW"));
+    }
+
+    @Test
+    void themeNotInTop_isSoftPenalty() {
+        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
+                .themeRank(3).build());
+        assertFalse(result.vetoed());
+        assertTrue(result.penaltyReasons().contains("PENALTY:THEME_NOT_IN_TOP"));
+    }
+
+    @Test
+    void themeScoreTooLow_isSoftPenalty() {
+        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
+                .finalThemeScore(new BigDecimal("6.0")).build());
+        assertFalse(result.vetoed());
+        assertTrue(result.penaltyReasons().contains("PENALTY:THEME_SCORE_TOO_LOW"));
+    }
+
+    @Test
+    void scoreDivergenceHigh_isSoftPenalty() {
+        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
+                .javaScore(new BigDecimal("9.0"))
+                .claudeScore(new BigDecimal("6.0")).build());
+        assertFalse(result.vetoed());
+        assertTrue(result.penaltyReasons().contains("PENALTY:SCORE_DIVERGENCE_HIGH"));
+    }
+
+    @Test
+    void entryTooExtended_isSoftPenalty() {
         VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
                 .entryTooExtended(true).build());
-        assertTrue(result.vetoed());
-        assertTrue(result.reasons().contains("ENTRY_TOO_EXTENDED"));
+        assertFalse(result.vetoed());
+        assertTrue(result.penaltyReasons().contains("PENALTY:ENTRY_TOO_EXTENDED"));
+    }
+
+    // ── 組合行為 ──────────────────────────────────────────────────────────────
+
+    @Test
+    void cleanCandidate_noPenaltyNoVeto() {
+        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder().build());
+        assertFalse(result.vetoed());
+        assertEquals(BigDecimal.ZERO, result.scoringPenalty());
+        assertTrue(result.penaltyReasons().isEmpty());
+        assertTrue(result.hardReasons().isEmpty());
     }
 
     @Test
-    void cleanCandidateShouldNotBeVetoed() {
-        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder().build());
-        assertFalse(result.vetoed(),
-                "乾淨候選股不應被 veto，實際原因：" + result.reasons());
+    void hardAndPenaltyTogether_hardBlocksAndSkipsPenalty() {
+        // marketGrade=C (hard) + rrBelowMin (penalty) 同時觸發 → 只取 hard，penalty=0
+        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
+                .marketGrade("C")
+                .riskRewardRatio(new BigDecimal("1.0")).build());
+        assertTrue(result.vetoed());
+        assertTrue(result.hardReasons().contains("MARKET_GRADE_C"));
+        assertEquals(BigDecimal.ZERO, result.scoringPenalty(),
+                "hard veto 觸發後不再累 penalty（fail-fast）");
+        assertTrue(result.penaltyReasons().isEmpty());
+    }
+
+    @Test
+    void multiplePenaltiesAccumulate() {
+        // rrBelowMin(1.5) + notInPlan(0.5) + noTheme(1.0) = 3.0
+        VetoEngine.VetoResult result = engine.evaluate(baseInputBuilder()
+                .riskRewardRatio(new BigDecimal("1.5"))
+                .includeInFinalPlan(false)
+                .hasTheme(false).build());
+        assertFalse(result.vetoed());
+        assertEquals(new BigDecimal("3.0"), result.scoringPenalty());
+        assertEquals(3, result.penaltyReasons().size());
+    }
+
+    @Test
+    void legacyReasonsCombinesHardAndPenalty() {
+        // 為向下相容（FinalDecisionService 寫入 stock_evaluation.veto_reasons 等），
+        // reasons() 應反映當下所有被觸發的條件。
+        VetoEngine.VetoResult vetoResult = engine.evaluate(baseInputBuilder()
+                .hasTheme(false).build());
+        assertFalse(vetoResult.vetoed());
+        assertTrue(vetoResult.reasons().contains("PENALTY:NO_THEME"));
     }
 
     // ── 工具方法 ──────────────────────────────────────────────────────────────
 
-    /** 返回一個「完全合格」的 VetoInput Builder（預設不觸發任何 veto） */
     private InputBuilder baseInputBuilder() {
         return new InputBuilder()
                 .marketGrade("A")

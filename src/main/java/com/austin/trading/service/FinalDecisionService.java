@@ -10,9 +10,11 @@ import com.austin.trading.dto.internal.SetupDecision;
 import com.austin.trading.dto.internal.TimingEvaluationInput;
 import com.austin.trading.dto.request.FinalDecisionCandidateRequest;
 import com.austin.trading.dto.request.FinalDecisionEvaluateRequest;
+import com.austin.trading.dto.request.MarketSnapshotCreateRequest;
 import com.austin.trading.domain.enums.StrategyType;
 import com.austin.trading.dto.request.PositionSizingEvaluateRequest;
 import com.austin.trading.dto.request.StopLossTakeProfitEvaluateRequest;
+import com.austin.trading.dto.request.TradingStateUpsertRequest;
 import com.austin.trading.dto.response.FinalDecisionRecordResponse;
 import com.austin.trading.dto.response.FinalDecisionResponse;
 import com.austin.trading.dto.response.FinalDecisionSelectedStockResponse;
@@ -515,6 +517,7 @@ public class FinalDecisionService {
         entity.setStrategyType(strategyType);
         fillAiContext(entity, readiness);
         finalDecisionRepository.save(entity);
+        syncDashboardState(tradingDate, response, readiness);
 
         // v2.1/v2.2: 最終決策產出後，標記來源 AI task 為 FINALIZED（只對 CODEX_DONE 有效）
         if (readiness != null && readiness.aiTaskId() != null
@@ -540,6 +543,118 @@ public class FinalDecisionService {
         entity.setSourceTaskType(readiness.sourceTaskType());
         entity.setClaudeDoneAt(readiness.claudeDoneAt());
         entity.setCodexDoneAt(readiness.codexDoneAt());
+    }
+
+    private void syncDashboardState(LocalDate tradingDate,
+                                    FinalDecisionResponse response,
+                                    AiReadiness readiness) {
+        try {
+            Optional<TradingStateResponse> existingState = tradingStateService.getStateByDate(tradingDate);
+            Optional<MarketCurrentResponse> existingMarket = marketDataService.getMarketPreferToday()
+                    .filter(m -> tradingDate.equals(m.tradingDate()));
+            Optional<MarketRegimeDecision> latestRegime = marketRegimeService.getLatestForToday()
+                    .filter(r -> tradingDate.equals(r.tradingDate()))
+                    .or(marketRegimeService::getLatest);
+
+            String marketGrade = firstNonBlank(
+                    latestRegime.map(MarketRegimeDecision::marketGrade).orElse(null),
+                    existingState.map(TradingStateResponse::marketGrade).orElse(null),
+                    existingMarket.map(MarketCurrentResponse::marketGrade).orElse(null),
+                    "B"
+            );
+            String marketPhase = resolveMarketPhase(readiness);
+            String timeDecayStage = TradingStateService.resolveTimeDecayForNow();
+            String decisionLock = firstNonBlank(
+                    existingState.map(TradingStateResponse::decisionLock).orElse(null),
+                    "NONE"
+            );
+            String hourlyGate = firstNonBlank(
+                    existingState.map(TradingStateResponse::hourlyGate).orElse(null),
+                    "ON"
+            );
+            String monitorMode = firstNonBlank(
+                    existingState.map(TradingStateResponse::monitorMode).orElse(null),
+                    "WATCH"
+            );
+            String payloadJson = buildDashboardSyncPayload(response, readiness, marketPhase, timeDecayStage);
+
+            marketDataService.createSnapshot(new MarketSnapshotCreateRequest(
+                    tradingDate,
+                    marketGrade,
+                    marketPhase,
+                    response.decision(),
+                    payloadJson
+            ));
+
+            tradingStateService.create(new TradingStateUpsertRequest(
+                    tradingDate,
+                    marketGrade,
+                    decisionLock,
+                    timeDecayStage,
+                    hourlyGate,
+                    monitorMode,
+                    payloadJson
+            ));
+        } catch (Exception e) {
+            log.warn("[FinalDecisionService] dashboard sync skipped for {}: {}", tradingDate, e.getMessage(), e);
+        }
+    }
+
+    private String resolveMarketPhase(AiReadiness readiness) {
+        if (readiness == null || readiness.sourceTaskType() == null || readiness.sourceTaskType().isBlank()) {
+            return "INTRADAY";
+        }
+        return switch (readiness.sourceTaskType().toUpperCase()) {
+            case "PREMARKET" -> "PREMARKET";
+            case "OPENING" -> "OPENING";
+            case "MIDDAY" -> "MIDDAY";
+            case "POSTMARKET", "T86_TOMORROW" -> "CLOSE";
+            default -> "INTRADAY";
+        };
+    }
+
+    private String buildDashboardSyncPayload(FinalDecisionResponse response,
+                                             AiReadiness readiness,
+                                             String marketPhase,
+                                             String timeDecayStage) {
+        String aiStatus = readiness == null || readiness.mode() == null
+                ? "UNKNOWN"
+                : readiness.mode().name();
+        String sourceTaskType = readiness == null ? null : readiness.sourceTaskType();
+        String fallbackReason = readiness == null ? null : readiness.fallbackReason();
+        return "{"
+                + "\"source\":\"FINAL_DECISION\","
+                + "\"market_phase\":\"" + escapeJson(marketPhase) + "\","
+                + "\"time_decay_stage\":\"" + escapeJson(timeDecayStage) + "\","
+                + "\"decision\":\"" + escapeJson(response.decision()) + "\","
+                + "\"summary\":\"" + escapeJson(response.summary()) + "\","
+                + "\"ai_status\":\"" + escapeJson(aiStatus) + "\","
+                + "\"source_task_type\":" + toJsonStringOrNull(sourceTaskType) + ","
+                + "\"fallback_reason\":" + toJsonStringOrNull(fallbackReason)
+                + "}";
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) return null;
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String toJsonStringOrNull(String value) {
+        return value == null || value.isBlank()
+                ? "null"
+                : "\"" + escapeJson(value) + "\"";
+    }
+
+    private String escapeJson(String value) {
+        if (value == null) return "";
+        return value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"");
     }
 
     // ── v2.1 AI Readiness ────────────────────────────────────────────────────
@@ -863,14 +978,24 @@ public class FinalDecisionService {
 
             // 4. 加權評分與最終排序分（final = min(weighted, consensus) unless vetoed）
             BigDecimal aiWeighted = weightedScoringEngine.computeAiWeightedScore(javaScore, claudeScore, codexScore);
-            BigDecimal finalRank  = weightedScoringEngine.computeFinalRankScore(aiWeighted, consensusScore, veto.vetoed());
+            BigDecimal rawRank    = weightedScoringEngine.computeFinalRankScore(aiWeighted, consensusScore, veto.vetoed());
+            // v2.6 MVP: 套用 VetoEngine soft penalty 扣分（hard veto 時 rawRank 已為 0，不會再扣）
+            BigDecimal finalRank  = veto.vetoed()
+                    ? rawRank
+                    : rawRank.subtract(
+                            veto.scoringPenalty() == null ? BigDecimal.ZERO : veto.scoringPenalty()
+                      ).max(BigDecimal.ZERO);
 
-            // 5. 回寫 stock_evaluation
+            // 5. 回寫 stock_evaluation（含 v2.6 MVP veto trace）
+            double rrForBucket = c.riskRewardRatio() == null ? 0.0 : c.riskRewardRatio();
+            String bucket = computeBucket(finalRank, rrForBucket, veto.vetoed());
             persistScores(tradingDate, c.stockCode(), javaScore, claudeScore, codexScore,
                     aiWeighted, finalRank, consensusScore, disagreementPenalty,
                     veto.vetoed(),
                     veto.reasons().isEmpty() ? null : String.join(",", veto.reasons()),
-                    rankingOrder);
+                    rankingOrder,
+                    rawRank, veto.scoringPenalty(),
+                    veto.hardReasons(), veto.penaltyReasons(), bucket);
 
             // 6. 產生帶完整分數的新 request
             result.add(new FinalDecisionCandidateRequest(
@@ -897,7 +1022,13 @@ public class FinalDecisionService {
                                BigDecimal aiWeighted, BigDecimal finalRank,
                                BigDecimal consensusScore, BigDecimal disagreementPenalty,
                                boolean isVetoed, String vetoReasons,
-                               int rankingOrder) {
+                               int rankingOrder,
+                               // v2.6 MVP trace 新參數
+                               BigDecimal rawRankBeforePenalty,
+                               BigDecimal scoringPenalty,
+                               List<String> hardReasons,
+                               List<String> penaltyReasons,
+                               String bucket) {
         try {
             stockEvaluationRepository.findByTradingDateAndSymbol(date, symbol).ifPresent(eval -> {
                 eval.setJavaStructureScore(javaScore);
@@ -909,17 +1040,108 @@ public class FinalDecisionService {
                 eval.setDisagreementPenalty(disagreementPenalty);
                 eval.setIsVetoed(isVetoed);
                 eval.setRankingOrder(rankingOrder);
-                eval.setScoreVersion(scoreConfigService.getString("scoring.version", "v2.0-bc-sniper"));
+                eval.setScoreVersion(scoreConfigService.getString("scoring.version", "v2.6-mvp-refactor"));
                 if (vetoReasons != null) {
                     String vetoJson = "[\"" + vetoReasons.replace(",", "\",\"") + "\"]";
                     eval.setVetoReasonsJson(vetoJson);
                     eval.setJavaVetoFlags(vetoJson);
                 }
+                // v2.6 MVP：把結構化 veto trace 寫進 payload_json，讓 debug 與 bounded learning 可消費
+                eval.setPayloadJson(buildVetoTracePayload(
+                        rawRankBeforePenalty, scoringPenalty,
+                        hardReasons, penaltyReasons, bucket,
+                        eval.getPayloadJson()));
                 stockEvaluationRepository.save(eval);
             });
         } catch (Exception e) {
             log.warn("[FinalDecisionService] persistScores failed for {}: {}", symbol, e.getMessage());
         }
+    }
+
+    /**
+     * v2.6 MVP: 建構 veto_trace 區塊，保留既有 payload_json 其他欄位。
+     */
+    private String buildVetoTracePayload(BigDecimal rawRank, BigDecimal penalty,
+                                          List<String> hardReasons, List<String> penaltyReasons,
+                                          String bucket, String existingPayload) {
+        String hardJson    = jsonStringArray(hardReasons);
+        String penaltyJson = jsonStringArray(penaltyReasons);
+        String trace = String.format(
+                "\"veto_trace\":{\"bucket\":%s,\"raw_rank\":%s,\"penalty\":%s," +
+                "\"final_rank\":%s,\"hard_reasons\":%s,\"penalty_reasons\":%s}",
+                bucket == null ? "null" : "\"" + bucket + "\"",
+                rawRank == null ? "null" : rawRank.toPlainString(),
+                penalty == null ? "null" : penalty.toPlainString(),
+                rawRank == null || penalty == null
+                        ? "null"
+                        : rawRank.subtract(penalty).max(BigDecimal.ZERO).toPlainString(),
+                hardJson, penaltyJson
+        );
+
+        if (existingPayload == null || existingPayload.isBlank()
+                || !existingPayload.trim().startsWith("{")) {
+            return "{" + trace + "}";
+        }
+        String trimmed = existingPayload.trim();
+        if (trimmed.equals("{}")) return "{" + trace + "}";
+        // 合併：保留原物件，把 veto_trace 覆寫/加入
+        // 簡化處理：若已有 veto_trace 字串就丟棄舊的再加新
+        int vtIdx = trimmed.indexOf("\"veto_trace\"");
+        if (vtIdx >= 0) {
+            // 粗略移除舊 veto_trace（找到對應的 } 與末尾逗號）
+            return "{" + trace + "," +
+                    stripVetoTrace(trimmed.substring(1, trimmed.length() - 1)) + "}";
+        }
+        return "{" + trace + "," + trimmed.substring(1);
+    }
+
+    private String jsonStringArray(List<String> values) {
+        if (values == null || values.isEmpty()) return "[]";
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) sb.append(',');
+            sb.append('"').append(values.get(i).replace("\"", "\\\"")).append('"');
+        }
+        return sb.append(']').toString();
+    }
+
+    /** 粗略移除舊 veto_trace 區塊；因 payload 小 + 手寫格式固定，用字串操作即可。 */
+    private String stripVetoTrace(String inner) {
+        int start = inner.indexOf("\"veto_trace\"");
+        if (start < 0) return inner;
+        int braceStart = inner.indexOf('{', start);
+        if (braceStart < 0) return inner;
+        int depth = 1;
+        int i = braceStart + 1;
+        while (i < inner.length() && depth > 0) {
+            char ch = inner.charAt(i);
+            if (ch == '{') depth++;
+            else if (ch == '}') depth--;
+            i++;
+        }
+        String before = start > 0 ? inner.substring(0, start) : "";
+        String after  = i < inner.length() ? inner.substring(i) : "";
+        // 清理連續逗號
+        if (before.endsWith(",")) before = before.substring(0, before.length() - 1);
+        if (after.startsWith(","))  after  = after.substring(1);
+        if (!before.isEmpty() && !after.isEmpty()) return before + "," + after;
+        return before + after;
+    }
+
+    /**
+     * v2.6 MVP bucket 分級（與 FinalDecisionEngine 對齊）。
+     */
+    private String computeBucket(BigDecimal finalRank, double rr, boolean isVetoed) {
+        if (isVetoed) return "REJECTED_HARD_VETO";
+        if (finalRank == null) return "REJECTED_NO_SCORE";
+        BigDecimal apMin = scoreConfigService.getDecimal("scoring.grade_ap_min", new BigDecimal("8.5"));
+        BigDecimal aMin  = scoreConfigService.getDecimal("scoring.grade_a_min",  new BigDecimal("7.6"));
+        BigDecimal bMin  = scoreConfigService.getDecimal("scoring.grade_b_min",  new BigDecimal("6.8"));
+        BigDecimal rrMinAp = scoreConfigService.getDecimal("scoring.rr_min_ap", new BigDecimal("2.2"));
+        if (finalRank.compareTo(apMin) >= 0 && rr >= rrMinAp.doubleValue()) return "A_PLUS";
+        if (finalRank.compareTo(aMin)  >= 0) return "A";
+        if (finalRank.compareTo(bMin)  >= 0) return "B";
+        return "C";
     }
 
     // ── Setup generation helpers (P0.4) ──────────────────────────────────────

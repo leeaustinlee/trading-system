@@ -19,6 +19,12 @@ import java.util.List;
  * {@code tradeAllowed} and {@code allowedSetupTypes} instead of deriving
  * policy from the legacy A/B/C grade string.</p>
  *
+ * <p>v2.6 MVP 新增：</p>
+ * <ul>
+ *   <li>{@code confidenceLevel}: HIGH / MEDIUM / LOW — 依缺資料程度</li>
+ *   <li>{@code missingSignals}: 列出哪些 input key 為 null，下游可據此降倉而非 hard block</li>
+ * </ul>
+ *
  * <p>{@code id} is {@code null} for the engine result before persistence;
  * persisted decisions (loaded from repo) include the DB id.</p>
  */
@@ -33,9 +39,35 @@ public record MarketRegimeDecision(
         List<String> allowedSetupTypes,
         String summary,
         String reasonsJson,
-        String inputSnapshotJson
+        String inputSnapshotJson,
+        String confidenceLevel,
+        List<String> missingSignals
 ) {
-    /** Convenience ctor used by the engine before persistence (id unknown). */
+    public static final String CONFIDENCE_HIGH   = "HIGH";
+    public static final String CONFIDENCE_MEDIUM = "MEDIUM";
+    public static final String CONFIDENCE_LOW    = "LOW";
+
+    /** v2.6 ctor with confidence fields (engine 新用法，id 尚未持久化)。 */
+    public MarketRegimeDecision(
+            LocalDate tradingDate,
+            LocalDateTime evaluatedAt,
+            String regimeType,
+            String marketGrade,
+            boolean tradeAllowed,
+            BigDecimal riskMultiplier,
+            List<String> allowedSetupTypes,
+            String summary,
+            String reasonsJson,
+            String inputSnapshotJson,
+            String confidenceLevel,
+            List<String> missingSignals
+    ) {
+        this(null, tradingDate, evaluatedAt, regimeType, marketGrade, tradeAllowed,
+                riskMultiplier, allowedSetupTypes, summary, reasonsJson, inputSnapshotJson,
+                confidenceLevel, missingSignals);
+    }
+
+    /** Legacy ctor（v2.5 與更早，無 confidence）：預設 HIGH + empty missingSignals。 */
     public MarketRegimeDecision(
             LocalDate tradingDate,
             LocalDateTime evaluatedAt,
@@ -49,6 +81,26 @@ public record MarketRegimeDecision(
             String inputSnapshotJson
     ) {
         this(null, tradingDate, evaluatedAt, regimeType, marketGrade, tradeAllowed,
-                riskMultiplier, allowedSetupTypes, summary, reasonsJson, inputSnapshotJson);
+                riskMultiplier, allowedSetupTypes, summary, reasonsJson, inputSnapshotJson,
+                CONFIDENCE_HIGH, List.of());
+    }
+
+    /** Legacy 11-arg ctor with id（v2.5 持久化加載用）：預設 HIGH + empty。 */
+    public MarketRegimeDecision(
+            Long id,
+            LocalDate tradingDate,
+            LocalDateTime evaluatedAt,
+            String regimeType,
+            String marketGrade,
+            boolean tradeAllowed,
+            BigDecimal riskMultiplier,
+            List<String> allowedSetupTypes,
+            String summary,
+            String reasonsJson,
+            String inputSnapshotJson
+    ) {
+        this(id, tradingDate, evaluatedAt, regimeType, marketGrade, tradeAllowed,
+                riskMultiplier, allowedSetupTypes, summary, reasonsJson, inputSnapshotJson,
+                CONFIDENCE_HIGH, List.of());
     }
 }
