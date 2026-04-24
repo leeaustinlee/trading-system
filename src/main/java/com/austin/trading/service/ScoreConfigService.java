@@ -142,6 +142,69 @@ public class ScoreConfigService {
         DEFAULTS.put("final_decision.require_claude",              new String[]{"true",  "BOOLEAN", "FinalDecision 前必須等到 Claude PREMARKET 任務完成"});
         DEFAULTS.put("final_decision.require_codex",               new String[]{"false", "BOOLEAN", "FinalDecision 前必須等到 Codex 審核（PR-2 預設 false）"});
         DEFAULTS.put("final_decision.ai_downgrade_enabled",        new String[]{"true",  "BOOLEAN", "AI 未就緒時是否降級為 REST（false 則忽略準備度）"});
+
+        // ── Theme Engine v2 / PR2: Snapshot 讀寫服務設定 ────────────────────
+        // 規則（spec / shadow-mode-spec）：
+        //   1. `theme.engine.v2.enabled=false` 時，ThemeSnapshotService 直接回 DISABLED，
+        //      下游 gate 必須以 WAIT 為 fallback，不能當作 PASS。
+        //   2. Claude/Codex 對 enum 不認識的值（UNKNOWN）也不能當 PASS；由 gate layer 強制 WAIT/trace。
+        DEFAULTS.put("theme.engine.v2.enabled",             new String[]{"false", "BOOLEAN", "Theme Engine v2 主 flag；關閉時不提供 snapshot 給下游"});
+        DEFAULTS.put("theme.snapshot.validation.enabled",   new String[]{"true",  "BOOLEAN", "Theme snapshot schema validation 開關（預設開）"});
+        DEFAULTS.put("theme.snapshot.fallback.enabled",     new String[]{"true",  "BOOLEAN", "Theme snapshot stale / invalid 時是否回退到最後有效快照（預設開）"});
+        DEFAULTS.put("theme.snapshot.path",                 new String[]{"D:\\ai\\stock\\theme-snapshot.json", "STRING", "Theme snapshot JSON 檔路徑（Asia/Taipei）"});
+        DEFAULTS.put("theme.snapshot.max_age_minutes",      new String[]{"30",    "INTEGER", "Theme snapshot 新鮮度門檻（分）；超過視為 stale"});
+
+        // ── Theme Engine v2 / PR3: Claude theme research 合併層 ───────────
+        // 規則：Claude 只能補語意欄位（theme_fit_score / theme_role / theme_doubt /
+        //      theme_rotation_risk / stock_specific_catalyst / risk_notes）。
+        //      若 Claude 回傳 theme_strength，PR3 merge service 必須忽略並記 warning
+        //      trace key=IGNORED_CLAUDE_THEME_STRENGTH_OVERRIDE。theme_strength 權威來源永遠是 Codex snapshot。
+        DEFAULTS.put("theme.claude.context.merge.enabled",  new String[]{"false", "BOOLEAN", "Theme Engine v2 / PR3 Claude context merge 主 flag（預設關）"});
+        DEFAULTS.put("theme.claude.research.path",          new String[]{"D:\\ai\\stock\\claude-theme-research.json", "STRING", "Claude theme research JSON 檔路徑"});
+        DEFAULTS.put("theme.claude.research.max_age_minutes", new String[]{"120",  "INTEGER", "Claude theme research 新鮮度門檻（分；比 snapshot 寬鬆，研究頻率較低）"});
+
+        // ── Theme Engine v2 / PR4: 8-gate trace（trace-only，不影響 legacy decision）────
+        DEFAULTS.put("theme.gate.trace.enabled",            new String[]{"false", "BOOLEAN", "PR4 dual-run gate trace 開關（預設關；trace-only 不改 live decision）"});
+        DEFAULTS.put("theme.gate.strength_min",             new String[]{"7.0",   "DECIMAL", "G2 theme_veto：題材強度最低門檻"});
+        DEFAULTS.put("theme.gate.entry_strength_min",       new String[]{"7.5",   "DECIMAL", "G3 rotation：新倉題材強度最低門檻（rotation IN 情境）"});
+        DEFAULTS.put("theme.gate.rr_min",                   new String[]{"2.0",   "DECIMAL", "G6 RR gate：最低風報比（trace-only，不改 legacy RR）"});
+        DEFAULTS.put("theme.gate.max_score_divergence",     new String[]{"2.5",   "DECIMAL", "G5 score_divergence：|max-min|(java/claude/codex) 超過此值 → BLOCK"});
+        DEFAULTS.put("theme.gate.min_liquidity_turnover",   new String[]{"30000000","DECIMAL", "G4 liquidity：最低累計成交金額（元；低於 → BLOCK）"});
+        DEFAULTS.put("theme.gate.final_rank_a_min",         new String[]{"7.6",   "DECIMAL", "G8 final_rank：A bucket 門檻；低於視為 C bucket → BLOCK"});
+
+        // ── Theme Engine v2 / PR5: shadow mode（預設全關，trace-only）────
+        DEFAULTS.put("theme.shadow_mode.enabled",           new String[]{"false", "BOOLEAN", "PR5 shadow mode：雙路徑 diff + 落 log/daily report（預設關；不影響 live decision）"});
+        DEFAULTS.put("theme.shadow_report.path",            new String[]{"D:\\ai\\stock\\logs", "STRING", "PR5 shadow report 輸出資料夾（Windows 預設）"});
+        DEFAULTS.put("theme.shadow_report.path_wsl",        new String[]{"",      "STRING", "PR5 shadow report 輸出資料夾（WSL/Linux override；非空時優先）"});
+        DEFAULTS.put("theme.line.summary.enabled",          new String[]{"false", "BOOLEAN", "PR5 shadow report 每日 LINE 摘要開關（預設關）"});
+
+        // ── Theme Engine v2 / PR6: live decision override（Phase 3；預設關；開啟後 BLOCK 可改寫 legacy ENTER）────
+        DEFAULTS.put("theme.live_decision.enabled",              new String[]{"false", "BOOLEAN", "PR6 Phase 3 主開關；開啟後 theme gate BLOCK 可把 legacy ENTER 改寫成 REST（預設關）"});
+        DEFAULTS.put("theme.live_decision.wait_override.enabled", new String[]{"false", "BOOLEAN", "PR6 保留：WAIT 是否也能介入 live decision（預設關；PR6 不啟用，保留未來擴充）"});
+
+        // ── v2.11 Capital Allocation（風險金額驅動的倉位建議，不自動下單）────
+        DEFAULTS.put("capital.risk_pct_per_trade.trial",    new String[]{"0.003", "DECIMAL", "Capital：TRIAL mode 單筆最大風險 % (0.3%)"});
+        DEFAULTS.put("capital.risk_pct_per_trade.normal",   new String[]{"0.006", "DECIMAL", "Capital：NORMAL mode 單筆最大風險 % (0.6%)"});
+        DEFAULTS.put("capital.risk_pct_per_trade.core",     new String[]{"0.01",  "DECIMAL", "Capital：CORE mode 單筆最大風險 % (1.0%)"});
+        DEFAULTS.put("capital.max_position_pct.trial",      new String[]{"0.10",  "DECIMAL", "Capital：TRIAL 單股最大佔權益比 (10%)"});
+        DEFAULTS.put("capital.max_position_pct.normal",     new String[]{"0.20",  "DECIMAL", "Capital：NORMAL 單股最大佔權益比 (20%)"});
+        DEFAULTS.put("capital.max_position_pct.core",       new String[]{"0.30",  "DECIMAL", "Capital：CORE 單股最大佔權益比 (30%)"});
+        DEFAULTS.put("capital.market_exposure_limit.bull",  new String[]{"0.80",  "DECIMAL", "Capital：BULL_TREND 全市場曝險上限 (80%)"});
+        DEFAULTS.put("capital.market_exposure_limit.range", new String[]{"0.50",  "DECIMAL", "Capital：RANGE_CHOP 全市場曝險上限 (50%)"});
+        DEFAULTS.put("capital.market_exposure_limit.bear",  new String[]{"0.20",  "DECIMAL", "Capital：BEAR / WEAK_DOWNTREND 全市場曝險上限 (20%)"});
+        DEFAULTS.put("capital.market_exposure_limit.panic", new String[]{"0.00",  "DECIMAL", "Capital：PANIC_VOLATILITY 全市場曝險上限 (0% - 不開新倉)"});
+        DEFAULTS.put("capital.theme_exposure_limit",        new String[]{"0.40",  "DECIMAL", "Capital：同題材曝險上限 (40%)"});
+        DEFAULTS.put("capital.min_trade_amount",            new String[]{"10000", "DECIMAL", "Capital：單筆最低金額（< 此金額視為 CASH_RESERVE）"});
+        DEFAULTS.put("capital.cash_reserve_pct",            new String[]{"0.10",  "DECIMAL", "Capital：保留現金佔權益比例 (10%)"});
+        DEFAULTS.put("capital.round_lot_size",              new String[]{"1",     "INTEGER", "Capital：股數最小單位（台股可 1 股；整張取 1000）"});
+        DEFAULTS.put("capital.reduce_hint_pct",             new String[]{"0.40",  "DECIMAL", "Capital：REDUCE_SIZE_SUGGESTION 建議減碼比例中位（30–50% 取中）"});
+
+        // ── v2.9 Price Gate Refactor（Gate 6/7）──────────────────────────────
+        // 用意：belowOpen / belowPrevClose 不再一律 hard block，改為條件式。
+        //      強勢股開盤洗盤站回 VWAP、BULL_TREND 小幅回測，應降級為 WAIT 而非 REST。
+        DEFAULTS.put("trading.price_gate.low_volume_ratio_threshold",       new String[]{"0.8",   "DECIMAL", "Price Gate：量能比低於此值視為量縮（current / avg，預設 0.8）"});
+        DEFAULTS.put("trading.price_gate.far_from_open_pct_threshold",      new String[]{"0.01",  "DECIMAL", "Price Gate：距開盤偏離絕對值超過此比例視為遠離（預設 1%）"});
+        DEFAULTS.put("trading.price_gate.bull_shallow_drop_pct_threshold",  new String[]{"0.01",  "DECIMAL", "Price Gate：跌破昨收小於此比例視為淺跌（BULL_TREND 下降級 WAIT，預設 1%）"});
     }
 
     public ScoreConfigService(ScoreConfigRepository repository) {

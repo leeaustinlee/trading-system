@@ -29,6 +29,7 @@ class FinalDecisionEngineTests {
 
     private FinalDecisionEngine engine;
     private ScoreConfigService config;
+    private PriceGateEvaluator priceGateEvaluator;
 
     @BeforeEach
     void setUp() {
@@ -50,7 +51,15 @@ class FinalDecisionEngineTests {
         when(config.getInt(eq("plan.max_backup"),         anyInt())).thenReturn(3);
         when(config.getBoolean(eq("decision.require_entry_trigger"), anyBoolean())).thenReturn(true);
         when(config.getString(any(), any())).thenReturn("A");
-        engine = new FinalDecisionEngine(config);
+        // v2.9 Gate 6/7: PriceGateEvaluator 會讀 3 個 config，測試用 default 值。
+        when(config.getDecimal(eq("trading.price_gate.low_volume_ratio_threshold"), any()))
+                .thenReturn(new BigDecimal("0.8"));
+        when(config.getDecimal(eq("trading.price_gate.far_from_open_pct_threshold"), any()))
+                .thenReturn(new BigDecimal("0.01"));
+        when(config.getDecimal(eq("trading.price_gate.bull_shallow_drop_pct_threshold"), any()))
+                .thenReturn(new BigDecimal("0.01"));
+        priceGateEvaluator = new PriceGateEvaluator(config);
+        engine = new FinalDecisionEngine(config, priceGateEvaluator);
     }
 
     // ── v2.7 Session gate ────────────────────────────────────────────────────
@@ -256,18 +265,169 @@ class FinalDecisionEngineTests {
                 "mainStream boost 應讓此候選進 A bucket：" + result.summary());
     }
 
-    // ── v2.7 A7: belowOpen / belowPrevClose session-gated ─────────────────
+    // ── v2.9 Gate 6/7: PriceGateEvaluator（belowOpen / belowPrevClose 條件式）────
 
+    /**
+     * v2.9：LIVE_TRADING + belowOpen=true + 無 VWAP / regime 資訊 → 降級 WAIT，不再直接 REST。
+     * 取代舊 v2.7 `belowOpen_blockedOnlyInLiveTrading` 的一律 hard block 語意。
+     */
     @Test
-    void belowOpen_blockedOnlyInLiveTrading() {
-        // session=LIVE_TRADING + belowOpen=true → 擋
+    void belowOpen_withoutVwapOrRegime_degradesToWait() {
         FinalDecisionResponse live = engine.evaluate(new FinalDecisionEvaluateRequest(
                 "A", "NONE", "EARLY", false,
                 List.of(candidateCustom("2330", 2.5, "VALUE_FAIR", new BigDecimal("9.2"),
                         true, true, /*belowOpen*/ true))),
                 MarketSession.LIVE_TRADING);
-        assertEquals("REST", live.decision(),
-                "LIVE_TRADING 時 belowOpen=true 應被 validateBasicConditions 擋");
+        assertEquals("WAIT", live.decision(),
+                "v2.9：belowOpen 無 VWAP 無 regime 資訊應降級 WAIT 等確認，不該直接 REST");
+        assertTrue(live.summary() == null || !live.summary().contains("A+"),
+                "不應帶 A+ 進場字樣");
+    }
+
+    /**
+     * v2.9 Case 1：belowOpen + currentPrice 站回 VWAP + volumeRatio 正常 → WAIT（不可 REST）。
+     */
+    @Test
+    void priceGate_case1_belowOpenButAboveVwap_waits() {
+        FinalDecisionCandidateRequest c = priceGateCandidate(
+                "2454", new BigDecimal("9.2"),
+                /*belowOpen*/ true, /*belowPrevClose*/ false,
+                /*current*/ new BigDecimal("2190"),
+                /*open*/    new BigDecimal("2200"),
+                /*prev*/    new BigDecimal("2180"),
+                /*vwap*/    new BigDecimal("2185"),      // current 2190 > vwap 2185
+                /*volRatio*/ new BigDecimal("1.10"),
+                /*regime*/  "BULL_TREND");
+        FinalDecisionResponse result = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(c)),
+                MarketSession.LIVE_TRADING);
+        assertEquals("WAIT", result.decision(),
+                "站回 VWAP + 量能正常 → WAIT，不該 REST");
+    }
+
+    /**
+     * v2.9 Case 2：belowOpen + belowVwap + lowVolume + farFromOpen 四條件齊全 → REST（hard block）。
+     */
+    @Test
+    void priceGate_case2_belowOpenFullWeak_blocks() {
+        FinalDecisionCandidateRequest c = priceGateCandidate(
+                "2454", new BigDecimal("9.2"),
+                true, false,
+                /*current*/ new BigDecimal("2160"),
+                /*open*/    new BigDecimal("2200"),
+                /*prev*/    new BigDecimal("2180"),
+                /*vwap*/    new BigDecimal("2180"),      // current 2160 < vwap 2180
+                /*volRatio*/ new BigDecimal("0.60"),      // < 0.8
+                /*regime*/  "BULL_TREND");
+        // distance = (2160-2200)/2200 = -0.0182 (1.82% > 1%)
+        FinalDecisionResponse result = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(c)),
+                MarketSession.LIVE_TRADING);
+        assertEquals("REST", result.decision(),
+                "belowOpen + belowVwap + lowVolume + farFromOpen 四條件齊全應 hard block");
+    }
+
+    /**
+     * v2.9 Case 3：belowPrevClose + BULL_TREND + 小跌 (0.5%) → WAIT。
+     */
+    @Test
+    void priceGate_case3_belowPrevCloseBullShallow_waits() {
+        FinalDecisionCandidateRequest c = priceGateCandidate(
+                "2454", new BigDecimal("9.2"),
+                false, true,
+                new BigDecimal("2169.1"),           // drop 0.5%
+                new BigDecimal("2200"),
+                new BigDecimal("2180"),
+                null, null,
+                "BULL_TREND");
+        FinalDecisionResponse result = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(c)),
+                MarketSession.LIVE_TRADING);
+        assertEquals("WAIT", result.decision(),
+                "BULL_TREND 下跌破昨收 < 1% 應 WAIT 不 REST");
+    }
+
+    /**
+     * v2.9 Case 4：belowPrevClose + RANGE_CHOP + 小跌 → REST。
+     */
+    @Test
+    void priceGate_case4_belowPrevCloseRangeChop_blocks() {
+        FinalDecisionCandidateRequest c = priceGateCandidate(
+                "2454", new BigDecimal("9.2"),
+                false, true,
+                new BigDecimal("2169.1"),
+                new BigDecimal("2200"),
+                new BigDecimal("2180"),
+                null, null,
+                "RANGE_CHOP");
+        FinalDecisionResponse result = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(c)),
+                MarketSession.LIVE_TRADING);
+        assertEquals("REST", result.decision(),
+                "非 BULL_TREND 跌破昨收即 hard block");
+    }
+
+    /**
+     * v2.9 Case 5：belowPrevClose + BULL_TREND + 深跌 (>=1%) → REST。
+     */
+    @Test
+    void priceGate_case5_belowPrevCloseBullDeep_blocks() {
+        FinalDecisionCandidateRequest c = priceGateCandidate(
+                "2454", new BigDecimal("9.2"),
+                false, true,
+                new BigDecimal("2154"),           // drop 1.19% ≥ 1%
+                new BigDecimal("2200"),
+                new BigDecimal("2180"),
+                null, null,
+                "BULL_TREND");
+        FinalDecisionResponse result = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(c)),
+                MarketSession.LIVE_TRADING);
+        assertEquals("REST", result.decision(),
+                "BULL_TREND 下跌破昨收 ≥ 1% 仍應 hard block");
+    }
+
+    /**
+     * v2.9.1 Case 3 強化：belowOpen + belowVwap + 高量（ratio > 1.0）+ farFromOpen → WAIT。
+     * 量能未縮，代表有買盤承接，不是真弱勢；只要四條件中任一不成立就不該 BLOCK。
+     */
+    @Test
+    void priceGate_v291_case3_belowOpenHighVolume_waits() {
+        FinalDecisionCandidateRequest c = priceGateCandidate(
+                "2454", new BigDecimal("9.2"),
+                /*belowOpen*/ true, /*belowPrevClose*/ false,
+                /*current*/ new BigDecimal("2160"),
+                /*open*/    new BigDecimal("2200"),
+                /*prev*/    new BigDecimal("2180"),
+                /*vwap*/    new BigDecimal("2180"),    // below VWAP
+                /*volRatio*/ new BigDecimal("1.25"),    // 高量，> 0.8 threshold
+                /*regime*/  "BULL_TREND");
+        FinalDecisionResponse result = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(c)),
+                MarketSession.LIVE_TRADING);
+        assertEquals("WAIT", result.decision(),
+                "belowOpen + belowVwap + 高量 + farFromOpen → 高量破除 BLOCK 條件，應 WAIT");
+    }
+
+    /**
+     * v2.9 Case 6：belowOpen + 無 VWAP + SELECT_BUY_NOW 精神（mainStream=true）→ WAIT。
+     * 本測試只驗 engine 層，不走 Codex overlay；但此案例覆蓋「無 VWAP fallback」。
+     */
+    @Test
+    void priceGate_case6_belowOpenNoVwap_waits() {
+        FinalDecisionCandidateRequest c = priceGateCandidate(
+                "2454", new BigDecimal("9.2"),
+                true, false,
+                new BigDecimal("2190"),
+                new BigDecimal("2200"),
+                new BigDecimal("2180"),
+                null, null,                       // VWAP null
+                "BULL_TREND");
+        FinalDecisionResponse result = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(c)),
+                MarketSession.LIVE_TRADING);
+        assertEquals("WAIT", result.decision(),
+                "無 VWAP fallback 應 WAIT，不可直接 REST");
     }
 
     // ── v2.8 POSTCLOSE_TOMORROW_PLAN 模式 ───────────────────────────────────
@@ -437,6 +597,38 @@ class FinalDecisionEngineTests {
                 null, null,         // consensusScore, disagreementPenalty
                 null, null, entryTooExtended,   // volumeSpike, priceNotBreakHigh, entryTooExtended
                 entryTriggered
+        );
+    }
+
+    /**
+     * v2.9 Gate 6/7 測試專用 builder：直接指定 priceGate 相關欄位。
+     * distanceFromOpenPct / dropFromPrevClosePct 會自動從 currentPrice / open / prev 推導。
+     */
+    private FinalDecisionCandidateRequest priceGateCandidate(
+            String code, BigDecimal finalRankScore,
+            boolean belowOpen, boolean belowPrevClose,
+            BigDecimal currentPrice, BigDecimal openPrice, BigDecimal previousClose,
+            BigDecimal vwapPrice, BigDecimal volumeRatio, String regime) {
+        BigDecimal distanceFromOpenPct = (currentPrice != null && openPrice != null && openPrice.signum() > 0)
+                ? currentPrice.subtract(openPrice).divide(openPrice, 6, java.math.RoundingMode.HALF_UP)
+                : null;
+        BigDecimal dropFromPrevClosePct = (currentPrice != null && previousClose != null && previousClose.signum() > 0)
+                ? previousClose.subtract(currentPrice).divide(previousClose, 6, java.math.RoundingMode.HALF_UP)
+                : null;
+        return new FinalDecisionCandidateRequest(
+                code, "TEST-" + code, "VALUE_FAIR", "BREAKOUT",
+                2.5, /*includeInFinalPlan*/ true, /*mainStream*/ true,
+                /*falseBreakout*/ false, belowOpen, belowPrevClose,
+                /*nearDayHigh*/ false, /*stopLossReasonable*/ true,
+                "pricegate-test", "100-102",
+                98.0, 108.0, 115.0,
+                null, null, null,
+                finalRankScore, false,
+                null, null, null, null, null, null,
+                null, null, false, /*entryTriggered*/ true,
+                currentPrice, openPrice, previousClose,
+                vwapPrice, volumeRatio,
+                distanceFromOpenPct, dropFromPrevClosePct, regime
         );
     }
 }

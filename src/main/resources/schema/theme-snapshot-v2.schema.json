@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ThemeSnapshotV2",
+  "description": "Reference schema for theme-snapshot.json. Kept in sync with docs/theme-engine-implementation-spec.md §2.2. PR2 的 validator 為手寫輕量版本，此檔作為規約來源與未來接 JSON Schema library 時使用。",
+  "type": "object",
+  "required": ["generated_at", "market_regime", "themes"],
+  "properties": {
+    "generated_at": {"type": "string", "format": "date-time"},
+    "market_regime": {
+      "type": "object",
+      "required": ["regime_type", "risk_multiplier", "trade_allowed"],
+      "properties": {
+        "regime_type": {"type": "string"},
+        "risk_multiplier": {"type": "number"},
+        "trade_allowed": {"type": "boolean"}
+      }
+    },
+    "themes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "theme_tag",
+          "theme_strength",
+          "trend_stage",
+          "rotation_signal",
+          "sustainability_score",
+          "freshness_score",
+          "crowding_risk",
+          "evidence_sources",
+          "confidence",
+          "candidates"
+        ],
+        "properties": {
+          "theme_tag": {"type": "string"},
+          "theme_strength": {"type": "number", "minimum": 0, "maximum": 10},
+          "trend_stage": {"type": "string", "enum": ["EARLY", "MID", "LATE"]},
+          "rotation_signal": {"type": "string", "enum": ["IN", "OUT", "NONE"]},
+          "sustainability_score": {"type": "number", "minimum": 0, "maximum": 10},
+          "freshness_score": {"type": "number", "minimum": 0, "maximum": 10},
+          "crowding_risk": {"type": "string", "enum": ["LOW", "MID", "HIGH"]},
+          "evidence_sources": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "GAINER_BOARD",
+                "VOLUME_BOARD",
+                "NEWS",
+                "INSTITUTIONAL_FLOW",
+                "INDUSTRY_EVENT"
+              ]
+            },
+            "minItems": 1
+          },
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["source", "summary"],
+              "properties": {
+                "source": {"type": "string"},
+                "summary": {"type": "string"},
+                "url": {"type": "string"}
+              }
+            }
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["symbol", "role_hint", "confidence"],
+              "properties": {
+                "symbol": {"type": "string"},
+                "role_hint": {"type": "string", "enum": ["LEADER", "FOLLOWER", "LAGGARD", "UNKNOWN"]},
+                "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

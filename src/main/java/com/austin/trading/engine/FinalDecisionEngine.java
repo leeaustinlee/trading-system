@@ -2,6 +2,7 @@ package com.austin.trading.engine;
 
 import com.austin.trading.domain.enums.DecisionPlanningMode;
 import com.austin.trading.domain.enums.MarketSession;
+import com.austin.trading.dto.internal.PriceGateDecision;
 import com.austin.trading.dto.request.FinalDecisionCandidateRequest;
 import com.austin.trading.dto.request.FinalDecisionEvaluateRequest;
 import com.austin.trading.dto.response.FinalDecisionResponse;
@@ -52,9 +53,11 @@ public class FinalDecisionEngine {
     private static final ZoneId MARKET_ZONE = ZoneId.of("Asia/Taipei");
 
     private final ScoreConfigService config;
+    private final PriceGateEvaluator priceGateEvaluator;
 
-    public FinalDecisionEngine(ScoreConfigService config) {
+    public FinalDecisionEngine(ScoreConfigService config, PriceGateEvaluator priceGateEvaluator) {
         this.config = config;
+        this.priceGateEvaluator = priceGateEvaluator;
     }
 
     public FinalDecisionResponse evaluate(FinalDecisionEvaluateRequest request) {
@@ -146,6 +149,8 @@ public class FinalDecisionEngine {
         List<FinalDecisionCandidateRequest> apBucket = new ArrayList<>();
         List<FinalDecisionCandidateRequest> aBucket  = new ArrayList<>();
         List<FinalDecisionCandidateRequest> bBucket  = new ArrayList<>();
+        // v2.9 Gate 6/7: 被 priceGate 判 WAIT 的候選不進分桶也不 reject，落到 waitBucket
+        List<FinalDecisionCandidateRequest> waitBucket = new ArrayList<>();
 
         for (FinalDecisionCandidateRequest c : candidates) {
             // 已被 VetoEngine hard veto 的直接跳過
@@ -154,10 +159,23 @@ public class FinalDecisionEngine {
                 continue;
             }
 
-            // 基本市場條件驗證（非 veto 層的過濾；v2.7 依 session 差異化）
+            // 基本市場條件驗證（非 veto 層的過濾；v2.7 依 session 差異化；v2.9 移除 belowOpen/belowPrevClose）
             String basicReject = validateBasicConditions(c, marketGrade, session);
             if (basicReject != null) {
                 rejected.add(c.stockCode() + " " + basicReject);
+                continue;
+            }
+
+            // v2.9 Gate 6/7 Refactor：belowOpen / belowPrevClose 改條件式 hard block
+            PriceGateDecision priceGate = priceGateEvaluator.evaluate(c, session);
+            if (priceGate.isBlock()) {
+                rejected.add(c.stockCode() + " priceGate=" + priceGate.reason());
+                continue;
+            }
+            if (priceGate.isWait()) {
+                log.info("[FinalDecisionEngine] priceGate WAIT: {} reason={}",
+                        c.stockCode(), priceGate.reason());
+                waitBucket.add(c);
                 continue;
             }
 
@@ -230,6 +248,18 @@ public class FinalDecisionEngine {
                     "僅有 B 等級候選，以試單倉位進場（0.5x）。");
         }
 
+        // v2.9 Gate 6/7：若沒有可進場候選但有 WAIT 候選，輸出 WAIT 等待盤中確認
+        if (!waitBucket.isEmpty()) {
+            String symbols = waitBucket.stream()
+                    .map(FinalDecisionCandidateRequest::stockCode)
+                    .toList().toString();
+            log.info("[FinalDecisionEngine] WAIT: priceGate pending {} candidate(s) {}",
+                    waitBucket.size(), symbols);
+            return new FinalDecisionResponse(
+                    "WAIT", List.of(), rejected,
+                    "價格 gate 疑似洗盤，等待站回 VWAP / 確認再進場：" + symbols);
+        }
+
         log.info("[FinalDecisionEngine] REST: no A+/A/B candidates after scoring");
         return new FinalDecisionResponse(
                 "REST", List.of(), rejected,
@@ -237,7 +267,7 @@ public class FinalDecisionEngine {
     }
 
     /**
-     * 基本市場條件驗證（v2.7：依 session 差異化）。
+     * 基本市場條件驗證（v2.7 session-aware / v2.9 拆出 priceGate）。
      *
      * <p>v2.7 變更：</p>
      * <ul>
@@ -246,19 +276,18 @@ public class FinalDecisionEngine {
      *   <li>A7: {@code belowOpen} / {@code belowPrevClose} 只在 {@link MarketSession#LIVE_TRADING} 做 hard block</li>
      * </ul>
      *
+     * <p>v2.9 變更：</p>
+     * <ul>
+     *   <li>Gate 6/7: {@code belowOpen} / {@code belowPrevClose} 從一律 hard block 改為條件式，
+     *       判斷移到 {@link PriceGateEvaluator}，本方法只保留 falseBreakout + entryType 檢查</li>
+     * </ul>
+     *
      * @return null 表示通過；非 null 為排除原因
      */
     private String validateBasicConditions(FinalDecisionCandidateRequest c, String marketGrade,
                                             MarketSession session) {
         if (Boolean.TRUE.equals(c.falseBreakout())) {
             return "假突破風險";
-        }
-
-        // v2.7 A7: 盤前試撮 / 開盤驗證中，belowOpen/belowPrevClose 不可作為 hard block
-        if (session.allowsPriceGateHardBlock()) {
-            if (Boolean.TRUE.equals(c.belowOpen()) || Boolean.TRUE.equals(c.belowPrevClose())) {
-                return "跌破開盤或昨收";
-            }
         }
 
         String entryType = normalize(c.entryType());

@@ -8,9 +8,12 @@ import com.austin.trading.dto.internal.PortfolioRiskDecision;
 import com.austin.trading.dto.internal.RankedCandidate;
 import com.austin.trading.dto.internal.SetupDecision;
 import com.austin.trading.dto.internal.TimingEvaluationInput;
+import com.austin.trading.dto.request.CodexResultPayloadRequest;
+import com.austin.trading.dto.request.CodexReviewedSymbolRequest;
 import com.austin.trading.dto.request.FinalDecisionCandidateRequest;
 import com.austin.trading.dto.request.FinalDecisionEvaluateRequest;
 import com.austin.trading.dto.request.MarketSnapshotCreateRequest;
+import com.austin.trading.domain.enums.MarketSession;
 import com.austin.trading.domain.enums.StrategyType;
 import com.austin.trading.dto.request.PositionSizingEvaluateRequest;
 import com.austin.trading.dto.request.StopLossTakeProfitEvaluateRequest;
@@ -22,10 +25,13 @@ import com.austin.trading.dto.response.MarketCurrentResponse;
 import com.austin.trading.dto.response.PositionSizingResponse;
 import com.austin.trading.dto.response.StopLossTakeProfitResponse;
 import com.austin.trading.dto.response.TradingStateResponse;
+import com.austin.trading.dto.internal.CapitalAllocationResult;
+import com.austin.trading.dto.internal.PriceGateDecision;
 import com.austin.trading.engine.ConsensusScoringEngine;
 import com.austin.trading.engine.FinalDecisionEngine;
 import com.austin.trading.engine.JavaStructureScoringEngine;
 import com.austin.trading.engine.PositionSizingEngine;
+import com.austin.trading.engine.PriceGateEvaluator;
 import com.austin.trading.engine.StopLossTakeProfitEngine;
 import com.austin.trading.engine.VetoEngine;
 import com.austin.trading.engine.WeightedScoringEngine;
@@ -53,12 +59,18 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -66,6 +78,7 @@ import java.util.stream.Collectors;
 public class FinalDecisionService {
 
     private static final Logger log = LoggerFactory.getLogger(FinalDecisionService.class);
+    private static final ZoneId MARKET_ZONE = ZoneId.of("Asia/Taipei");
 
     // 資金參數回退值（capital_config 未設定時使用）
     private static final double DEFAULT_BASE_CAPITAL     = 50_000.0;
@@ -105,6 +118,15 @@ public class FinalDecisionService {
     private final PortfolioRiskService      portfolioRiskService;
     private final ExecutionDecisionService  executionDecisionService;
     private final ThemeStrengthService      themeStrengthService;
+    private final PriceGateEvaluator        priceGateEvaluator;
+    private final IntradayVwapService       intradayVwapService;
+    private final VolumeProfileService      volumeProfileService;
+    private final CapitalAllocationService  capitalAllocationService;
+    private final ThemeGateOrchestrator     themeGateOrchestrator;
+    private final ThemeShadowModeService    themeShadowModeService;
+    private final ThemeShadowReportService  themeShadowReportService;
+    private final ThemeLiveDecisionService  themeLiveDecisionService;
+    private final ThemeLineSummaryService   themeLineSummaryService;
 
     public FinalDecisionService(
             ConsensusScoringEngine consensusScoringEngine,
@@ -134,7 +156,16 @@ public class FinalDecisionService {
             ExecutionTimingService executionTimingService,
             PortfolioRiskService portfolioRiskService,
             ExecutionDecisionService executionDecisionService,
-            ThemeStrengthService themeStrengthService
+            ThemeStrengthService themeStrengthService,
+            PriceGateEvaluator priceGateEvaluator,
+            IntradayVwapService intradayVwapService,
+            VolumeProfileService volumeProfileService,
+            CapitalAllocationService capitalAllocationService,
+            ThemeGateOrchestrator themeGateOrchestrator,
+            ThemeShadowModeService themeShadowModeService,
+            ThemeShadowReportService themeShadowReportService,
+            ThemeLiveDecisionService themeLiveDecisionService,
+            ThemeLineSummaryService themeLineSummaryService
     ) {
         this.consensusScoringEngine     = consensusScoringEngine;
         this.finalDecisionEngine        = finalDecisionEngine;
@@ -164,6 +195,15 @@ public class FinalDecisionService {
         this.portfolioRiskService       = portfolioRiskService;
         this.executionDecisionService   = executionDecisionService;
         this.themeStrengthService       = themeStrengthService;
+        this.priceGateEvaluator         = priceGateEvaluator;
+        this.intradayVwapService        = intradayVwapService;
+        this.volumeProfileService       = volumeProfileService;
+        this.capitalAllocationService   = capitalAllocationService;
+        this.themeGateOrchestrator      = themeGateOrchestrator;
+        this.themeShadowModeService     = themeShadowModeService;
+        this.themeShadowReportService   = themeShadowReportService;
+        this.themeLiveDecisionService   = themeLiveDecisionService;
+        this.themeLineSummaryService    = themeLineSummaryService;
     }
 
     @Transactional
@@ -183,6 +223,20 @@ public class FinalDecisionService {
         AiReadiness readiness = resolveAiReadiness(tradingDate, preferTaskType);
         log.info("[FinalDecision] AI readiness: mode={} sourceTaskType={} taskId={} fallback={}",
                 readiness.mode(), readiness.sourceTaskType(), readiness.aiTaskId(), readiness.fallbackReason());
+        CodexExecutionContext codexContext = loadCodexExecutionContext(readiness);
+
+        if (shouldBlockPremarketTrade(readiness, codexContext)) {
+            DecisionTrace trace = buildDecisionTrace(
+                    codexContext, "WAIT", "PREMARKET_BIAS_ONLY", false, false);
+            return persistAndReturn(tradingDate,
+                    withDecisionTrace(new FinalDecisionResponse(
+                            "WAIT",
+                            List.of(),
+                            List.of("PREMARKET_BIAS_ONLY"),
+                            "PREMARKET 只提供市場偏向與候選觀察，不可作為正式進場判斷。"),
+                            trace),
+                    readiness);
+        }
 
         boolean downgradeEnabled = scoreConfigService.getBoolean("final_decision.ai_downgrade_enabled", true);
         if (downgradeEnabled) {
@@ -233,16 +287,22 @@ public class FinalDecisionService {
             String reason = portfolioGate.blockReason() + " (" + portfolioGate.openPositionCount()
                     + "/" + portfolioGate.maxPositions() + ")";
             log.info("[FinalDecision] portfolio gate blocked: {}", reason);
+            DecisionTrace trace = buildDecisionTrace(
+                    codexContext, !codexContext.buyNowSymbols().isEmpty() ? "BLOCKED" : "REST",
+                    reason, !codexContext.buyNowSymbols().isEmpty(), false);
             return persistAndReturn(tradingDate, new FinalDecisionResponse(
-                    "REST", List.of(), List.of(reason), reason), readiness);
+                    "REST", List.of(), List.of(reason), reason, Map.of("decisionTrace", trace.payload())), readiness);
         }
 
         // ── Step 0.1: 全市場冷卻檢查（連續虧損 / 當日虧損上限）──────────────
         MarketCooldownService.MarketCooldownResult marketCooldown = marketCooldownService.check();
         if (marketCooldown.blocked()) {
             log.info("[FinalDecision] 全市場冷卻: {}", marketCooldown.reason());
+            DecisionTrace trace = buildDecisionTrace(
+                    codexContext, "REST", marketCooldown.reason(), !codexContext.buyNowSymbols().isEmpty(), false);
             return persistAndReturn(tradingDate, new FinalDecisionResponse(
-                    "REST", List.of(), List.of(marketCooldown.reason()), marketCooldown.reason()),
+                    "REST", List.of(), List.of(marketCooldown.reason()), marketCooldown.reason(),
+                    Map.of("decisionTrace", trace.payload())),
                     readiness);
         }
 
@@ -254,8 +314,11 @@ public class FinalDecisionService {
             String reason = "REGIME_BLOCKED: " + regime.regimeType()
                     + " (riskMultiplier=" + regime.riskMultiplier() + ")";
             log.info("[FinalDecision] {}", reason);
+            DecisionTrace trace = buildDecisionTrace(
+                    codexContext, "REST", reason, !codexContext.buyNowSymbols().isEmpty(), false);
             return persistAndReturn(tradingDate, new FinalDecisionResponse(
-                    "REST", List.of(), List.of(reason), regime.summary()), readiness);
+                    "REST", List.of(), List.of(reason), regime.summary(),
+                    Map.of("decisionTrace", trace.payload())), readiness);
         }
         if (regime != null) {
             log.info("[FinalDecision] regime={} riskMultiplier={} tradeAllowed={}",
@@ -265,6 +328,30 @@ public class FinalDecisionService {
         int maxCount = scoreConfigService.getInt("candidate.scan.maxCount", 8);
         List<FinalDecisionCandidateRequest> rawCandidates =
                 candidateScanService.loadFinalDecisionCandidates(tradingDate, maxCount);
+        // v2.9.1：overlay 期間同步把 VWAP/volume extras 累加到 symbol->map，trace 層合併用。
+        Map<String, Map<String, Object>> priceGateExtrasBySymbol = new LinkedHashMap<>();
+        rawCandidates = applyCodexExecutionOverlay(rawCandidates, codexContext, priceGateExtrasBySymbol);
+        rawCandidates = applyMarketRegime(rawCandidates, regime);
+        rawCandidates = applyCodexActionableGate(rawCandidates, readiness, codexContext);
+
+        // v2.9 Gate 6/7：預先算每檔的 priceGate trace，buildDecisionTrace 時就能直接塞回 trace。
+        MarketSession currentSession = MarketSession.fromTime(LocalTime.now(MARKET_ZONE));
+        Map<String, Map<String, Object>> priceGateTraceMap = new LinkedHashMap<>();
+        for (FinalDecisionCandidateRequest c : rawCandidates) {
+            PriceGateDecision pg = priceGateEvaluator.evaluate(c, currentSession);
+            Map<String, Object> baseTrace = new LinkedHashMap<>(pg.trace());
+            Map<String, Object> extras = priceGateExtrasBySymbol.get(c.stockCode());
+            if (extras != null) {
+                baseTrace.putAll(extras);
+            }
+            priceGateTraceMap.put(c.stockCode(), baseTrace);
+        }
+
+        FinalDecisionResponse codexShortCircuit = buildCodexShortCircuitDecision(
+                readiness, codexContext, rawCandidates);
+        if (codexShortCircuit != null) {
+            return persistAndReturn(tradingDate, codexShortCircuit, readiness);
+        }
 
         // ── 評分管線：JavaStructure → Veto → WeightedScore ────────────────────
         List<FinalDecisionCandidateRequest> scoredCandidates =
@@ -283,6 +370,9 @@ public class FinalDecisionService {
                 .filter(c -> {
                     RankedCandidate r = rankMap.get(c.stockCode());
                     if (r == null || !r.eligibleForSetup()) {
+                        if (codexContext.buyNowSymbols().contains(c.stockCode())) {
+                            return true;
+                        }
                         String why = r == null ? "NOT_IN_RANKING" : r.rejectionReason();
                         log.info("[FinalDecision] 排除 {} — {}", c.stockCode(), why);
                         return false;
@@ -306,6 +396,9 @@ public class FinalDecisionService {
         if (strongMinScore.compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal requiredMin = strongMinScore.add(scoreGap);
             scoredCandidates = scoredCandidates.stream().filter(c -> {
+                if (codexContext.buyNowSymbols().contains(c.stockCode())) {
+                    return true;
+                }
                 RankedCandidate r = rankMap.get(c.stockCode());
                 BigDecimal sel = r != null ? r.selectionScore() : c.finalRankScore();
                 if (sel != null && sel.compareTo(requiredMin) < 0) {
@@ -347,6 +440,9 @@ public class FinalDecisionService {
                 .filter(c -> {
                     ExecutionTimingDecision t = timingMap.get(c.stockCode());
                     if (t == null || !t.approved()) {
+                        if (codexContext.buyNowSymbols().contains(c.stockCode())) {
+                            return true;
+                        }
                         String why = t == null ? "NO_TIMING_DECISION" : t.rejectionReason();
                         log.info("[FinalDecision] 排除 {} — timing: {}", c.stockCode(), why);
                         return false;
@@ -382,6 +478,19 @@ public class FinalDecisionService {
                 .toList();
 
         // v2.8：依 AI source taskType 決定盤中 vs 盤後規劃模式
+        if (shouldUseCodexBuyNowOnly(readiness, codexContext)) {
+            List<FinalDecisionCandidateRequest> codexPreferred = scoredCandidates.stream()
+                    .filter(c -> codexContext.buyNowSymbols().contains(c.stockCode()))
+                    .sorted(Comparator.comparing(
+                            (FinalDecisionCandidateRequest c) -> codexContext.reviewIndex().getOrDefault(c.stockCode(), 999)))
+                    .toList();
+            if (!codexPreferred.isEmpty()) {
+                scoredCandidates = codexPreferred;
+                log.info("[FinalDecision] Use Codex execution-priority candidates only: {}",
+                        scoredCandidates.stream().map(FinalDecisionCandidateRequest::stockCode).toList());
+            }
+        }
+
         com.austin.trading.domain.enums.DecisionPlanningMode planningMode =
                 com.austin.trading.domain.enums.DecisionPlanningMode.fromTaskType(
                         readiness == null ? null : readiness.sourceTaskType());
@@ -404,8 +513,7 @@ public class FinalDecisionService {
 
         FinalDecisionResponse decision = finalDecisionEngine.evaluate(
                 request,
-                com.austin.trading.domain.enums.MarketSession.fromTime(
-                        java.time.LocalTime.now(java.time.ZoneId.of("Asia/Taipei"))),
+                MarketSession.fromTime(LocalTime.now(MARKET_ZONE)),
                 planningMode);
 
         // 建立 candidateMap 以便回查估值模式
@@ -500,9 +608,161 @@ public class FinalDecisionService {
         }
 
         // v2.8：保留原 decision 的 planningPayload（盤後規劃模式用）
+        boolean softPenaltySkipped = shouldUseCodexBuyNowOnly(readiness, codexContext)
+                && !codexContext.buyNowSymbols().isEmpty();
+        boolean hardRiskBlocked = hasCodexExecutionPriorityHardRiskBlock(readiness, codexContext, riskMap);
+        String traceFinalAction = hardRiskBlocked ? "BLOCKED" : finalDecisionCode;
+        String traceFinalReason = resolveDecisionTraceReason(codexContext, riskMap, hardRiskBlocked, summary);
+        DecisionTrace trace = buildDecisionTrace(
+                codexContext, traceFinalAction, traceFinalReason, hardRiskBlocked, softPenaltySkipped,
+                priceGateTraceMap);
+
+        // v2.11 Capital Allocation：對 ENTER 的每檔算建議金額 / 股數 / mode，寫入 decisionTrace.allocations
+        List<Map<String, Object>> allocationTrace = new ArrayList<>();
+        if ("ENTER".equalsIgnoreCase(finalDecisionCode)) {
+            String regimeType = regime != null ? regime.regimeType() : null;
+            for (FinalDecisionSelectedStockResponse s : merged) {
+                FinalDecisionCandidateRequest c = candidateMap.get(s.stockCode());
+                if (c == null) continue;
+                try {
+                    BigDecimal[] zone = parseEntryZone(s.entryPriceZone());
+                    BigDecimal entry = (zone != null && zone.length > 0) ? zone[0] : c.currentPrice();
+                    BigDecimal stop = s.stopLossPrice() == null ? null : BigDecimal.valueOf(s.stopLossPrice());
+                    BigDecimal target = s.takeProfit1() == null ? null : BigDecimal.valueOf(s.takeProfit1());
+                    BigDecimal current = c.currentPrice();
+                    String bucketStr = codexContext.reviewedBySymbol().get(c.stockCode()) != null
+                            ? codexContext.reviewedBySymbol().get(c.stockCode()).bucket() : null;
+                    CapitalAllocationResult allocation = capitalAllocationService.allocateForEntry(
+                            c.stockCode(), /*theme*/ null, bucketStr, c.finalRankScore(),
+                            entry, current, stop, target, regimeType);
+                    Map<String, Object> entryTrace = new LinkedHashMap<>();
+                    entryTrace.put("symbol", c.stockCode());
+                    entryTrace.put("action", allocation.action().name());
+                    entryTrace.put("mode", allocation.mode() == null ? null : allocation.mode().name());
+                    entryTrace.put("suggestedAmount", allocation.suggestedAmount());
+                    entryTrace.put("suggestedShares", allocation.suggestedShares());
+                    entryTrace.put("riskPerShare", allocation.riskPerShare());
+                    entryTrace.put("maxLossAmount", allocation.maxLossAmount());
+                    entryTrace.put("estimatedLossAmount", allocation.estimatedLossAmount());
+                    entryTrace.put("positionPctOfEquity", allocation.positionPctOfEquity());
+                    entryTrace.put("reasons", allocation.reasons());
+                    entryTrace.put("warnings", allocation.warnings());
+                    allocationTrace.add(entryTrace);
+                } catch (Exception e) {
+                    log.warn("[FinalDecision] allocation failed symbol={}: {}", c.stockCode(), e.getMessage());
+                }
+            }
+        }
+        Map<String, Object> tracePayload = new LinkedHashMap<>(trace.payload());
+        if (!allocationTrace.isEmpty()) {
+            tracePayload.put("allocations", allocationTrace);
+        }
+
+        // v2 Theme Engine PR4：dual-run gate trace（trace-only；flag=theme.gate.trace.enabled）
+        // ⚠️ 無論結果為何，絕對不改 finalDecisionCode / merged / response；只往 trace 塞。
+        // PR5 起對「全部 candidate」跑 probe（不限 ENTER），確保 shadow 6 類 diff 都能觀察到。
+        try {
+            List<ThemeGateOrchestrator.CandidateProbe> probes = buildThemeGateProbes(
+                    candidateMap.values(), regime, codexContext,
+                    openPositions.size(), maxPos, capitalService.getAvailableCash());
+            ThemeGateOrchestrator.Outcome themeOutcome = themeGateOrchestrator.traceCandidates(probes);
+            if (themeOutcome.active()) {
+                Map<String, Object> themeTracePayload = new LinkedHashMap<>();
+                themeTracePayload.put("summary", themeOutcome.summary());
+                themeTracePayload.put("snapshotStatus", themeOutcome.snapshotStatus());
+                themeTracePayload.put("snapshotTraceKey", themeOutcome.snapshotTraceKey());
+                themeTracePayload.put("claudeStatus", themeOutcome.claudeStatus());
+                themeTracePayload.put("claudeTraceKey", themeOutcome.claudeTraceKey());
+                themeTracePayload.put("mergeWarnings", themeOutcome.mergeWarnings());
+                themeTracePayload.put("mergeRejected", themeOutcome.mergeRejectedClaudeEntries());
+                themeTracePayload.put("results", themeOutcome.results().stream().map(r -> {
+                    Map<String, Object> rm = new LinkedHashMap<>();
+                    rm.put("symbol", r.symbol());
+                    rm.put("overall", r.overallOutcome() == null ? null : r.overallOutcome().name());
+                    rm.put("themeMultiplier", r.themeMultiplier());
+                    rm.put("themeFinalScore", r.themeFinalScore());
+                    rm.put("themeSizeFactor", r.themeSizeFactor());
+                    rm.put("gates", r.gates().stream().map(g -> Map.<String, Object>of(
+                            "gate", g.gateKey(),
+                            "result", g.result().name(),
+                            "reason", g.reason()
+                    )).toList());
+                    return rm;
+                }).toList());
+                tracePayload.put("themeGateTrace", themeTracePayload);
+
+                // v2 Theme Engine PR5：shadow mode（flag=theme.shadow_mode.enabled，預設關）
+                // ⚠️ 仍是 trace-only；寫失敗也不影響 legacy decision
+                ThemeShadowReportService.ReportResult shadowReportResult = null;
+                try {
+                    java.util.Set<String> selectedSymbols = merged == null ? java.util.Set.of()
+                            : merged.stream()
+                                    .map(FinalDecisionSelectedStockResponse::stockCode)
+                                    .filter(java.util.Objects::nonNull)
+                                    .collect(java.util.stream.Collectors.toSet());
+                    List<ThemeShadowModeService.Input> shadowInputs = buildShadowInputs(
+                            candidateMap.values(), selectedSymbols, finalDecisionCode, themeOutcome);
+                    if (!shadowInputs.isEmpty()) {
+                        ThemeShadowModeService.RunResult shadowRun = themeShadowModeService.record(
+                                tradingDate,
+                                regime == null ? null : regime.regimeType(),
+                                shadowInputs);
+                        if (shadowRun.active() && shadowRun.totalRecorded() > 0) {
+                            shadowReportResult = themeShadowReportService.generateDaily(tradingDate);
+                        }
+                    }
+                } catch (Exception se) {
+                    log.warn("[FinalDecision] theme shadow mode failed: {}", se.getMessage());
+                }
+
+                // v2 Theme Engine PR6：Phase 3 live decision override（flag=theme.live_decision.enabled，預設關）
+                // ⚠️ 開啟後 BLOCK 可改寫 legacy ENTER；WAIT 仍不介入（除非 wait_override=true）。
+                // 改寫前將 legacy 原值保留到 tracePayload，rollback 靠關 flag 即回 legacy。
+                ThemeLiveDecisionService.Result liveOverride = null;
+                try {
+                    liveOverride = themeLiveDecisionService.apply(finalDecisionCode, merged, themeOutcome);
+                    if (liveOverride.changed()) {
+                        // 1. 保留 legacy 原值到 tracePayload（永不覆寫）
+                        tracePayload.put("legacyFinalDecisionCode", liveOverride.legacyFinalDecisionCode());
+                        tracePayload.put("legacyMergedSymbols", liveOverride.legacyMerged().stream()
+                                .map(FinalDecisionSelectedStockResponse::stockCode).toList());
+                        tracePayload.put("themeLiveDecisionOverride", liveOverride.trace());
+
+                        // 2. 套用覆寫到 local 變數
+                        finalDecisionCode = liveOverride.finalDecisionCode();
+                        merged.clear();
+                        merged.addAll(liveOverride.merged());
+
+                        // 3. 同步移除對應的 allocationTrace 項目，避免回傳含已被擋下的倉位建議
+                        if (!allocationTrace.isEmpty()) {
+                            java.util.Set<String> keptSymbols = merged.stream()
+                                    .map(FinalDecisionSelectedStockResponse::stockCode)
+                                    .collect(Collectors.toSet());
+                            allocationTrace.removeIf(m -> !keptSymbols.contains(String.valueOf(m.get("symbol"))));
+                            tracePayload.put("allocations", allocationTrace);
+                        }
+                    }
+                } catch (Exception oe) {
+                    log.warn("[FinalDecision] theme live decision override failed: {}", oe.getMessage());
+                }
+
+                // v2 Theme Engine PR6：LINE 摘要 formatter（flag=theme.line.summary.enabled，預設關）
+                // 不實際發送 LINE；只把格式化內容 log 出來，由外部決定是否轉發（符合 CLAUDE.md 規則）。
+                try {
+                    themeLineSummaryService.formatDailySummary(tradingDate, shadowReportResult, liveOverride)
+                            .ifPresent(text -> tracePayload.put("themeLineSummary", text));
+                } catch (Exception le) {
+                    log.warn("[FinalDecision] theme line summary failed: {}", le.getMessage());
+                }
+            }
+        } catch (Exception te) {
+            log.warn("[FinalDecision] theme gate trace failed: {}", te.getMessage());
+            // trace 層失敗絕不影響 legacy decision
+        }
+
         FinalDecisionResponse enrichedDecision = new FinalDecisionResponse(
                 finalDecisionCode, merged, decision.rejectedReasons(), summary,
-                decision.planningPayload());
+                mergePlanningPayload(decision.planningPayload(), tracePayload));
 
         // v2.2: 走 persistAndReturn 確保「產生 FinalDecision → finalize AI task」原子執行
         return persistAndReturnWithStrategy(tradingDate, enrichedDecision, readiness, strategyType);
@@ -693,6 +953,28 @@ public class FinalDecisionService {
 
     public enum AiReadinessMode { FULL_AI_READY, PARTIAL_AI_READY, AI_NOT_READY }
 
+    private record CodexExecutionContext(
+            CodexResultPayloadRequest payload,
+            MarketSession marketSession,
+            Map<String, CodexReviewedSymbolRequest> reviewedBySymbol,
+            Set<String> buyNowSymbols,
+            Set<String> rejectedSymbols,
+            Map<String, Integer> reviewIndex
+    ) {
+        static CodexExecutionContext empty() {
+            return new CodexExecutionContext(null, null, Map.of(), Set.of(), Set.of(), Map.of());
+        }
+    }
+
+    private record DecisionTrace(
+            Map<String, Object> payload,
+            boolean executionPriority
+    ) {
+        static DecisionTrace empty() {
+            return new DecisionTrace(Map.of(), false);
+        }
+    }
+
     /**
      * v2.1 AI Readiness 判定。09:30 FinalDecision 優先讀 OPENING，fallback PREMARKET。
      * <ul>
@@ -760,6 +1042,543 @@ public class FinalDecisionService {
                           && !AiTaskService.STATUS_FAILED.equals(t.getStatus()))
                 .findFirst()  // getByDate 已 order by createdAt desc
                 .orElse(null);
+    }
+
+    private CodexExecutionContext loadCodexExecutionContext(AiReadiness readiness) {
+        if (readiness == null || readiness.aiTaskId() == null || readiness.mode() != AiReadinessMode.FULL_AI_READY) {
+            return CodexExecutionContext.empty();
+        }
+        Optional<AiTaskEntity> taskOpt = aiTaskService.getById(readiness.aiTaskId());
+        if (taskOpt.isEmpty()) {
+            return CodexExecutionContext.empty();
+        }
+        String payloadJson = taskOpt.get().getCodexPayloadJson();
+        if (payloadJson == null || payloadJson.isBlank()) {
+            return CodexExecutionContext.empty();
+        }
+        try {
+            CodexResultPayloadRequest payload = objectMapper.readValue(payloadJson, CodexResultPayloadRequest.class);
+            Map<String, CodexReviewedSymbolRequest> reviewedBySymbol = new LinkedHashMap<>();
+            Map<String, Integer> reviewIndex = new LinkedHashMap<>();
+            Set<String> buyNowSymbols = new java.util.LinkedHashSet<>();
+            Set<String> rejectedSymbols = new java.util.LinkedHashSet<>();
+            int index = 0;
+            for (CodexReviewedSymbolRequest item : safeItems(payload.selected())) {
+                if (item == null || isBlank(item.symbol())) continue;
+                reviewedBySymbol.put(item.symbol(), item);
+                reviewIndex.putIfAbsent(item.symbol(), index++);
+                if ("SELECT_BUY_NOW".equalsIgnoreCase(item.bucket())) {
+                    buyNowSymbols.add(item.symbol());
+                }
+            }
+            for (CodexReviewedSymbolRequest item : safeItems(payload.watchlist())) {
+                if (item == null || isBlank(item.symbol())) continue;
+                reviewedBySymbol.putIfAbsent(item.symbol(), item);
+                reviewIndex.putIfAbsent(item.symbol(), index++);
+            }
+            for (CodexReviewedSymbolRequest item : safeItems(payload.rejected())) {
+                if (item == null || isBlank(item.symbol())) continue;
+                reviewedBySymbol.put(item.symbol(), item);
+                reviewIndex.putIfAbsent(item.symbol(), index++);
+                rejectedSymbols.add(item.symbol());
+            }
+            MarketSession payloadSession = resolveCodexMarketSession(payload, readiness);
+            return new CodexExecutionContext(
+                    payload,
+                    payloadSession,
+                    reviewedBySymbol,
+                    Set.copyOf(buyNowSymbols),
+                    Set.copyOf(rejectedSymbols),
+                    Map.copyOf(reviewIndex));
+        } catch (Exception e) {
+            log.warn("[FinalDecision] Failed to parse codex payload taskId={}: {}", readiness.aiTaskId(), e.getMessage());
+            return CodexExecutionContext.empty();
+        }
+    }
+
+    private boolean shouldBlockPremarketTrade(AiReadiness readiness, CodexExecutionContext context) {
+        if (readiness == null || context == null || context.payload() == null) {
+            return false;
+        }
+        if (!"PREMARKET".equalsIgnoreCase(readiness.sourceTaskType())) {
+            return false;
+        }
+        return Boolean.TRUE.equals(context.payload().noTradeDecision())
+                || context.marketSession() == MarketSession.PREMARKET;
+    }
+
+    private boolean shouldUseCodexBuyNowOnly(AiReadiness readiness, CodexExecutionContext context) {
+        if (readiness == null || context == null || context.buyNowSymbols().isEmpty()) {
+            return false;
+        }
+        return "OPENING".equalsIgnoreCase(readiness.sourceTaskType())
+                && context.marketSession() == MarketSession.LIVE_TRADING;
+    }
+
+    private MarketSession resolveCodexMarketSession(CodexResultPayloadRequest payload, AiReadiness readiness) {
+        if (!isBlank(payload.marketSession())) {
+            try {
+                return MarketSession.valueOf(payload.marketSession().trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException ignored) {
+                // Fallback to reviewTime/taskType parsing.
+            }
+        }
+
+        LocalTime reviewTime = null;
+        if (!isBlank(payload.reviewTime())) {
+            try {
+                reviewTime = OffsetDateTime.parse(payload.reviewTime()).atZoneSameInstant(MARKET_ZONE).toLocalTime();
+            } catch (Exception ignored) {
+                try {
+                    reviewTime = LocalDateTime.parse(payload.reviewTime()).toLocalTime();
+                } catch (Exception ignoredAgain) {
+                    reviewTime = null;
+                }
+            }
+        }
+        return MarketSession.fromTaskType(
+                payload.taskType() == null ? readiness.sourceTaskType() : payload.taskType(),
+                reviewTime == null ? LocalTime.now(MARKET_ZONE) : reviewTime);
+    }
+
+    private List<FinalDecisionCandidateRequest> applyCodexExecutionOverlay(
+            List<FinalDecisionCandidateRequest> rawCandidates,
+            CodexExecutionContext context
+    ) {
+        return applyCodexExecutionOverlay(rawCandidates, context, null);
+    }
+
+    /**
+     * v2.9.1 Gate 6/7 強化 overload：多傳一個 {@code priceGateExtrasBySymbol} 累加器，
+     * overlay 算完 VWAP / volumeRatio 後會把「來源、currentVolume、expectedVolume、reason」
+     * 塞進去，供 trace 層合併使用。傳 null 則忽略（向下相容）。
+     */
+    private List<FinalDecisionCandidateRequest> applyCodexExecutionOverlay(
+            List<FinalDecisionCandidateRequest> rawCandidates,
+            CodexExecutionContext context,
+            Map<String, Map<String, Object>> priceGateExtrasBySymbol
+    ) {
+        if (rawCandidates == null || rawCandidates.isEmpty() || context == null || context.reviewedBySymbol().isEmpty()) {
+            return rawCandidates;
+        }
+        LocalTime now = LocalTime.now(MARKET_ZONE);
+        return rawCandidates.stream()
+                .filter(c -> !context.rejectedSymbols().contains(c.stockCode()))
+                .map(c -> {
+                    CodexReviewedSymbolRequest item = context.reviewedBySymbol().get(c.stockCode());
+                    return item == null ? c : overlayCandidateWithCodexReview(c, item, now, priceGateExtrasBySymbol);
+                })
+                .toList();
+    }
+
+    private List<FinalDecisionCandidateRequest> applyCodexActionableGate(
+            List<FinalDecisionCandidateRequest> rawCandidates,
+            AiReadiness readiness,
+            CodexExecutionContext context
+    ) {
+        if (rawCandidates == null || rawCandidates.isEmpty() || context == null || context.reviewedBySymbol().isEmpty()) {
+            return rawCandidates;
+        }
+        if (readiness == null
+                || !"OPENING".equalsIgnoreCase(readiness.sourceTaskType())
+                || context.marketSession() != MarketSession.LIVE_TRADING) {
+            return rawCandidates;
+        }
+        return rawCandidates.stream()
+                .filter(c -> {
+                    CodexReviewedSymbolRequest review = context.reviewedBySymbol().get(c.stockCode());
+                    return review == null || "SELECT_BUY_NOW".equalsIgnoreCase(review.bucket());
+                })
+                .toList();
+    }
+
+    /** 舊 2-arg overload — 保留給其他呼叫者用（e.g. 單 candidate 單測）。 */
+    private FinalDecisionCandidateRequest overlayCandidateWithCodexReview(
+            FinalDecisionCandidateRequest c,
+            CodexReviewedSymbolRequest item
+    ) {
+        return overlayCandidateWithCodexReview(c, item, LocalTime.now(MARKET_ZONE), null);
+    }
+
+    private FinalDecisionCandidateRequest overlayCandidateWithCodexReview(
+            FinalDecisionCandidateRequest c,
+            CodexReviewedSymbolRequest item,
+            LocalTime now,
+            Map<String, Map<String, Object>> priceGateExtrasBySymbol
+    ) {
+        String bucket = safeUpper(item.bucket());
+        double currentPrice = item.currentPrice() == null ? 0.0 : item.currentPrice();
+        double openPrice = item.openPrice() == null ? 0.0 : item.openPrice();
+        double prevClose = item.previousClose() == null ? 0.0 : item.previousClose();
+        double dayHigh = item.dayHigh() == null ? 0.0 : item.dayHigh();
+        boolean belowOpen = openPrice > 0 && currentPrice > 0 && currentPrice < openPrice;
+        boolean belowPrevClose = prevClose > 0 && currentPrice > 0 && currentPrice < prevClose;
+        boolean entryTooExtended = "SELECT_WAIT_PULLBACK".equals(bucket)
+                || "NOT_CHASE".equalsIgnoreCase(item.suggestedAction());
+        boolean falseBreakout = "REJECT_RISK".equals(bucket) || containsKeyword(item.issues(), "fake", "false breakout");
+        boolean entryTriggered = "SELECT_BUY_NOW".equals(bucket);
+        boolean nearDayHigh = dayHigh > 0 && currentPrice > 0 && currentPrice >= dayHigh * 0.985;
+        boolean mainStream = item.thesisStillValid() == null ? c.mainStream() : item.thesisStillValid();
+        Double realtimeRr = item.realTimeRR() != null && item.realTimeRR() > 0 ? item.realTimeRR() : c.riskRewardRatio();
+        String entryZone = buildEntryZone(item, c.entryPriceZone());
+        String rationale = mergeRationale(c.rationale(), item);
+
+        // v2.9 Price Gate：把現價 / 開盤 / 昨收 與衍生比例傳入 candidate。
+        BigDecimal currentPriceBd = currentPrice > 0 ? BigDecimal.valueOf(currentPrice) : null;
+        BigDecimal openPriceBd    = openPrice > 0    ? BigDecimal.valueOf(openPrice)    : null;
+        BigDecimal prevCloseBd    = prevClose > 0    ? BigDecimal.valueOf(prevClose)    : null;
+        BigDecimal distanceFromOpenPct = (currentPriceBd != null && openPriceBd != null)
+                ? currentPriceBd.subtract(openPriceBd).divide(openPriceBd, 6, RoundingMode.HALF_UP)
+                : null;
+        BigDecimal dropFromPrevClosePct = (currentPriceBd != null && prevCloseBd != null)
+                ? prevCloseBd.subtract(currentPriceBd).divide(prevCloseBd, 6, RoundingMode.HALF_UP)
+                : null;
+
+        // v2.9.1 Gate 6/7 強化：呼叫 IntradayVwapService + VolumeProfileService 填 vwap / volumeRatio。
+        IntradayVwapService.VwapResult vwap =
+                intradayVwapService.computeFromCumulative(item.volume(), item.turnover());
+        VolumeProfileService.VolumeRatioResult volRatio =
+                volumeProfileService.compute(item.volume(), item.averageDailyVolume(), now);
+        BigDecimal vwapPriceBd   = vwap.price();
+        BigDecimal volumeRatioBd = volRatio.ratio();
+
+        if (priceGateExtrasBySymbol != null) {
+            Map<String, Object> extras = new LinkedHashMap<>();
+            extras.put("vwapSource", vwap.source());
+            extras.put("vwapReason", vwap.reason());
+            extras.put("volumeSource", volRatio.source());
+            extras.put("volumeReason", volRatio.reason());
+            extras.put("currentVolume", volRatio.currentVolume());
+            extras.put("expectedVolume", volRatio.expectedVolume());
+            extras.put("avgDailyVolume", item.averageDailyVolume());
+            extras.put("elapsedTradingMinutes", volRatio.elapsedMinutes());
+            extras.put("turnover", item.turnover());
+            priceGateExtrasBySymbol.put(c.stockCode(), extras);
+        }
+
+        return new FinalDecisionCandidateRequest(
+                c.stockCode(),
+                c.stockName(),
+                c.valuationMode(),
+                c.entryType(),
+                realtimeRr,
+                c.includeInFinalPlan(),
+                mainStream,
+                falseBreakout,
+                belowOpen,
+                belowPrevClose,
+                nearDayHigh,
+                c.stopLossReasonable(),
+                rationale,
+                entryZone,
+                item.stopLoss() != null ? item.stopLoss() : c.stopLossPrice(),
+                item.targetPrice() != null ? item.targetPrice() : c.takeProfit1(),
+                c.takeProfit2(),
+                c.javaStructureScore(),
+                c.claudeScore(),
+                mapCodexScore(bucket),
+                c.finalRankScore(),
+                "REJECT_RISK".equals(bucket),
+                c.baseScore(),
+                c.hasTheme(),
+                c.themeRank(),
+                c.finalThemeScore(),
+                c.consensusScore(),
+                c.disagreementPenalty(),
+                c.volumeSpike(),
+                c.priceNotBreakHigh(),
+                entryTooExtended,
+                entryTriggered,
+                currentPriceBd,
+                openPriceBd,
+                prevCloseBd,
+                vwapPriceBd,
+                volumeRatioBd,
+                distanceFromOpenPct,
+                dropFromPrevClosePct,
+                c.marketRegime()          // regime 由主流程透過 applyMarketRegime 補上
+        );
+    }
+
+    /**
+     * v2.9 Gate 6/7：在 overlay 之後把 marketRegime 字串塞給每個 candidate，
+     * PriceGateEvaluator 依此判斷 BULL_TREND / BEAR / PANIC 差異化行為。
+     */
+    private List<FinalDecisionCandidateRequest> applyMarketRegime(
+            List<FinalDecisionCandidateRequest> candidates,
+            MarketRegimeDecision regime
+    ) {
+        if (candidates == null || candidates.isEmpty() || regime == null) {
+            return candidates;
+        }
+        String regimeType = regime.regimeType();
+        if (regimeType == null || regimeType.isBlank()) {
+            return candidates;
+        }
+        return candidates.stream().map(c -> withRegime(c, regimeType)).toList();
+    }
+
+    private FinalDecisionCandidateRequest withRegime(FinalDecisionCandidateRequest c, String regimeType) {
+        return new FinalDecisionCandidateRequest(
+                c.stockCode(), c.stockName(), c.valuationMode(), c.entryType(), c.riskRewardRatio(),
+                c.includeInFinalPlan(), c.mainStream(), c.falseBreakout(), c.belowOpen(), c.belowPrevClose(),
+                c.nearDayHigh(), c.stopLossReasonable(), c.rationale(), c.entryPriceZone(),
+                c.stopLossPrice(), c.takeProfit1(), c.takeProfit2(),
+                c.javaStructureScore(), c.claudeScore(), c.codexScore(), c.finalRankScore(),
+                c.isVetoed(), c.baseScore(), c.hasTheme(), c.themeRank(), c.finalThemeScore(),
+                c.consensusScore(), c.disagreementPenalty(), c.volumeSpike(),
+                c.priceNotBreakHigh(), c.entryTooExtended(), c.entryTriggered(),
+                c.currentPrice(), c.openPrice(), c.previousClose(), c.vwapPrice(),
+                c.volumeRatio(), c.distanceFromOpenPct(), c.dropFromPrevClosePct(), regimeType
+        );
+    }
+
+    private List<CodexReviewedSymbolRequest> safeItems(List<CodexReviewedSymbolRequest> items) {
+        return items == null ? List.of() : items;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private String safeUpper(String value) {
+        return value == null ? "" : value.toUpperCase(Locale.ROOT);
+    }
+
+    private BigDecimal mapCodexScore(String bucket) {
+        return switch (safeUpper(bucket)) {
+            case "SELECT_BUY_NOW" -> new BigDecimal("9.8");
+            case "SELECT_WAIT_PULLBACK" -> new BigDecimal("7.8");
+            case "WATCH_ONLY", "HOLD_EXISTING" -> new BigDecimal("6.8");
+            case "REDUCE_EXISTING", "EXIT_EXISTING", "REJECT_WEAK" -> new BigDecimal("3.0");
+            case "REJECT_RISK" -> new BigDecimal("2.0");
+            default -> null;
+        };
+    }
+
+    private String buildEntryZone(CodexReviewedSymbolRequest item, String fallback) {
+        if (item.entryZoneLow() != null && item.entryZoneHigh() != null) {
+            return item.entryZoneLow() + "-" + item.entryZoneHigh();
+        }
+        return fallback;
+    }
+
+    private String mergeRationale(String existing, CodexReviewedSymbolRequest item) {
+        List<String> notes = new ArrayList<>();
+        if (existing != null && !existing.isBlank()) {
+            notes.add(existing);
+        }
+        if (item.reasons() != null) {
+            notes.addAll(item.reasons().stream().filter(s -> s != null && !s.isBlank()).toList());
+        }
+        if (item.issues() != null && !item.issues().isEmpty()) {
+            notes.add("Codex issues: " + String.join("; ", item.issues()));
+        }
+        return String.join(" | ", notes);
+    }
+
+    private boolean containsKeyword(List<String> values, String... keywords) {
+        if (values == null || values.isEmpty()) {
+            return false;
+        }
+        for (String value : values) {
+            if (value == null) continue;
+            String lowered = value.toLowerCase(Locale.ROOT);
+            for (String keyword : keywords) {
+                if (lowered.contains(keyword.toLowerCase(Locale.ROOT))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private DecisionTrace buildDecisionTrace(
+            CodexExecutionContext context,
+            String finalAction,
+            String finalReason,
+            boolean hardRiskBlocked,
+            boolean softPenaltySkipped
+    ) {
+        return buildDecisionTrace(context, finalAction, finalReason, hardRiskBlocked, softPenaltySkipped, null);
+    }
+
+    /**
+     * v2.9 Gate 6/7：多傳一個 {@code priceGateTraceMap}（symbol -> priceGate 子 trace），
+     * 主流程會對每檔預先算好。若傳 null 則不輸出 priceGate 區塊，維持向下相容。
+     */
+    private DecisionTrace buildDecisionTrace(
+            CodexExecutionContext context,
+            String finalAction,
+            String finalReason,
+            boolean hardRiskBlocked,
+            boolean softPenaltySkipped,
+            Map<String, Map<String, Object>> priceGateTraceMap
+    ) {
+        if (context == null || context.reviewedBySymbol().isEmpty()) {
+            return DecisionTrace.empty();
+        }
+        CodexReviewedSymbolRequest primary = resolvePrimaryCodexReview(context);
+        if (primary == null) {
+            return DecisionTrace.empty();
+        }
+
+        boolean executionPriority = "SELECT_BUY_NOW".equalsIgnoreCase(primary.bucket());
+        Map<String, Object> trace = new LinkedHashMap<>();
+        trace.put("symbol", primary.symbol());
+        trace.put("codexBucket", primary.bucket());
+        trace.put("suggestedAction", primary.suggestedAction());
+        trace.put("executionPriority", executionPriority);
+        trace.put("hardRiskBlocked", hardRiskBlocked);
+        trace.put("softPenaltySkipped", softPenaltySkipped);
+        trace.put("codexReasons", primary.reasons() == null ? List.of() : primary.reasons());
+        trace.put("codexIssues", primary.issues() == null ? List.of() : primary.issues());
+        trace.put("finalAction", finalAction);
+        trace.put("finalReason", finalReason);
+        if (priceGateTraceMap != null) {
+            Map<String, Object> pg = priceGateTraceMap.get(primary.symbol());
+            if (pg != null) {
+                trace.put("priceGate", pg);
+            }
+        }
+        return new DecisionTrace(trace, executionPriority);
+    }
+
+    private CodexReviewedSymbolRequest resolvePrimaryCodexReview(CodexExecutionContext context) {
+        if (context == null || context.reviewedBySymbol().isEmpty()) {
+            return null;
+        }
+        if (!context.buyNowSymbols().isEmpty()) {
+            String firstBuyNow = context.buyNowSymbols().stream()
+                    .sorted(Comparator.comparing(symbol -> context.reviewIndex().getOrDefault(symbol, 999)))
+                    .findFirst()
+                    .orElse(null);
+            if (firstBuyNow != null) {
+                return context.reviewedBySymbol().get(firstBuyNow);
+            }
+        }
+        return context.reviewedBySymbol().values().stream()
+                .sorted(Comparator.comparing(item -> context.reviewIndex().getOrDefault(item.symbol(), 999)))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private FinalDecisionResponse buildCodexShortCircuitDecision(
+            AiReadiness readiness,
+            CodexExecutionContext context,
+            List<FinalDecisionCandidateRequest> actionableCandidates
+    ) {
+        if (readiness == null
+                || !"OPENING".equalsIgnoreCase(readiness.sourceTaskType())
+                || context == null
+                || context.marketSession() != MarketSession.LIVE_TRADING
+                || (actionableCandidates != null && !actionableCandidates.isEmpty())) {
+            return null;
+        }
+        CodexReviewedSymbolRequest primary = resolvePrimaryCodexReview(context);
+        if (primary == null) {
+            return null;
+        }
+
+        String bucket = safeUpper(primary.bucket());
+        String reason = resolveReviewReason(primary);
+        return switch (bucket) {
+            case "SELECT_WAIT_PULLBACK", "WATCH_ONLY" -> withDecisionTrace(
+                    new FinalDecisionResponse("WAIT", List.of(), List.of(bucket), reason),
+                    buildDecisionTrace(context, "WAIT", reason, false, false));
+            case "REJECT_WEAK", "REJECT_RISK" -> withDecisionTrace(
+                    new FinalDecisionResponse("REST", List.of(), List.of(bucket), reason),
+                    buildDecisionTrace(context, "REJECT", reason, false, false));
+            default -> null;
+        };
+    }
+
+    private boolean hasCodexExecutionPriorityHardRiskBlock(
+            AiReadiness readiness,
+            CodexExecutionContext context,
+            Map<String, PortfolioRiskDecision> riskMap
+    ) {
+        if (!shouldUseCodexBuyNowOnly(readiness, context) || riskMap == null || riskMap.isEmpty()) {
+            return false;
+        }
+        return context.buyNowSymbols().stream().anyMatch(symbol -> {
+            PortfolioRiskDecision decision = riskMap.get(symbol);
+            return decision == null || !decision.approved();
+        });
+    }
+
+    private String resolveDecisionTraceReason(
+            CodexExecutionContext context,
+            Map<String, PortfolioRiskDecision> riskMap,
+            boolean hardRiskBlocked,
+            String fallback
+    ) {
+        CodexReviewedSymbolRequest primary = resolvePrimaryCodexReview(context);
+        if (hardRiskBlocked && context != null && riskMap != null) {
+            for (String symbol : context.buyNowSymbols()) {
+                PortfolioRiskDecision risk = riskMap.get(symbol);
+                if (risk == null) {
+                    return "NO_RISK_DECISION";
+                }
+                if (!risk.approved()) {
+                    return isBlank(risk.blockReason()) ? "PORTFOLIO_RISK_BLOCKED" : risk.blockReason();
+                }
+            }
+        }
+        if (primary != null) {
+            String reviewReason = resolveReviewReason(primary);
+            if (!isBlank(reviewReason)) {
+                return reviewReason;
+            }
+        }
+        return fallback;
+    }
+
+    private String resolveReviewReason(CodexReviewedSymbolRequest review) {
+        if (review == null) {
+            return null;
+        }
+        if (review.reasons() != null) {
+            String reasons = review.reasons().stream()
+                    .filter(s -> s != null && !s.isBlank())
+                    .collect(Collectors.joining(" | "));
+            if (!reasons.isBlank()) {
+                return reasons;
+            }
+        }
+        if (review.issues() != null) {
+            String issues = review.issues().stream()
+                    .filter(s -> s != null && !s.isBlank())
+                    .collect(Collectors.joining(" | "));
+            if (!issues.isBlank()) {
+                return issues;
+            }
+        }
+        return review.bucket();
+    }
+
+    private FinalDecisionResponse withDecisionTrace(FinalDecisionResponse response, DecisionTrace trace) {
+        if (response == null || trace == null || trace.payload().isEmpty()) {
+            return response;
+        }
+        return new FinalDecisionResponse(
+                response.decision(),
+                response.selectedStocks(),
+                response.rejectedReasons(),
+                response.summary(),
+                mergePlanningPayload(response.planningPayload(), trace.payload())
+        );
+    }
+
+    private Map<String, Object> mergePlanningPayload(Map<String, Object> existing, Map<String, Object> tracePayload) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        if (existing != null && !existing.isEmpty()) {
+            payload.putAll(existing);
+        }
+        if (tracePayload != null && !tracePayload.isEmpty()) {
+            payload.put("decisionTrace", tracePayload);
+        }
+        return payload.isEmpty() ? null : payload;
     }
 
     private FinalDecisionSelectedStockResponse enrichWithSizing(
@@ -1006,7 +1825,12 @@ public class FinalDecisionService {
             BigDecimal aiWeighted = weightedScoringEngine.computeAiWeightedScore(javaScore, claudeScore, codexScore);
             BigDecimal rawRank    = weightedScoringEngine.computeFinalRankScore(aiWeighted, consensusScore, veto.vetoed());
             // v2.6 MVP: 套用 VetoEngine soft penalty 扣分（hard veto 時 rawRank 已為 0，不會再扣）
+            boolean codexExecutionPriority = Boolean.TRUE.equals(c.entryTriggered())
+                    && codexScore != null
+                    && codexScore.compareTo(new BigDecimal("9.5")) >= 0;
             BigDecimal finalRank  = veto.vetoed()
+                    ? rawRank
+                    : codexExecutionPriority
                     ? rawRank
                     : rawRank.subtract(
                             veto.scoringPenalty() == null ? BigDecimal.ZERO : veto.scoringPenalty()
@@ -1311,5 +2135,95 @@ public class FinalDecisionService {
 
     private String safe(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    /**
+     * v2 Theme Engine PR4/PR5：把候選股集合（全部 candidate，非只 selected）轉成 gate trace probe。
+     *
+     * <p>PR5 修正：若只對 selected 跑 trace，shadow diff 只會產生 SAME_BUY /
+     * LEGACY_BUY_THEME_BLOCK / CONFLICT_REVIEW_REQUIRED，看不到 LEGACY_WAIT_THEME_BUY
+     * / BOTH_BLOCK / SAME_WAIT。故對所有 candidate 都跑 probe，讓 shadow 看到完整 6 類。</p>
+     *
+     * <p>nullable：themeTag 嘗試從 Codex review 或 CandidateStock 推斷；找不到就給 null（merge 會略過對齊）。
+     * Trace-only，純讀不寫。</p>
+     */
+    private List<ThemeGateOrchestrator.CandidateProbe> buildThemeGateProbes(
+            java.util.Collection<FinalDecisionCandidateRequest> candidates,
+            MarketRegimeDecision regime,
+            CodexExecutionContext codexContext,
+            int openPositions,
+            int maxPositions,
+            BigDecimal availableCash
+    ) {
+        List<ThemeGateOrchestrator.CandidateProbe> probes = new ArrayList<>();
+        if (candidates == null || candidates.isEmpty()) return probes;
+        String regimeType = regime != null ? regime.regimeType() : null;
+        boolean tradeAllowed = regime == null || regime.tradeAllowed();
+        BigDecimal riskMultiplier = regime != null ? regime.riskMultiplier() : null;
+
+        for (FinalDecisionCandidateRequest c : candidates) {
+            if (c == null || c.stockCode() == null) continue;
+
+            String themeTag = null;
+            BigDecimal turnover = null;
+            if (codexContext != null) {
+                var review = codexContext.reviewedBySymbol().get(c.stockCode());
+                if (review != null && review.turnover() != null) {
+                    turnover = BigDecimal.valueOf(review.turnover());
+                }
+            }
+
+            probes.add(new ThemeGateOrchestrator.CandidateProbe(
+                    c.stockCode(),
+                    themeTag,
+                    regimeType,
+                    tradeAllowed,
+                    riskMultiplier,
+                    turnover,
+                    c.volumeRatio(),
+                    c.javaStructureScore(),
+                    c.claudeScore(),
+                    c.codexScore(),
+                    c.riskRewardRatio() == null ? null : BigDecimal.valueOf(c.riskRewardRatio()),
+                    c.baseScore(),
+                    openPositions,
+                    maxPositions,
+                    availableCash
+            ));
+        }
+        return probes;
+    }
+
+    /**
+     * v2 Theme Engine PR5：把 PR4 themeOutcome 對齊成 shadow diff input。
+     *
+     * <p>Legacy decision 正規化規則：逐檔判斷 {@code (finalDecisionCode=ENTER && selectedSymbols.contains(symbol)) ? ENTER : WAIT}。
+     * 這讓 shadow 可看到「legacy 未選 × theme PASS/BLOCK/WAIT」等完整 6 類。</p>
+     * <p>Legacy final score 使用 {@code finalRankScore}（未設時退回 {@code baseScore}）。</p>
+     */
+    private List<ThemeShadowModeService.Input> buildShadowInputs(
+            java.util.Collection<FinalDecisionCandidateRequest> candidates,
+            java.util.Set<String> selectedSymbols,
+            String finalDecisionCode,
+            ThemeGateOrchestrator.Outcome themeOutcome) {
+        if (candidates == null || candidates.isEmpty() || themeOutcome == null) return List.of();
+        boolean finalDecisionEnter = "ENTER".equalsIgnoreCase(finalDecisionCode);
+        java.util.Set<String> selected = selectedSymbols == null ? java.util.Set.of() : selectedSymbols;
+        List<ThemeShadowModeService.Input> list = new ArrayList<>(candidates.size());
+        for (FinalDecisionCandidateRequest c : candidates) {
+            if (c == null || c.stockCode() == null) continue;
+            var trace = themeOutcome.findBySymbol(c.stockCode()).orElse(null);
+            if (trace == null) continue;   // theme trace 缺 → 跳過該檔
+            boolean wasSelected = selected.contains(c.stockCode());
+            String legacyDecision = (finalDecisionEnter && wasSelected) ? "ENTER" : "WAIT";
+            BigDecimal legacyScore = c.finalRankScore() != null ? c.finalRankScore() : c.baseScore();
+            list.add(new ThemeShadowModeService.Input(
+                    c.stockCode(),
+                    legacyDecision,
+                    legacyScore,
+                    trace,
+                    null));
+        }
+        return list;
     }
 }
