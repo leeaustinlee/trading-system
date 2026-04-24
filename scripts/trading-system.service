@@ -1,0 +1,53 @@
+#
+# systemd unit for Austin trading-system
+#
+# 安裝（在 WSL 內）：
+#   sudo cp /mnt/d/ai/stock/trading-system/scripts/trading-system.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable trading-system
+#   sudo systemctl start trading-system
+#
+# 查看狀態：
+#   sudo systemctl status trading-system
+#   sudo journalctl -u trading-system -f
+#
+# 重啟：
+#   sudo systemctl restart trading-system
+#
+# 停止：
+#   sudo systemctl stop trading-system
+#
+# 注意：請依實際情況改 User= 與路徑（預設假設 WSL 帳號是 austin、專案在 /mnt/d/ai/stock）
+#
+[Unit]
+Description=Austin Trading System (Java App)
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=austin
+WorkingDirectory=/mnt/d/ai/stock/trading-system
+
+# 載入 .env（DB / LINE / Claude path 等）
+EnvironmentFile=/mnt/d/ai/stock/trading-system/.env
+Environment=SPRING_PROFILES_ACTIVE=local
+
+ExecStart=/usr/bin/java -Xms512m -Xmx1536m \
+  -Dspring.profiles.active=local \
+  -jar /mnt/d/ai/stock/trading-system/target/trading-system-0.0.1-SNAPSHOT.jar
+
+# 自動重啟策略：crash / OOM 後 30 秒重啟
+Restart=always
+RestartSec=30
+SuccessExitStatus=143
+
+# 給 Spring Boot 充足的關機時間
+TimeoutStopSec=60
+
+# 日誌走 systemd-journal（journalctl 看），同時保留 logs/app.log
+StandardOutput=append:/mnt/d/ai/stock/trading-system/logs/app.log
+StandardError=append:/mnt/d/ai/stock/trading-system/logs/app.log
+
+[Install]
+WantedBy=multi-user.target

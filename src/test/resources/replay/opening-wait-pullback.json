@@ -1,0 +1,38 @@
+{
+  "taskType": "OPENING",
+  "marketSession": "LIVE_TRADING",
+  "reviewTime": "2026-04-24T09:30:00+08:00",
+  "marketBias": "BULLISH",
+  "marketRegime": "BULL_TREND",
+  "noTradeDecision": false,
+  "selected": [],
+  "watchlist": [
+    {
+      "symbol": "2454",
+      "bucket": "SELECT_WAIT_PULLBACK",
+      "currentPrice": 2248.0,
+      "openPrice": 2210.0,
+      "previousClose": 2175.0,
+      "dayHigh": 2255.0,
+      "dayLow": 2208.0,
+      "volume": 21200000.0,
+      "turnover": 47200000000.0,
+      "entryZoneLow": 2185.0,
+      "entryZoneHigh": 2205.0,
+      "stopLoss": 2140.0,
+      "targetPrice": 2300.0,
+      "realTimeRR": 0.9,
+      "thesisStillValid": true,
+      "reasons": [
+        "Too far above entry zone",
+        "Wait for pullback to actionable area"
+      ],
+      "issues": [
+        "Not chase"
+      ],
+      "suggestedAction": "WAIT_PULLBACK",
+      "positionMode": "A"
+    }
+  ],
+  "rejected": []
+}

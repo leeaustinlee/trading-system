@@ -1,0 +1,37 @@
+{
+  "taskType": "OPENING",
+  "marketSession": "LIVE_TRADING",
+  "reviewTime": "2026-04-24T09:30:00+08:00",
+  "marketBias": "BULLISH",
+  "marketRegime": "BULL_TREND",
+  "noTradeDecision": false,
+  "selected": [
+    {
+      "symbol": "2454",
+      "bucket": "SELECT_BUY_NOW",
+      "currentPrice": 2200.0,
+      "openPrice": 2188.0,
+      "previousClose": 2175.0,
+      "dayHigh": 2205.0,
+      "dayLow": 2182.0,
+      "volume": 18500000.0,
+      "turnover": 40700000000.0,
+      "entryZoneLow": 2185.0,
+      "entryZoneHigh": 2205.0,
+      "stopLoss": 2140.0,
+      "targetPrice": 2300.0,
+      "realTimeRR": 1.6,
+      "thesisStillValid": true,
+      "reasons": [
+        "AI thesis valid",
+        "Holding above open",
+        "Semiconductor theme confirmed"
+      ],
+      "issues": [],
+      "suggestedAction": "BUY_NOW",
+      "positionMode": "A"
+    }
+  ],
+  "watchlist": [],
+  "rejected": []
+}

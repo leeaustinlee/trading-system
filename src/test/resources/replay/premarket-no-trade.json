@@ -1,0 +1,36 @@
+{
+  "taskType": "PREMARKET",
+  "marketSession": "PREMARKET",
+  "reviewTime": "2026-04-24T08:30:00+08:00",
+  "marketBias": "BULLISH",
+  "marketRegime": "BULL_TREND",
+  "noTradeDecision": true,
+  "selected": [],
+  "watchlist": [
+    {
+      "symbol": "2454",
+      "bucket": "WATCH_ONLY",
+      "currentPrice": 2200.0,
+      "openPrice": 0.0,
+      "previousClose": 2185.0,
+      "dayHigh": 0.0,
+      "dayLow": 0.0,
+      "volume": 0.0,
+      "turnover": 0.0,
+      "entryZoneLow": 2180.0,
+      "entryZoneHigh": 2210.0,
+      "stopLoss": 2140.0,
+      "targetPrice": 2290.0,
+      "realTimeRR": 1.9,
+      "thesisStillValid": true,
+      "reasons": [
+        "Premarket bias only",
+        "Wait for 09:30 live validation"
+      ],
+      "issues": [],
+      "suggestedAction": "BIAS_ONLY",
+      "positionMode": "A"
+    }
+  ],
+  "rejected": []
+}

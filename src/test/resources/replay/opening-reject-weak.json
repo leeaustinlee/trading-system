@@ -1,0 +1,39 @@
+{
+  "taskType": "OPENING",
+  "marketSession": "LIVE_TRADING",
+  "reviewTime": "2026-04-24T09:30:00+08:00",
+  "marketBias": "NEUTRAL",
+  "marketRegime": "RANGE_CHOP",
+  "noTradeDecision": false,
+  "selected": [],
+  "watchlist": [],
+  "rejected": [
+    {
+      "symbol": "2454",
+      "bucket": "REJECT_WEAK",
+      "currentPrice": 2165.0,
+      "openPrice": 2198.0,
+      "previousClose": 2175.0,
+      "dayHigh": 2201.0,
+      "dayLow": 2160.0,
+      "volume": 19400000.0,
+      "turnover": 42500000000.0,
+      "entryZoneLow": 2185.0,
+      "entryZoneHigh": 2205.0,
+      "stopLoss": 2140.0,
+      "targetPrice": 2300.0,
+      "realTimeRR": 0.7,
+      "thesisStillValid": false,
+      "reasons": [
+        "Lost open price",
+        "Opening strength failed"
+      ],
+      "issues": [
+        "Break below previous close",
+        "Theme not extending"
+      ],
+      "suggestedAction": "REJECT",
+      "positionMode": "A"
+    }
+  ]
+}
