@@ -5,6 +5,19 @@
 
 ---
 
+## 環境與路徑解析（v2.1 新增）
+
+本 prompt 會同時被兩種環境執行，請先判斷當下環境並自動翻譯路徑：
+
+| 執行環境 | stock 根目錄路徑 |
+|---|---|
+| 本機 Windows PowerShell / WSL Claude CLI | `D:/ai/stock/` 或 `/mnt/d/ai/stock/` |
+| Cowork cloud sandbox Claude | `/sessions/happy-gracious-pasteur/mnt/stock/` |
+
+底下章節出現的 `D:/ai/stock/...` 一律請翻譯成你當下環境能讀寫的對應路徑，兩邊指向同一份檔案。若其中一條路徑 Read 失敗，改用另一條。
+
+---
+
 ## 第一步：必讀（依序讀完再開始研究）
 
 1. `D:/ai/stock/AI_RULES_INDEX.md`
@@ -77,52 +90,69 @@ D:/ai/stock/claude-research-YYYYMMDD-0820.md
 
 ---
 
-## 第六步：認領任務 + 回報結果（PR-2 新流程，取代原本的「匯入 DB」）
+## 第六步：寫出研究結果到 File Bridge（v2.1 協定）
 
-### 6.1 認領任務
-先查詢 PENDING 的 PREMARKET 任務（Java 於 08:10 已建立）：
+Java `PremarketDataPrepJob`（08:10）已建立 PREMARKET 任務並寫出 `claude-research-request.json`。你只需要寫一個檔案到 `claude-submit/`，Java `ClaudeSubmitWatcher` 會在 30 秒內自動 submit 並把 task 狀態推進到 `CLAUDE_DONE` — **不需要、也不可以呼叫 `localhost:8080`**（Cowork 雲端環境打不到；本機走 file bridge 更穩）。
 
+### 6.1 讀 request 取得 taskId 與建議檔名
+
+讀 `D:/ai/stock/claude-research-request.json`（路徑請依第 0 章翻譯），取出以下欄位：
+
+| 欄位 | 意義 |
+|---|---|
+| `taskId` | 本輪 ai_task 的 ID。**不得自行創造** |
+| `taskType` | 必須 = `"PREMARKET"`（若不是，代表目前不是 PREMARKET 時段） |
+| `tradingDate` | 例如 `"2026-04-23"` |
+| `submit_filename_hint` | Java 建議檔名（例如 `claude-PREMARKET-2026-04-23-0847-task-118.json`），**直接沿用** |
+| `allowed_symbols` | `scores` / `thesis` 的 key 必須是這個清單的子集 |
+
+若 `taskType` 不是 `PREMARKET` 或 `taskId` 缺失，不要寫 claude-submit，直接在 `claude-research-latest.md` 標註「未取得有效 PREMARKET taskId，本輪不回報」後結束。
+
+### 6.2 組成 JSON 內容
+
+```json
+{
+  "taskId": 118,
+  "taskType": "PREMARKET",
+  "tradingDate": "2026-04-23",
+  "contentMarkdown": "完整盤前研究 md（與 claude-research-latest.md 同內容）",
+  "scores": {"2303": 8.5, "3231": 7.8, "4938": 7.2},
+  "thesis": {"2303": "T86 年度級大買，但法說風險", "3231": "..."},
+  "riskFlags": ["台積電 T86 大賣，大盤風險偏高"]
+}
+```
+
+規則：
+
+- `scores` key 必須 ∈ `allowed_symbols`，不在清單的 symbol 一律丟棄
+- `thesis` key 應與 `scores` 對齊
+- `riskFlags` 沒有風險就給空陣列 `[]`
+- `contentMarkdown` 必須有實質研究內容，系統會拒收空殼
+
+### 6.3 原子寫檔（tmp → rename）
+
+**絕對不可省略 `.tmp` 階段**，否則 watcher 可能讀到半成品被丟進 `failed/`。
+
+路徑：`D:/ai/stock/claude-submit/<submit_filename_hint>`（依第 0 章翻譯）
+
+1. 先寫 `.../<submit_filename_hint>.tmp`
+2. 完整寫入後 rename 去掉 `.tmp`
+
+範例（本機）：
 ```bash
-curl -s "http://localhost:8080/api/ai/tasks/pending?type=PREMARKET" | jq '.[0]'
+mv /mnt/d/ai/stock/claude-submit/claude-PREMARKET-*-task-118.json.tmp \
+   /mnt/d/ai/stock/claude-submit/claude-PREMARKET-*-task-118.json
 ```
 
-記下回傳中的 `id`（下稱 `TASK_ID`）。讀取 `target_candidates_json` 作為研究對象。
+Cowork 同理，把路徑前綴換成 `/sessions/happy-gracious-pasteur/mnt/stock/`。
 
-### 6.2 做研究（讀 target_candidates_json + 各來源）
+### 6.4 驗證（選用）
 
-### 6.3 寫研究到 claude-research-latest.md（備份用，Codex fallback）
+- `claude-submit/` 下應有剛寫的 `.json`（不應有 `.tmp` 殘留）
+- 30-60 秒後 `claude-submit/processed/` 會出現 `<hint>.processed.json`，代表 Java 已 submit 成功
+- 若 `claude-submit/failed/` 出現 `<hint>.failed.json`，開檔看原因（通常是 schema 問題）
 
-### 6.4 回報結果（自動寫 stock_evaluation.claude_score + 觸發 consensus 重算）
-
-```bash
-curl -X POST "http://localhost:8080/api/ai/tasks/$TASK_ID/claude-result" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "contentMarkdown": "完整盤前研究 md 內容",
-    "scores": {"2303": 8.5, "3231": 7.8, "4938": 7.2},
-    "thesis": {"2303": "T86 年度級大買，但 4/22 法說風險"},
-    "riskFlags": ["台積電 T86 大賣，大盤風險偏高"]
-  }'
-```
-
-成功回應：`{"success":true, "id":N, "status":"CLAUDE_DONE", "autoScored":{...}}`。
-
-### 6.5 驗證
-```bash
-curl -s "http://localhost:8080/api/ai/tasks/$TASK_ID" | jq '.status'   # 應為 "CLAUDE_DONE"
-curl -s "http://localhost:8080/api/candidates/current" | jq '.[] | {symbol, claudeScore}'
-```
-
-### 6.6 失敗處理
-若 `claude-result` 失敗或 PENDING 任務不存在，在最後輸出印出：
-```
-❌ 任務回報失敗：<原因>
-👉 請 Austin 手動用 UI 匯入 claude-research-latest.md 作為備援，或 curl 重試
-```
-
-> **舊 API `POST /api/ai/research/import-file` 仍保留**，但只寫 `ai_research_log`，
-> 不會寫 `stock_evaluation.claude_score`，FinalDecisionService 拿不到 Claude 分數。
-> 優先用新流程。
+Scheduled 環境下寫完就可結束。
 
 ---
 
@@ -132,4 +162,6 @@ curl -s "http://localhost:8080/api/candidates/current" | jq '.[] | {symbol, clau
 - 不寫 `claude-outbox.json`
 - 不直接給 Austin 買賣張數（張數由 Codex 決定）
 - 不用超過 30 分鐘的報價給進場建議
-- **不要跳過第六步 — 這是 FinalDecisionService 拿到 Claude 分數的唯一管道**
+- **不要呼叫 `localhost:8080`** — 走 file bridge（6.3）
+- **不要跳過 `.tmp` 階段** — watcher 可能讀到半成品
+- **不要自行創造 taskId** — 必須用 `claude-research-request.json` 的值

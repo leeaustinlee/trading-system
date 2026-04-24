@@ -81,10 +81,10 @@ public class TomorrowPlan1800Job {
             }
             List<PositionResponse> openPositions = positionService.getOpenPositions(20);
 
-            lineTemplateService.notifyTomorrowPlan(buildMessage(today, market, candidates, openPositions), today);
+            log.info("[TomorrowPlan1800Job] TOMORROW_PLAN LINE deferred until final AI result is submitted.");
 
             String aiMd = aiTaskService.findLatestMarkdown(today, "T86_TOMORROW", "POSTMARKET");
-            if (aiMd != null && aiMd.length() > 100) {
+            if (false && aiMd != null && aiMd.length() > 100) {
                 String summary = aiMd.length() > 2500
                         ? aiMd.substring(0, 2500) + "\n...(更多內容請查看 AI task 詳細結果)"
                         : aiMd;

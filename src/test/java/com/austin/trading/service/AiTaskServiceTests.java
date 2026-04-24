@@ -233,7 +233,7 @@ class AiTaskServiceTests {
         Map<String, String> issues = Map.of("6213", "風險未揭露");
 
         AiTaskEntity submitted = service.submitCodexResult(t.getId(),
-                new CodexSubmitRequest("codex md", cscores, List.of("6213"), issues)).task();
+                new CodexSubmitRequest("codex md", cscores, List.of("6213"), issues, null)).task();
 
         assertThat(submitted.getStatus()).isEqualTo(AiTaskService.STATUS_CODEX_DONE);
         assertThat(submitted.getCodexDoneAt()).isNotNull();
@@ -255,7 +255,7 @@ class AiTaskServiceTests {
         service.submitClaudeResult(t.getId(),
                 new ClaudeSubmitRequest("md", Collections.emptyMap(), null, null));
         service.submitCodexResult(t.getId(),
-                new CodexSubmitRequest("codex", Collections.emptyMap(), List.of(), null));
+                new CodexSubmitRequest("codex", Collections.emptyMap(), List.of(), null, null));
 
         AiTaskEntity done = service.finalizeTask(t.getId());
         assertThat(done.getStatus()).isEqualTo(AiTaskService.STATUS_FINALIZED);
@@ -278,7 +278,7 @@ class AiTaskServiceTests {
         assertThat(service.isClaudeReady(date, "PREMARKET")).isTrue();   // CLAUDE_DONE
 
         service.submitCodexResult(t.getId(),
-                new CodexSubmitRequest("codex", Collections.emptyMap(), List.of(), null));
+                new CodexSubmitRequest("codex", Collections.emptyMap(), List.of(), null, null));
         service.finalizeTask(t.getId());
         assertThat(service.isClaudeReady(date, "PREMARKET")).isTrue();   // FINALIZED
     }
@@ -294,7 +294,7 @@ class AiTaskServiceTests {
         assertThat(service.isCodexReady(date, "PREMARKET")).isFalse();
 
         service.submitCodexResult(t.getId(),
-                new CodexSubmitRequest("md", Collections.emptyMap(), List.of(), null));
+                new CodexSubmitRequest("md", Collections.emptyMap(), List.of(), null, null));
 
         assertThat(service.isCodexReady(date, "PREMARKET")).isTrue();
     }
@@ -319,7 +319,7 @@ class AiTaskServiceTests {
                 new ClaudeSubmitRequest("md", Collections.emptyMap(), null, null));
         // v2.1：要先 CODEX_DONE 才能 finalize
         service.submitCodexResult(t.getId(),
-                new CodexSubmitRequest("codex", Collections.emptyMap(), List.of(), null));
+                new CodexSubmitRequest("codex", Collections.emptyMap(), List.of(), null, null));
         service.finalizeTask(t.getId());
 
         assertThatThrownBy(() -> service.submitClaudeResult(t.getId(),
@@ -336,7 +336,7 @@ class AiTaskServiceTests {
         service.submitClaudeResult(t.getId(),
                 new ClaudeSubmitRequest("md", Collections.emptyMap(), null, null));
         service.submitCodexResult(t.getId(),
-                new CodexSubmitRequest("codex", Collections.emptyMap(), List.of(), null));
+                new CodexSubmitRequest("codex", Collections.emptyMap(), List.of(), null, null));
 
         assertThatThrownBy(() -> service.submitClaudeResult(t.getId(),
                 new ClaudeSubmitRequest("new md", Collections.emptyMap(), null, null)))

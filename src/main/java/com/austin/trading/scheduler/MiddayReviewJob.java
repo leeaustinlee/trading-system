@@ -99,10 +99,10 @@ public class MiddayReviewJob {
                     buildPositionSummary(openPositions),
                     buildAdvice(market, openPositions.size())
             );
-            lineTemplateService.notifyMidday(message, today);
+            log.info("[MiddayReviewJob] MIDDAY LINE deferred until final AI result is submitted.");
 
             String aiMd = aiTaskService.findLatestMarkdown(today, "MIDDAY", "OPENING", "PREMARKET");
-            if (aiMd != null && aiMd.length() > 100) {
+            if (false && aiMd != null && aiMd.length() > 100) {
                 String summary = aiMd.length() > 2500
                         ? aiMd.substring(0, 2500) + "\n...(內容過長已截斷，完整內容請看 AI task)"
                         : aiMd;

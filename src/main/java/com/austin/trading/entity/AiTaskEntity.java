@@ -70,6 +70,9 @@ public class AiTaskEntity {
     @Column(name = "codex_result_markdown", columnDefinition = "LONGTEXT")
     private String codexResultMarkdown;
 
+    @Column(name = "codex_payload_json", columnDefinition = "json")
+    private String codexPayloadJson;
+
     @Column(name = "codex_scores_json", columnDefinition = "json")
     private String codexScoresJson;
 
@@ -153,6 +156,9 @@ public class AiTaskEntity {
     public void setCodexResultMarkdown(String codexResultMarkdown) {
         this.codexResultMarkdown = codexResultMarkdown;
     }
+
+    public String getCodexPayloadJson() { return codexPayloadJson; }
+    public void setCodexPayloadJson(String codexPayloadJson) { this.codexPayloadJson = codexPayloadJson; }
 
     public String getCodexScoresJson() { return codexScoresJson; }
     public void setCodexScoresJson(String codexScoresJson) { this.codexScoresJson = codexScoresJson; }

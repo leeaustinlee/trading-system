@@ -5,6 +5,19 @@
 
 ---
 
+## 環境與路徑解析（v2.1 新增）
+
+本 prompt 會同時被兩種環境執行，請先判斷當下環境並自動翻譯路徑：
+
+| 執行環境 | stock 根目錄路徑 |
+|---|---|
+| 本機 Windows PowerShell / WSL Claude CLI | `D:/ai/stock/` 或 `/mnt/d/ai/stock/` |
+| Cowork cloud sandbox Claude | `/sessions/happy-gracious-pasteur/mnt/stock/` |
+
+底下章節出現的 `D:/ai/stock/...` 一律請翻譯成你當下環境能讀寫的對應路徑，兩邊指向同一份檔案。若其中一條路徑 Read 失敗，改用另一條。
+
+---
+
 ## 第一步：必讀
 
 1. `D:/ai/stock/AI_RULES_INDEX.md`
@@ -77,41 +90,65 @@
 
 ---
 
-## 第七步：認領任務 + 回報結果（PR-2 新流程）
+## 第七步：寫出研究結果到 File Bridge（v2.1 協定）
 
-### 7.1 認領任務
+Java 於盤中階段已建立 MIDDAY 任務並寫出 `claude-research-request.json`。你只需要寫一個檔案到 `claude-submit/`，Java `ClaudeSubmitWatcher` 會在 30 秒內自動 submit 並把 task 狀態推進到 `CLAUDE_DONE` — **不需要、也不可以呼叫 `localhost:8080`**。
+
+### 7.1 讀 request 取得 taskId 與建議檔名
+
+讀 `D:/ai/stock/claude-research-request.json`（路徑依第 0 章翻譯），取出：
+
+| 欄位 | 意義 |
+|---|---|
+| `taskId` | 本輪 ai_task 的 ID。**不得自行創造** |
+| `taskType` | 必須 = `"MIDDAY"` |
+| `tradingDate` | 例如 `"2026-04-23"` |
+| `submit_filename_hint` | 例如 `claude-MIDDAY-2026-04-23-1105-task-120.json`，**直接沿用** |
+| `allowed_symbols` | `scores` / `thesis` 的 key 必須是子集 |
+
+若 `taskType` 不是 `MIDDAY` 或 `taskId` 缺失，不要寫 claude-submit，只在 `claude-research-latest.md` 標註「未取得有效 MIDDAY taskId，本輪不回報」後結束。
+
+### 7.2 組成 JSON 內容
+
+```json
+{
+  "taskId": 120,
+  "taskType": "MIDDAY",
+  "tradingDate": "2026-04-23",
+  "contentMarkdown": "完整盤中研究 md（與 claude-research-latest.md 同內容）",
+  "scores": {"2303": 8.0},
+  "thesis": {"2303": "持倉續抱，動能尚在"},
+  "riskFlags": []
+}
+```
+
+規則：
+
+- `scores` key 必須 ∈ `allowed_symbols`
+- **10:50 MIDDAY 特殊規則**：若 `decision_lock = LOCKED` 或行情等級 = C，scores 一律保守（≤ 6）或留空
+- 11:00 後無持倉且無新轉強，`thesis` 可註明「建議 monitor_mode = OFF」
+- `riskFlags` 沒有就空陣列 `[]`
+
+### 7.3 原子寫檔（tmp → rename）
+
+**絕對不可省略 `.tmp` 階段**。
+
+路徑：`D:/ai/stock/claude-submit/<submit_filename_hint>`（依第 0 章翻譯）
+
+1. 先寫 `.../<submit_filename_hint>.tmp`
+2. 完整寫入後 rename 去掉 `.tmp`
+
+範例（本機）：
 ```bash
-curl -s "http://localhost:8080/api/ai/tasks/pending?type=MIDDAY" | jq '.[0]'
-```
-記下 `id`。若無 PENDING 可用舊 API fallback。
-
-### 7.2 回報結果
-```bash
-curl -X POST "http://localhost:8080/api/ai/tasks/$TASK_ID/claude-result" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "contentMarkdown": "完整盤中研究 md",
-    "scores": {"2303": 8.0},
-    "thesis": {"2303": "持倉續抱，動能尚在"},
-    "riskFlags": []
-  }'
+mv /mnt/d/ai/stock/claude-submit/claude-MIDDAY-*-task-120.json.tmp \
+   /mnt/d/ai/stock/claude-submit/claude-MIDDAY-*-task-120.json
 ```
 
-### 7.3 驗證
-```bash
-curl -s "http://localhost:8080/api/ai/tasks/$TASK_ID" | jq '.status'   # CLAUDE_DONE
-```
+### 7.4 驗證（選用）
 
-### Fallback（僅無 PENDING 任務時）
-```bash
-curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt/d/ai/stock/claude-research-latest.md&researchType=MIDDAY&tradingDate=$(date +%Y-%m-%d)"
-```
-
-失敗處理：
-```
-❌ 任務回報失敗：<原因>
-👉 請 Austin 手動匯入 claude-research-latest.md
-```
+- `claude-submit/` 下應有剛寫的 `.json`（不應有 `.tmp` 殘留）
+- 30-60 秒後 `claude-submit/processed/` 出現 `<hint>.processed.json`
+- 若進 `failed/` 開檔看原因
 
 ---
 
@@ -120,4 +157,6 @@ curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt
 - 不發 LINE
 - 不執行盤中監控（監控由 Codex 負責）
 - 不直接給張數
-- **不要跳過第七步回報**
+- **不要呼叫 `localhost:8080`** — 走 file bridge（7.3）
+- **不要跳過 `.tmp` 階段** — watcher 可能讀到半成品
+- **不要自行創造 taskId** — 必須用 `claude-research-request.json` 的值

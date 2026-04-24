@@ -44,6 +44,9 @@ import java.util.Map;
 @RequestMapping("/api/scheduler")
 public class SchedulerController {
 
+    private static final LocalTime T86_DATA_PREP_OFFICIAL_TIME = LocalTime.of(18, 10);
+    private static final LocalTime TOMORROW_PLAN_OFFICIAL_TIME = LocalTime.of(18, 30);
+
     private final SchedulerExecutionLogRepository logRepository;
     private final SchedulerLogService schedulerLogService;
     private final DailyOrchestrationService orchestrationService;
@@ -181,6 +184,7 @@ public class SchedulerController {
         LocalDate d = date != null && !date.isBlank() ? LocalDate.parse(date) : LocalDate.now();
         LocalDateTime trigger = LocalDateTime.now();
         String jobName = triggerKeyToJobName(triggerKey) + " (MANUAL)";
+        boolean previewMode = isPreviewOnlyManualRun(triggerKey, d, trigger.toLocalTime());
 
         // 1. 解析對應的 orchestration step（若該 trigger 能對應）
         OrchestrationStep step = OrchestrationStep.fromKey(triggerKey).orElse(null);
@@ -235,14 +239,31 @@ public class SchedulerController {
             };
             schedulerLogService.success(jobName, trigger, LocalDateTime.now(), result.toString());
             if (step != null) {
-                orchestrationService.markDone(d, step, "manual: " + result);
+                if (previewMode) {
+                    orchestrationService.resetStepToPending(d, step);
+                } else {
+                    orchestrationService.markDone(d, step, "manual: " + result);
+                }
             }
-            return ResponseEntity.ok(Map.of("ok", true, "triggerKey", triggerKey, "date", d.toString(),
-                    "forced", force, "result", result));
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("ok", true);
+            body.put("triggerKey", triggerKey);
+            body.put("date", d.toString());
+            body.put("forced", force);
+            body.put("preview", previewMode);
+            if (previewMode) {
+                body.put("message", "preview only - orchestration step kept PENDING until official schedule time");
+            }
+            body.put("result", result);
+            return ResponseEntity.ok(body);
         } catch (Exception e) {
             schedulerLogService.failed(jobName, trigger, LocalDateTime.now(), e.getMessage());
             if (step != null) {
-                orchestrationService.markFailed(d, step, "manual: " + e.getMessage());
+                if (previewMode) {
+                    orchestrationService.resetStepToPending(d, step);
+                } else {
+                    orchestrationService.markFailed(d, step, "manual: " + e.getMessage());
+                }
             }
             return ResponseEntity.internalServerError().body(Map.of(
                     "ok", false, "triggerKey", triggerKey, "error", e.getMessage()));
@@ -271,6 +292,17 @@ public class SchedulerController {
     }
 
     /** 若某個 Job bean 因 enabled=false 沒被建立，回傳清楚的 400 而非 NPE */
+    private boolean isPreviewOnlyManualRun(String triggerKey, LocalDate date, LocalTime now) {
+        if (!LocalDate.now().equals(date)) {
+            return false;
+        }
+        return switch (triggerKey) {
+            case "t86-data-prep" -> now.isBefore(T86_DATA_PREP_OFFICIAL_TIME);
+            case "tomorrow-plan" -> now.isBefore(TOMORROW_PLAN_OFFICIAL_TIME);
+            default -> false;
+        };
+    }
+
     private void requireJob(Object jobBean, String triggerKey) {
         if (jobBean == null) {
             throw new IllegalStateException("Job for '" + triggerKey

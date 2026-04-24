@@ -991,13 +991,13 @@
         <h2>評分策略設定
           <span class="small" style="color:var(--muted);margin-left:8px">score_config — 所有參數即時生效，無需重啟</span>
         </h2>
-        <table>
+        <table class="settings-config-table">
           <thead><tr>
-            <th style="width:280px">設定 Key</th>
+            <th style="width:90px">操作</th>
             <th style="width:120px">目前值</th>
-            <th style="width:90px">型別</th>
+            <th style="width:80px">型別</th>
+            <th style="width:260px">設定 Key</th>
             <th>說明</th>
-            <th style="width:100px">操作</th>
           </tr></thead>
           <tbody id="settings-configBody"></tbody>
         </table>
@@ -1538,9 +1538,35 @@
     const el = $(boxId); if (!el) return;
     el.textContent = msg; el.style.display = "block";
   }
-  function clearErr(boxId) {
+function clearErr(boxId) {
     const el = $(boxId); if (!el) return;
     el.textContent = ""; el.style.display = "none";
+  }
+
+  function showCopyableError(title, message) {
+    const modal = $("modal-copyable-error");
+    const titleEl = $("copyable-error-title");
+    const bodyEl = $("copyable-error-body");
+    if (!modal || !titleEl || !bodyEl) {
+      alert(`${title}\n${message}`);
+      return;
+    }
+    titleEl.textContent = title || "錯誤訊息";
+    bodyEl.value = message || "";
+    modal.style.display = "flex";
+    bodyEl.focus();
+    bodyEl.select();
+  }
+
+  async function copyCopyableError() {
+    const bodyEl = $("copyable-error-body");
+    if (!bodyEl) return;
+    bodyEl.select();
+    try {
+      await navigator.clipboard.writeText(bodyEl.value || "");
+    } catch (_) {
+      document.execCommand("copy");
+    }
   }
 
   /* ── Nav routing ── */
@@ -2769,7 +2795,7 @@
     return buttons.join(" ");
   }
 
-  window.finalizeCatchup = async function(taskId) {
+window.finalizeCatchup = async function(taskId) {
     if (!confirm(`確定補跑 FinalDecision for task #${taskId}？`)) return;
     try {
       const res = await fetch(`/api/orchestration/tasks/${taskId}/finalize-catchup`, {
@@ -2777,11 +2803,16 @@
       });
       const body = await res.json();
       if (!res.ok) {
-        alert(`補跑失敗：${body.errorCode || res.status}\n${body.message || ""}`);
+        showCopyableError(
+          `補跑失敗：${body.errorCode || res.status}`,
+          body.message || ""
+        );
         return;
       }
       await loadSchedAiTasks();
-    } catch(e) { alert("補跑失敗：" + e.message); }
+    } catch(e) {
+      showCopyableError("補跑失敗", e.message || String(e));
+    }
   };
 
   // jobName → 中文顯示名稱；(MANUAL) 手動觸發也正確映射
@@ -3636,12 +3667,12 @@
       return;
     }
     body.innerHTML = configs.map(c => `<tr>
-      <td class="mono small">${esc(c.configKey)}</td>
-      <td><strong>${esc(c.configValue)}</strong></td>
-      <td class="small">${esc(c.valueType)}</td>
-      <td class="small">${esc(c.description)}</td>
       <td><button class="btn" style="padding:2px 10px;font-size:12px"
         onclick="openConfigEdit('${esc(c.configKey)}','${esc(c.configValue)}','${esc(c.description)}')">編輯</button></td>
+      <td><strong>${esc(c.configValue)}</strong></td>
+      <td class="small">${esc(c.valueType)}</td>
+      <td class="mono small" style="word-break:break-all">${esc(c.configKey)}</td>
+      <td class="small" style="white-space:normal;line-height:1.5">${esc(c.description)}</td>
     </tr>`).join("");
   }
 
@@ -3990,6 +4021,23 @@
     <div class="modal-actions">
       <button class="btn" onclick="submitCapitalConfig()">儲存</button>
       <button class="btn" style="background:var(--bg3)" onclick="closeModal('modal-capital')">取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-copyable-error" style="display:none" onclick="if(event.target===this)closeModal('modal-copyable-error')">
+  <div class="modal-box" style="max-width:760px">
+    <div class="modal-title">
+      <span id="copyable-error-title">錯誤訊息</span>
+      <button class="modal-close" onclick="closeModal('modal-copyable-error')">×</button>
+    </div>
+    <div class="form-field form-full" style="margin-bottom:16px">
+      <label>可直接選取或複製</label>
+      <textarea id="copyable-error-body" readonly style="min-height:240px;font-family:Consolas,'Courier New',monospace;white-space:pre-wrap"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="copyCopyableError()">複製</button>
+      <button class="btn" style="background:var(--bg3)" onclick="closeModal('modal-copyable-error')">關閉</button>
     </div>
   </div>
 </div>

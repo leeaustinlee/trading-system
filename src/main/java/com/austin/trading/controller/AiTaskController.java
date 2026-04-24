@@ -4,6 +4,7 @@ import com.austin.trading.dto.request.AiTaskCreateRequest;
 import com.austin.trading.dto.request.ClaudeSubmitRequest;
 import com.austin.trading.dto.request.CodexSubmitRequest;
 import com.austin.trading.entity.AiTaskEntity;
+import com.austin.trading.notify.LineTemplateService;
 import com.austin.trading.service.AiTaskInvalidStateException;
 import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.AiTaskService.SubmitResult;
@@ -49,11 +50,14 @@ public class AiTaskController {
 
     private final AiTaskService aiTaskService;
     private final FinalDecisionService finalDecisionService;
+    private final LineTemplateService lineTemplateService;
 
     public AiTaskController(AiTaskService aiTaskService,
-                             FinalDecisionService finalDecisionService) {
+                             FinalDecisionService finalDecisionService,
+                             LineTemplateService lineTemplateService) {
         this.aiTaskService = aiTaskService;
         this.finalDecisionService = finalDecisionService;
+        this.lineTemplateService = lineTemplateService;
     }
 
     @GetMapping
@@ -214,6 +218,8 @@ public class AiTaskController {
             body.put("vetoSymbols", req.vetoSymbols() == null ? List.of() : req.vetoSymbols());
             body.put("catchUpTriggered", catchUpTriggered);
             if (catchUpResult != null) body.put("catchUpDecision", catchUpResult);
+
+            maybeNotifyFinalAiResult(task, req, result.idempotent());
             return ResponseEntity.ok(body);
         } catch (AiTaskInvalidStateException e) {
             return invalidState(e);
@@ -237,6 +243,27 @@ public class AiTaskController {
             }
         }
         return null;
+    }
+
+    private void maybeNotifyFinalAiResult(AiTaskEntity task, CodexSubmitRequest req, boolean idempotent) {
+        if (idempotent || task == null || req == null) return;
+        if (req.contentMarkdown() == null || req.contentMarkdown().isBlank()) return;
+
+        String taskType = task.getTaskType();
+        if (!"PREMARKET".equalsIgnoreCase(taskType)
+                && !"MIDDAY".equalsIgnoreCase(taskType)
+                && !"POSTMARKET".equalsIgnoreCase(taskType)
+                && !"T86_TOMORROW".equalsIgnoreCase(taskType)) {
+            return;
+        }
+
+        try {
+            lineTemplateService.notifyAiTaskFinal(taskType.toUpperCase(), req.contentMarkdown(), task.getTradingDate());
+            log.info("[AiTaskController] sent final AI LINE for task {} ({})", task.getId(), taskType);
+        } catch (Exception ex) {
+            log.warn("[AiTaskController] final AI LINE failed for task {} ({}): {}",
+                    task.getId(), taskType, ex.getMessage());
+        }
     }
 
     @PostMapping("/{id}/finalize")
@@ -312,6 +339,7 @@ public class AiTaskController {
         map.put("claudeResultMarkdown",  task.getClaudeResultMarkdown());
         map.put("claudeScoresJson",      task.getClaudeScoresJson());
         map.put("codexResultMarkdown",   task.getCodexResultMarkdown());
+        map.put("codexPayloadJson",      task.getCodexPayloadJson());
         map.put("codexScoresJson",       task.getCodexScoresJson());
         map.put("codexVetoSymbolsJson",  task.getCodexVetoSymbolsJson());
         map.put("errorMessage",          task.getErrorMessage());

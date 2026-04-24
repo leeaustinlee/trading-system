@@ -74,6 +74,10 @@ public class LineTemplateService {
                 LineMessageBuilder.buildPostmarket(candidates, date), null);
     }
 
+    public void notifyAiTaskFinal(String taskType, String message, LocalDate date) {
+        sendAndLog("AI_TASK_FINAL_" + taskType, taskType + " final " + date, ensureSource(message), null);
+    }
+
     public void notifySystemAlert(String title, String message) {
         sendAndLog("SYSTEM_ALERT", title, ensureSource(message), Duration.ofMinutes(30));
     }
@@ -87,6 +91,58 @@ public class LineTemplateService {
         }
         String message = LineMessageBuilder.buildPositionAlert(symbol, status, reason, currentPrice, entryPrice, pnlPct);
         sendAndLog("POSITION_ALERT", "持倉警報 " + symbol + " " + status, message, Duration.ofMinutes(120));
+    }
+
+    /**
+     * v2.10 Position Management：ADD / REDUCE / EXIT / SWITCH_HINT 專用通知。
+     * 節流 key = type + title，title 含 symbol+action+reason，30 分鐘內同組不重複發。
+     * v2.11 擴充：附帶 allocation 建議金額 / 股數 / 減碼比例。
+     */
+    public void notifyPositionAction(String symbol, String action, String reason,
+                                      Double currentPrice, Double entryPrice, Double pnlPct,
+                                      java.util.List<String> signals, String switchTo, Double scoreGap) {
+        notifyPositionAction(symbol, action, reason, currentPrice, entryPrice, pnlPct,
+                signals, switchTo, scoreGap, null, null, null);
+    }
+
+    public void notifyPositionAction(String symbol, String action, String reason,
+                                      Double currentPrice, Double entryPrice, Double pnlPct,
+                                      java.util.List<String> signals, String switchTo, Double scoreGap,
+                                      Double suggestedAmount, Integer suggestedShares,
+                                      Double suggestedReducePct) {
+        if (currentPrice == null) {
+            log.warn("[LineTemplateService] Skip position action because currentPrice is null: symbol={}, action={}",
+                    symbol, action);
+            return;
+        }
+        if ("HOLD".equalsIgnoreCase(action)) {
+            return;
+        }
+        String message = LineMessageBuilder.buildPositionAction(
+                symbol, action, reason, currentPrice, entryPrice, pnlPct, signals, switchTo, scoreGap,
+                suggestedAmount, suggestedShares, suggestedReducePct);
+        sendAndLog("POSITION_ACTION",
+                "持倉 " + action + " " + symbol + " " + reason,
+                message,
+                Duration.ofMinutes(30));
+    }
+
+    /** v2.11 新倉進場：資金配置建議 LINE。title 含 symbol+mode，60 分鐘去重（FinalDecision 每 30 分跑一次較穩）。 */
+    public void notifyBuyAllocation(String symbol, String mode, String bucket,
+                                     Double score, Double entryPrice, Double stopLoss,
+                                     Double suggestedAmount, Integer suggestedShares,
+                                     Double riskPerShare, Double maxLossAmount) {
+        if (suggestedAmount == null || suggestedAmount <= 0 || suggestedShares == null || suggestedShares <= 0) {
+            log.debug("[LineTemplateService] Skip buy allocation because amount/shares missing: symbol={}", symbol);
+            return;
+        }
+        String message = LineMessageBuilder.buildBuyAllocation(
+                symbol, mode, bucket, score, entryPrice, stopLoss,
+                suggestedAmount, suggestedShares, riskPerShare, maxLossAmount);
+        sendAndLog("BUY_ALLOCATION",
+                "進場資金 " + symbol + " " + mode,
+                message,
+                Duration.ofMinutes(60));
     }
 
     private void sendAndLog(String type, String title, String message, Duration cooldown) {

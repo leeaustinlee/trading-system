@@ -268,6 +268,7 @@ public class AiTaskService {
         requireState(task, Set.of(STATUS_CLAUDE_DONE, STATUS_CODEX_RUNNING), "codex-result");
 
         task.setCodexResultMarkdown(req.contentMarkdown());
+        task.setCodexPayloadJson(toJson(req.payload()));
         task.setCodexScoresJson(toJson(req.scores() == null ? Collections.emptyMap() : req.scores()));
         task.setCodexVetoSymbolsJson(toJson(req.vetoSymbols() == null ? List.of() : req.vetoSymbols()));
         task.setCodexDoneAt(LocalDateTime.now());
@@ -403,6 +404,7 @@ public class AiTaskService {
     private String computeCodexHash(CodexSubmitRequest req) {
         return shortHash(sha256("codex:"
                 + safe(req.contentMarkdown()) + "|"
+                + toJson(req.payload()) + "|"
                 + toJson(req.scores()) + "|"
                 + toJson(req.vetoSymbols()) + "|"
                 + toJson(req.reviewIssues())));

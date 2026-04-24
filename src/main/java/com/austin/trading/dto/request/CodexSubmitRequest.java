@@ -20,6 +20,7 @@ public record CodexSubmitRequest(
         String contentMarkdown,
         Map<String, BigDecimal> scores,
         List<String> vetoSymbols,
-        Map<String, String> reviewIssues
+        Map<String, String> reviewIssues,
+        CodexResultPayloadRequest payload
 ) {
 }

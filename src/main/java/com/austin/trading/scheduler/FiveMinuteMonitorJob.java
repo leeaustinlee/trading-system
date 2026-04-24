@@ -5,6 +5,8 @@ import com.austin.trading.dto.request.TradingStateUpsertRequest;
 import com.austin.trading.dto.response.MarketCurrentResponse;
 import com.austin.trading.dto.response.MonitorDecisionResponse;
 import com.austin.trading.dto.response.TradingStateResponse;
+import com.austin.trading.dto.internal.CapitalAllocationResult;
+import com.austin.trading.dto.internal.PositionManagementResult;
 import com.austin.trading.engine.MonitorDecisionEngine;
 import com.austin.trading.engine.PositionDecisionEngine.PositionDecisionResult;
 import com.austin.trading.engine.PositionDecisionEngine.PositionStatus;
@@ -13,6 +15,7 @@ import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.MarketDataService;
 import com.austin.trading.service.MonitorDecisionService;
 import com.austin.trading.service.OrchestrationStep;
+import com.austin.trading.service.PositionManagementService;
 import com.austin.trading.service.PositionReviewService;
 import com.austin.trading.service.PositionReviewService.ReviewResult;
 import com.austin.trading.service.SchedulerLogService;
@@ -41,6 +44,7 @@ public class FiveMinuteMonitorJob {
     private final MonitorDecisionEngine monitorDecisionEngine;
     private final MonitorDecisionService monitorDecisionService;
     private final PositionReviewService positionReviewService;
+    private final PositionManagementService positionManagementService;
     private final LineTemplateService lineTemplateService;
     private final SchedulerLogService schedulerLogService;
     private final ScoreConfigService scoreConfig;
@@ -52,6 +56,7 @@ public class FiveMinuteMonitorJob {
             MonitorDecisionEngine monitorDecisionEngine,
             MonitorDecisionService monitorDecisionService,
             PositionReviewService positionReviewService,
+            PositionManagementService positionManagementService,
             LineTemplateService lineTemplateService,
             SchedulerLogService schedulerLogService,
             ScoreConfigService scoreConfig,
@@ -62,6 +67,7 @@ public class FiveMinuteMonitorJob {
         this.monitorDecisionEngine = monitorDecisionEngine;
         this.monitorDecisionService = monitorDecisionService;
         this.positionReviewService = positionReviewService;
+        this.positionManagementService = positionManagementService;
         this.lineTemplateService = lineTemplateService;
         this.schedulerLogService = schedulerLogService;
         this.scoreConfig = scoreConfig;
@@ -139,6 +145,57 @@ public class FiveMinuteMonitorJob {
                                 r.pnlPct() != null ? r.pnlPct().doubleValue() : null);
                     }
                 }
+
+                // v2.10 Position Management + v2.11 Capital Allocation：
+                //   ADD / REDUCE / SWITCH_HINT / EXIT 提示（HOLD 不發 LINE）+ 附建議金額 / 股數 / 減碼比例
+                try {
+                    List<PositionManagementResult> mgmtResults =
+                            positionManagementService.evaluateAll(reviews, LocalDate.now());
+                    // index reviews by symbol for position lookup
+                    java.util.Map<String, ReviewResult> reviewBySymbol = new java.util.HashMap<>();
+                    for (ReviewResult rv : reviews) {
+                        if (rv.position() != null) reviewBySymbol.put(rv.position().getSymbol(), rv);
+                    }
+                    for (PositionManagementResult mgmt : mgmtResults) {
+                        if (!mgmt.requiresNotification()) continue;
+                        if (!lineEnabled || !monitorActive) continue;
+                        if (mgmt.currentPrice() == null) continue;
+
+                        Double switchGap = null;
+                        String switchTo = null;
+                        Object switchHint = mgmt.trace().get("switchHint");
+                        if (switchHint instanceof java.util.Map<?, ?> map) {
+                            Object to  = map.get("switchTo");
+                            Object gap = map.get("scoreGap");
+                            switchTo = to == null ? null : String.valueOf(to);
+                            if (gap instanceof Number n) switchGap = n.doubleValue();
+                        }
+
+                        // Resolve allocation for non-EXIT actions
+                        CapitalAllocationResult alloc = null;
+                        ReviewResult rv = reviewBySymbol.get(mgmt.symbol());
+                        if (rv != null && rv.position() != null) {
+                            String regimeAtEvaluator = (String) mgmt.trace().get("marketRegime");
+                            alloc = positionManagementService.resolveAllocation(mgmt, rv.position(), regimeAtEvaluator);
+                        }
+                        Double allocAmount = alloc != null && alloc.suggestedAmount() != null
+                                ? alloc.suggestedAmount().doubleValue() : null;
+                        Integer allocShares = alloc != null ? alloc.suggestedShares() : null;
+                        Double reducePct = alloc != null && alloc.suggestedReducePct() != null
+                                ? alloc.suggestedReducePct().doubleValue() : null;
+
+                        lineTemplateService.notifyPositionAction(
+                                mgmt.symbol(), mgmt.action().name(), mgmt.reason(),
+                                mgmt.currentPrice().doubleValue(),
+                                mgmt.entryPrice() == null ? null : mgmt.entryPrice().doubleValue(),
+                                mgmt.unrealizedPct() == null ? null : mgmt.unrealizedPct().doubleValue(),
+                                mgmt.signals(), switchTo, switchGap,
+                                allocAmount, allocShares, reducePct);
+                    }
+                } catch (Exception mgmtE) {
+                    log.warn("[FiveMinuteMonitorJob] PositionManagement 失敗: {}", mgmtE.getMessage());
+                }
+
                 log.info("[FiveMinuteMonitorJob] 持倉監控完成，共 {} 筆 (monitorMode={}, lineEnabled={})",
                         reviews.size(), monitorMode, lineEnabled);
             } catch (Exception pe) {

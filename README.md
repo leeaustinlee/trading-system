@@ -1,141 +1,246 @@
 # Trading Decision Platform
 
-台股中短線交易決策平台（Java / Spring Boot 版）。
+Java 17 / Spring Boot 3.4 台股中短線交易決策平台。此子專案負責排程、外部資料、AI task orchestration、規則 engine、DB persistence、Dashboard、LINE 通知與 decision trace。
+
+完整跨 AI 架構見：`../docs/system-architecture.md`。
 
 ## 技術棧
 
-- Java 17 / Spring Boot 3.4.4
-- MySQL 8+ / JPA (ddl-auto:update)
-- 115+ 單元 & 整合測試
+- Java 17
+- Spring Boot 3.4.x
+- MySQL 8+
+- Spring Data JPA
+- Maven
+- LINE Messaging API
+- TWSE / TPEx / TAIFEX / T86 外部資料 adapter
 
-## 架構
+## 分層架構
 
-```
-Scheduler（13 個定時任務，全部可開關）
+```text
+Controller / Dashboard API
   ↓
-Workflow（流程編排）
+Scheduler / Workflow
   ↓
-Service（業務邏輯） ←→ Engine（純計算，無 Spring 依賴）
+Service orchestration
   ↓
-Repository → MySQL
-  ↑
-Client（TWSE MIS / TAIFEX / T86 外部 API）
-  ↑
-Notify（LINE Push API）
+Engine pure rules
+  ↓
+Repository / MySQL
+
+Client adapters feed market data into services.
+Notify builds LINE messages from persisted decisions and traces.
+AI parser/prompt components only parse or format AI payloads; they do not own live rules.
 ```
 
-## 核心模組
+Package responsibility：
 
-### BC Sniper v2.0 評分管線
-```
-JavaStructureScoringEngine → ConsensusScoringEngine → VetoEngine (14 條)
-  → WeightedScoringEngine → FinalDecisionEngine (A+ only 進場)
-```
+| Package | Responsibility |
+|---|---|
+| `client` | 外部 API adapter，只取資料不做交易判斷 |
+| `controller` | REST API / Dashboard |
+| `scheduler` | cron trigger、手動 trigger、job lock |
+| `workflow` | 盤前、盤中、盤後、watchlist 流程編排 |
+| `service` | 業務組裝、DB 寫入、engine 呼叫、report/file bridge |
+| `engine` | 純規則計算，可 unit test，避免 Spring 依賴 |
+| `entity` / `repository` | JPA persistence |
+| `dto` | request / response / internal records |
+| `domain/enums` | 市場、策略、題材、決策 enum |
+| `notify` | LINE 文案、template、push adapter |
+| `ai` | AI prompt/parser/adapter，不放 live trading rules |
 
-### Position Layer — 持股優先
-- `PositionDecisionEngine`：每日/盤中持股決策（STRONG/HOLD/WEAKEN/EXIT/TRAIL_UP）
-  - Drawdown 回撤監控、時間衰退、isExtended 分級、failedBreakout 快速 EXIT
-  - Trailing stop 三階段自動上移
-- `FiveMinuteMonitorJob`：盤中每 5 分鐘持倉停損/停利監控 + LINE 警報
+## 核心決策 pipeline
 
-### Watchlist Layer — 觀察名單
-- `WatchlistEngine`：候選股連續追蹤（ADD/KEEP/PROMOTE_READY/DROP/EXPIRE）
-  - Decay 時間衰退、marketGrade 過濾、READY 門檻分級
-- 新倉優先來自 Watchlist READY，而非每天陌生新股
+### 09:30 Final Decision
 
-### 風控機制
-- 滿倉禁止新倉（portfolio.max_open_positions）
-- 同題材集中度限制（portfolio.same_theme_max）
-- Score gap 保護 STRONG 持股不被輕易替換
-- Entry trigger（突破/回測確認才進場）
-- Cooldown：symbol + theme 維度冷卻
-- Market-level cooldown：連續虧損或當日虧損超限 → 禁止交易
-- 重複持倉防護（同 symbol 不可重複 OPEN）
-
-### 題材評分
-- `ThemeSelectionEngine`：market_behavior × 0.55 + heat × 0.25 + continuation × 0.20
-
-## Quick Start
-
-1. 準備 Java 17 與 MySQL 8+
-2. 建立 DB：`trading_system`（local MySQL port 預設 `3330`）
-3. 複製 `.env.example` 為 `.env`，填入實際值
-4. 啟動：`./scripts/run-local.sh`
-
-本地 UI Console：`http://localhost:8080/`
-
-快速載入測試資料：
-```bash
-# application-local.yml 設定 trading.mock-data-loader.enabled: true
-# 或手動載入：
-./scripts/load-local-seed.sh
+```text
+CandidateStock / AI research
+  → MarketRegimeService
+  → ThemeStrengthService
+  → StockRankingService
+  → SetupValidationService
+  → ExecutionTimingService
+  → PortfolioRiskService
+  → FinalDecisionEngine
+  → ExecutionDecisionService
+  → FinalDecisionEntity / LINE / Dashboard
 ```
 
-## 主要 API
+保證：score alone 不能繞過 setup、timing 或 risk gate。
 
-| 類別 | 端點 |
-|------|------|
-| 儀表板 | `GET /api/dashboard/current` |
-| 候選股 | `GET /api/candidates/current` |
-| 持倉 | `GET /api/positions/open` |
-| 決策 | `POST /api/decisions/final/evaluate` |
-| 觀察名單 | `GET /api/watchlist/current`, `GET /api/watchlist/ready` |
-| 持倉審查 | `POST /api/watchlist/position-review/trigger` |
-| 損益 | `GET /api/pnl/summary` |
-| 題材 | `GET /api/themes/snapshots` |
-| 系統 | `GET /api/system/external/probe` |
+### Setup / Momentum
 
-完整 API 列表：`docs/api-spec.md`
+```text
+候選股 → Claude + Codex research
+  ├─ Setup pipeline: ranking + setup + timing + risk
+  └─ Momentum pipeline: momentum candidate/scoring + stricter size/risk control
+```
 
-## 排程（13 + 1 個 Job）
+Momentum 是並行策略，不是 Setup fallback。實際啟用需看 config flag 與當前程式設定。
 
-| 時間 | Job | 內容 |
-|------|-----|------|
-| 08:10 | PremarketDataPrepJob | 台指期 + 候選股昨收 |
-| 08:30 | PremarketNotifyJob | 盤前分析 + Java 結構評分 |
-| 09:01 | OpenDataPrepJob | 開盤價 + 跳空 |
-| 09:30 | FinalDecision0930Job | 最終決策（A+ only） |
-| 10:05-13:05 | HourlyIntradayGateJob | 整點行情 gate |
-| 每 5 分鐘 | FiveMinuteMonitorJob | 大盤監控 + 持倉停損/停利 |
-| 11:00 | MiddayReviewJob | 盤中戰情 |
-| 14:00 | AftermarketReview1400Job | 交易檢討 |
-| 15:05 | PostmarketDataPrepJob | 收盤價 + 市場廣度 |
-| 15:30 | PostmarketAnalysis1530Job | 損益彙總 + 題材評分 |
-| 15:35 | WatchlistRefreshJob | 觀察名單刷新 |
-| 18:10 | T86DataPrepJob | 法人籌碼 |
-| 18:30 | TomorrowPlan1800Job | 明日計畫 |
-| 08:25/15:25 | ExternalProbeHealthJob | 外部服務健康檢查 |
+### Theme Engine v2
+
+```text
+ThemeSnapshotService
+  → ClaudeThemeResearchParserService
+  → ThemeContextMergeService
+  → ThemeGateTraceEngine (G1-G8)
+  → ThemeShadowModeService / ThemeShadowReportService
+  → ThemeLiveDecisionService (flag off by default)
+```
+
+8 gates：
+
+1. market_regime
+2. theme_veto
+3. theme_rotation
+4. liquidity
+5. score_divergence
+6. RR
+7. position_sizing
+8. final_rank
+
+Live override 安全規則：
+
+- `theme.live_decision.enabled=false` 預設關。
+- 開啟後只有 Theme `BLOCK` 能移除 legacy `ENTER`。
+- Theme `WAIT` 預設 pass-through，除非 `theme.live_decision.wait_override.enabled=true`。
+- Legacy final decision code、legacy merged symbols 與 override trace 必須保留。
+
+## 主要 Engine 群組
+
+| 群組 | Engine |
+|---|---|
+| Scoring | `JavaStructureScoringEngine`, `ConsensusScoringEngine`, `WeightedScoringEngine`, `StockEvaluationEngine` |
+| Veto / Final | `VetoEngine`, `FinalDecisionEngine`, `DecisionLockEngine` |
+| Ranking / Setup | `StockRankingEngine`, `SetupEngine`, `ExecutionTimingEngine` |
+| Risk / Execution | `PortfolioRiskEngine`, `PositionSizingEngine`, `CapitalAllocationEngine`, `ExecutionDecisionEngine` |
+| Position / Watchlist | `PositionDecisionEngine`, `PositionManagementEngine`, `WatchlistEngine`, `CooldownEngine` |
+| Market / Theme | `MarketGateEngine`, `MarketRegimeEngine`, `ThemeSelectionEngine`, `ThemeStrengthEngine`, `ThemeGateTraceEngine` |
+| Momentum | `MomentumCandidateEngine`, `MomentumScoringEngine`, `ChasedHighEntryEngine` |
+| Review / Learning | `TradeReviewEngine`, `TradeAttributionEngine`, `BenchmarkAnalyticsEngine`, `StrategyRecommendationEngine`, `ExitRegimeIntegrationEngine` |
+| Monitoring | `HourlyGateEngine`, `MonitorDecisionEngine`, `StopLossTakeProfitEngine`, `PriceGateEvaluator` |
+
+## AI orchestration
+
+`ai_task` is the source of truth for Claude/Codex workflow.
+
+```text
+PENDING
+  → CLAUDE_RUNNING
+  → CLAUDE_DONE
+  → CODEX_RUNNING
+  → CODEX_DONE
+  → FINALIZED
+```
+
+Rules：
+
+- Claude file bridge writes `.tmp` then renames to stable `.json`.
+- Watcher ignores unstable `.tmp` and `.processing` locked files.
+- Codex runner should claim `/claim-codex` before submit `/codex-result`.
+- FinalDecision must expose AI readiness and fallback reason if one side is missing.
+
+## Scheduler overview
+
+Jobs are controlled by config and scheduler endpoints. Check actual enabled state in `application-local.yml`, DB config, or `SchedulerController`.
+
+| Job | Purpose |
+|---|---|
+| `PremarketDataPrepJob` | 盤前資料準備、market snapshot、AI task |
+| `PremarketNotifyJob` | 盤前通知 |
+| `OpenDataPrepJob` | 開盤資料 |
+| `FinalDecision0930Job` | 09:30 最終決策 |
+| `HourlyIntradayGateJob` | 盤中 market gate |
+| `FiveMinuteMonitorJob` | 5 分鐘持倉監控 |
+| `MiddayReviewJob` | 盤中檢討 |
+| `AftermarketReview1400Job` | 14:00 檢討 |
+| `PostmarketDataPrepJob` | 盤後收盤資料與廣度 |
+| `PostmarketAnalysis1530Job` | 盤後分析 |
+| `WatchlistRefreshJob` | Watchlist refresh |
+| `T86DataPrepJob` | 三大法人資料 |
+| `TomorrowPlan1800Job` | 明日計畫 |
+| `WeeklyTradeReviewJob` | 週檢討、歸因、benchmark |
+| `ClaudeSubmitWatcherJob` | Claude file bridge watcher |
+| `AiTaskSweepJob` | AI task cleanup / timeout handling |
+| `ExternalProbeHealthJob` / `DailyHealthCheckJob` | 外部服務與系統健康檢查 |
+
+## API groups
+
+| Group | Controller |
+|---|---|
+| Dashboard | `DashboardController` |
+| Market | `MarketController` |
+| Candidates | `CandidateController` |
+| Decisions | `DecisionController` |
+| Positions | `PositionController` |
+| Watchlist | `WatchlistController` |
+| Themes | `ThemeController` |
+| AI / Orchestration | `AiController`, `AiTaskController`, `OrchestrationController` |
+| Workflow / Scheduler | `WorkflowController`, `SchedulerController` |
+| Config | `ScoreConfigController` |
+| Review / Strategy | `TradeReviewController`, `StrategyRecommendationController`, `BacktestController` |
+| System | `SystemController` |
+| Notifications | `NotificationController` |
+
+完整 API 以 `docs/api-spec.md` 和 controller 程式碼為準。
 
 ## Config
 
-40+ 參數透過 `score_config` 表管理，啟動時自動種植預設值：
-- `scoring.*` — 評分權重與分級門檻
-- `veto.*` — 淘汰規則
-- `position.review.*` — 持倉決策（drawdown/時間衰退/trailing）
-- `watchlist.*` — 觀察名單（decay/門檻/marketGrade）
-- `trading.cooldown.*` — 冷卻（symbol/theme/market-level）
-- `portfolio.*` — 倉位控制（滿倉/集中度/score gap）
+Runtime parameters are stored in `score_config` and seeded by `ScoreConfigService`.
 
-API 查詢與即時修改：`GET/PUT /api/config/score/{key}`
+Important namespaces：
 
-## LINE 設定
+- `scoring.*`
+- `veto.*`
+- `ranking.*`
+- `setup.*`
+- `portfolio.*`
+- `position.*`
+- `watchlist.*`
+- `momentum.*`
+- `theme.*`
+- `learning.*`
+- `risk.*`
 
-所有 LINE 參數由 `.env` 控制：
-- `LINE_ENABLED=false|true`
-- `LINE_CHANNEL_ACCESS_TOKEN=...`
-- `LINE_TO=...`
+Query/update：`GET/PUT /api/config/score/{key}`。
 
-## 測試
+## Quick Start
+
+1. Install Java 17 and MySQL 8+.
+2. Create database `trading_system`.
+3. Create `.env` from local template or existing environment.
+4. Start local server:
+
+```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+Dashboard：`http://localhost:8080/`
+
+Health check：
+
+```bash
+curl -sS http://localhost:8080/actuator/health
+```
+
+## Tests
 
 ```bash
 mvn test
-# 115 tests pass, 4 skipped (TAIFEX live)
 ```
 
-## 文件
+For targeted review, prefer running the changed engine/service tests plus one final-decision integration/replay test.
 
-- `docs/spec.md` — 完整規格與進度
-- `docs/api-spec.md` — API 列表
-- `docs/architecture.md` — 分層原則
-- `docs/scoring-workflow.md` — BC Sniper v2.0 評分流程
-- `docs/claude-handoff.md` — 開發接手手冊
+## Documentation
+
+| File | Purpose |
+|---|---|
+| `../docs/system-architecture.md` | Cross-system architecture and AI roles |
+| `docs/architecture.md` | Java architecture and package rules |
+| `docs/api-spec.md` | API reference |
+| `docs/db-schema.md` | DB schema notes |
+| `docs/scoring-workflow.md` | Scoring and decision flow |
+| `docs/scheduler-plan.md` | Scheduler plan |
+| `docs/runbook.md` | Operations runbook |
+| `docs/claude-handoff.md` | Claude handoff |
+| `docs/codex-handoff.md` | Codex handoff |

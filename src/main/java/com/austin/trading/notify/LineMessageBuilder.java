@@ -185,6 +185,122 @@ public class LineMessageBuilder {
                 SOURCE);
     }
 
+    /**
+     * v2.11 Capital Allocation：新倉進場建議金額 + 股數。
+     */
+    public static String buildBuyAllocation(String symbol, String mode, String bucket,
+                                             Double score, Double entryPrice, Double stopLoss,
+                                             Double suggestedAmount, Integer suggestedShares,
+                                             Double riskPerShare, Double maxLossAmount) {
+        return String.join("\n",
+                "【進場資金建議】" + symbol,
+                "",
+                "模式：" + safeStr(mode),
+                "建議金額：" + formatAmount(suggestedAmount),
+                "建議股數：" + (suggestedShares == null ? "N/A" : suggestedShares + " 股"),
+                "進場價：" + formatNullable(entryPrice) +
+                        "｜停損：" + formatNullable(stopLoss),
+                "單股風險：" + formatNullable(riskPerShare) +
+                        "｜最大可承受損失：約 " + formatAmount(maxLossAmount),
+                "",
+                "📌 原因",
+                safeStr(bucket) + (score == null ? "" : String.format(Locale.ROOT, " / score %.2f", score)),
+                SOURCE);
+    }
+
+    /** 資金不足 / 風險封鎖時的 LINE 提示（僅 trace 用，可選發）。 */
+    public static String buildAllocationBlocked(String symbol, String action, java.util.List<String> reasons) {
+        return String.join("\n",
+                "【配置封鎖】" + symbol,
+                "",
+                "動作：" + safeStr(action),
+                "原因：" + (reasons == null || reasons.isEmpty() ? "—" : String.join("、", reasons)),
+                "",
+                "📌 建議",
+                "暫不入場，觀察其他機會。",
+                SOURCE);
+    }
+
+    private static String formatAmount(Double value) {
+        if (value == null) return "N/A";
+        return String.format(Locale.ROOT, "%,.0f", value);
+    }
+
+    private static String safeStr(String v) {
+        return v == null || v.isBlank() ? "—" : v;
+    }
+
+    /**
+     * v2.10 PositionManagement LINE 訊息：HOLD/ADD/REDUCE/EXIT/SWITCH_HINT 專用。
+     * signals 與 reason 已是繁中語意 key，訊息層只做文案包裝。
+     * v2.11 擴充：附帶 suggestedAmount / suggestedShares / suggestedReducePct。
+     */
+    public static String buildPositionAction(String symbol, String action, String reason,
+                                              Double currentPrice, Double entryPrice,
+                                              Double pnlPct, java.util.List<String> signals,
+                                              String switchTo, Double scoreGap) {
+        return buildPositionAction(symbol, action, reason, currentPrice, entryPrice, pnlPct,
+                signals, switchTo, scoreGap, null, null, null);
+    }
+
+    public static String buildPositionAction(String symbol, String action, String reason,
+                                              Double currentPrice, Double entryPrice,
+                                              Double pnlPct, java.util.List<String> signals,
+                                              String switchTo, Double scoreGap,
+                                              Double suggestedAmount, Integer suggestedShares,
+                                              Double suggestedReducePct) {
+        String title = switch (action) {
+            case "ADD" -> "【持倉加碼提示】" + symbol;
+            case "REDUCE" -> "【持倉減碼提示】" + symbol;
+            case "EXIT" -> "【持倉出場警報】" + symbol;
+            case "SWITCH_HINT" -> "【換股提示】" + symbol + (switchTo == null ? "" : " → " + switchTo);
+            default -> "【持倉提醒】" + symbol;
+        };
+        String state = switch (action) {
+            case "ADD" -> "續強";
+            case "REDUCE" -> "動能轉弱";
+            case "EXIT" -> "觸發停損 / 移動停利";
+            case "SWITCH_HINT" -> "同主題更強新候選";
+            default -> "觀察中";
+        };
+        String actionHint = switch (action) {
+            case "ADD" -> "可考慮加碼 0.3 倉。";
+            case "REDUCE" -> "可考慮減碼，保留核心倉。";
+            case "EXIT" -> "優先處理出場。";
+            case "SWITCH_HINT" -> scoreGap == null
+                    ? "可評估減碼本檔，切換部分資金至新候選。"
+                    : String.format(Locale.ROOT, "新候選高出 %.2f 分，可評估減碼切換。", scoreGap);
+            default -> "先觀察，不追價。";
+        };
+        String signalLine = (signals == null || signals.isEmpty())
+                ? "—" : String.join("、", signals);
+
+        // v2.11：依 action 決定是否附帶金額 / 減碼比例
+        String sizingLine = null;
+        if (("ADD".equals(action) || "SWITCH_HINT".equals(action))
+                && suggestedAmount != null && suggestedAmount > 0) {
+            sizingLine = "建議金額：" + formatAmount(suggestedAmount)
+                    + (suggestedShares == null ? "" : "（約 " + suggestedShares + " 股）");
+        } else if ("REDUCE".equals(action) && suggestedReducePct != null) {
+            sizingLine = "建議減碼：" + String.format(Locale.ROOT, "%.0f%%", suggestedReducePct * 100);
+        }
+
+        java.util.List<String> lines = new java.util.ArrayList<>();
+        lines.add(title);
+        lines.add("");
+        lines.add("狀態：" + state);
+        lines.add("現價：" + formatNullable(currentPrice) + "｜成本：" + formatNullable(entryPrice) +
+                "｜損益：" + (pnlPct == null ? "N/A" : String.format(Locale.ROOT, "%+.2f%%", pnlPct)));
+        lines.add("原因：" + clean(reason));
+        lines.add("訊號：" + signalLine);
+        if (sizingLine != null) lines.add(sizingLine);
+        lines.add("");
+        lines.add("📌 建議");
+        lines.add(actionHint);
+        lines.add(SOURCE);
+        return String.join("\n", lines);
+    }
+
     private static String decisionText(String decision) {
         return switch (decision == null ? "" : decision) {
             case "ENTER" -> "可進場";

@@ -34,7 +34,10 @@ public enum MarketSession {
 
     PREMARKET,
     OPEN_VALIDATION,
-    LIVE_TRADING;
+    LIVE_TRADING,
+    MIDDAY_REVIEW,
+    POSTMARKET,
+    TOMORROW_PLAN;
 
     /** 09:00：PREMARKET → OPEN_VALIDATION 切點。 */
     public static final LocalTime OPEN_VALIDATION_START = LocalTime.of(9, 0);
@@ -67,5 +70,19 @@ public enum MarketSession {
     /** 是否允許對 belowOpen / belowPrevClose 等欄位做 hard block 決策。 */
     public boolean allowsPriceGateHardBlock() {
         return this == LIVE_TRADING;
+    }
+
+    public static MarketSession fromTaskType(String taskType, LocalTime now) {
+        if (taskType == null || taskType.isBlank()) {
+            return fromTime(now);
+        }
+        return switch (taskType.toUpperCase()) {
+            case "PREMARKET" -> PREMARKET;
+            case "OPENING" -> fromTime(now);
+            case "MIDDAY" -> MIDDAY_REVIEW;
+            case "POSTMARKET" -> POSTMARKET;
+            case "T86_TOMORROW" -> TOMORROW_PLAN;
+            default -> fromTime(now);
+        };
     }
 }

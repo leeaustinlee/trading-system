@@ -5,6 +5,19 @@
 
 ---
 
+## 環境與路徑解析（v2.1 新增）
+
+本 prompt 會同時被兩種環境執行，請先判斷當下環境並自動翻譯路徑：
+
+| 執行環境 | stock 根目錄路徑 |
+|---|---|
+| 本機 Windows PowerShell / WSL Claude CLI | `D:/ai/stock/` 或 `/mnt/d/ai/stock/` |
+| Cowork cloud sandbox Claude | `/sessions/happy-gracious-pasteur/mnt/stock/` |
+
+底下章節出現的 `D:/ai/stock/...` 一律請翻譯成你當下環境能讀寫的對應路徑，兩邊指向同一份檔案。若其中一條路徑 Read 失敗，改用另一條。
+
+---
+
 ## 第一步：必讀
 
 1. `D:/ai/stock/AI_RULES_INDEX.md`
@@ -80,44 +93,65 @@
 
 ---
 
-## 第六步：認領任務 + 回報結果（PR-2 新流程）
+## 第六步：寫出研究結果到 File Bridge（v2.1 協定）
 
-### 6.1 認領任務
+Java `OpenDataPrepJob`（09:01）已建立 OPENING 任務並寫出 `claude-research-request.json`。你只需要寫一個檔案到 `claude-submit/`，Java `ClaudeSubmitWatcher` 會在 30 秒內自動 submit 並把 task 狀態推進到 `CLAUDE_DONE` — **不需要、也不可以呼叫 `localhost:8080`**。
+
+### 6.1 讀 request 取得 taskId 與建議檔名
+
+讀 `D:/ai/stock/claude-research-request.json`（路徑依第 0 章翻譯），取出：
+
+| 欄位 | 意義 |
+|---|---|
+| `taskId` | 本輪 ai_task 的 ID。**不得自行創造** |
+| `taskType` | 必須 = `"OPENING"` |
+| `tradingDate` | 例如 `"2026-04-23"` |
+| `submit_filename_hint` | 例如 `claude-OPENING-2026-04-23-0955-task-119.json`，**直接沿用** |
+| `allowed_symbols` | `scores` / `thesis` 的 key 必須是子集 |
+
+若 `taskType` 不是 `OPENING` 或 `taskId` 缺失，不要寫 claude-submit，只在 `claude-research-latest.md` 標註「未取得有效 OPENING taskId，本輪不回報」後結束。
+
+### 6.2 組成 JSON 內容
+
+```json
+{
+  "taskId": 119,
+  "taskType": "OPENING",
+  "tradingDate": "2026-04-23",
+  "contentMarkdown": "完整開盤研究 md（與 claude-research-latest.md 同內容）",
+  "scores": {"2303": 8.5, "3231": 7.8},
+  "thesis": {"2303": "開盤洗盤轉強", "3231": "..."},
+  "riskFlags": ["若跌破均價立即出場"]
+}
+```
+
+規則：
+
+- `scores` key 必須 ∈ `allowed_symbols`
+- `thesis` key 應與 `scores` 對齊
+- **09:20 的特殊規則**：跌破開盤、跌破昨收、爆量開高走低的 symbol 一律給低分（≤ 5）或直接不放進 scores
+- `riskFlags` 沒有風險就給空陣列 `[]`
+
+### 6.3 原子寫檔（tmp → rename）
+
+**絕對不可省略 `.tmp` 階段**。
+
+路徑：`D:/ai/stock/claude-submit/<submit_filename_hint>`（依第 0 章翻譯）
+
+1. 先寫 `.../<submit_filename_hint>.tmp`
+2. 完整寫入後 rename 去掉 `.tmp`
+
+範例（本機）：
 ```bash
-curl -s "http://localhost:8080/api/ai/tasks/pending?type=OPENING" | jq '.[0]'
-```
-記下 `id`（下稱 `TASK_ID`）。若無 PENDING 任務（workflow 未建立），可用舊 API fallback（見最後）。
-
-### 6.2 回報結果
-```bash
-curl -X POST "http://localhost:8080/api/ai/tasks/$TASK_ID/claude-result" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "contentMarkdown": "完整開盤研究 md",
-    "scores": {"2303": 8.5, "3231": 7.8},
-    "thesis": {"2303": "開盤洗盤轉強"},
-    "riskFlags": ["若跌破均價立即出場"]
-  }'
+mv /mnt/d/ai/stock/claude-submit/claude-OPENING-*-task-119.json.tmp \
+   /mnt/d/ai/stock/claude-submit/claude-OPENING-*-task-119.json
 ```
 
-### 6.3 驗證
-```bash
-curl -s "http://localhost:8080/api/ai/tasks/$TASK_ID" | jq '.status'   # 應為 "CLAUDE_DONE"
-```
+### 6.4 驗證（選用）
 
-成功後 `stock_evaluation.claude_score` 自動寫入；FinalDecisionService 即可使用。
-
-### 6.4 Fallback（僅無 PENDING 任務時）
-```bash
-curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt/d/ai/stock/claude-research-latest.md&researchType=OPENING&tradingDate=$(date +%Y-%m-%d)"
-```
-**注意**：舊 API 只寫 `ai_research_log`，不寫 `stock_evaluation.claude_score`。優先走新流程。
-
-失敗處理：
-```
-❌ 任務回報失敗：<原因>
-👉 請 Austin 手動匯入 claude-research-latest.md
-```
+- `claude-submit/` 下應有剛寫的 `.json`（不應有 `.tmp` 殘留）
+- 30-60 秒後 `claude-submit/processed/` 出現 `<hint>.processed.json`
+- 若進 `failed/` 開檔看原因
 
 ---
 
@@ -127,4 +161,6 @@ curl -s -X POST "http://localhost:8080/api/ai/research/import-file?filePath=/mnt
 - snapshot 超過 10 分鐘不得給進場建議（僅可標示方向）
 - 跌破開盤、跌破昨收、爆量開高走低的標的，直接排除
 - 不直接給張數
-- **不要跳過第六步回報** — 這是 FinalDecision 拿到 Claude 分數的唯一管道
+- **不要呼叫 `localhost:8080`** — 走 file bridge（6.3）
+- **不要跳過 `.tmp` 階段** — watcher 可能讀到半成品
+- **不要自行創造 taskId** — 必須用 `claude-research-request.json` 的值

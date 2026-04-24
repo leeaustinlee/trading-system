@@ -10,6 +10,7 @@ import com.austin.trading.entity.StockEvaluationEntity;
 import com.austin.trading.repository.StockEvaluationRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -159,16 +160,25 @@ public class StockEvaluationService {
     }
 
     private String buildPayload(StockEvaluateResult r) {
-        return "{" +
-                "\"valuationMode\":\"" + r.valuationMode() + "\"," +
-                "\"includeInFinalPlan\":" + r.includeInFinalPlan() + "," +
-                "\"rejectReason\":" + (r.rejectReason() == null ? "null" : "\"" + r.rejectReason() + "\"") + "," +
-                "\"rationale\":\"" + escapeJson(r.rationale()) + "\"" +
-                "}";
-    }
-
-    private String escapeJson(String s) {
-        return s == null ? "" : s.replace("\\", "\\\\").replace("\"", "\\\"");
+        try {
+            ObjectNode root = objectMapper.createObjectNode();
+            root.put("valuationMode", r.valuationMode());
+            if (r.includeInFinalPlan() != null) {
+                root.put("includeInFinalPlan", r.includeInFinalPlan());
+            } else {
+                root.putNull("includeInFinalPlan");
+            }
+            if (r.rejectReason() != null) {
+                root.put("rejectReason", r.rejectReason());
+            } else {
+                root.putNull("rejectReason");
+            }
+            root.put("rationale", r.rationale() == null ? "" : r.rationale());
+            return objectMapper.writeValueAsString(root);
+        } catch (JsonProcessingException e) {
+            log.warn("[StockEvalService] buildPayload serialization failed for symbol={}", r.symbol(), e);
+            return "{}";
+        }
     }
 
     private String toJson(Object obj) {
