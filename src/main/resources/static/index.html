@@ -2256,6 +2256,8 @@ function clearErr(boxId) {
       el.innerHTML = `<div class="terminal-empty">目前無持倉，等待下一個高品質 setup。</div>`;
       return;
     }
+    // 同步進 _openPosCache，讓 dashboard 上的按鈕也能用持倉頁的 modal
+    (pos || []).forEach(p => { if (p && p.id != null) _openPosCache[p.id] = p; });
     el.innerHTML = pos.map(p => {
       const title = `${p.stockName ? esc(p.stockName) + " " : ""}<span class="mono">${esc(p.symbol)}</span>`;
       const advice = renderAiAdvice(p, null).replace(/^<span[^>]*>|<\/span>$/g, "");
@@ -2268,7 +2270,8 @@ function clearErr(boxId) {
       const tp2 = p.takeProfit2 != null ? esc(p.takeProfit2) : "-";
       const reco = recommendedPositionAction(advice);
       const POS_ACTION_LABEL = { HOLD: "續抱", ADD: "加碼", REDUCE: "減碼", EXIT: "出場" };
-      const btn = (code) => `<button class="${reco === code ? "recommended" : ""}" data-action="${code}">${POS_ACTION_LABEL[code]}</button>`;
+      const btn = (code) => `<button class="${reco === code ? "recommended" : ""}" data-action="${code}"
+        onclick="dashPositionAction('${code}', ${p.id || "null"}, '${esc(p.symbol || "")}')">${POS_ACTION_LABEL[code]}</button>`;
       return `<article class="position-card ${cls}">
         <div class="position-top">
           <div>
@@ -2293,6 +2296,67 @@ function clearErr(boxId) {
       </article>`;
     }).join("");
   }
+
+  // 首頁持倉卡 4 顆按鈕的 dispatcher。
+  // 系統不自動下單；點按鈕只開對應的 modal / 顯示提示，由 Austin 確認後執行。
+  window.dashPositionAction = async function(action, posId, symbol) {
+    // HOLD：純資訊提示，不需 modal
+    if (action === "HOLD") {
+      alert(`系統建議「續抱」${symbol}\n\n目前部位繼續持有；若價格觸及停損或停利，再考慮動作。`);
+      return;
+    }
+    // ADD：開新增持倉 modal，預填 symbol 表示「以加碼為意圖再記錄一筆部位」
+    if (action === "ADD") {
+      if (typeof openAddModal === "function") {
+        openAddModal();
+        const symEl = document.getElementById("ma-symbol");
+        if (symEl && symbol) symEl.value = symbol;
+        const noteEl = document.getElementById("ma-note");
+        if (noteEl) noteEl.value = `加碼 ${symbol}（系統建議）`;
+      } else {
+        alert(`系統建議「加碼」${symbol}\n\n請至「持倉」頁手動新增加碼紀錄。`);
+      }
+      return;
+    }
+    // REDUCE / EXIT：開出清 modal；REDUCE = PARTIAL、EXIT = FULL
+    if (action === "REDUCE" || action === "EXIT") {
+      if (posId == null) {
+        alert("找不到持倉 id，請至「持倉」頁手動操作。");
+        return;
+      }
+      // 確保 _openPosCache 有資料
+      if (!_openPosCache[posId]) {
+        try {
+          const list = await api(`/api/positions/open?size=50`);
+          (list || []).forEach(p => { if (p && p.id != null) _openPosCache[p.id] = p; });
+        } catch (e) { /* 容錯：直接 alert */ }
+      }
+      if (!_openPosCache[posId]) {
+        alert(`無法載入持倉 #${posId} 的詳細資料，請至「持倉」頁手動操作。`);
+        return;
+      }
+      if (typeof openCloseModal === "function") {
+        openCloseModal(posId);
+        // 預設模式：REDUCE → PARTIAL；EXIT → FULL（openCloseModal 預設已是 FULL）
+        if (action === "REDUCE") {
+          const modeSel = document.getElementById("mc-mode");
+          if (modeSel) {
+            modeSel.value = "PARTIAL";
+            modeSel.dispatchEvent(new Event("change"));
+          }
+          const reasonEl = document.getElementById("mc-exitReason");
+          if (reasonEl) reasonEl.value = "減碼（系統建議）";
+        } else {
+          const reasonEl = document.getElementById("mc-exitReason");
+          if (reasonEl) reasonEl.value = "出場（系統建議）";
+        }
+      } else {
+        alert(`系統建議「${action === "REDUCE" ? "減碼" : "出場"}」${symbol}\n\n請至「持倉」頁手動操作。`);
+      }
+      return;
+    }
+    alert(`未支援的動作：${action}`);
+  };
 
   function renderWatchlistCards(quotes, candidates) {
     const el = $("d-watchlist");
