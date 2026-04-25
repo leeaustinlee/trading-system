@@ -550,6 +550,8 @@
       border-left: 3px solid var(--c-blocked);
     }
     .alert-item.warn { border-color: var(--c-wait-bd); background: var(--c-wait-bg); color:#7a5a12; border-left-color: var(--c-wait); }
+    .alert-item.alert-info { border-color: var(--c-watch-bd); background: var(--c-watch-bg); color: #144787; border-left-color: var(--c-watch); }
+    .alert-item.alert-neutral { border-color: var(--line); background: var(--panel-2); color: var(--ink-2); border-left-color: var(--accent-2); }
     .alert-head { font-weight:800; margin-bottom:3px; font-size:13px; }
     .alerts { display:grid; gap:6px; }
 
@@ -717,6 +719,23 @@
     .task-row .task-time { font-family: var(--mono); font-size:12px; font-weight:800; color:#2c3a52; }
     .task-row .task-title { font-weight:700; color: var(--ink); font-size:13px; }
     .task-row .task-meta { font-size:11px; color: var(--muted); margin-top:2px; font-family: var(--mono); }
+
+    /* Capital exposure bar */
+    .capital-bar { height:4px; background:#e5e9f0; border-radius:2px; overflow:hidden; margin-top:5px; }
+    .capital-bar > i { display:block; height:100%; background: var(--accent); transition: width .3s; }
+    .capital-bar > i.ok { background: var(--c-buy); }
+    .capital-bar > i.warn { background: var(--c-wait); }
+    .capital-bar > i.over { background: var(--c-blocked); }
+    .capital-mode-pill {
+      display:inline-block; padding:1px 7px; border-radius:3px;
+      font-size:10px; font-weight:800; letter-spacing:.4px;
+      font-family: var(--mono); border:1px solid; text-transform: uppercase;
+      margin-right: 6px;
+    }
+    .capital-mode-pill.normal { background: var(--c-watch-bg); color: var(--c-watch); border-color: var(--c-watch-bd); }
+    .capital-mode-pill.tight  { background: var(--c-wait-bg); color: var(--c-wait); border-color: var(--c-wait-bd); }
+    .capital-mode-pill.over   { background: var(--c-blocked-bg); color: var(--c-blocked); border-color: var(--c-blocked-bd); }
+    .capital-mode-pill.ok     { background: var(--c-buy-bg); color: var(--c-buy); border-color: var(--c-buy-bd); }
 
     /* AI task table row tint by status */
     tr.task-status-PENDING { background: rgba(94,112,136,.04); }
@@ -1197,6 +1216,7 @@
         <p class="small" style="margin-bottom:8px;color:var(--muted)">
           Claude / Codex 兩段式研究的完成狀態。每個任務都有預計完成時間；若超過仍未完成，系統會標紅並提供處理按鈕。
         </p>
+        <div id="sched-statusRow" class="scheduler-status-row"></div>
         <table class="table">
           <thead>
             <tr>
@@ -1991,20 +2011,52 @@ function clearErr(boxId) {
   /* ─────────────────────────────────────────────
      PAGE: Dashboard
   ───────────────────────────────────────────── */
+  // 依現金比 / 曝險推斷模式 badge
+  function _capitalModeBadge(cashRatio) {
+    const r = Number(cashRatio);
+    if (!Number.isFinite(r)) return "";
+    if (r >= 50) return `<span class="capital-mode-pill ok">CASH HEAVY</span>`;
+    if (r >= 30) return `<span class="capital-mode-pill normal">NORMAL</span>`;
+    if (r >= 15) return `<span class="capital-mode-pill tight">TIGHT</span>`;
+    return `<span class="capital-mode-pill over">OVER EXPOSED</span>`;
+  }
+
+  // 曝險條：投入比例 / 警示色階
+  function _capitalExposureBar(investedCost, totalAssets) {
+    const cost = Number(investedCost);
+    const total = Number(totalAssets);
+    if (!Number.isFinite(cost) || !Number.isFinite(total) || total <= 0) return "";
+    const pct = Math.max(0, Math.min(100, (cost / total) * 100));
+    const cls = pct >= 85 ? "over" : pct >= 70 ? "warn" : pct >= 30 ? "ok" : "";
+    return `<div class="capital-bar"><i class="${cls}" style="width:${pct.toFixed(1)}%"></i></div>`;
+  }
+
   async function loadCapitalSummary() {
     try {
       const c = await api("/api/capital/summary");
-      $("d-capCash").innerHTML       = `<span style="font-size:20px;font-weight:700">${fmtPrice(c.availableCash)}</span>`;
+      $("d-capCash").innerHTML       = `<span style="font-size:20px;font-weight:700;font-family:var(--mono)">${fmtPrice(c.availableCash)}</span>`;
       $("d-capValue").innerHTML      = c.investedValue != null
-        ? `<span style="font-size:20px;font-weight:700">${fmtPrice(c.investedValue)}</span>`
-        : `<span style="font-size:16px;color:var(--muted)">${fmtPrice(c.investedCost)} <span style="font-size:11px">(成本)</span></span>`;
+        ? `<span style="font-size:20px;font-weight:700;font-family:var(--mono)">${fmtPrice(c.investedValue)}</span>`
+        : `<span style="font-size:16px;color:var(--muted);font-family:var(--mono)">${fmtPrice(c.investedCost)} <span style="font-size:11px">(成本)</span></span>`;
       $("d-capCost").textContent     = c.investedValue != null ? `成本 ${fmtPrice(c.investedCost)}` : "";
       $("d-capUnrealized").innerHTML = c.unrealizedPnl != null
         ? `<span style="font-size:20px">${pnlHtml(c.unrealizedPnl)}</span>`
         : `<span style="color:var(--muted);font-size:16px">盤外</span>`;
       $("d-capPositions").textContent = `${c.openPositionCount} 檔持倉`;
-      $("d-capTotal").innerHTML      = `<span style="font-size:20px;font-weight:700">${fmtPrice(c.totalAssets)}</span>`;
+      $("d-capTotal").innerHTML      = `<span style="font-size:20px;font-weight:700;font-family:var(--mono)">${fmtPrice(c.totalAssets)}</span>`
+                                     + _capitalExposureBar(c.investedCost, c.totalAssets);
       $("d-capCashRatio").textContent = `現金比 ${c.cashRatio}%`;
+
+      // subline 加 mode badge
+      const subline = document.querySelector("#pageDashboard .panel-capital .capital-subline");
+      if (subline && !subline.querySelector(".capital-mode-pill")) {
+        const badge = document.createElement("span");
+        badge.innerHTML = _capitalModeBadge(c.cashRatio);
+        subline.insertBefore(badge.firstChild || badge, subline.firstChild);
+      } else if (subline) {
+        const old = subline.querySelector(".capital-mode-pill");
+        if (old) old.outerHTML = _capitalModeBadge(c.cashRatio);
+      }
     } catch(_) { /* 不影響主頁 */ }
   }
 
@@ -2364,26 +2416,53 @@ function clearErr(boxId) {
           </tr>`).join("")
         : `<tr class="empty-row"><td colspan="3">無通知</td></tr>`;
 
-      renderDashAlerts({});
+      renderDashAlerts(notifs);
 
     } catch(e) { showErr("errBoxDash", `Dashboard 載入失敗：${e.message}`); }
   }
 
-  function renderDashAlerts(extra) {
-    const alerts = [];
-    if (extra.migration === false) alerts.push({ level:"err", head:"Migration", body:"有 migration 項目未通過" });
+  // 從 notification type 推斷風險等級
+  function _alertLevelOf(notif) {
+    const s = ((notif?.notificationType || "") + " " + (notif?.title || "")).toUpperCase();
+    if (s.includes("FAIL") || s.includes("BLOCK") || s.includes("STOP_LOSS")
+        || s.includes("EXIT") || s.includes("ERROR") || s.includes("OVER_EXP")) return "err";
+    if (s.includes("WARN") || s.includes("OVERDUE") || s.includes("COOLDOWN")
+        || s.includes("WAIT") || s.includes("REDUCE")) return "warn";
+    if (s.includes("ENTER") || s.includes("BUY") || s.includes("ADD")) return "info";
+    return "neutral";
+  }
+
+  function renderDashAlerts(notifs) {
+    const arr = Array.isArray(notifs) ? notifs : [];
     const body = $("d-alertsBody");
-    if (!alerts.length) {
-      setText("d-alertsMeta","無異常");
-      body.innerHTML = `<div class="small">目前無需要處理的系統異常。</div>`;
+    if (!body) return;
+    if (!arr.length) {
+      setText("d-alertsMeta","系統正常");
+      body.innerHTML = `<div class="terminal-empty">無系統訊號</div>`;
       return;
     }
-    setText("d-alertsMeta",`異常數：${alerts.length}`);
-    body.innerHTML = alerts.slice(0,10).map(a => `
-      <div class="alert-item ${a.level==="warn"?"warn":""}">
-        <div class="alert-head">${esc(a.head)}</div>
+    const items = arr.slice(0, 6).map(n => ({
+      level: _alertLevelOf(n),
+      head: zh(n.notificationType) || n.notificationType || "事件",
+      body: n.title || "—",
+      time: fmtTime(n.eventTime),
+    }));
+    const errCount = items.filter(i => i.level === "err").length;
+    const warnCount = items.filter(i => i.level === "warn").length;
+    if (errCount > 0) setText("d-alertsMeta", `異常 ${errCount} · 警告 ${warnCount}`);
+    else if (warnCount > 0) setText("d-alertsMeta", `警告 ${warnCount} · 共 ${items.length} 筆事件`);
+    else setText("d-alertsMeta", `近 ${items.length} 筆事件`);
+    body.innerHTML = items.map(a => {
+      const cls = a.level === "warn" ? "warn"
+                 : a.level === "info" ? "alert-info"
+                 : a.level === "neutral" ? "alert-neutral"
+                 : "";
+      return `
+      <div class="alert-item ${cls}">
+        <div class="alert-head"><span class="mono small" style="opacity:.7">${a.time}</span> ${esc(a.head)}</div>
         <div>${esc(a.body)}</div>
-      </div>`).join("");
+      </div>`;
+    }).join("");
   }
 
   /* ─────────────────────────────────────────────
@@ -3190,6 +3269,28 @@ function clearErr(boxId) {
   /* ─────────────────────────────────────────────
      PAGE: AI Research
   ───────────────────────────────────────────── */
+  // 從 model 字串推斷 AI 來源（Claude / Codex / Trading System）
+  function _aiSource(r) {
+    const m = (r.model || "").toLowerCase();
+    if (m.includes("claude") || (r.aiSource || "").toUpperCase() === "CLAUDE") return { label: "CLAUDE", cls: "ok" };
+    if (m.includes("gpt") || m.includes("codex") || m.includes("o1") || m.includes("o3")
+        || (r.aiSource || "").toUpperCase() === "CODEX") return { label: "CODEX", cls: "warn" };
+    if ((r.aiSource || "").toUpperCase() === "SYSTEM" || m.includes("internal")) return { label: "SYSTEM", cls: "muted" };
+    return { label: "AI", cls: "muted" };
+  }
+
+  // 不同 researchType 的順序（盤前 → 開盤 → 盤中 → 盤後 → 明日）
+  const _RESEARCH_TYPE_ORDER = ["PREMARKET", "OPENING", "MIDDAY", "POSTMARKET", "T86_TOMORROW", "STOCK_EVAL", "FINAL_DECISION"];
+  const _RESEARCH_TYPE_LABEL = {
+    PREMARKET: "盤前研究 (08:30 前)",
+    OPENING: "開盤研究 (09:30 前)",
+    MIDDAY: "盤中研究 (11:30 前)",
+    POSTMARKET: "盤後研究 (15:30 前)",
+    T86_TOMORROW: "明日策略 (18:30 前)",
+    STOCK_EVAL: "個股評估",
+    FINAL_DECISION: "最終決策研究",
+  };
+
   async function loadAiResearch() {
     clearErr("errBoxAi");
     // 預設今日
@@ -3205,30 +3306,53 @@ function clearErr(boxId) {
       const data = await api(`/api/ai/research?${params}`);
       const el = $("ai-logsBody");
       if (!data || !data.length) {
-        el.innerHTML = `<div class="small" style="color:var(--muted);padding:16px 0">當日無研究記錄</div>`;
+        el.innerHTML = `<div class="terminal-empty">當日無研究記錄</div>`;
         return;
       }
-      el.innerHTML = (data || []).map((r, i) => {
-        const content   = r.researchResult || r.responseContent || r.content || "(無內容)";
-        const tokens    = r.tokensUsed ?? r.totalTokens;
-        const dateLabel = r.tradingDate ? fmtDate(r.tradingDate) : "";
-        const timeLabel = r.createdAt   ? fmtTime(r.createdAt)   : dateLabel;
-        const id = `ai-body-${i}`;
-        const promptId = `ai-prompt-${i}`;
-        const hasPrompt = !!(r.promptSummary);
-        return `
-        <div class="ai-log-item">
-          <div class="ai-log-head">
-            <span>
-              <span class="tag">${esc(r.researchType)}</span>
-              &nbsp;${esc(r.symbol || "市場")} — ${timeLabel}
-            </span>
-            <span class="small">${r.model && r.model !== "N/A" ? esc(r.model) + " / " : ""}${tokens != null ? tokens + " tokens" : ""}</span>
-          </div>
-          ${hasPrompt ? `<div style="margin-bottom:6px"><span class="ai-log-toggle" onclick="toggleAiLog('${promptId}', this)" style="font-size:11px;color:var(--muted)">▶ 查看 Prompt</span><div class="ai-log-body" id="${promptId}" style="max-height:0;overflow:hidden;color:var(--muted)">${esc(r.promptSummary)}</div></div>` : ""}
-          <div class="ai-log-body" id="${id}">${esc(content)}</div>
-          <div class="ai-log-toggle" onclick="toggleAiLog('${id}', this)">▼ 展開全文</div>
-        </div>`;
+
+      // 依 researchType 分組
+      const groups = {};
+      (data || []).forEach(r => {
+        const k = r.researchType || "OTHER";
+        if (!groups[k]) groups[k] = [];
+        groups[k].push(r);
+      });
+      const orderedKeys = Object.keys(groups).sort((a, b) => {
+        const ai = _RESEARCH_TYPE_ORDER.indexOf(a), bi = _RESEARCH_TYPE_ORDER.indexOf(b);
+        const ao = ai === -1 ? 999 : ai, bo = bi === -1 ? 999 : bi;
+        return ao - bo;
+      });
+
+      let itemIdx = 0;
+      el.innerHTML = orderedKeys.map(k => {
+        const items = groups[k];
+        const groupLabel = _RESEARCH_TYPE_LABEL[k] || k;
+        const inner = items.map(r => {
+          const content   = r.researchResult || r.responseContent || r.content || "(無內容)";
+          const tokens    = r.tokensUsed ?? r.totalTokens;
+          const dateLabel = r.tradingDate ? fmtDate(r.tradingDate) : "";
+          const timeLabel = r.createdAt   ? fmtTime(r.createdAt)   : dateLabel;
+          const id = `ai-body-${itemIdx}`;
+          const promptId = `ai-prompt-${itemIdx}`;
+          itemIdx++;
+          const hasPrompt = !!(r.promptSummary);
+          const src = _aiSource(r);
+          return `
+          <div class="ai-log-item">
+            <div class="ai-log-head">
+              <span>
+                <span class="pill ${src.cls}">${esc(src.label)}</span>
+                <span class="tag">${esc(r.researchType)}</span>
+                &nbsp;<span class="mono">${esc(r.symbol || "市場")}</span> — <span class="mono">${timeLabel}</span>
+              </span>
+              <span class="small mono">${r.model && r.model !== "N/A" ? esc(r.model) + " · " : ""}${tokens != null ? tokens + " tokens" : ""}</span>
+            </div>
+            ${hasPrompt ? `<div style="margin-bottom:6px"><span class="ai-log-toggle" onclick="toggleAiLog('${promptId}', this)" style="font-size:11px;color:var(--muted)">▶ 查看 Prompt</span><div class="ai-log-body" id="${promptId}" style="max-height:0;overflow:hidden;color:var(--muted)">${esc(r.promptSummary)}</div></div>` : ""}
+            <div class="ai-log-body" id="${id}">${esc(content)}</div>
+            <div class="ai-log-toggle" onclick="toggleAiLog('${id}', this)">▼ 展開全文</div>
+          </div>`;
+        }).join("");
+        return `<div class="section-title">${esc(groupLabel)} <span class="config-group-tag">${items.length} 筆</span></div>${inner}`;
       }).join("");
     } catch(e) { showErr("errBoxAi", `載入失敗：${e.message}`); }
   }
@@ -3469,12 +3593,58 @@ function clearErr(boxId) {
     $("modal-ai-help").style.display = "flex";
   };
 
+  function renderSchedStatusRow(tasks, now) {
+    const row = $("sched-statusRow");
+    if (!row) return;
+    const order = ["PREMARKET", "OPENING", "MIDDAY", "POSTMARKET", "T86_TOMORROW"];
+    const byType = {};
+    (tasks || []).forEach(t => { byType[t.taskType] = t; });
+    row.innerHTML = order.map(k => {
+      const t = byType[k];
+      const sched = AI_TASK_SCHEDULE[k];
+      const label = (_aiTaskTypeZh[k] || k);
+      let valHtml, ds;
+      if (!t) {
+        valHtml = `<span class="capital-mode-pill">未建立</span>`;
+        ds = "PENDING";
+      } else if (t.status === "FINALIZED") {
+        valHtml = `<span class="capital-mode-pill ok">✓ 完成</span>`;
+        ds = "FINALIZED";
+      } else if (["FAILED","EXPIRED","CLAUDE_FAILED","CODEX_FAILED"].includes(t.status)) {
+        valHtml = `<span class="capital-mode-pill over">⚠ ${esc(aiStatusLabel(t.status))}</span>`;
+        ds = "FAILED";
+      } else if (t.status === "CODEX_DONE") {
+        valHtml = `<span class="capital-mode-pill normal">CODEX 完成</span>`;
+        ds = "CODEX_DONE";
+      } else if (t.status === "CLAUDE_DONE") {
+        valHtml = `<span class="capital-mode-pill normal">CLAUDE 完成</span>`;
+        ds = "CLAUDE_DONE";
+      } else if (sched) {
+        const target = _todayAt(sched.finalBy);
+        const overdue = target && now > target && t.status !== "FINALIZED";
+        valHtml = overdue
+          ? `<span class="capital-mode-pill tight">超時</span>`
+          : `<span class="capital-mode-pill">${esc(aiStatusLabel(t.status))}</span>`;
+        ds = overdue ? "FAILED" : "PENDING";
+      } else {
+        valHtml = `<span class="capital-mode-pill">${esc(aiStatusLabel(t.status))}</span>`;
+        ds = "PENDING";
+      }
+      return `<div class="scheduler-status-card task-status-${esc(ds)}">
+        <div class="lbl">${esc(label)}</div>
+        <div class="val">${valHtml}</div>
+        <div class="lbl" style="margin-top:3px;letter-spacing:.2px;text-transform:none;color:var(--muted);font-weight:600">建立 ${sched ? sched.created : "-"}</div>
+      </div>`;
+    }).join("");
+  }
+
   async function loadSchedAiTasks() {
     try {
       // v2.2：改用 /api/orchestration/tasks/today 拿到 displayStatus / displayMessage / finalDecision 對應
       const tasks = await api("/api/orchestration/tasks/today");
       const body = $("sched-aiBody");
       const now = new Date();
+      renderSchedStatusRow(tasks, now);
       if (!tasks || !tasks.length) {
         body.innerHTML = `<tr class="empty-row"><td colspan="7">今日尚無 AI 任務</td></tr>`;
       } else {
