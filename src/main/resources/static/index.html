@@ -718,6 +718,21 @@
     .task-row .task-title { font-weight:700; color: var(--ink); font-size:13px; }
     .task-row .task-meta { font-size:11px; color: var(--muted); margin-top:2px; font-family: var(--mono); }
 
+    /* AI task table row tint by status */
+    tr.task-status-PENDING { background: rgba(94,112,136,.04); }
+    tr.task-status-PENDING td:first-child { box-shadow: inset 3px 0 0 var(--muted); }
+    tr.task-status-CLAUDE_RUNNING, tr.task-status-CODEX_RUNNING { background: rgba(192,132,0,.05); }
+    tr.task-status-CLAUDE_RUNNING td:first-child, tr.task-status-CODEX_RUNNING td:first-child { box-shadow: inset 3px 0 0 var(--c-wait); }
+    tr.task-status-CLAUDE_DONE { background: rgba(7,169,156,.05); }
+    tr.task-status-CLAUDE_DONE td:first-child { box-shadow: inset 3px 0 0 var(--accent-2); }
+    tr.task-status-CODEX_DONE { background: rgba(22,101,216,.05); }
+    tr.task-status-CODEX_DONE td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+    tr.task-status-FINALIZED { background: rgba(14,156,110,.05); }
+    tr.task-status-FINALIZED td:first-child { box-shadow: inset 3px 0 0 var(--c-buy); }
+    tr.task-status-FAILED, tr.task-status-EXPIRED, tr.task-status-CLAUDE_FAILED, tr.task-status-CODEX_FAILED { background: rgba(196,30,53,.06); }
+    tr.task-status-FAILED td:first-child, tr.task-status-EXPIRED td:first-child,
+    tr.task-status-CLAUDE_FAILED td:first-child, tr.task-status-CODEX_FAILED td:first-child { box-shadow: inset 3px 0 0 var(--c-blocked); }
+
     /* Settings config table */
     #pageSettings .config-key {
       font-family: var(--mono); font-size:12px; color:#2a3a55; word-break: break-all;
@@ -2063,6 +2078,23 @@ function clearErr(boxId) {
     return { cls:"watch", label:"WATCH", zh:"觀察" };
   }
 
+  function heroActionLabel(kind) {
+    switch (kind) {
+      case "enter":   return "ACTION REQUIRED";
+      case "wait":    return "WAIT CONFIRMATION";
+      case "watch":   return "OBSERVE ONLY";
+      case "blocked": return "RISK BLOCKED";
+      case "plan":    return "PLAN ONLY";
+      default:        return "STAND BY";
+    }
+  }
+
+  function heroSignalLabel(decision, kind) {
+    const session = sessionLabel(decision?.sourceTaskType) || "—";
+    const aiStatus = decision?.aiStatus || "—";
+    return `${session} · AI ${aiStatus}`;
+  }
+
   function renderTerminalHero(dash) {
     const hero = $("d-decisionHero");
     if (!hero) return;
@@ -2072,9 +2104,13 @@ function clearErr(boxId) {
     const rejected = Number(payload.rejected_count ?? 0);
     const kind = terminalDecisionKind(decision);
     hero.className = `decision-hero terminal-${kind}`;
-    $("d-heroSignal").textContent = kind === "enter" ? "ACTION REQUIRED" : kind === "blocked" ? "RISK BLOCK" : "TRADING COMMAND";
+    const signalEl = $("d-heroSignal");
+    if (signalEl) {
+      signalEl.innerHTML = `<span class="hero-action">${esc(heroActionLabel(kind))}</span>${esc(heroSignalLabel(decision, kind))}`;
+    }
     $("d-heroTitle").textContent = terminalDecisionText(decision, selected);
-    $("d-heroSummary").textContent = decision?.summary || "尚無正式決策，等待 AI / Java 決策鏈完成。";
+    const fallback = decision?.fallbackReason ? `（降級：${decision.fallbackReason}）` : "";
+    $("d-heroSummary").textContent = (decision?.summary || "尚無正式決策，等待 AI / Java 決策鏈完成。") + fallback;
     $("d-heroSelected").textContent = selected;
     $("d-heroRejected").textContent = rejected;
     $("d-heroTime").textContent = timeOnly(decision?.createdAt);
@@ -2110,6 +2146,20 @@ function clearErr(boxId) {
       const score = resolveCandidateDisplayScore(c);
       const chCls = changeClass(q?.changePercent);
       const thesis = c.reason || c.themeTag || "等待 Claude / Codex 補充 thesis。";
+      const entry = c.entryPriceZone || (c.entryPrice != null ? esc(c.entryPrice) : null);
+      const stop = c.stopLossPrice != null ? c.stopLossPrice : null;
+      const tp1 = c.takeProfit1 != null ? c.takeProfit1 : null;
+      const rr = c.riskRewardRatio != null ? Number(c.riskRewardRatio).toFixed(2) : null;
+      const metricsParts = [];
+      if (entry) metricsParts.push(`<div><div class="tm-k">Entry</div><div class="tm-v">${esc(entry)}</div></div>`);
+      if (stop != null) metricsParts.push(`<div><div class="tm-k">Stop</div><div class="tm-v">${esc(stop)}</div></div>`);
+      if (tp1 != null) metricsParts.push(`<div><div class="tm-k">TP1</div><div class="tm-v">${esc(tp1)}</div></div>`);
+      if (rr != null) metricsParts.push(`<div><div class="tm-k">RR</div><div class="tm-v">${esc(rr)}</div></div>`);
+      const metricsHtml = metricsParts.length
+        ? `<div class="trade-metrics">${metricsParts.join("")}</div>` : "";
+      const subZh = hint.cls === "buy" ? "可進場"
+                  : hint.cls === "wait" ? "等回測"
+                  : hint.cls === "watch" ? "觀察" : "排除";
       return `<article class="trade-card ${hint.cls}">
         <div>
           <div><span class="trade-symbol">${esc(c.symbol)}</span><span class="trade-name">${esc(c.stockName || "")}</span></div>
@@ -2119,14 +2169,32 @@ function clearErr(boxId) {
             <span class="pill session-badge">Score ${esc(score)}</span>
             <span class="pill session-badge">${esc(c.themeTag || "未標題材")}</span>
           </div>
+          ${metricsHtml}
         </div>
         <div>
-          <div class="trade-action ${hint.cls}">${esc(hint.label)}</div>
+          <div class="trade-action ${hint.cls}">${esc(hint.label)}<small>${esc(subZh)}</small></div>
           <div class="quote-price ${chCls === "up" ? "num-pos" : chCls === "dn" ? "num-neg" : ""}" style="text-align:right;margin-top:7px">${q ? fmtPriceWithFallback(q) : "-"}</div>
           <div class="quote-change ${chCls}" style="text-align:right">${q ? `${changeSign(q.changeAmount)} ${changePctText(q.changePercent)}` : ""}</div>
         </div>
       </article>`;
     }).join("");
+  }
+
+  function pnlPctClass(p) {
+    const pct = Number(p.unrealizedPnlPct);
+    if (!Number.isFinite(pct)) return "flat";
+    if (pct >= 0.5) return "profit";
+    if (pct <= -0.5) return "loss";
+    return "flat";
+  }
+
+  function recommendedPositionAction(advice) {
+    const a = (advice || "").toString().toUpperCase();
+    if (a.includes("ADD") || a.includes("加碼")) return "ADD";
+    if (a.includes("REDUCE") || a.includes("減碼")) return "REDUCE";
+    if (a.includes("EXIT") || a.includes("出場") || a.includes("停損") || a.includes("STOP")) return "EXIT";
+    if (a.includes("HOLD") || a.includes("續抱")) return "HOLD";
+    return null;
   }
 
   function renderPositionCards(pos) {
@@ -2139,17 +2207,35 @@ function clearErr(boxId) {
     el.innerHTML = pos.map(p => {
       const title = `${p.stockName ? esc(p.stockName) + " " : ""}<span class="mono">${esc(p.symbol)}</span>`;
       const advice = renderAiAdvice(p, null).replace(/^<span[^>]*>|<\/span>$/g, "");
-      return `<article class="position-card">
+      const cls = pnlPctClass(p);
+      const pnlPct = p.unrealizedPnlPct != null ? Number(p.unrealizedPnlPct).toFixed(2) : null;
+      const pnlAmt = p.unrealizedPnl != null ? Number(p.unrealizedPnl).toFixed(0) : null;
+      const pnlCls = cls === "profit" ? "position-pnl-pos" : cls === "loss" ? "position-pnl-neg" : "position-pnl-flat";
+      const stop = p.stopLossPrice != null ? esc(p.stopLossPrice) : "-";
+      const tp1 = p.takeProfit1 != null ? esc(p.takeProfit1) : "-";
+      const tp2 = p.takeProfit2 != null ? esc(p.takeProfit2) : "-";
+      const reco = recommendedPositionAction(advice);
+      const btn = (label) => `<button class="${reco === label ? "recommended" : ""}">${label}</button>`;
+      return `<article class="position-card ${cls}">
         <div class="position-top">
           <div>
             <div class="position-title">${title}</div>
-            <div class="small">股數 ${esc(p.qty)}｜均價 ${esc(p.avgCost)}｜${esc(zh(p.side))}</div>
+            <div class="small">股數 <b>${esc(p.qty)}</b>｜均價 <b>${esc(p.avgCost)}</b>｜${esc(zh(p.side))}</div>
           </div>
-          ${strategyBadge(p.strategyType)}
+          <div style="text-align:right">
+            ${pnlPct != null ? `<div class="${pnlCls}">${pnlPct}%</div>` : ""}
+            ${pnlAmt != null ? `<div class="small ${pnlCls}">${pnlAmt}</div>` : ""}
+            ${strategyBadge(p.strategyType)}
+          </div>
+        </div>
+        <div class="position-meta">
+          <span>SL <b>${stop}</b></span>
+          <span>TP1 <b>${tp1}</b></span>
+          <span>TP2 <b>${tp2}</b></span>
         </div>
         <div class="trade-thesis">${esc(advice || "續抱觀察")}</div>
         <div class="position-actions">
-          <button>HOLD</button><button>ADD</button><button>REDUCE</button>
+          ${btn("HOLD")}${btn("ADD")}${btn("REDUCE")}${btn("EXIT")}
         </div>
       </article>`;
     }).join("");
@@ -2165,15 +2251,19 @@ function clearErr(boxId) {
       el.innerHTML = `<div class="terminal-empty">等待即時候選報價。</div>`;
       return;
     }
-    el.innerHTML = rows.map(q => {
+    el.innerHTML = rows.map((q, idx) => {
       const c = cBySymbol[q.symbol] || {};
       const hint = actionHintForCandidate(c, q);
       const cls = changeClass(q.changePercent);
-      return `<article class="watch-card">
+      const rank = idx + 1;
+      return `<article class="watch-card layout-stacked">
         <div class="watch-top">
-          <div>
-            <div class="watch-title"><span class="mono">${esc(q.symbol)}</span> ${esc(q.stockName || c.stockName || "")}</div>
-            <div class="small">${esc(c.themeTag || c.reason || "watchlist")}</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="watch-rank">#${rank}</span>
+            <div>
+              <div class="watch-title"><span class="mono">${esc(q.symbol)}</span> <span class="trade-name">${esc(q.stockName || c.stockName || "")}</span></div>
+              <div class="small">${esc(c.themeTag || c.reason || "watchlist")}</div>
+            </div>
           </div>
           <div style="text-align:right">
             <div class="watch-score">S ${esc(resolveCandidateDisplayScore(c))}</div>
@@ -2364,8 +2454,11 @@ function clearErr(boxId) {
             const cxScoreCell = c.codexScore != null
               ? `<span class="score-badge" style="background:${scoreBg(c.codexScore)}">${cxScore}</span>`
               : `<span class="quote-meta">–</span>`;
+            const fScoreBarPct = c.finalRankScore != null
+              ? Math.max(0, Math.min(100, Number(c.finalRankScore) * 10)).toFixed(0) + "%"
+              : null;
             const fScoreCell = c.finalRankScore != null
-              ? `<span class="score-badge" style="background:${scoreBg(c.finalRankScore)};font-weight:700">${fScore}</span>`
+              ? `<div class="score-bar" style="--p:${fScoreBarPct}"></div><span class="score-badge mono" style="background:${scoreBg(c.finalRankScore)};font-weight:800">${fScore}</span>`
               : `<span class="quote-meta">–</span>`;
             // 等級徽章
             let gradeCell = `<span class="quote-meta">–</span>`;
@@ -2386,7 +2479,9 @@ function clearErr(boxId) {
             const dpCell  = c.disagreementPenalty   != null
               ? `<span class="mono" style="color:${c.disagreementPenalty > 1 ? 'var(--dn)' : 'var(--muted)'}">${dpScore}</span>`
               : `<span class="quote-meta">–</span>`;
-            return `<tr>
+            const rowCls = c.isVetoed ? "row-excluded"
+                          : c.includeInFinalPlan ? "row-included" : "";
+            return `<tr class="${rowCls}">
               <td class="mono">${esc(c.symbol)}</td>
               <td>${esc(c.stockName)}</td>
               <td class="small">${c.themeTag ? `<span class="pill warn">${esc(c.themeTag)}</span>` : "–"}</td>
@@ -2398,12 +2493,12 @@ function clearErr(boxId) {
               <td style="text-align:center">${csCell}</td>
               <td style="text-align:center">${dpCell}</td>
               <td style="text-align:center">${vetoCell}</td>
-              <td>${esc(c.riskRewardRatio)}</td>
+              <td class="num-cell">${esc(c.riskRewardRatio)}</td>
               <td>${zhEsc(c.valuationMode)}</td>
-              <td>${esc(c.entryPriceZone)}</td>
-              <td>${esc(c.stopLossPrice)}</td>
-              <td>${esc(c.takeProfit1)}</td>
-              <td>${esc(c.takeProfit2)}</td>
+              <td class="num-cell">${esc(c.entryPriceZone)}</td>
+              <td class="num-cell">${esc(c.stopLossPrice)}</td>
+              <td class="num-cell">${esc(c.takeProfit1)}</td>
+              <td class="num-cell">${esc(c.takeProfit2)}</td>
               <td>${c.includeInFinalPlan ? pill("納入","ok") : pill("未納入","muted")}</td>
               <td style="white-space:nowrap">
                 <button class="btn" style="padding:2px 8px;font-size:12px"
@@ -3023,23 +3118,33 @@ function clearErr(boxId) {
       grouped[k].push(r);
     });
     timeline.innerHTML = Object.entries(grouped).map(([date, items]) => {
+      // 找出當日的「09:30 正式決策」：最新一筆 OPENING task source（同日多次只標最新）
+      const openingItems = items.filter(r => r.sourceTaskType === "OPENING");
+      const final0930Id = openingItems.length ? openingItems[0].id : null;
       const dayBody = items.map(r => {
         const payload = safeJson(r.payloadJson);
         const selCount  = payload.selected_count ?? 0;
         const rejCount  = payload.rejected_count ?? 0;
         const reasons = payload.rejected_reasons || [];
         const isLatestFinal = r.id === latest.id || (date === today && r.sourceTaskType === "OPENING");
+        const isFinal0930 = r.id === final0930Id;
         const fallback = r.fallbackReason ? `降級：${r.fallbackReason}` : "";
         const reasonText = fallback || (Array.isArray(reasons) && reasons.length ? reasons[0] : "");
         const titleSummary = r.summary || payload.summary || "";
-        return `<div class="decision-item ${isLatestFinal ? "latest-final" : ""}">
+        const itemCls = [
+          "decision-item",
+          isLatestFinal ? "latest-final" : "",
+          isFinal0930 ? "is-final-0930" : ""
+        ].filter(Boolean).join(" ");
+        return `<div class="${itemCls}">
           <div>
             <div class="decision-time">${esc(timeOnly(r.createdAt))}</div>
             <div class="small mono">#${esc(r.id)}</div>
           </div>
           <div>
             <div class="decision-meta">
-              ${isLatestFinal ? `<span class="latest-chip">LATEST FINAL</span>` : ""}
+              ${isFinal0930 ? `<span class="latest-chip" style="background:var(--c-buy)">09:30 FINAL</span>` : ""}
+              ${isLatestFinal && !isFinal0930 ? `<span class="latest-chip">LATEST</span>` : ""}
               ${sessionBadgeHtml(r.sourceTaskType)}
               ${decisionBadgeHtml(r.decision)}
               ${actionabilityBadgeHtml(r.decision, r.fallbackReason)}
@@ -3385,7 +3490,7 @@ function clearErr(boxId) {
           const codexCell  = _aiScheduleCell(sched?.codexBy,  t.codexDoneAt,  now);
           const finalCell  = _aiFinalCell(t, sched, now);
           const lastUpdate = t.lastTransitionAt || t.codexDoneAt || t.claudeDoneAt;
-          return `<tr>
+          return `<tr class="task-status-${esc(t.status || "PENDING")}">
             <td><b>${esc(aiTaskTypeZh(t.taskType))}</b>
               <div class="small" style="color:var(--muted)">${esc(t.taskType)}${sched ? " • 建立 " + sched.created : ""}</div>
             </td>
@@ -4364,14 +4469,22 @@ window.finalizeCatchup = async function(taskId) {
       body.innerHTML = `<tr class="empty-row"><td colspan="5">無設定</td></tr>`;
       return;
     }
-    body.innerHTML = configs.map(c => `<tr>
-      <td><button class="btn" style="padding:2px 10px;font-size:12px"
-        onclick="openConfigEdit('${esc(c.configKey)}','${esc(c.configValue)}','${esc(c.description)}')">編輯</button></td>
-      <td><strong>${esc(c.configValue)}</strong></td>
-      <td class="small">${esc(c.valueType)}</td>
-      <td class="mono small" style="word-break:break-all">${esc(c.configKey)}</td>
-      <td class="small" style="white-space:normal;line-height:1.5">${esc(c.description)}</td>
-    </tr>`).join("");
+    body.innerHTML = configs.map(c => {
+      const key = c.configKey || "";
+      const dot = key.indexOf(".");
+      const groupTag = dot > 0
+        ? `<span class="config-group-tag">${esc(key.slice(0, dot))}</span>`
+        : "";
+      const restKey = dot > 0 ? key.slice(dot + 1) : key;
+      return `<tr>
+        <td><button class="btn btn-xs"
+          onclick="openConfigEdit('${esc(c.configKey)}','${esc(c.configValue)}','${esc(c.description)}')">編輯</button></td>
+        <td><strong class="config-value">${esc(c.configValue)}</strong></td>
+        <td class="small">${esc(c.valueType)}</td>
+        <td>${groupTag}<span class="config-key">${esc(restKey)}</span></td>
+        <td class="small" style="white-space:normal;line-height:1.5">${esc(c.description)}</td>
+      </tr>`;
+    }).join("");
   }
 
   function openConfigEdit(key, value, desc) {
