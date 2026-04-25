@@ -40,17 +40,21 @@ v1 PowerShell 通知任務已停用。v2 使用：
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File D:\ai\stock\run-codex-v2-task.ps1 -Type <TYPE>
 ```
 
-## 候選股 fallback（週一 / 假日後首個交易日必做）
+## 候選股權威來源
 
-Java `PremarketDataPrepJob` 在 08:10 建 task 時，若「昨日」是週末或假日，
-會自動 fallback 到 DB 最新有候選的交易日。但 task 的 `targetCandidatesJson`
-不保證永遠同步最新 DB 狀態，**Codex 必須額外呼叫** `GET /api/candidates/current`
-取真實候選股清單，以此為主線。若兩者不一致：
+每一輪 Codex 必須以 Java `ai_task.targetCandidatesJson` 作為本輪候選 universe 的權威來源。
+這可避免 `/api/candidates/current` 因跨時段、跨日或人工刷新而污染本輪 Claude / Codex
+共同研究範圍。
 
-- 以 `/api/candidates/current` 為準。
-- 在 markdown 標示「候選來源：最新交易日 YYYY-MM-DD（週末/假日 fallback）」。
-- Claude 的 `claudeScoresJson` 只對能匹配到 `/api/candidates/current` 的 symbol 有效，
-  其餘 symbol 作 Claude 研究脈絡參考，不直接用於 Codex 評分。
+只有以下情況才可 fallback 到 `GET /api/candidates/current`：
+
+- `targetCandidatesJson` 為空陣列或無法解析。
+- task payload 明確標示本輪候選來源需要 fallback。
+- Java API 回傳 task 本身沒有任何候選，但流程仍要求保守產出觀察/休息結論。
+
+若使用 fallback，Codex 必須在 markdown 標示「候選來源：/api/candidates/current fallback」。
+Claude 的 `claudeScoresJson` 只對本輪候選 universe 中能匹配到的 symbol 有效，
+其餘 symbol 只能作研究脈絡參考，不得直接用於 Codex 評分。
 
 ## API
 
@@ -78,6 +82,8 @@ POST http://localhost:8080/api/ai/tasks/{id}/fail
 - API 回傳 `success=true`。
 - Task 狀態變為 `CODEX_DONE`。
 - `D:\ai\stock\codex-research-latest.md` 已更新。
+- 對應時段 latest 檔已更新，例如 `codex-opening-latest.md` / `codex-postmarket-latest.md`。
+- `D:\ai\stock\codex-result-{taskId}.json` 已保存。
 - Java 下一次 workflow 能讀取 `CODEX_DONE` 並發 LINE。
 
 ## 禁止事項
