@@ -846,7 +846,7 @@
 
     <section id="d-decisionHero" class="decision-hero terminal-rest">
       <div class="hero-left">
-        <div id="d-heroSignal" class="hero-signal">LOADING</div>
+        <div id="d-heroSignal" class="hero-signal">讀取中</div>
         <div id="d-heroTitle" class="hero-title">讀取今日交易指令</div>
         <div id="d-heroSummary" class="hero-summary">正在整合市場、候選股、持倉與 AI 決策。</div>
       </div>
@@ -871,7 +871,7 @@
         <div class="terminal-head">
           <div>
             <div class="terminal-title">今日可操作標的</div>
-            <div class="terminal-sub">BUY / WAIT / WATCH execution list</div>
+            <div class="terminal-sub">進場 / 等回測 / 觀察 清單</div>
           </div>
           <span class="live-status">
             <span class="live-dot" id="d-liveDot"></span>
@@ -884,24 +884,24 @@
       </section>
 
       <section class="terminal-panel">
-        <div class="terminal-title">Market Context</div>
+        <div class="terminal-title">市場狀態</div>
         <div id="d-marketTags" class="market-tags"></div>
         <div id="d-marketStale" class="terminal-note"></div>
         <button class="terminal-link" id="d-marketEditBtn">調整市場快照</button>
       </section>
 
       <section class="terminal-panel">
-        <div class="terminal-title">Portfolio</div>
+        <div class="terminal-title">持倉</div>
         <div id="d-positionCards" class="position-cards"></div>
       </section>
 
       <section class="terminal-panel">
-        <div class="terminal-title">Watchlist</div>
+        <div class="terminal-title">觀察清單</div>
         <div id="d-watchlist" class="watchlist-cards"></div>
       </section>
 
       <section class="terminal-panel panel-capital">
-        <div class="terminal-title">Capital / PnL</div>
+        <div class="terminal-title">資金 / 損益</div>
         <div class="capital-strip">
           <div><span>現金</span><strong id="d-capCash">-</strong></div>
           <div><span>持倉現值</span><strong id="d-capValue">-</strong><small id="d-capCost"></small></div>
@@ -917,7 +917,7 @@
       </section>
 
       <section class="terminal-panel panel-alerts">
-        <div class="terminal-title">System Alerts</div>
+        <div class="terminal-title">系統訊號</div>
         <div class="small" id="d-alertsMeta">無異常</div>
         <div id="d-alertsBody" class="alerts"></div>
       </section>
@@ -2015,10 +2015,10 @@ function clearErr(boxId) {
   function _capitalModeBadge(cashRatio) {
     const r = Number(cashRatio);
     if (!Number.isFinite(r)) return "";
-    if (r >= 50) return `<span class="capital-mode-pill ok">CASH HEAVY</span>`;
-    if (r >= 30) return `<span class="capital-mode-pill normal">NORMAL</span>`;
-    if (r >= 15) return `<span class="capital-mode-pill tight">TIGHT</span>`;
-    return `<span class="capital-mode-pill over">OVER EXPOSED</span>`;
+    if (r >= 50) return `<span class="capital-mode-pill ok">現金充足</span>`;
+    if (r >= 30) return `<span class="capital-mode-pill normal">正常水位</span>`;
+    if (r >= 15) return `<span class="capital-mode-pill tight">水位偏緊</span>`;
+    return `<span class="capital-mode-pill over">過度曝險</span>`;
   }
 
   // 曝險條：投入比例 / 警示色階
@@ -2124,20 +2124,20 @@ function clearErr(boxId) {
     const include = c?.includeInFinalPlan === true;
     const final = c?.finalRankScore != null ? Number(c.finalRankScore) : score;
     const pct = quote?.changePercent;
-    if (include && final >= 8.8) return { cls:"buy", label:"BUY NOW", zh:"可進場" };
-    if (final >= 7.4 || score >= 7.4) return { cls:"wait", label:"WAIT PULLBACK", zh:"等回測" };
-    if (pct != null && pct > 6) return { cls:"wait", label:"WAIT PULLBACK", zh:"過熱等回測" };
-    return { cls:"watch", label:"WATCH", zh:"觀察" };
+    if (include && final >= 8.8) return { cls:"buy", label:"進場", zh:"可進場" };
+    if (final >= 7.4 || score >= 7.4) return { cls:"wait", label:"等回測", zh:"等回測" };
+    if (pct != null && pct > 6) return { cls:"wait", label:"過熱等回測", zh:"過熱等回測" };
+    return { cls:"watch", label:"觀察", zh:"觀察" };
   }
 
   function heroActionLabel(kind) {
     switch (kind) {
-      case "enter":   return "ACTION REQUIRED";
-      case "wait":    return "WAIT CONFIRMATION";
-      case "watch":   return "OBSERVE ONLY";
-      case "blocked": return "RISK BLOCKED";
-      case "plan":    return "PLAN ONLY";
-      default:        return "STAND BY";
+      case "enter":   return "立即執行";
+      case "wait":    return "等待確認";
+      case "watch":   return "僅觀察";
+      case "blocked": return "風控擋單";
+      case "plan":    return "計畫待發";
+      default:        return "暫停觀望";
     }
   }
 
@@ -2203,15 +2203,15 @@ function clearErr(boxId) {
       const tp1 = c.takeProfit1 != null ? c.takeProfit1 : null;
       const rr = c.riskRewardRatio != null ? Number(c.riskRewardRatio).toFixed(2) : null;
       const metricsParts = [];
-      if (entry) metricsParts.push(`<div><div class="tm-k">Entry</div><div class="tm-v">${esc(entry)}</div></div>`);
-      if (stop != null) metricsParts.push(`<div><div class="tm-k">Stop</div><div class="tm-v">${esc(stop)}</div></div>`);
-      if (tp1 != null) metricsParts.push(`<div><div class="tm-k">TP1</div><div class="tm-v">${esc(tp1)}</div></div>`);
-      if (rr != null) metricsParts.push(`<div><div class="tm-k">RR</div><div class="tm-v">${esc(rr)}</div></div>`);
+      if (entry) metricsParts.push(`<div><div class="tm-k">進場</div><div class="tm-v">${esc(entry)}</div></div>`);
+      if (stop != null) metricsParts.push(`<div><div class="tm-k">停損</div><div class="tm-v">${esc(stop)}</div></div>`);
+      if (tp1 != null) metricsParts.push(`<div><div class="tm-k">停利</div><div class="tm-v">${esc(tp1)}</div></div>`);
+      if (rr != null) metricsParts.push(`<div><div class="tm-k">風報</div><div class="tm-v">${esc(rr)}</div></div>`);
       const metricsHtml = metricsParts.length
         ? `<div class="trade-metrics">${metricsParts.join("")}</div>` : "";
-      const subZh = hint.cls === "buy" ? "可進場"
-                  : hint.cls === "wait" ? "等回測"
-                  : hint.cls === "watch" ? "觀察" : "排除";
+      const subZh = hint.cls === "buy" ? "立即"
+                  : hint.cls === "wait" ? "別追高"
+                  : hint.cls === "watch" ? "未到位" : "排除";
       return `<article class="trade-card ${hint.cls}">
         <div>
           <div><span class="trade-symbol">${esc(c.symbol)}</span><span class="trade-name">${esc(c.stockName || "")}</span></div>
@@ -2267,7 +2267,8 @@ function clearErr(boxId) {
       const tp1 = p.takeProfit1 != null ? esc(p.takeProfit1) : "-";
       const tp2 = p.takeProfit2 != null ? esc(p.takeProfit2) : "-";
       const reco = recommendedPositionAction(advice);
-      const btn = (label) => `<button class="${reco === label ? "recommended" : ""}">${label}</button>`;
+      const POS_ACTION_LABEL = { HOLD: "續抱", ADD: "加碼", REDUCE: "減碼", EXIT: "出場" };
+      const btn = (code) => `<button class="${reco === code ? "recommended" : ""}" data-action="${code}">${POS_ACTION_LABEL[code]}</button>`;
       return `<article class="position-card ${cls}">
         <div class="position-top">
           <div>
@@ -2281,9 +2282,9 @@ function clearErr(boxId) {
           </div>
         </div>
         <div class="position-meta">
-          <span>SL <b>${stop}</b></span>
-          <span>TP1 <b>${tp1}</b></span>
-          <span>TP2 <b>${tp2}</b></span>
+          <span>停損 <b>${stop}</b></span>
+          <span>停利1 <b>${tp1}</b></span>
+          <span>停利2 <b>${tp2}</b></span>
         </div>
         <div class="trade-thesis">${esc(advice || "續抱觀察")}</div>
         <div class="position-actions">
@@ -2314,11 +2315,11 @@ function clearErr(boxId) {
             <span class="watch-rank">#${rank}</span>
             <div>
               <div class="watch-title"><span class="mono">${esc(q.symbol)}</span> <span class="trade-name">${esc(q.stockName || c.stockName || "")}</span></div>
-              <div class="small">${esc(c.themeTag || c.reason || "watchlist")}</div>
+              <div class="small">${esc(c.themeTag || c.reason || "觀察中")}</div>
             </div>
           </div>
           <div style="text-align:right">
-            <div class="watch-score">S ${esc(resolveCandidateDisplayScore(c))}</div>
+            <div class="watch-score">分 ${esc(resolveCandidateDisplayScore(c))}</div>
             <div class="quote-change ${cls}">${changePctText(q.changePercent)}</div>
           </div>
         </div>
@@ -3222,8 +3223,8 @@ function clearErr(boxId) {
           </div>
           <div>
             <div class="decision-meta">
-              ${isFinal0930 ? `<span class="latest-chip" style="background:var(--c-buy)">09:30 FINAL</span>` : ""}
-              ${isLatestFinal && !isFinal0930 ? `<span class="latest-chip">LATEST</span>` : ""}
+              ${isFinal0930 ? `<span class="latest-chip" style="background:var(--c-buy)">09:30 正式</span>` : ""}
+              ${isLatestFinal && !isFinal0930 ? `<span class="latest-chip">最新</span>` : ""}
               ${sessionBadgeHtml(r.sourceTaskType)}
               ${decisionBadgeHtml(r.decision)}
               ${actionabilityBadgeHtml(r.decision, r.fallbackReason)}
@@ -3269,13 +3270,13 @@ function clearErr(boxId) {
   /* ─────────────────────────────────────────────
      PAGE: AI Research
   ───────────────────────────────────────────── */
-  // 從 model 字串推斷 AI 來源（Claude / Codex / Trading System）
+  // 從 model 字串推斷 AI 來源（Claude / Codex / 系統 — 品牌名保留原拼寫）
   function _aiSource(r) {
     const m = (r.model || "").toLowerCase();
-    if (m.includes("claude") || (r.aiSource || "").toUpperCase() === "CLAUDE") return { label: "CLAUDE", cls: "ok" };
+    if (m.includes("claude") || (r.aiSource || "").toUpperCase() === "CLAUDE") return { label: "Claude", cls: "ok" };
     if (m.includes("gpt") || m.includes("codex") || m.includes("o1") || m.includes("o3")
-        || (r.aiSource || "").toUpperCase() === "CODEX") return { label: "CODEX", cls: "warn" };
-    if ((r.aiSource || "").toUpperCase() === "SYSTEM" || m.includes("internal")) return { label: "SYSTEM", cls: "muted" };
+        || (r.aiSource || "").toUpperCase() === "CODEX") return { label: "Codex", cls: "warn" };
+    if ((r.aiSource || "").toUpperCase() === "SYSTEM" || m.includes("internal")) return { label: "系統", cls: "muted" };
     return { label: "AI", cls: "muted" };
   }
 
