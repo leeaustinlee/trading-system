@@ -1,5 +1,6 @@
 package com.austin.trading.service;
 
+import com.austin.trading.domain.enums.AllocationAction;
 import com.austin.trading.domain.enums.AllocationMode;
 import com.austin.trading.dto.internal.CapitalAllocationInput;
 import com.austin.trading.dto.internal.CapitalAllocationInput.AllocationIntent;
@@ -38,9 +39,6 @@ import java.util.Map;
 public class CapitalAllocationService {
 
     private static final Logger log = LoggerFactory.getLogger(CapitalAllocationService.class);
-
-    /** 當 CapitalService 無資料時的 fallback 權益（保守預設）。 */
-    public static final BigDecimal FALLBACK_EQUITY = new BigDecimal("50000");
 
     private final CapitalService capitalService;
     private final ScoreConfigService scoreConfigService;
@@ -117,13 +115,20 @@ public class CapitalAllocationService {
             AllocationIntent intent
     ) {
         CapitalSummaryResponse summary = safeSummary();
-        BigDecimal accountEquity = summary != null && summary.totalEquity() != null
-                && summary.totalEquity().signum() > 0
-                ? summary.totalEquity() : FALLBACK_EQUITY;
-        BigDecimal availableCash = summary != null && summary.availableCash() != null
+
+        // v2.12 Fix2：移除 FALLBACK_EQUITY=50000 保守常數。
+        // 抓不到 capital_ledger equity → 直接回 RISK_BLOCK，避免所有後續建議金額失真。
+        boolean hasEquity = summary != null && summary.totalEquity() != null
+                && summary.totalEquity().signum() > 0;
+        if (!hasEquity) {
+            log.warn("[CapitalAllocation] {} blocked: capital_ledger 無有效權益資料 summary={}",
+                    symbol, summary);
+            return riskBlockNoEquity(symbol, entryPrice, stopLoss, mode, intent);
+        }
+        BigDecimal accountEquity = summary.totalEquity();
+        BigDecimal availableCash = summary.availableCash() != null
                 ? summary.availableCash() : BigDecimal.ZERO;
-        String equitySource = summary != null && summary.totalEquity() != null
-                && summary.totalEquity().signum() > 0 ? "capital_ledger" : "fallback_default";
+        String equitySource = "capital_ledger";
 
         // portfolio & theme exposures（金額）
         List<PositionEntity> openPositions = positionRepository.findByStatus("OPEN");
@@ -180,11 +185,34 @@ public class CapitalAllocationService {
         return result;
     }
 
+    /**
+     * v2.12 Fix2：capital_ledger 無有效權益時直接回 RISK_BLOCK。
+     * 不再使用 FALLBACK_EQUITY=50000 當 equity，避免後續 sizing 全部失真。
+     */
+    private CapitalAllocationResult riskBlockNoEquity(
+            String symbol, BigDecimal entryPrice, BigDecimal stopLoss,
+            AllocationMode mode, AllocationIntent intent) {
+        Map<String, Object> trace = new LinkedHashMap<>();
+        trace.put("equitySource", "capital_ledger");
+        trace.put("equityAvailable", false);
+        trace.put("blockReason", "CAPITAL_LEDGER_EQUITY_MISSING");
+        trace.put("intent", intent);
+        trace.put("mode", mode);
+        return new CapitalAllocationResult(
+                symbol, AllocationAction.RISK_BLOCK, mode,
+                BigDecimal.ZERO, 0,
+                entryPrice, stopLoss,
+                null, null, null, null, null, null, null,
+                List.of("CAPITAL_LEDGER_EQUITY_MISSING: capital_ledger 無有效權益資料，阻擋新倉/加碼/換股建議"),
+                List.of("allocation-blocked-equity-missing"),
+                java.util.Collections.unmodifiableMap(trace));
+    }
+
     private CapitalSummaryResponse safeSummary() {
         try {
             return capitalService.getSummary();
         } catch (Exception e) {
-            log.warn("[CapitalAllocation] getSummary failed → fallback: {}", e.getMessage());
+            log.warn("[CapitalAllocation] getSummary failed → no valid capital_ledger equity: {}", e.getMessage());
             return null;
         }
     }

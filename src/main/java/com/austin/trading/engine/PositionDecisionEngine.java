@@ -68,9 +68,12 @@ public class PositionDecisionEngine {
             // v2.3 Momentum 專屬
             String strategyType,              // SETUP | MOMENTUM_CHASE；null 視同 SETUP
             boolean belowMa5,                 // 今日跌破 5MA？
-            boolean volumeSpikeLongBlack      // bar 爆量長黑？
+            boolean volumeSpikeLongBlack,     // bar 爆量長黑？
+            // v2.12 Fix3：drawdown EXIT 雙條件用
+            BigDecimal vwapPrice,             // 盤中 VWAP；null → 該訊號不參與
+            BigDecimal volumeRatio            // 量能比；null → 該訊號不參與
     ) {
-        /** 向下相容 ctor：舊呼叫不傳 Momentum 欄位 → 預設 SETUP。 */
+        /** 向下相容 ctor：舊呼叫不傳 Momentum / vwap / volumeRatio。 */
         public PositionDecisionInput(String symbol, BigDecimal entryPrice, BigDecimal currentStopLoss,
                 BigDecimal takeProfit1, BigDecimal takeProfit2, BigDecimal trailingStopPrice,
                 String side, int holdingDays,
@@ -84,7 +87,25 @@ public class PositionDecisionEngine {
                     side, holdingDays, currentPrice, dayHigh, dayLow, prevClose, sessionHighPrice,
                     marketGrade, themeRank, finalThemeScore, unrealizedPnlPct, extendedLevel,
                     volumeWeakening, failedBreakout, momentumStrong, nearResistance, madeNewHighRecently,
-                    "SETUP", false, false);
+                    "SETUP", false, false, null, null);
+        }
+
+        /** Momentum 專屬 ctor 不含 vwap / volumeRatio。 */
+        public PositionDecisionInput(String symbol, BigDecimal entryPrice, BigDecimal currentStopLoss,
+                BigDecimal takeProfit1, BigDecimal takeProfit2, BigDecimal trailingStopPrice,
+                String side, int holdingDays,
+                BigDecimal currentPrice, BigDecimal dayHigh, BigDecimal dayLow, BigDecimal prevClose,
+                BigDecimal sessionHighPrice,
+                String marketGrade, Integer themeRank, BigDecimal finalThemeScore,
+                BigDecimal unrealizedPnlPct, ExtendedLevel extendedLevel,
+                boolean volumeWeakening, boolean failedBreakout, boolean momentumStrong,
+                boolean nearResistance, boolean madeNewHighRecently,
+                String strategyType, boolean belowMa5, boolean volumeSpikeLongBlack) {
+            this(symbol, entryPrice, currentStopLoss, takeProfit1, takeProfit2, trailingStopPrice,
+                    side, holdingDays, currentPrice, dayHigh, dayLow, prevClose, sessionHighPrice,
+                    marketGrade, themeRank, finalThemeScore, unrealizedPnlPct, extendedLevel,
+                    volumeWeakening, failedBreakout, momentumStrong, nearResistance, madeNewHighRecently,
+                    strategyType, belowMa5, volumeSpikeLongBlack, null, null);
         }
     }
 
@@ -123,12 +144,34 @@ public class PositionDecisionEngine {
         }
 
         // ─ 2.5. Drawdown 從日高回撤 → WEAKEN / EXIT ──────────────────────
+        // v2.12 Fix3：drawdown >= 7% 不再單獨 EXIT；要同時滿足「動能轉弱」（任一）：
+        //   (a) currentPrice < vwapPrice
+        //   (b) volumeRatio < exit_volume_ratio_floor（預設 0.8）
+        //   (c) volumeWeakening=true
+        //   (d) !momentumStrong
+        // 動能仍強時降級為 WEAKEN，避免半山腰出場錯失反彈。
         BigDecimal drawdownPct = computeDrawdownPct(in);
         if (drawdownPct != null) {
-            BigDecimal ddExitPct = config.getDecimal("position.review.drawdown_from_high_exit_pct", new BigDecimal("5.0"));
+            BigDecimal ddExitPct = config.getDecimal("position.review.drawdown_from_high_exit_pct", new BigDecimal("7.0"));
             BigDecimal ddWeakenPct = config.getDecimal("position.review.drawdown_from_high_weaken_pct", new BigDecimal("3.0"));
+            BigDecimal volRatioFloor = config.getDecimal("position.review.exit_volume_ratio_floor", new BigDecimal("0.8"));
+
             if (drawdownPct.compareTo(ddExitPct) >= 0) {
-                return exit("從高點回撤 " + drawdownPct.setScale(1, RoundingMode.HALF_UP) + "% 超過出場門檻");
+                boolean priceBelowVwap = in.vwapPrice() != null && in.currentPrice() != null
+                        && in.currentPrice().compareTo(in.vwapPrice()) < 0;
+                boolean volumeRatioWeak = in.volumeRatio() != null
+                        && in.volumeRatio().compareTo(volRatioFloor) < 0;
+                boolean momentumWeak = priceBelowVwap || volumeRatioWeak
+                        || in.volumeWeakening() || !in.momentumStrong();
+                String ddText = drawdownPct.setScale(1, RoundingMode.HALF_UP).toPlainString();
+                if (momentumWeak) {
+                    String why = priceBelowVwap ? "currentPrice<VWAP"
+                            : volumeRatioWeak ? "volumeRatio<" + volRatioFloor.toPlainString()
+                            : in.volumeWeakening() ? "volumeWeakening"
+                            : "momentum 不強";
+                    return exit("從高點回撤 " + ddText + "% 且動能轉弱 (" + why + ")");
+                }
+                return weaken("從高點回撤 " + ddText + "% 但動能仍強，續抱觀察");
             }
             if (drawdownPct.compareTo(ddWeakenPct) >= 0 && !in.momentumStrong()) {
                 return weaken("從高點回撤 " + drawdownPct.setScale(1, RoundingMode.HALF_UP) + "% 且動能不足");

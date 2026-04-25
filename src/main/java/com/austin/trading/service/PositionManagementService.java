@@ -8,20 +8,27 @@ import com.austin.trading.dto.internal.PositionManagementInput;
 import com.austin.trading.dto.internal.PositionManagementInput.SwitchCandidate;
 import com.austin.trading.dto.internal.PositionManagementResult;
 import com.austin.trading.dto.internal.MarketRegimeDecision;
+import com.austin.trading.dto.request.CodexResultPayloadRequest;
+import com.austin.trading.dto.request.CodexReviewedSymbolRequest;
 import com.austin.trading.engine.PositionManagementEngine;
 import com.austin.trading.engine.PositionDecisionEngine.PositionStatus;
+import com.austin.trading.entity.AiTaskEntity;
 import com.austin.trading.entity.PositionEntity;
 import com.austin.trading.entity.StockEvaluationEntity;
 import com.austin.trading.entity.StockThemeMappingEntity;
+import com.austin.trading.repository.AiTaskRepository;
 import com.austin.trading.repository.StockEvaluationRepository;
 import com.austin.trading.repository.StockThemeMappingRepository;
 import com.austin.trading.service.PositionReviewService.ReviewResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,24 +48,38 @@ public class PositionManagementService {
 
     private static final Logger log = LoggerFactory.getLogger(PositionManagementService.class);
 
+    private static final ZoneId TPE = ZoneId.of("Asia/Taipei");
+
     private final PositionManagementEngine engine;
     private final MarketRegimeService marketRegimeService;
     private final StockEvaluationRepository stockEvaluationRepository;
     private final StockThemeMappingRepository stockThemeMappingRepository;
     private final CapitalAllocationService capitalAllocationService;
+    private final IntradayVwapService intradayVwapService;
+    private final VolumeProfileService volumeProfileService;
+    private final AiTaskRepository aiTaskRepository;
+    private final ObjectMapper objectMapper;
 
     public PositionManagementService(
             PositionManagementEngine engine,
             MarketRegimeService marketRegimeService,
             StockEvaluationRepository stockEvaluationRepository,
             StockThemeMappingRepository stockThemeMappingRepository,
-            CapitalAllocationService capitalAllocationService
+            CapitalAllocationService capitalAllocationService,
+            IntradayVwapService intradayVwapService,
+            VolumeProfileService volumeProfileService,
+            AiTaskRepository aiTaskRepository,
+            ObjectMapper objectMapper
     ) {
         this.engine = engine;
         this.marketRegimeService = marketRegimeService;
         this.stockEvaluationRepository = stockEvaluationRepository;
         this.stockThemeMappingRepository = stockThemeMappingRepository;
         this.capitalAllocationService = capitalAllocationService;
+        this.intradayVwapService = intradayVwapService;
+        this.volumeProfileService = volumeProfileService;
+        this.aiTaskRepository = aiTaskRepository;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -113,6 +134,11 @@ public class PositionManagementService {
         List<SwitchCandidate> switchPool = buildSwitchPool(
                 todayCandidates, pos.getSymbol(), positionTheme);
 
+        // v2.12 Fix1：Position ADD 資料鏈。從今日最新 Codex payload 抓 volume/turnover/avgDailyVolume，
+        // 算 VWAP + volumeRatio 餵進 engine；若資料缺失仍傳 null（engine 保守 fallback），
+        // 但 service 層補 trace flag（vwapAvailable / volumeRatioAvailable）供事後 debug。
+        VolumeDataProbe probe = buildVolumeDataProbe(pos.getSymbol(), tradingDate);
+
         PositionManagementInput in = new PositionManagementInput(
                 pos.getSymbol(),
                 baseline,
@@ -123,8 +149,8 @@ public class PositionManagementService {
                 pos.getTrailingStopPrice(),
                 null,         // sessionHigh MVP：live quote 未傳；engine 會在 ADD 路徑判 null 視為 fail
                 peakPct,
-                null,         // vwapPrice：position 監控流無法取得 turnover，MVP 為 null
-                null,         // volumeRatio：無 avgDailyVolume 來源，MVP 為 null
+                probe.vwapPrice(),
+                probe.volumeRatio(),
                 sizeLevel,
                 todayAdds,
                 lifetimeAdds,
@@ -133,10 +159,127 @@ public class PositionManagementService {
                 switchPool
         );
 
-        PositionManagementResult result = engine.evaluate(in);
-        log.info("[PositionManagement] {} action={} reason={} baseline={} regime={}",
-                pos.getSymbol(), result.action(), result.reason(), baseline, regimeType);
+        PositionManagementResult raw = engine.evaluate(in);
+        PositionManagementResult result = decorateWithVolumeTrace(raw, probe);
+        log.info("[PositionManagement] {} action={} reason={} baseline={} regime={} vwapAvailable={} volumeRatioAvailable={}",
+                pos.getSymbol(), result.action(), result.reason(), baseline, regimeType,
+                probe.vwapAvailable(), probe.volumeRatioAvailable());
         return result;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Volume data probe：v2.12 Fix1
+    // ══════════════════════════════════════════════════════════════════════
+
+    /** 為單一 symbol 計算 VWAP / volumeRatio，並記錄 available flag + reason。 */
+    VolumeDataProbe buildVolumeDataProbe(String symbol, LocalDate tradingDate) {
+        Optional<CodexReviewedSymbolRequest> codex = fetchCodexReviewedForSymbol(symbol, tradingDate);
+        if (codex.isEmpty()) {
+            return VolumeDataProbe.unavailable("NO_CODEX_REVIEW_FOR_SYMBOL", "NO_CODEX_REVIEW_FOR_SYMBOL");
+        }
+        CodexReviewedSymbolRequest item = codex.get();
+        IntradayVwapService.VwapResult vwap =
+                intradayVwapService.computeFromCumulative(item.volume(), item.turnover());
+        LocalTime now = LocalTime.now(TPE);
+        VolumeProfileService.VolumeRatioResult vr =
+                volumeProfileService.compute(item.volume(), item.averageDailyVolume(), now);
+        return new VolumeDataProbe(
+                vwap.available() ? vwap.price() : null,
+                vwap.available(),
+                vwap.available() ? null : vwap.reason(),
+                vr.available() ? vr.ratio() : null,
+                vr.available(),
+                vr.available() ? null : vr.reason()
+        );
+    }
+
+    /**
+     * 從今日的 AiTask（偏好 OPENING → MIDDAY → 其他）裡讀 Codex result payload，抓出 symbol 的
+     * reviewed entry（含 volume / turnover / averageDailyVolume）。找不到回 Optional.empty。
+     */
+    private Optional<CodexReviewedSymbolRequest> fetchCodexReviewedForSymbol(String symbol, LocalDate tradingDate) {
+        if (symbol == null || tradingDate == null) return Optional.empty();
+        List<AiTaskEntity> tasks = aiTaskRepository.findByTradingDateOrderByCreatedAtDesc(tradingDate);
+        if (tasks == null || tasks.isEmpty()) return Optional.empty();
+        // 偏好順序：OPENING 最新、再退 MIDDAY、再退 POSTMARKET（盤後）/ PREMARKET（量能資料可能不足）
+        String[] typePreference = {"OPENING", "MIDDAY", "POSTMARKET", "PREMARKET"};
+        for (String type : typePreference) {
+            for (AiTaskEntity task : tasks) {
+                if (!type.equalsIgnoreCase(task.getTaskType())) continue;
+                Optional<CodexReviewedSymbolRequest> hit = parseCodexForSymbol(task, symbol);
+                if (hit.isPresent()) return hit;
+            }
+        }
+        // fallback：任何 task type
+        for (AiTaskEntity task : tasks) {
+            Optional<CodexReviewedSymbolRequest> hit = parseCodexForSymbol(task, symbol);
+            if (hit.isPresent()) return hit;
+        }
+        return Optional.empty();
+    }
+
+    private Optional<CodexReviewedSymbolRequest> parseCodexForSymbol(AiTaskEntity task, String symbol) {
+        String json = task.getCodexPayloadJson();
+        if (json == null || json.isBlank()) return Optional.empty();
+        try {
+            CodexResultPayloadRequest payload = objectMapper.readValue(json, CodexResultPayloadRequest.class);
+            Optional<CodexReviewedSymbolRequest> hit = findSymbolIn(payload.selected(), symbol);
+            if (hit.isPresent()) return hit;
+            hit = findSymbolIn(payload.watchlist(), symbol);
+            if (hit.isPresent()) return hit;
+            return findSymbolIn(payload.rejected(), symbol);
+        } catch (Exception e) {
+            log.debug("[PositionManagement] parse codex payload failed taskId={}: {}",
+                    task.getId(), e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private static Optional<CodexReviewedSymbolRequest> findSymbolIn(
+            List<CodexReviewedSymbolRequest> list, String symbol) {
+        if (list == null) return Optional.empty();
+        for (CodexReviewedSymbolRequest item : list) {
+            if (item != null && symbol.equals(item.symbol())) return Optional.of(item);
+        }
+        return Optional.empty();
+    }
+
+    /** 把 VWAP / volumeRatio 的 available flag + reason 塞進 result.trace，讓事後能 debug。 */
+    private static PositionManagementResult decorateWithVolumeTrace(
+            PositionManagementResult raw, VolumeDataProbe probe) {
+        if (raw == null) return null;
+        Map<String, Object> trace = new LinkedHashMap<>();
+        if (raw.trace() != null) trace.putAll(raw.trace());
+        trace.put("vwapAvailable", probe.vwapAvailable());
+        if (!probe.vwapAvailable() && probe.vwapUnavailableReason() != null) {
+            trace.put("vwapUnavailableReason", probe.vwapUnavailableReason());
+        }
+        trace.put("volumeRatioAvailable", probe.volumeRatioAvailable());
+        if (!probe.volumeRatioAvailable() && probe.volumeRatioUnavailableReason() != null) {
+            trace.put("volumeRatioUnavailableReason", probe.volumeRatioUnavailableReason());
+        }
+        return new PositionManagementResult(
+                raw.symbol(), raw.action(), raw.reason(),
+                raw.currentPrice(), raw.entryPrice(), raw.unrealizedPct(),
+                raw.vwapPrice(), raw.volumeRatio(),
+                raw.stopLoss(), raw.trailingStop(),
+                raw.score(), raw.positionSizeLevel(),
+                raw.signals(), raw.warnings(),
+                java.util.Collections.unmodifiableMap(trace));
+    }
+
+    /** VWAP + volumeRatio 探測結果 + trace flag。 */
+    public record VolumeDataProbe(
+            BigDecimal vwapPrice,
+            boolean vwapAvailable,
+            String vwapUnavailableReason,
+            BigDecimal volumeRatio,
+            boolean volumeRatioAvailable,
+            String volumeRatioUnavailableReason
+    ) {
+        public static VolumeDataProbe unavailable(String vwapReason, String volRatioReason) {
+            return new VolumeDataProbe(null, false, vwapReason, null, false, volRatioReason);
+        }
     }
 
     /**

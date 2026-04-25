@@ -238,8 +238,9 @@ public class FinalDecisionService {
                     readiness);
         }
 
+        boolean requireCodex = scoreConfigService.getBoolean("final_decision.require_codex", true);
         boolean downgradeEnabled = scoreConfigService.getBoolean("final_decision.ai_downgrade_enabled", true);
-        if (downgradeEnabled) {
+        if (requireCodex || downgradeEnabled) {
             if (readiness.mode() == AiReadinessMode.AI_NOT_READY) {
                 String reason = readiness.fallbackReason() == null ? "AI_NOT_READY" : readiness.fallbackReason();
                 log.warn("[FinalDecision] AI_NOT_READY → REST (reason={})", reason);
@@ -253,7 +254,8 @@ public class FinalDecisionService {
                 String partialMode = scoreConfigService.getString("final_decision.partial_ai_mode", "WATCH");
                 String decisionLabel = "REST".equalsIgnoreCase(partialMode) ? "REST" : "WATCH";
                 String reasonCode = readiness.fallbackReason() == null ? "CODEX_MISSING" : readiness.fallbackReason();
-                log.warn("[FinalDecision] PARTIAL_AI_READY → {} (reason={})", decisionLabel, reasonCode);
+                log.warn("[FinalDecision] PARTIAL_AI_READY → {} (reason={} requireCodex={})",
+                        decisionLabel, reasonCode, requireCodex);
                 return persistAndReturn(tradingDate,
                         new FinalDecisionResponse(decisionLabel, List.of(),
                                 List.of(reasonCode),
@@ -1825,9 +1827,15 @@ public class FinalDecisionService {
             BigDecimal aiWeighted = weightedScoringEngine.computeAiWeightedScore(javaScore, claudeScore, codexScore);
             BigDecimal rawRank    = weightedScoringEngine.computeFinalRankScore(aiWeighted, consensusScore, veto.vetoed());
             // v2.6 MVP: 套用 VetoEngine soft penalty 扣分（hard veto 時 rawRank 已為 0，不會再扣）
+            // v2.12 Fix4：bucket=SELECT_BUY_NOW（entryTriggered=true）直接 bypass 所有 soft penalty
+            //   （ranking / timing / divergence），不再受 codexScore>=9.5 限制；hard risk gate 仍生效。
+            // Rollback flag：final_decision.select_buy_now_bypass_soft_penalty.enabled=false
+            //   → 回到舊行為（需 codexScore>=9.5 才 bypass）。
+            boolean bypassFlagEnabled = scoreConfigService.getBoolean(
+                    "final_decision.select_buy_now_bypass_soft_penalty.enabled", true);
             boolean codexExecutionPriority = Boolean.TRUE.equals(c.entryTriggered())
-                    && codexScore != null
-                    && codexScore.compareTo(new BigDecimal("9.5")) >= 0;
+                    && (bypassFlagEnabled
+                        || (codexScore != null && codexScore.compareTo(new BigDecimal("9.5")) >= 0));
             BigDecimal finalRank  = veto.vetoed()
                     ? rawRank
                     : codexExecutionPriority

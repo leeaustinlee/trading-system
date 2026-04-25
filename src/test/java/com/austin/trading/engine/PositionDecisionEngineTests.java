@@ -130,16 +130,35 @@ class PositionDecisionEngineTests {
     }
 
     @Test
-    void drawdownFromHigh_exceedsExitThreshold_shouldExit() {
+    void drawdownFromHigh_exceedsExitThreshold_andMomentumWeak_shouldExit() {
+        // v2.12 Fix3：drawdown >= 7% + 動能轉弱（volumeWeakening）→ EXIT
+        // entryPrice=100、sessionHigh=120、currentPrice=110 → 回撤 (120-110)/120 ≈ 8.3%、pnl +10%
         var input = buildInput(b -> {
             b.entryPrice = bd("100");
-            b.currentPrice = bd("95");        // 現價
-            b.sessionHighPrice = bd("108");   // 持倉期間最高 108，回撤 (108-95)/108 = 12%
-            b.unrealizedPnlPct = bd("-5");
+            b.currentPrice = bd("110");
+            b.sessionHighPrice = bd("120");
+            b.unrealizedPnlPct = bd("10");
+            b.volumeWeakening = true;
         });
         var result = engine.evaluate(input);
         assertThat(result.status()).isEqualTo(PositionStatus.EXIT);
-        assertThat(result.reason()).contains("回撤");
+        assertThat(result.reason()).contains("回撤").contains("動能轉弱");
+    }
+
+    @Test
+    void drawdownFromHigh_exceedsExitThreshold_butMomentumStrong_shouldWeaken() {
+        // v2.12 Fix3：drawdown >= 7% 但動能仍強 → 只降級為 WEAKEN，不出場
+        var input = buildInput(b -> {
+            b.entryPrice = bd("100");
+            b.currentPrice = bd("110");
+            b.sessionHighPrice = bd("120");
+            b.unrealizedPnlPct = bd("10");
+            b.momentumStrong = true;          // 動能仍強
+            b.volumeWeakening = false;
+        });
+        var result = engine.evaluate(input);
+        assertThat(result.status()).isEqualTo(PositionStatus.WEAKEN);
+        assertThat(result.reason()).contains("動能仍強");
     }
 
     @Test

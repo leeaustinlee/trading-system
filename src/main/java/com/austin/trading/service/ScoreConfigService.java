@@ -86,7 +86,8 @@ public class ScoreConfigService {
         DEFAULTS.put("position.review.exit_if_extended_and_weak",   new String[]{"true",  "BOOLEAN", "EXTREME 延伸 + 動能弱 → EXIT"});
         DEFAULTS.put("position.review.extended_weaken_override",    new String[]{"true",  "BOOLEAN", "MILD 延伸時即使獲利也不給 STRONG"});
         DEFAULTS.put("position.review.drawdown_from_high_weaken_pct",new String[]{"3.0",  "DECIMAL", "從高點回撤 ≥ 此 % 且無動能 → WEAKEN"});
-        DEFAULTS.put("position.review.drawdown_from_high_exit_pct",  new String[]{"5.0",  "DECIMAL", "從高點回撤 ≥ 此 % → EXIT"});
+        DEFAULTS.put("position.review.drawdown_from_high_exit_pct",  new String[]{"7.0",  "DECIMAL", "從高點回撤 ≥ 此 % + 動能轉弱（currentPrice<VWAP 或 volumeRatio<0.8 或 volumeWeakening）→ EXIT（v2.12 Fix3 雙條件）"});
+        DEFAULTS.put("position.review.exit_volume_ratio_floor",      new String[]{"0.8",  "DECIMAL", "drawdown EXIT 動能轉弱閾值：volumeRatio 低於此值視為量縮（v2.12 Fix3）"});
 
         // ── Trailing Stop — 移動停利 ──────────────────────────────────────────
         DEFAULTS.put("position.trailing.breakeven_pct",             new String[]{"3.0",   "DECIMAL", "獲利 ≥ 此 % → 停損移到成本"});
@@ -140,8 +141,12 @@ public class ScoreConfigService {
 
         // ── Final Decision AI 研究準備度（PR-2）─────────────────────────────────
         DEFAULTS.put("final_decision.require_claude",              new String[]{"true",  "BOOLEAN", "FinalDecision 前必須等到 Claude PREMARKET 任務完成"});
-        DEFAULTS.put("final_decision.require_codex",               new String[]{"false", "BOOLEAN", "FinalDecision 前必須等到 Codex 審核（PR-2 預設 false）"});
+        DEFAULTS.put("final_decision.require_codex",               new String[]{"true",  "BOOLEAN", "FinalDecision 前必須等到 Codex 審核（Codex 未完成不得輸出正式 ENTER）"});
         DEFAULTS.put("final_decision.ai_downgrade_enabled",        new String[]{"true",  "BOOLEAN", "AI 未就緒時是否降級為 REST（false 則忽略準備度）"});
+        // v2.12 Fix4 rollback flag：bucket=SELECT_BUY_NOW 是否直接 bypass 所有 soft penalty。
+        // 預設 true（採用 v2.12 新行為）；要回退到「需 codexScore>=9.5」舊行為時改為 false。
+        DEFAULTS.put("final_decision.select_buy_now_bypass_soft_penalty.enabled",
+                new String[]{"true", "BOOLEAN", "SELECT_BUY_NOW 直接 bypass soft penalty（v2.12 Fix4；false=回舊邏輯需 codexScore>=9.5）"});
 
         // ── Theme Engine v2 / PR2: Snapshot 讀寫服務設定 ────────────────────
         // 規則（spec / shadow-mode-spec）：
