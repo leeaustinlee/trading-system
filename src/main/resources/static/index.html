@@ -9,104 +9,159 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f0f4fa;
-      --ink: #12233e;
-      --muted: #5c6d84;
+      /* Foundational */
+      --bg: #eef2f6;
+      --bg-elev: #f3f5f9;
+      --ink: #0c1626;
+      --ink-2: #2a3a52;
+      --muted: #5e7088;
       --panel: #ffffff;
-      --line: #d3dbe8;
-      --ok: #0a7a52;
-      --warn: #8c5d00;
-      --err: #a0192a;
+      --panel-2: #f8fafd;
+      --panel-dark: #131a2c;
+      --panel-dark-2: #1a2236;
+      --line: #d6dde7;
+      --line-strong: #b6c0cf;
+      --line-dark: #2a344b;
+      --ink-dark: #e6edf8;
+      --muted-dark: #8a9bb6;
+
+      /* Status (decision colors) */
+      --ok: #0e9c6e;
+      --warn: #c08400;
+      --err: #c41e35;
+      --c-buy: #0e9c6e;     --c-buy-bg: #e2f6ec;     --c-buy-bd: #99dab7;
+      --c-wait: #c08400;    --c-wait-bg: #fff4d6;    --c-wait-bd: #e6c878;
+      --c-watch: #1a5fd0;   --c-watch-bg: #e3edff;   --c-watch-bd: #a8c2f0;
+      --c-rest: #506178;    --c-rest-bg: #eef1f5;    --c-rest-bd: #cbd3df;
+      --c-blocked: #c41e35; --c-blocked-bg: #fde2e7; --c-blocked-bd: #f0a4af;
+      --c-plan: #6845c1;    --c-plan-bg: #ede5fb;    --c-plan-bd: #c8b7eb;
+
+      /* PnL (TW market: red=up, green=down) */
       --up: #c8001e;
       --dn: #007a45;
-      --accent: #0452b8;
-      --accent-2: #0c9589;
-      --accent-light: #e6f0ff;
-      --shadow: 0 4px 20px rgba(18,35,62,.07);
-      --shadow-hover: 0 8px 28px rgba(18,35,62,.12);
+
+      /* Accent */
+      --accent: #1665d8;
+      --accent-2: #07a99c;
+      --accent-light: #e3edff;
+      --accent-glow: rgba(22,101,216,.20);
+
+      /* Layout */
+      --shadow: 0 1px 0 rgba(12,22,38,.04);
+      --shadow-hover: 0 2px 12px rgba(12,22,38,.08);
+      --shadow-elev: 0 4px 16px rgba(12,22,38,.10);
       --nav-h: 56px;
-      --radius: 16px;
-      --radius-sm: 10px;
+      --radius: 6px;
+      --radius-sm: 4px;
+
+      /* Legacy aliases (do not remove) */
+      --terminal: #131a2c;
+      --terminal-2: #1a2236;
+      --terminal-line: rgba(255,255,255,.10);
+      --trade-green: #0e9c6e;
+      --trade-red: #c41e35;
+      --trade-amber: #c08400;
+      --trade-blue: #1a5fd0;
+      --trade-purple: #6845c1;
+
+      /* Mono font stack (numbers / codes) */
+      --mono: "JetBrains Mono","SF Mono","Consolas","Roboto Mono","Courier New",monospace;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html { font-size: 15px; }
+    html { font-size: 14px; }
+    html, body { max-width: 100%; overflow-x: hidden; }
     body {
       font-family: "Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
       color: var(--ink);
-      background:
-        radial-gradient(circle at 15% -5%, #cee4ff 0, transparent 40%),
-        radial-gradient(circle at 88% 18%, #c8fff5 0, transparent 32%),
-        var(--bg);
+      background: var(--bg-elev);
       min-height: 100vh;
-      line-height: 1.6;
+      line-height: 1.55;
+      overflow-x: hidden;
+      font-feature-settings: "tnum" 1, "ss01" 1;
     }
 
-    /* ── Nav ── */
+    /* ── Nav (financial slate) ── */
     nav {
       position: sticky; top: 0; z-index: 100;
       height: var(--nav-h);
-      background: rgba(255,255,255,.92);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #0c1322 0%, #111a2d 100%);
+      border-bottom: 1px solid #1f2942;
       display: flex; align-items: center;
-      padding: 0 24px; gap: 2px;
-      box-shadow: 0 1px 8px rgba(18,35,62,.05);
+      padding: 0 18px; gap: 2px;
+      max-width: 100vw;
+      overflow-x: auto;
+      overflow-y: hidden;
+      box-shadow: 0 1px 0 rgba(0,0,0,.4);
     }
+    nav::-webkit-scrollbar { display:none; }
     .nav-brand {
-      font-weight: 700; font-size: 16px; margin-right: 20px;
-      white-space: nowrap; color: var(--accent);
-      display: flex; align-items: center; gap: 6px; cursor: pointer;
+      font-weight: 800; font-size: 13px; margin-right: 16px;
+      white-space: nowrap; color: #e6edf8;
+      display: flex; align-items: center; gap: 8px; cursor: pointer;
+      letter-spacing: .8px; text-transform: uppercase;
     }
     .nav-brand::before {
-      content: "📊";
-      font-size: 18px;
+      content: "▸"; color: var(--accent-2); font-size: 13px; font-weight: 700;
     }
     .nav-tab {
       border: none; background: none; cursor: pointer;
-      padding: 7px 14px; border-radius: var(--radius-sm);
-      font-size: 14px; font-weight: 600; color: var(--muted);
-      transition: background .15s, color .15s;
+      padding: 6px 12px; border-radius: var(--radius-sm);
+      font-size: 13px; font-weight: 600; color: #9aacc8;
+      transition: background .12s, color .12s;
       white-space: nowrap;
       font-family: inherit;
     }
-    .nav-tab:hover { background: #edf2fa; color: var(--ink); }
+    .nav-tab:hover { background: rgba(255,255,255,.06); color: #e6edf8; }
     .nav-tab.active {
-      background: var(--accent-light);
-      color: var(--accent);
+      background: rgba(22,101,216,.22);
+      color: #c0d8ff;
+      box-shadow: inset 0 -2px 0 var(--accent);
     }
     .nav-spacer { flex: 1; }
-    .nav-meta { font-size: 13px; color: var(--muted); white-space: nowrap; margin-right: 8px; }
-    #btnRefreshNav {
-      border: 1px solid var(--line); border-radius: var(--radius-sm);
-      background: #fff; color: var(--ink);
-      padding: 6px 12px; cursor: pointer; font-size: 13px; font-weight: 600;
-      font-family: inherit;
-      transition: background .15s, box-shadow .15s;
+    .nav-more { position: relative; display: inline-block; z-index: 1000; }
+    #navMoreMenu {
+      position: fixed !important;
+      z-index: 2000 !important;
+      border-radius: 6px !important;
+      box-shadow: 0 12px 40px rgba(0,0,0,.5) !important;
+      border: 1px solid var(--line-dark) !important;
     }
-    #btnRefreshNav:hover { background: #f0f4fb; box-shadow: 0 2px 8px rgba(18,35,62,.08); }
+    .nav-meta {
+      font-size: 12px; color: #8197b3; white-space: nowrap;
+      margin-right: 8px; font-family: var(--mono); letter-spacing: .3px;
+    }
+    #btnRefreshNav {
+      border: 1px solid #2a3a55; border-radius: var(--radius-sm);
+      background: rgba(255,255,255,.04); color: #c8d6ed;
+      padding: 5px 11px; cursor: pointer; font-size: 12px; font-weight: 600;
+      font-family: inherit;
+      transition: background .12s, border-color .12s;
+    }
+    #btnRefreshNav:hover { background: rgba(255,255,255,.10); border-color: var(--accent); }
 
     /* ── Pages ── */
-    .page { display: none; }
+    .page { display: none; width:100%; max-width:100vw; overflow-x:hidden; }
     .page.active { display: block; }
-    .wrap { max-width: 1320px; margin: 0 auto; padding: 24px 20px 60px; }
+    .wrap { width:100%; max-width: 1480px; margin: 0 auto; padding: 18px 18px 60px; overflow-x:hidden; }
 
     /* ── Grid ── */
-    .grid { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); gap: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); gap: 12px; }
     .card {
       grid-column: span 12;
+      min-width:0;
       background: var(--panel); border: 1px solid var(--line);
       border-radius: var(--radius); box-shadow: var(--shadow);
-      padding: 20px 22px; animation: fadeUp .35s ease both;
-      transition: box-shadow .2s;
+      padding: 14px 16px;
+      transition: box-shadow .15s, border-color .15s;
     }
     .card:hover { box-shadow: var(--shadow-hover); }
     .card h2 {
-      font-size: 15px; margin-bottom: 16px; font-weight: 700;
+      font-size: 12px; margin-bottom: 12px; font-weight: 800;
       color: var(--ink); display: flex; align-items: center; gap: 8px;
-      padding-bottom: 12px; border-bottom: 1px solid var(--line);
+      padding-bottom: 9px; border-bottom: 1px solid var(--line);
+      letter-spacing: .6px; text-transform: uppercase;
     }
-    .card h2::before { content: ""; display: inline-block; width: 3px; height: 16px; background: var(--accent); border-radius: 2px; }
+    .card h2::before { content: ""; display: inline-block; width: 3px; height: 13px; background: var(--accent); border-radius: 0; }
     .span-3 { grid-column: span 12; }
     .span-4 { grid-column: span 12; }
     .span-6 { grid-column: span 12; }
@@ -123,146 +178,387 @@
     }
 
     /* ── KV ── */
-    .kv { display: grid; grid-template-columns: 130px 1fr; gap: 8px 10px; font-size: 14px; }
-    .k { color: var(--muted); font-weight: 500; display: flex; align-items: center; }
+    .kv { display: grid; grid-template-columns: 130px 1fr; gap: 6px 10px; font-size: 13px; }
+    .k {
+      color: var(--muted); font-weight: 700; display: flex; align-items: center;
+      font-size: 11px; letter-spacing: .4px; text-transform: uppercase;
+    }
     .v { font-weight: 600; word-break: break-word; }
+    .v.mono, .v[data-mono] { font-family: var(--mono); font-feature-settings: "tnum" 1; }
 
     /* ── Pill ── */
     .pill {
-      display: inline-block; padding: 3px 10px; border-radius: 999px;
-      font-size: 12px; font-weight: 700; letter-spacing: .2px;
+      display: inline-flex; align-items:center; justify-content:center; gap:4px;
+      padding: 2px 7px; border-radius: 3px;
+      font-size: 11px; font-weight: 800; letter-spacing: .3px;
+      border:1px solid transparent;
+      font-family: var(--mono); text-transform: uppercase;
     }
-    .pill.ok { background:#ffe3e7; color:#8b0014; }
-    .pill.warn { background:#fff2cc; color:#7a5000; }
-    .pill.err { background:#d3f8ea; color:#076b45; }
-    .pill.muted { background:#edf0f6; color:var(--muted); }
+    .pill.ok { background: var(--c-buy-bg); color: var(--c-buy); border-color: var(--c-buy-bd); }
+    .pill.warn { background: var(--c-wait-bg); color: var(--c-wait); border-color: var(--c-wait-bd); }
+    .pill.err { background: var(--c-rest-bg); color: var(--c-rest); border-color: var(--c-rest-bd); }
+    .pill.muted { background: var(--c-rest-bg); color: var(--c-rest); }
+    .decision-badge.enter, .decision-badge.buy { background: var(--c-buy-bg); color: var(--c-buy); border-color: var(--c-buy-bd); }
+    .decision-badge.wait { background: var(--c-wait-bg); color: var(--c-wait); border-color: var(--c-wait-bd); }
+    .decision-badge.watch { background: var(--c-watch-bg); color: var(--c-watch); border-color: var(--c-watch-bd); }
+    .decision-badge.rest { background: var(--c-rest-bg); color: var(--c-rest); border-color: var(--c-rest-bd); }
+    .decision-badge.blocked { background: var(--c-blocked-bg); color: var(--c-blocked); border-color: var(--c-blocked-bd); }
+    .decision-badge.plan { background: var(--c-plan-bg); color: var(--c-plan); border-color: var(--c-plan-bd); }
+    .session-badge { background:#f3f5fa; color:#4a5a72; border-color:#d6dee9; font-family: var(--mono); }
+    .action-badge.actionable { background: var(--c-buy-bg); color: var(--c-buy); border-color: var(--c-buy-bd); }
+    .action-badge.observe { background: var(--c-watch-bg); color: var(--c-watch); border-color: var(--c-watch-bd); }
+    .action-badge.no-action { background: var(--c-rest-bg); color: var(--c-rest); border-color: var(--c-rest-bd); }
+    .action-badge.blocked { background: var(--c-blocked-bg); color: var(--c-blocked); border-color: var(--c-blocked-bd); }
+    .monitor-badge.on, .monitor-badge.active { background: var(--c-buy-bg); color: var(--c-buy); border-color: var(--c-buy-bd); }
+    .monitor-badge.off_hard { background: var(--c-blocked-bg); color: var(--c-blocked); border-color: var(--c-blocked-bd); }
+    .monitor-badge.off_soft { background: var(--c-wait-bg); color: var(--c-wait); border-color: var(--c-wait-bd); }
+    .monitor-badge.watch { background: var(--c-watch-bg); color: var(--c-watch); border-color: var(--c-watch-bd); }
 
-    /* ── Table ── */
-    table { width: 100%; border-collapse: collapse; font-size: 14px; }
-    th,td { text-align:left; border-bottom:1px solid var(--line); padding:10px 6px; vertical-align:middle; }
+    /* ── Table (dense terminal) ── */
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    th,td { text-align:left; border-bottom:1px solid var(--line); padding:7px 8px; vertical-align:middle; }
     th {
-      color: var(--muted); font-weight: 600; font-size: 12px;
-      letter-spacing: .3px; background: #f7f9fc;
+      color: var(--muted); font-weight: 800; font-size: 11px;
+      letter-spacing: .5px; text-transform: uppercase;
+      background: #eff2f7;
+      border-bottom: 2px solid var(--line-strong);
+      position: sticky; top: 0; z-index: 1;
     }
-    th:first-child { border-radius: 8px 0 0 0; }
-    th:last-child { border-radius: 0 8px 0 0; }
+    th:first-child { border-radius: 4px 0 0 0; }
+    th:last-child { border-radius: 0 4px 0 0; }
     tr:last-child td { border-bottom: none; }
-    tr:hover td { background: #f7faff; }
-    tr.row-warn { background:#fff9e6; }
+    tr:hover td { background:#f4f7fc; }
+    tr.row-warn { background: var(--c-wait-bg); }
     tr.row-warn td { background: transparent !important; }
-    tr.row-err { background:#fff0f2; }
+    tr.row-err { background: var(--c-blocked-bg); }
     tr.row-err td { background: transparent !important; }
+    tr.row-included { box-shadow: inset 3px 0 0 var(--accent); background: rgba(22,101,216,.04); }
+    tr.row-included:hover td { background: rgba(22,101,216,.07); }
+    tr.row-excluded td { opacity: .45; }
+    td.num, th.num, .num-cell {
+      text-align: right;
+      font-family: var(--mono);
+      font-feature-settings: "tnum" 1;
+    }
+
+    /* Settings tables contain long config keys. Keep page stable, scroll inside card. */
+    #pageSettings .card { overflow-x: auto; }
+    #pageSettings .card h2 { flex-wrap: wrap; }
+    #pageSettings table { min-width: 720px; }
+    #pageSettings .settings-config-table { table-layout: fixed; }
+    #pageSettings .settings-config-table th,
+    #pageSettings .settings-config-table td { word-break: break-word; }
+    #pageSettings .toolbar { min-width: 520px; }
 
     /* ── Misc ── */
-    .mono { font-family:"Consolas","Courier New",monospace; font-size:13px; }
-    .small { font-size:13px; color:var(--muted); }
-    .num-pos { color:var(--up); font-weight:700; }
-    .num-neg { color:var(--dn); font-weight:700; }
+    .mono { font-family: var(--mono); font-size: 12.5px; font-feature-settings: "tnum" 1; }
+    .small { font-size:12px; color:var(--muted); }
+    .num-pos { color: var(--up); font-weight: 700; font-family: var(--mono); font-feature-settings: "tnum" 1; }
+    .num-neg { color: var(--dn); font-weight: 700; font-family: var(--mono); font-feature-settings: "tnum" 1; }
     .errbox {
-      background:#ffeaea; color:#7d1928; border:1px solid #f3bcbe;
-      border-radius:var(--radius-sm); padding:12px 16px; margin-bottom:14px;
-      font-size:14px; display:none;
+      background: var(--c-blocked-bg); color:#7d1928;
+      border:1px solid var(--c-blocked-bd); border-left: 3px solid var(--c-blocked);
+      border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:12px;
+      font-size:13px; display:none; font-weight:600;
     }
     .toolbar {
-      display:flex; flex-wrap:wrap; align-items:center; gap:8px;
-      margin-bottom:14px;
+      display:flex; flex-wrap:wrap; align-items:center; gap:6px;
+      margin-bottom:12px;
     }
-    .toolbar label { font-size:14px; color:var(--muted); display:flex; align-items:center; gap:6px; font-weight:500; }
+    .toolbar label { font-size:12px; color:var(--muted); display:flex; align-items:center; gap:5px; font-weight:600; }
     .toolbar input[type=date],
     .toolbar input[type=text],
+    .toolbar input[type=number],
     .toolbar select {
-      border:1px solid var(--line); border-radius:8px;
-      padding:6px 10px; font-size:14px; color:var(--ink); background:#fff;
+      border:1px solid var(--line); border-radius:var(--radius-sm);
+      padding:5px 8px; font-size:13px; color:var(--ink); background:#fff;
       font-family: inherit;
-      transition: border-color .15s, box-shadow .15s;
+      transition: border-color .12s, box-shadow .12s;
     }
     .toolbar input:focus, .toolbar select:focus {
       outline: none; border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(4,82,184,.12);
+      box-shadow: 0 0 0 2px var(--accent-glow);
     }
     .btn {
       border:1px solid var(--line); border-radius:var(--radius-sm);
-      background:#fff; color:var(--ink);
-      padding:7px 16px; cursor:pointer; font-weight:600; font-size:14px;
-      transition:transform .15s, border-color .15s, box-shadow .15s;
+      background:#fff; color:var(--ink-2);
+      padding:6px 12px; cursor:pointer; font-weight:600; font-size:13px;
+      transition: background .12s, border-color .12s;
       font-family: inherit;
     }
-    .btn:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(18,35,62,.1); border-color:#b0c4de; }
+    .btn:hover { background:#f1f5fb; border-color: var(--line-strong); }
     .btn.primary {
-      background:linear-gradient(120deg,var(--accent),#0680d8);
-      color:#fff; border:none;
-      box-shadow: 0 3px 12px rgba(4,82,184,.25);
+      background: var(--accent); color:#fff; border-color: var(--accent);
     }
-    .btn.primary:hover { box-shadow: 0 6px 20px rgba(4,82,184,.35); }
-    .btn.warn-btn { background:#fff8e6; color:#7a5000; border-color:#e8ca7a; }
-    .btn.warn-btn:hover { background:#fff3cc; }
-    .empty-row td { color:var(--muted); font-style:italic; text-align: center; }
+    .btn.primary:hover { background:#1059c4; border-color:#1059c4; }
+    .btn.warn-btn { background: var(--c-wait-bg); color: var(--c-wait); border-color: var(--c-wait-bd); }
+    .btn.warn-btn:hover { background:#ffe7a3; }
+    .btn-xs { padding: 3px 8px; font-size: 11px; }
+    .empty-row td { color:var(--muted); font-style:italic; text-align: center; padding: 14px 0; }
 
     /* ── PnL stat row ── */
-    .stat-row { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:16px; }
+    .stat-row { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
     .stat-box {
-      flex:1; min-width:130px;
+      flex:1; min-width:120px;
       border:1px solid var(--line);
       border-radius:var(--radius);
-      padding:16px 20px;
-      background: linear-gradient(145deg, #ffffff, #f5f9ff);
+      padding:12px 14px;
+      background: var(--panel);
       position: relative; overflow: hidden;
       box-shadow: var(--shadow);
     }
     .stat-box::after {
       content: "";
       position: absolute; top: 0; left: 0;
-      width: 100%; height: 3px;
-      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      width: 100%; height: 2px;
+      background: var(--accent);
     }
-    .stat-box .stat-label { font-size:12px; color:var(--muted); font-weight:600; letter-spacing:.3px; }
-    .stat-box .stat-value { font-size:24px; font-weight:700; margin-top:6px; line-height: 1.2; }
+    .stat-box .stat-label { font-size:11px; color:var(--muted); font-weight:800; letter-spacing:.5px; text-transform: uppercase; }
+    .stat-box .stat-value { font-size:22px; font-weight:800; margin-top:4px; line-height: 1.1; font-family: var(--mono); font-feature-settings: "tnum" 1; }
 
-    /* ── Decision trend chart ── */
-    .decision-chart { display:flex; align-items:flex-end; gap:6px; min-height:140px; padding:8px 2px 4px; }
-    .decision-col { width:24px; display:flex; flex-direction:column; align-items:center; gap:4px; }
-    .decision-bar { width:100%; border-radius:6px 6px 3px 3px; background:#dde4ef; transition:.2s; }
-    .decision-bar.enter { background:linear-gradient(180deg,#f07a8a,#c8001e); }
-    .decision-bar.watch { background:linear-gradient(180deg,#f5c047,#8c5d00); }
-    .decision-bar.rest  { background:linear-gradient(180deg,#8fa8c2,#3a4f68); }
-    .decision-label { font-size:10px; color:var(--muted); transform:rotate(-30deg) translateX(-4px); transform-origin:top left; width:36px; white-space:nowrap; }
-    .decision-summary { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    /* ── Decision trend chart (dark terminal) ── */
+    .decision-terminal { background: var(--panel-dark); border:1px solid var(--line-dark); border-radius:var(--radius); padding:12px; color: var(--ink-dark); }
+    .decision-status-strip { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; margin-bottom:10px; }
+    .decision-status-card { border:1px solid var(--line-dark); border-radius:var(--radius-sm); padding:7px 9px; background:rgba(255,255,255,.03); min-height:54px; }
+    .decision-status-card .label { font-size:10px; color: var(--muted-dark); font-weight:800; letter-spacing:.5px; text-transform: uppercase; }
+    .decision-status-card .value { margin-top:2px; font-size:14px; font-weight:900; color:#fff; line-height:1.1; font-family: var(--mono); }
+    .decision-status-card .sub { font-size:10px; color: var(--muted-dark); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .decision-chart { display:flex; align-items:flex-end; gap:6px; min-height:130px; padding:8px 2px 4px; overflow-x:auto; border-top:1px solid var(--line-dark); border-bottom:1px solid var(--line-dark); }
+    .decision-col { min-width:30px; display:flex; flex-direction:column; align-items:center; gap:4px; }
+    .decision-bar { width:26px; border-radius:2px 2px 0 0; background:#4a5a76; transition:.2s; border:1px solid rgba(255,255,255,.08); }
+    .decision-bar.enter { background: var(--c-buy); }
+    .decision-bar.wait { background: var(--c-wait); }
+    .decision-bar.watch { background: var(--c-watch); }
+    .decision-bar.rest { background:#4a5a76; }
+    .decision-bar.blocked { background: var(--c-blocked); }
+    .decision-bar.plan { background: var(--c-plan); }
+    .decision-col.today .decision-bar { outline:2px solid #fff; outline-offset:2px; }
+    .decision-label { font-size:9px; color: var(--muted-dark); width:40px; white-space:nowrap; text-align:center; font-family: var(--mono); }
+    .decision-summary { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+    .decision-empty { color: var(--muted-dark); font-family: var(--mono); padding:16px 0; font-size: 12px; }
+    .decision-timeline { display:grid; gap:12px; margin-top:12px; }
+    .decision-day { border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background: var(--panel); }
+    .decision-day-head {
+      display:flex; justify-content:space-between; align-items:center; gap:12px;
+      padding:8px 12px; background:#eef1f6; border-bottom:1px solid var(--line);
+      font-weight:800; font-size: 13px; font-family: var(--mono); letter-spacing: .3px;
+    }
+    .decision-day-count { font-size:11px; color:var(--muted); font-weight:700; font-family: var(--mono); }
+    .decision-feed { display:grid; }
+    .decision-item { display:grid; grid-template-columns:80px 1fr; gap:10px; padding:10px 12px; border-bottom:1px solid #e7ebf2; position:relative; }
+    .decision-item:last-child { border-bottom:0; }
+    .decision-item::before { content:""; position:absolute; left:88px; top:16px; width:7px; height:7px; border-radius:0; background:#8a9bb6; border:2px solid var(--panel); box-shadow:0 0 0 1px var(--line); }
+    .decision-item.latest-final { background: rgba(22,101,216,.05); box-shadow: inset 3px 0 0 var(--accent); }
+    .decision-item.latest-final::before { background: var(--accent); }
+    .decision-item.is-final-0930 { box-shadow: inset 3px 0 0 var(--c-buy), 0 0 0 1px var(--c-buy-bd) inset; background: rgba(14,156,110,.04); }
+    .decision-item.is-final-0930::before { background: var(--c-buy); }
+    .decision-time { font-family: var(--mono); font-size:12px; font-weight:800; color:#1c2c46; }
+    .decision-meta { display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-bottom:4px; }
+    .decision-text { color:#1c2b42; font-size:12.5px; line-height:1.5; }
+    .decision-reason { margin-top:4px; color:var(--muted); font-size:11.5px; display:flex; gap:8px; flex-wrap:wrap; }
+    .decision-counts { font-family: var(--mono); font-size:11px; color:#4a5a72; }
+    .latest-chip { background: var(--accent); color:white; border-radius:2px; padding:1px 6px; font-size:10px; font-weight:900; letter-spacing:.4px; font-family: var(--mono); }
+    .feed-panel { display:grid; gap:6px; }
+    .feed-current { border:1px solid var(--line); border-radius:var(--radius); padding:8px 11px; background:#f3f6fb; display:flex; justify-content:space-between; gap:10px; align-items:center; }
+    .feed-list { display:grid; gap:6px; }
+    .monitor-item { display:grid; grid-template-columns:70px 1fr; gap:10px; padding:8px 10px; border:1px solid var(--line); border-radius:var(--radius-sm); background: var(--panel); }
+    .monitor-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; background:#8a9bb6; }
+    .monitor-dot.on { background: var(--c-buy); }
+    .monitor-dot.off_hard { background: var(--c-blocked); }
+    .monitor-dot.off_soft { background: var(--c-wait); }
+    .monitor-dot.watch { background: var(--c-watch); }
+    .monitor-event-muted { color:#8a98aa; }
+    .summary-truncate { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 
-    /* ── AI Research ── */
+    /* ── Trading Decision Terminal dashboard ── */
+    .terminal-wrap { max-width: 1480px; }
+    .decision-hero {
+      display:grid; grid-template-columns: 1fr auto; gap:18px; align-items:center;
+      border:1px solid var(--line-dark); border-radius:var(--radius);
+      padding:18px 22px; margin-bottom:12px;
+      background: linear-gradient(135deg, #0f1626 0%, #131c30 100%);
+      color: var(--ink-dark);
+      position:relative; overflow:hidden;
+    }
+    .decision-hero::before {
+      content:""; position:absolute; top:0; left:0; bottom:0;
+      width:4px; background:#4a5a76;
+    }
+    .decision-hero.terminal-enter::before { background: var(--c-buy); }
+    .decision-hero.terminal-wait::before, .decision-hero.terminal-watch::before { background: var(--c-wait); }
+    .decision-hero.terminal-rest::before { background:#4a5a76; }
+    .decision-hero.terminal-blocked::before { background: var(--c-blocked); }
+    .decision-hero.terminal-plan::before { background: var(--c-plan); }
+    .decision-hero.terminal-enter { background: linear-gradient(135deg, #0f2a1f 0%, #131c30 100%); border-color:#1d6e4d; }
+    .decision-hero.terminal-watch, .decision-hero.terminal-wait { background: linear-gradient(135deg, #2d2106 0%, #131c30 100%); border-color:#846100; }
+    .decision-hero.terminal-rest { background: linear-gradient(135deg, #1a2236 0%, #131c30 100%); border-color: var(--line-dark); }
+    .decision-hero.terminal-blocked { background: linear-gradient(135deg, #2c0a13 0%, #131c30 100%); border-color:#921931; }
+    .decision-hero.terminal-plan { background: linear-gradient(135deg, #1c142f 0%, #131c30 100%); border-color:#4a3290; }
+    .hero-signal { font-family: var(--mono); font-size:11px; font-weight:900; letter-spacing:1.4px; color:#98abca; text-transform: uppercase; }
+    .hero-title { font-size:30px; line-height:1.1; font-weight:950; letter-spacing:.1px; margin-top:4px; color:#fff; }
+    .hero-summary { max-width:820px; margin-top:6px; color:#b3c2dc; font-size:13px; }
+    .hero-right { display:grid; grid-template-columns: repeat(3, 86px); gap:6px; align-items:stretch; }
+    .hero-metric { border:1px solid rgba(255,255,255,.12); border-radius:var(--radius-sm); padding:8px 10px; background: rgba(255,255,255,.04); }
+    .hero-metric span { display:block; color:#93a6c0; font-size:10px; font-weight:800; letter-spacing:.4px; text-transform: uppercase; }
+    .hero-metric strong { display:block; color:#fff; font-size:20px; line-height:1.1; margin-top:2px; font-family: var(--mono); font-feature-settings: "tnum" 1; }
+    .terminal-grid { display:grid; grid-template-columns: minmax(0,1.35fr) minmax(320px,.85fr); gap:12px; }
+    .terminal-panel {
+      background: var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+      padding:12px 14px; box-shadow: var(--shadow); min-width:0;
+    }
+    .panel-main { grid-row: span 2; }
+    .panel-capital, .panel-alerts { grid-column: span 2; }
+    .terminal-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid var(--line); }
+    .terminal-title { font-size:12px; font-weight:900; color: var(--ink); letter-spacing:.5px; text-transform: uppercase; }
+    .terminal-sub, .terminal-note { color: var(--muted); font-size:11px; margin-top:2px; font-family: var(--mono); }
+    .terminal-empty { color: var(--muted); border:1px dashed var(--line); border-radius:var(--radius); padding:14px; font-size:12px; text-align:center; font-family: var(--mono); }
+    .terminal-link {
+      border:1px solid var(--line); background: var(--panel); color: var(--accent);
+      font-weight:700; padding:4px 9px; border-radius:var(--radius-sm); cursor:pointer; font-size:11px;
+      font-family: inherit;
+    }
+    .terminal-link:hover { background:#f1f5fb; border-color: var(--line-strong); }
+    .action-list { display:grid; gap:8px; }
+    .trade-card {
+      display:grid; grid-template-columns: minmax(0,1fr) auto; gap:12px; align-items:stretch;
+      border:1px solid var(--line); border-left:4px solid #8a9bb6; border-radius:var(--radius); padding:10px 12px;
+      background: var(--panel); transition: border-color .15s, transform .12s;
+    }
+    .trade-card:hover { transform: translateY(-1px); border-color: var(--line-strong); }
+    .trade-card.buy { border-left-color: var(--c-buy); background: linear-gradient(90deg, rgba(14,156,110,.05) 0%, var(--panel) 60%); }
+    .trade-card.wait { border-left-color: var(--c-wait); background: linear-gradient(90deg, rgba(192,132,0,.05) 0%, var(--panel) 60%); }
+    .trade-card.watch { border-left-color: var(--c-watch); background: linear-gradient(90deg, rgba(26,95,208,.05) 0%, var(--panel) 60%); }
+    .trade-symbol { font-size:18px; font-weight:950; color: var(--ink); line-height:1.1; font-family: var(--mono); letter-spacing: .3px; }
+    .trade-name { color: var(--ink-2); font-weight:700; margin-left:6px; font-size:12px; }
+    .trade-thesis { color:#4a5a72; font-size:12px; margin-top:4px; line-height:1.45; }
+    .trade-meta { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+    .trade-action {
+      min-width:110px; text-align:center; border-radius:var(--radius-sm); padding:8px 10px;
+      font-weight:950; font-family: var(--mono); letter-spacing:.5px; font-size:12px;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    }
+    .trade-action.buy { background: var(--c-buy); color:#fff; }
+    .trade-action.wait { background: var(--c-wait); color:#fff; }
+    .trade-action.watch { background: var(--c-watch); color:#fff; }
+    .trade-action.muted { background: var(--c-rest); color:#fff; }
+    .trade-action small { display:block; font-size:9px; opacity:.85; font-weight:700; }
+    .market-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top: 4px; }
+    .market-tag {
+      border:1px solid var(--line); border-radius:var(--radius-sm); padding:6px 9px;
+      background:#f3f6fb; min-width:0;
+      display: inline-flex; flex-direction: column; gap: 1px;
+    }
+    .market-tag span { display:block; font-size:10px; color: var(--muted); font-weight:800; letter-spacing:.4px; text-transform: uppercase; }
+    .market-tag strong { display:block; font-size:13px; margin-top:1px; color: var(--ink); font-family: var(--mono); font-weight: 700; }
+    .position-cards, .watchlist-cards { display:grid; gap:6px; margin-top:8px; }
+    .position-card {
+      border:1px solid var(--line); border-left:3px solid var(--accent);
+      border-radius:var(--radius); padding:9px 11px; background: var(--panel);
+      transition: border-color .12s;
+    }
+    .position-card.profit { border-left-color: var(--up); }
+    .position-card.loss { border-left-color: var(--dn); }
+    .position-card.flat { border-left-color: var(--muted); }
+    .watch-card {
+      border:1px solid var(--line); border-radius:var(--radius); padding:8px 11px;
+      background: var(--panel);
+    }
+    .position-top, .watch-top { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
+    .position-title, .watch-title { font-weight:900; color: var(--ink); font-family: var(--mono); font-size: 14px; letter-spacing: .2px; }
+    .position-actions { display:flex; gap:4px; margin-top:7px; }
+    .position-actions button {
+      flex:1; border:1px solid var(--line); border-radius:var(--radius-sm); padding:4px 6px;
+      background: var(--panel); font-weight:700; color: var(--ink-2);
+      cursor:pointer; font-size:11px; font-family: inherit;
+    }
+    .position-actions button:hover { background:#f1f5fb; border-color: var(--line-strong); }
+    .position-actions button.recommended { background: var(--accent); color:#fff; border-color: var(--accent); }
+    .watch-score { font-family: var(--mono); font-weight:950; color: var(--accent); font-size: 14px; }
+    .watch-rank {
+      font-family: var(--mono); font-weight: 900; color: var(--muted);
+      font-size: 13px; min-width: 24px; text-align: center;
+      padding: 2px 4px; background: #eff2f7; border-radius: var(--radius-sm); margin-right: 6px;
+    }
+    .capital-strip { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:8px; margin-top:8px; }
+    .capital-strip > div {
+      border:1px solid var(--line); border-radius:var(--radius-sm); padding:9px 11px;
+      background:#f3f6fb;
+    }
+    .capital-strip span, .capital-subline span { display:block; color: var(--muted); font-size:10px; font-weight:800; letter-spacing:.4px; text-transform: uppercase; }
+    .capital-strip strong { display:block; font-size:16px; color: var(--ink); margin-top:2px; font-family: var(--mono); font-weight: 800; }
+    .capital-strip small { display:block; color: var(--muted); margin-top:1px; font-size: 11px; font-family: var(--mono); }
+    .capital-subline { display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-top:8px; color:#4a5a72; font-size: 12px; }
+    .capital-subline span { display:inline-block; }
+    .capital-subline b { color: var(--ink); font-size:12px; font-family: var(--mono); }
+
+    @media(max-width:700px) {
+      .wrap { padding: 16px 10px 44px; }
+      .card { padding: 14px 12px; }
+      .decision-hero { display:block; padding:16px; }
+      .hero-title { font-size:26px; }
+      .hero-right { grid-template-columns:repeat(3,1fr); margin-top:14px; }
+      .terminal-grid { grid-template-columns:1fr; }
+      .panel-main, .panel-capital, .panel-alerts { grid-column:auto; grid-row:auto; }
+      .capital-strip { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .decision-terminal { padding: 10px; }
+      .decision-status-strip { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .decision-status-card { min-height: 54px; padding: 7px 8px; }
+      .decision-status-card .value { font-size: 14px; }
+      .decision-item { grid-template-columns: 54px 1fr; padding: 10px 8px; }
+      .decision-item::before { left: 64px; }
+      .decision-meta { gap: 4px; }
+      .monitor-item { grid-template-columns: 58px 1fr; }
+      .pill { font-size: 11px; padding: 2px 6px; }
+    }
+
+    /* ── AI Research (research terminal) ── */
     .ai-log-item {
-      border:1px solid var(--line); border-radius:var(--radius-sm);
-      padding:14px 16px; margin-bottom:10px;
-      background: linear-gradient(145deg, #fff, #f8faff);
+      border:1px solid var(--line); border-radius:var(--radius);
+      padding:12px 14px; margin-bottom:8px;
+      background: var(--panel);
+      border-left: 3px solid var(--accent-2);
     }
     .ai-log-head {
-      font-weight:700; margin-bottom:8px; display:flex;
+      font-weight:800; margin-bottom:6px; display:flex;
       justify-content:space-between; align-items: flex-start;
-      font-size:14px; gap: 8px;
+      font-size:13px; gap: 8px;
     }
     .ai-log-head .tag {
-      background: var(--accent-light); color: var(--accent);
-      padding: 2px 8px; border-radius: 6px; font-size: 12px; white-space: nowrap;
+      background: rgba(7,169,156,.12); color: var(--accent-2);
+      padding: 2px 7px; border-radius: 3px; font-size: 11px; white-space: nowrap;
+      font-family: var(--mono); font-weight: 800; letter-spacing: .3px; text-transform: uppercase;
     }
-    .ai-log-body { color:#374860; white-space:pre-wrap; font-size:13px; line-height: 1.7; max-height:320px; overflow-y:auto; transition: max-height .3s ease; }
+    .ai-log-body {
+      color:#2c3a52; white-space:pre-wrap;
+      font-size:12.5px; line-height: 1.65;
+      max-height:320px; overflow-y:auto; transition: max-height .3s ease;
+      font-family: "SF Mono","Consolas","Roboto Mono",monospace;
+      background:#f7f9fc; padding: 10px 12px; border-radius: var(--radius-sm);
+      border:1px solid var(--line);
+    }
     .ai-log-body.expanded { max-height:none; }
-    .ai-log-toggle { margin-top:8px; font-size:12px; color:var(--accent); cursor:pointer; font-weight:600; user-select:none; }
+    .ai-log-toggle {
+      margin-top:6px; font-size:11px; color: var(--accent); cursor:pointer; font-weight:700;
+      user-select:none; font-family: var(--mono); letter-spacing: .3px;
+    }
     .ai-log-toggle:hover { text-decoration:underline; }
 
     /* ── Alert feed ── */
     .alert-item {
-      border:1px solid #f0b8c3; background:#fff0f3;
-      border-radius:var(--radius-sm); padding:10px 14px; font-size:13px; color:#7a2133;
-      border-left: 4px solid var(--err);
+      border:1px solid var(--c-blocked-bd); background: var(--c-blocked-bg);
+      border-radius:var(--radius-sm); padding:8px 12px; font-size:12px; color:#7a1929;
+      border-left: 3px solid var(--c-blocked);
     }
-    .alert-item.warn { border-color:#e8d28c; background:#fffaec; color:#7a5a12; border-left-color: var(--warn); }
-    .alert-head { font-weight:700; margin-bottom:4px; font-size:14px; }
-    .alerts { display:grid; gap:8px; }
+    .alert-item.warn { border-color: var(--c-wait-bd); background: var(--c-wait-bg); color:#7a5a12; border-left-color: var(--c-wait); }
+    .alert-head { font-weight:800; margin-bottom:3px; font-size:13px; }
+    .alerts { display:grid; gap:6px; }
 
     /* ── Section separator label ── */
     .section-title {
-      font-size: 13px; font-weight: 700; color: var(--muted);
-      text-transform: uppercase; letter-spacing: .6px;
-      margin: 16px 0 8px; display: flex; align-items: center; gap: 8px;
+      font-size: 11px; font-weight: 800; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .8px;
+      margin: 14px 0 6px; display: flex; align-items: center; gap: 8px;
+      font-family: var(--mono);
     }
     .section-title::after {
       content: ""; flex: 1; height: 1px; background: var(--line);
@@ -314,53 +610,54 @@
     /* ── Position Modals ── */
     .modal-overlay {
       position: fixed; inset: 0; z-index: 200;
-      background: rgba(18,35,62,.45);
+      background: rgba(8,14,28,.55);
       backdrop-filter: blur(4px);
       -webkit-backdrop-filter: blur(4px);
       display: flex; align-items: center; justify-content: center;
       padding: 16px;
     }
     .modal-box {
-      background: #fff; border-radius: var(--radius);
-      box-shadow: 0 12px 40px rgba(18,35,62,.22);
-      padding: 28px 28px 22px;
+      background: var(--panel); border-radius: var(--radius);
+      box-shadow: 0 12px 40px rgba(0,0,0,.45);
+      padding: 22px 22px 18px;
       min-width: 360px; max-width: 520px; width: 100%;
-      animation: fadeUp .2s ease;
+      border: 1px solid var(--line);
     }
     .modal-title {
-      font-size: 16px; font-weight: 700; margin-bottom: 20px;
+      font-size: 14px; font-weight: 800; margin-bottom: 16px;
       display: flex; justify-content: space-between; align-items: center;
+      letter-spacing: .4px; text-transform: uppercase;
     }
     .modal-close {
       background: none; border: none; cursor: pointer;
-      font-size: 20px; color: var(--muted); padding: 0 4px; line-height: 1;
+      font-size: 18px; color: var(--muted); padding: 0 4px; line-height: 1;
       font-family: inherit;
     }
     .modal-close:hover { color: var(--ink); }
     .form-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;
     }
     .form-full { grid-column: span 2; }
     .form-field label {
-      font-size: 12px; color: var(--muted); font-weight: 600;
-      display: block; margin-bottom: 4px; letter-spacing: .2px;
+      font-size: 11px; color: var(--muted); font-weight: 800;
+      display: block; margin-bottom: 3px; letter-spacing: .3px; text-transform: uppercase;
     }
     .form-field input, .form-field select, .form-field textarea {
-      width: 100%; border: 1px solid var(--line); border-radius: 8px;
-      padding: 8px 10px; font-size: 14px; color: var(--ink); background: #fff;
+      width: 100%; border: 1px solid var(--line); border-radius: var(--radius-sm);
+      padding: 7px 9px; font-size: 13px; color: var(--ink); background: var(--panel);
       font-family: inherit;
     }
     .form-field textarea { resize: vertical; min-height: 56px; }
     .form-field input:focus, .form-field select:focus, .form-field textarea:focus {
       outline: none; border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(4,82,184,.12);
+      box-shadow: 0 0 0 2px var(--accent-glow);
     }
     .modal-actions {
-      display: flex; gap: 8px; justify-content: flex-end;
-      padding-top: 16px; border-top: 1px solid var(--line);
+      display: flex; gap: 6px; justify-content: flex-end;
+      padding-top: 14px; border-top: 1px solid var(--line);
     }
-    .btn.danger { background:#fff0f2; color:var(--err); border-color:#f3bcbe; }
-    .btn.danger:hover { background:#ffe3e7; }
+    .btn.danger { background: var(--c-blocked-bg); color: var(--c-blocked); border-color: var(--c-blocked-bd); }
+    .btn.danger:hover { background:#fcd2d9; }
     /* PnL bar chart */
     .pnl-chart-wrap { display:flex; align-items:center; gap:4px; overflow-x:auto; padding:8px 0 4px; min-height:120px; }
     .pnl-col { display:flex; flex-direction:column; align-items:center; gap:2px; min-width:22px; }
@@ -385,6 +682,99 @@
     .stale-badge { background:#fff3cd; color:#856404; border:1px solid #ffc107; border-radius:6px; font-size:11px; padding:2px 7px; margin-left:8px; font-weight:600; }
     /* 損益圖表最小高度（class 為 pnl-chart-wrap，id 為 pnl-chart）*/
     #pnl-chart, .pnl-chart-wrap { min-height: 220px; }
+
+    /* ══ v2.13 UI Overhaul：Trading Terminal utilities ══ */
+
+    /* Hero ACTION semantic header */
+    .hero-action {
+      display: inline-block; padding: 2px 8px; border-radius: 3px;
+      font-family: var(--mono); font-size: 11px; font-weight: 900;
+      letter-spacing: .8px; margin-right: 8px; text-transform: uppercase;
+      background: rgba(255,255,255,.10); color: #fff;
+      border: 1px solid rgba(255,255,255,.22);
+    }
+    .decision-hero.terminal-enter .hero-action { background: var(--c-buy); color: #fff; border-color: transparent; }
+    .decision-hero.terminal-wait .hero-action,
+    .decision-hero.terminal-watch .hero-action { background: var(--c-wait); color: #fff; border-color: transparent; }
+    .decision-hero.terminal-blocked .hero-action { background: var(--c-blocked); color: #fff; border-color: transparent; }
+    .decision-hero.terminal-plan .hero-action { background: var(--c-plan); color: #fff; border-color: transparent; }
+
+    /* Scheduler / Orchestration monitor */
+    .scheduler-status-row { display:grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap:8px; margin-bottom:10px; }
+    .scheduler-status-card { border:1px solid var(--line); border-radius:var(--radius-sm); padding:8px 10px; background: var(--panel); }
+    .scheduler-status-card .lbl { font-size:10px; color: var(--muted); font-weight:800; letter-spacing:.5px; text-transform: uppercase; }
+    .scheduler-status-card .val { font-size:13px; font-weight:800; margin-top:2px; font-family: var(--mono); }
+    .task-row {
+      display:grid; grid-template-columns: 80px 1fr auto; gap:10px;
+      padding:8px 10px; border:1px solid var(--line); border-radius:var(--radius-sm);
+      background: var(--panel); margin-bottom:4px;
+    }
+    .task-row.status-PENDING { border-left:3px solid var(--muted); }
+    .task-row.status-CLAUDE_DONE { border-left:3px solid var(--accent-2); }
+    .task-row.status-CODEX_DONE { border-left:3px solid var(--accent); }
+    .task-row.status-FINALIZED, .task-row.status-FINALIZED_OK { border-left:3px solid var(--c-buy); }
+    .task-row.status-FAILED, .task-row.status-OVERTIME { border-left:3px solid var(--c-blocked); background: rgba(196,30,53,.04); }
+    .task-row .task-time { font-family: var(--mono); font-size:12px; font-weight:800; color:#2c3a52; }
+    .task-row .task-title { font-weight:700; color: var(--ink); font-size:13px; }
+    .task-row .task-meta { font-size:11px; color: var(--muted); margin-top:2px; font-family: var(--mono); }
+
+    /* Settings config table */
+    #pageSettings .config-key {
+      font-family: var(--mono); font-size:12px; color:#2a3a55; word-break: break-all;
+    }
+    #pageSettings .config-value {
+      font-family: var(--mono); font-weight:700;
+    }
+    #pageSettings .config-group-tag {
+      display:inline-block; padding:1px 6px; border-radius:3px;
+      background: var(--accent-light); color: var(--accent);
+      font-size:10px; font-weight:800; margin-right:6px; letter-spacing:.4px;
+      font-family: var(--mono); text-transform: uppercase;
+    }
+
+    /* Universal monospace numbers (auto-applied via class on JS-rendered text) */
+    .num, .ticker, .symbol-mono { font-family: var(--mono); font-feature-settings: "tnum" 1; letter-spacing: .2px; }
+
+    /* Watchlist: rank + symbol horizontal */
+    .watch-card { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
+    .watch-card.layout-stacked { display: block; }
+
+    /* Position card extras */
+    .position-meta { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; font-family: var(--mono); font-size:11.5px; color: var(--ink-2); }
+    .position-meta b { color: var(--ink); font-weight:800; }
+    .position-pnl-pos { color: var(--up); font-weight: 800; font-family: var(--mono); }
+    .position-pnl-neg { color: var(--dn); font-weight: 800; font-family: var(--mono); }
+    .position-pnl-flat { color: var(--muted); font-family: var(--mono); }
+
+    /* Trade-card metric grid (entry / stop / tp / rr) */
+    .trade-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px,1fr)); gap: 4px 8px; margin-top: 5px; font-size: 11.5px; }
+    .trade-metrics .tm-k { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .3px; text-transform: uppercase; }
+    .trade-metrics .tm-v { font-family: var(--mono); font-weight: 700; color: var(--ink); }
+
+    /* Score visual highlight (candidates / final rank) */
+    .score-bar {
+      display: inline-block; width: 60px; height: 5px; border-radius: 3px;
+      background: linear-gradient(90deg, var(--c-blocked) 0%, var(--c-wait) 50%, var(--c-buy) 100%);
+      vertical-align: middle; margin-right: 5px; position: relative;
+    }
+    .score-bar::after {
+      content: ""; position: absolute; top: -2px; bottom: -2px;
+      width: 2px; background: var(--ink); border-radius: 1px;
+      left: var(--p, 50%);
+    }
+
+    /* Strategy type badge */
+    .strategy-badge {
+      display: inline-block; padding: 2px 6px; font-size: 10px; font-weight: 800;
+      border-radius: 3px; font-family: var(--mono); letter-spacing: .3px; text-transform: uppercase;
+      background: #eef1f6; color: #4a5a72; border: 1px solid var(--line);
+    }
+    .strategy-badge.setup { background: var(--accent-light); color: var(--accent); border-color: var(--c-watch-bd); }
+    .strategy-badge.momentum, .strategy-badge.momentum_chase { background: rgba(7,169,156,.12); color: var(--accent-2); border-color: var(--accent-2); }
+
+    /* Section / page helper */
+    .pl-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:6px; }
+    .muted-text { color: var(--muted); }
   </style>
 </head>
 <body>
@@ -398,7 +788,7 @@
   <button class="nav-tab" data-page="pageDecisions">決策歷史</button>
   <button class="nav-tab" data-page="pageAiResearch">AI 研究</button>
   <button class="nav-tab" data-page="pageScheduler">排程</button>
-  <div class="nav-more" style="position:relative;display:inline-block">
+  <div class="nav-more">
     <button class="nav-tab" id="navMoreBtn" onclick="toggleNavMore()">進階 ▾</button>
     <div id="navMoreMenu" style="
       display:none; position:absolute; top:100%; left:0; z-index:200;
@@ -417,134 +807,95 @@
 
 <!-- ══════════════ PAGE: Dashboard ══════════════ -->
 <div class="page active" id="pageDashboard">
-  <div class="wrap">
+  <div class="wrap terminal-wrap">
     <div id="errBoxDash" class="errbox"></div>
 
-    <!-- 今日決策 Banner -->
-    <div id="d-decisionBanner" style="
-      display:none;
-      border-radius: 14px;
-      padding: 14px 20px;
-      margin-bottom: 18px;
-      align-items: center;
-      gap: 14px;
-      font-weight: 700;
-      font-size: 15px;
-      border: 1.5px solid;
-      animation: fadeUp .35s ease both;
-    ">
-      <span id="d-bannerIcon" style="font-size: 22px; line-height:1">—</span>
-      <div>
-        <div id="d-bannerDecision" style="font-size: 17px; font-weight: 800">載入中...</div>
-        <div id="d-bannerSummary" style="font-size: 13px; margin-top: 2px; opacity: .85"></div>
+    <section id="d-decisionHero" class="decision-hero terminal-rest">
+      <div class="hero-left">
+        <div id="d-heroSignal" class="hero-signal">LOADING</div>
+        <div id="d-heroTitle" class="hero-title">讀取今日交易指令</div>
+        <div id="d-heroSummary" class="hero-summary">正在整合市場、候選股、持倉與 AI 決策。</div>
       </div>
-      <div style="margin-left: auto; font-size: 13px; font-weight: 600; opacity: .75" id="d-bannerGrade"></div>
-    </div>
-
-    <!-- 資金總覽 stat-row -->
-    <div class="stat-row" id="d-capitalRow" style="margin-bottom:16px">
-      <div class="stat-box">
-        <div class="stat-label">可動用現金</div>
-        <div class="stat-value" id="d-capCash">-</div>
-        <button class="btn" id="d-capEditBtn" style="margin-top:8px;padding:4px 12px;font-size:12px;width:100%">⚙ 設定</button>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">持倉現值</div>
-        <div class="stat-value" id="d-capValue">-</div>
-        <div class="small" id="d-capCost" style="margin-top:4px;color:var(--muted)"></div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">未實現損益</div>
-        <div class="stat-value" id="d-capUnrealized">-</div>
-        <div class="small" id="d-capPositions" style="margin-top:4px;color:var(--muted)"></div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">總資產估計</div>
-        <div class="stat-value" id="d-capTotal">-</div>
-        <div class="small" id="d-capCashRatio" style="margin-top:4px;color:var(--muted)"></div>
-      </div>
-    </div>
-
-    <div class="grid">
-
-      <section class="card span-4">
-        <h2>市場狀態
-          <span id="d-marketStale"></span>
-          <button class="btn" id="d-marketEditBtn" style="margin-left:auto;padding:4px 12px;font-size:12px">⚙ 設定</button>
-        </h2>
-        <div class="kv">
-          <div class="k">市場等級</div><div class="v" id="d-marketGrade">-</div>
-          <div class="k">行情階段</div><div class="v" id="d-marketPhase">-</div>
-          <div class="k">決策方向</div><div class="v" id="d-marketDecision">-</div>
-          <div class="k">決策鎖定</div><div class="v" id="d-decisionLock">-</div>
-          <div class="k">時間衰減</div><div class="v" id="d-timeDecay">-</div>
-          <div class="k">整點閘道</div><div class="v" id="d-hourlyGate">-</div>
-          <div class="k">監控模式</div><div class="v" id="d-monitorMode">-</div>
+      <div class="hero-right">
+        <div class="hero-metric">
+          <span>可操作</span>
+          <strong id="d-heroSelected">0</strong>
         </div>
-      </section>
-
-      <section class="card span-4">
-        <h2>最新決策</h2>
-        <div class="kv">
-          <div class="k">最終決策</div><div class="v" id="d-finalDecision">-</div>
-          <div class="k">決策摘要</div><div class="v" id="d-finalSummary">-</div>
-          <div class="k">整點閘道</div><div class="v" id="d-latestHourly">-</div>
-          <div class="k">整點事件</div><div class="v" id="d-hourlyEvent">-</div>
-          <div class="k">監控模式</div><div class="v" id="d-latestMonitor">-</div>
-          <div class="k">監控事件</div><div class="v" id="d-monitorEvent">-</div>
-          <div class="k">最新通知</div><div class="v" id="d-latestNotice">-</div>
+        <div class="hero-metric">
+          <span>排除</span>
+          <strong id="d-heroRejected">0</strong>
         </div>
-      </section>
-
-      <section class="card span-4">
-        <h2>損益總覽</h2>
-        <div class="kv">
-          <div class="k">總已實現損益</div><div class="v" id="d-pnlRealized">-</div>
-          <div class="k">總未實現損益</div><div class="v" id="d-pnlUnrealized">-</div>
-          <div class="k">平均勝率</div><div class="v" id="d-pnlWinRate">-</div>
-          <div class="k">交易天數</div><div class="v" id="d-pnlDays">-</div>
+        <div class="hero-metric">
+          <span>最新</span>
+          <strong id="d-heroTime">--:--</strong>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <section class="card span-6">
-        <h2>候選股即時報價
-          <span class="live-status" style="margin-left:auto">
+    <div class="terminal-grid">
+      <section class="terminal-panel panel-main">
+        <div class="terminal-head">
+          <div>
+            <div class="terminal-title">今日可操作標的</div>
+            <div class="terminal-sub">BUY / WAIT / WATCH execution list</div>
+          </div>
+          <span class="live-status">
             <span class="live-dot" id="d-liveDot"></span>
             <span id="d-liveStatus">--</span>
           </span>
-        </h2>
-        <table>
-          <thead><tr>
-            <th>代號</th><th>名稱</th><th>評分</th><th>現價</th><th>漲跌</th><th>日高</th><th>日低</th><th>量(張)</th>
-          </tr></thead>
-          <tbody id="d-liveBody"></tbody>
-        </table>
+        </div>
+        <div id="d-actionList" class="action-list">
+          <div class="terminal-empty">等待候選股與即時報價...</div>
+        </div>
       </section>
 
-      <section class="card span-6">
-        <h2>持倉中</h2>
-        <table>
-          <thead><tr>
-            <th>股票</th><th>方向</th><th>股數</th><th>均價</th><th>開倉時間</th>
-          </tr></thead>
-          <tbody id="d-positionsBody"></tbody>
-        </table>
+      <section class="terminal-panel">
+        <div class="terminal-title">Market Context</div>
+        <div id="d-marketTags" class="market-tags"></div>
+        <div id="d-marketStale" class="terminal-note"></div>
+        <button class="terminal-link" id="d-marketEditBtn">調整市場快照</button>
       </section>
 
-      <section class="card span-6">
-        <h2>近期通知</h2>
-        <table>
-          <thead><tr><th>時間</th><th>類型</th><th>標題</th></tr></thead>
-          <tbody id="d-notificationsBody"></tbody>
-        </table>
+      <section class="terminal-panel">
+        <div class="terminal-title">Portfolio</div>
+        <div id="d-positionCards" class="position-cards"></div>
       </section>
 
-      <section class="card span-6">
-        <h2>系統警示</h2>
-        <div class="small" id="d-alertsMeta" style="margin-bottom:10px">無異常</div>
+      <section class="terminal-panel">
+        <div class="terminal-title">Watchlist</div>
+        <div id="d-watchlist" class="watchlist-cards"></div>
+      </section>
+
+      <section class="terminal-panel panel-capital">
+        <div class="terminal-title">Capital / PnL</div>
+        <div class="capital-strip">
+          <div><span>現金</span><strong id="d-capCash">-</strong></div>
+          <div><span>持倉現值</span><strong id="d-capValue">-</strong><small id="d-capCost"></small></div>
+          <div><span>未實現</span><strong id="d-capUnrealized">-</strong><small id="d-capPositions"></small></div>
+          <div><span>總資產</span><strong id="d-capTotal">-</strong><small id="d-capCashRatio"></small></div>
+        </div>
+        <div class="capital-subline">
+          <span>已實現 <b id="d-pnlRealized">-</b></span>
+          <span>勝率 <b id="d-pnlWinRate">-</b></span>
+          <span>交易天數 <b id="d-pnlDays">-</b></span>
+          <button class="terminal-link" id="d-capEditBtn">資金設定</button>
+        </div>
+      </section>
+
+      <section class="terminal-panel panel-alerts">
+        <div class="terminal-title">System Alerts</div>
+        <div class="small" id="d-alertsMeta">無異常</div>
         <div id="d-alertsBody" class="alerts"></div>
       </section>
+    </div>
 
+    <div style="display:none">
+      <span id="d-marketGrade"></span><span id="d-marketPhase"></span><span id="d-marketDecision"></span>
+      <span id="d-decisionLock"></span><span id="d-timeDecay"></span><span id="d-hourlyGate"></span><span id="d-monitorMode"></span>
+      <span id="d-finalDecision"></span><span id="d-finalSummary"></span><span id="d-latestHourly"></span>
+      <span id="d-hourlyEvent"></span><span id="d-latestMonitor"></span><span id="d-monitorEvent"></span>
+      <span id="d-latestNotice"></span><span id="d-pnlUnrealized"></span>
+      <span id="d-liveBody"></span><span id="d-positionsBody"></span><span id="d-notificationsBody"></span>
     </div>
   </div>
 </div>
@@ -705,22 +1056,16 @@
         <h2>最終決策趨勢
           <button class="btn primary" id="dec-btnEvaluate" style="margin-left:auto;padding:5px 14px;font-size:13px">▶ 執行今日最終決策</button>
         </h2>
-        <div id="dec-chart" class="decision-chart"></div>
-        <div id="dec-summary" class="decision-summary"></div>
-        <table style="margin-top:12px">
-          <thead><tr>
-            <th>日期</th><th>決策</th><th>入選</th><th>排除</th><th>摘要</th>
-          </tr></thead>
-          <tbody id="dec-tableBody"></tbody>
-        </table>
+        <div class="decision-terminal">
+          <div id="dec-summary" class="decision-status-strip"></div>
+          <div id="dec-chart" class="decision-chart"></div>
+        </div>
+        <div id="dec-timeline" class="decision-timeline"></div>
       </section>
 
       <section class="card span-4">
         <h2>整點閘道歷史</h2>
-        <table>
-          <thead><tr><th>時間</th><th>閘道</th><th>事件</th></tr></thead>
-          <tbody id="dec-hourlyBody"></tbody>
-        </table>
+        <div id="dec-hourlyBody" class="feed-list"></div>
       </section>
 
       <section class="card span-6">
@@ -728,10 +1073,7 @@
           <span class="small" id="dec-monitorScope" style="margin-left:8px;color:var(--muted);font-weight:normal">（今日）</span>
           <button class="btn" id="dec-monitorLoadAll" style="margin-left:auto;padding:4px 10px;font-size:12px">載入歷史</button>
         </h2>
-        <table>
-          <thead><tr><th>時間</th><th>模式</th><th>事件</th><th>動作</th></tr></thead>
-          <tbody id="dec-monitorBody"></tbody>
-        </table>
+        <div id="dec-monitorBody" class="feed-panel"></div>
       </section>
 
       <section class="card span-6">
@@ -1571,7 +1913,12 @@ function clearErr(boxId) {
 
   /* ── Nav routing ── */
   const tabs = document.querySelectorAll(".nav-tab[data-page]");
+  function resetHorizontalScroll() {
+    document.documentElement.scrollLeft = 0;
+    document.body.scrollLeft = 0;
+  }
   function activatePage(pageId) {
+    resetHorizontalScroll();
     tabs.forEach(x => x.classList.toggle("active", x.dataset.page === pageId));
     document.querySelectorAll(".page").forEach(p => p.classList.toggle("active", p.id === pageId));
     loadPageData(pageId);
@@ -1583,6 +1930,7 @@ function clearErr(boxId) {
     closeNavMore();
   }
   tabs.forEach(t => t.addEventListener("click", () => {
+    resetHorizontalScroll();
     tabs.forEach(x => x.classList.remove("active"));
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
     t.classList.add("active");
@@ -1601,14 +1949,28 @@ function clearErr(boxId) {
   window.toggleNavMore = function() {
     const m = $("navMoreMenu");
     if (!m) return;
-    m.style.display = m.style.display === "none" || !m.style.display ? "block" : "none";
+    const willOpen = m.style.display === "none" || !m.style.display;
+    if (willOpen) {
+      if (m.parentElement !== document.body) {
+        document.body.appendChild(m);
+      }
+      const btn = $("navMoreBtn");
+      const r = btn ? btn.getBoundingClientRect() : { left: 12, bottom: 52 };
+      m.style.position = "fixed";
+      m.style.top = `${Math.round(r.bottom + 6)}px`;
+      m.style.left = `${Math.max(8, Math.min(Math.round(r.left), window.innerWidth - 150))}px`;
+      m.style.zIndex = "5000";
+      m.style.display = "block";
+    } else {
+      m.style.display = "none";
+    }
   };
   window.closeNavMore = function() {
     const m = $("navMoreMenu");
     if (m) m.style.display = "none";
   };
   document.addEventListener("click", e => {
-    if (!e.target.closest(".nav-more")) closeNavMore();
+    if (!e.target.closest(".nav-more") && !e.target.closest("#navMoreMenu")) closeNavMore();
   });
 
   /* ─────────────────────────────────────────────
@@ -1670,16 +2032,173 @@ function clearErr(boxId) {
     banner.style.display = "flex";
   }
 
+  function terminalDecisionKind(decision) {
+    const d = (decision?.finalDecision || decision?.decision || decision || "REST").toString().toUpperCase();
+    if (d === "ENTER" || d === "BUY" || d === "CAN_ENTER") return "enter";
+    if (d === "WAIT") return "wait";
+    if (d === "WATCH" || d === "ONLY_WATCH") return "watch";
+    if (d === "PLAN") return "plan";
+    if (d === "BLOCKED") return "blocked";
+    return "rest";
+  }
+
+  function terminalDecisionText(decision, selectedCount) {
+    const kind = terminalDecisionKind(decision);
+    if (kind === "enter") return `今日可進場（${selectedCount || 0} 檔）`;
+    if (kind === "wait") return "等待 09:30 確認";
+    if (kind === "watch") return "僅觀察，不追價";
+    if (kind === "plan") return "明日計畫，今日不追";
+    if (kind === "blocked") return "風控阻擋";
+    return "建議休息";
+  }
+
+  function actionHintForCandidate(c, quote) {
+    const score = resolveCandidateSortScore(c);
+    const include = c?.includeInFinalPlan === true;
+    const final = c?.finalRankScore != null ? Number(c.finalRankScore) : score;
+    const pct = quote?.changePercent;
+    if (include && final >= 8.8) return { cls:"buy", label:"BUY NOW", zh:"可進場" };
+    if (final >= 7.4 || score >= 7.4) return { cls:"wait", label:"WAIT PULLBACK", zh:"等回測" };
+    if (pct != null && pct > 6) return { cls:"wait", label:"WAIT PULLBACK", zh:"過熱等回測" };
+    return { cls:"watch", label:"WATCH", zh:"觀察" };
+  }
+
+  function renderTerminalHero(dash) {
+    const hero = $("d-decisionHero");
+    if (!hero) return;
+    const decision = dash.finalDecision;
+    const payload = safeJson(decision?.payloadJson);
+    const selected = Number(payload.selected_count ?? 0);
+    const rejected = Number(payload.rejected_count ?? 0);
+    const kind = terminalDecisionKind(decision);
+    hero.className = `decision-hero terminal-${kind}`;
+    $("d-heroSignal").textContent = kind === "enter" ? "ACTION REQUIRED" : kind === "blocked" ? "RISK BLOCK" : "TRADING COMMAND";
+    $("d-heroTitle").textContent = terminalDecisionText(decision, selected);
+    $("d-heroSummary").textContent = decision?.summary || "尚無正式決策，等待 AI / Java 決策鏈完成。";
+    $("d-heroSelected").textContent = selected;
+    $("d-heroRejected").textContent = rejected;
+    $("d-heroTime").textContent = timeOnly(decision?.createdAt);
+  }
+
+  function renderMarketTerminal(dash) {
+    const box = $("d-marketTags");
+    if (!box) return;
+    const market = dash.market || {};
+    const state = dash.tradingState || {};
+    const hourly = dash.hourlyGateDecision || {};
+    const monitor = dash.monitorDecision || {};
+    box.innerHTML = `
+      <div class="market-tag"><span>市場</span><strong>${esc(zh(market.marketGrade || "-"))}</strong></div>
+      <div class="market-tag"><span>階段</span><strong>${esc(zh(market.marketPhase || "-"))}</strong></div>
+      <div class="market-tag"><span>狀態</span><strong>${esc(zh(market.decision || dash.finalDecision?.decision || "-"))}</strong></div>
+      <div class="market-tag"><span>風險</span><strong>${esc(zh(state.decisionLock || "正常"))}</strong></div>
+      <div class="market-tag"><span>監控</span><strong>${esc(monitor.monitorMode || hourly.hourlyGate || "-")}</strong></div>
+      <div class="market-tag"><span>事件</span><strong>${esc(eventLabel(monitor.triggerEvent || hourly.triggerEvent || "NONE"))}</strong></div>`;
+  }
+
+  function renderActionList(candidates, quotesBySymbol) {
+    const el = $("d-actionList");
+    if (!el) return;
+    const sorted = sortCandidatesByScore(candidates || []).slice(0, 5);
+    if (!sorted.length) {
+      el.innerHTML = `<div class="terminal-empty">目前沒有候選股。若決策為休息，今日不新增交易。</div>`;
+      return;
+    }
+    el.innerHTML = sorted.map(c => {
+      const q = quotesBySymbol?.[c.symbol];
+      const hint = actionHintForCandidate(c, q);
+      const score = resolveCandidateDisplayScore(c);
+      const chCls = changeClass(q?.changePercent);
+      const thesis = c.reason || c.themeTag || "等待 Claude / Codex 補充 thesis。";
+      return `<article class="trade-card ${hint.cls}">
+        <div>
+          <div><span class="trade-symbol">${esc(c.symbol)}</span><span class="trade-name">${esc(c.stockName || "")}</span></div>
+          <div class="trade-thesis summary-truncate" title="${esc(thesis)}">${esc(thesis)}</div>
+          <div class="trade-meta">
+            <span class="pill ${hint.cls === "buy" ? "ok" : hint.cls === "wait" ? "warn" : "muted"}">${esc(hint.zh)}</span>
+            <span class="pill session-badge">Score ${esc(score)}</span>
+            <span class="pill session-badge">${esc(c.themeTag || "未標題材")}</span>
+          </div>
+        </div>
+        <div>
+          <div class="trade-action ${hint.cls}">${esc(hint.label)}</div>
+          <div class="quote-price ${chCls === "up" ? "num-pos" : chCls === "dn" ? "num-neg" : ""}" style="text-align:right;margin-top:7px">${q ? fmtPriceWithFallback(q) : "-"}</div>
+          <div class="quote-change ${chCls}" style="text-align:right">${q ? `${changeSign(q.changeAmount)} ${changePctText(q.changePercent)}` : ""}</div>
+        </div>
+      </article>`;
+    }).join("");
+  }
+
+  function renderPositionCards(pos) {
+    const el = $("d-positionCards");
+    if (!el) return;
+    if (!pos || !pos.length) {
+      el.innerHTML = `<div class="terminal-empty">目前無持倉，等待下一個高品質 setup。</div>`;
+      return;
+    }
+    el.innerHTML = pos.map(p => {
+      const title = `${p.stockName ? esc(p.stockName) + " " : ""}<span class="mono">${esc(p.symbol)}</span>`;
+      const advice = renderAiAdvice(p, null).replace(/^<span[^>]*>|<\/span>$/g, "");
+      return `<article class="position-card">
+        <div class="position-top">
+          <div>
+            <div class="position-title">${title}</div>
+            <div class="small">股數 ${esc(p.qty)}｜均價 ${esc(p.avgCost)}｜${esc(zh(p.side))}</div>
+          </div>
+          ${strategyBadge(p.strategyType)}
+        </div>
+        <div class="trade-thesis">${esc(advice || "續抱觀察")}</div>
+        <div class="position-actions">
+          <button>HOLD</button><button>ADD</button><button>REDUCE</button>
+        </div>
+      </article>`;
+    }).join("");
+  }
+
+  function renderWatchlistCards(quotes, candidates) {
+    const el = $("d-watchlist");
+    if (!el) return;
+    const cBySymbol = {};
+    (candidates || []).forEach(c => cBySymbol[c.symbol] = c);
+    const rows = (quotes || []).slice(0, 8);
+    if (!rows.length) {
+      el.innerHTML = `<div class="terminal-empty">等待即時候選報價。</div>`;
+      return;
+    }
+    el.innerHTML = rows.map(q => {
+      const c = cBySymbol[q.symbol] || {};
+      const hint = actionHintForCandidate(c, q);
+      const cls = changeClass(q.changePercent);
+      return `<article class="watch-card">
+        <div class="watch-top">
+          <div>
+            <div class="watch-title"><span class="mono">${esc(q.symbol)}</span> ${esc(q.stockName || c.stockName || "")}</div>
+            <div class="small">${esc(c.themeTag || c.reason || "watchlist")}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="watch-score">S ${esc(resolveCandidateDisplayScore(c))}</div>
+            <div class="quote-change ${cls}">${changePctText(q.changePercent)}</div>
+          </div>
+        </div>
+        <div class="trade-meta"><span class="pill ${hint.cls === "buy" ? "ok" : hint.cls === "wait" ? "warn" : "muted"}">${esc(hint.zh)}</span><span class="quote-meta">${fmtPriceWithFallback(q)}</span></div>
+      </article>`;
+    }).join("");
+  }
+
   async function loadDashboard() {
     clearErr("errBoxDash");
     loadCapitalSummary();   // 非阻塞，獨立載入
     try {
-      const [dash, pnl, pos, notifs] = await Promise.all([
+      const [dash, pnl, pos, notifs, candidates] = await Promise.all([
         api("/api/dashboard/current"),
         api("/api/pnl/summary?days=20"),
         api("/api/positions/open?size=10"),
-        api("/api/notifications?limit=5")
+        api("/api/notifications?limit=5"),
+        api("/api/candidates/current").catch(() => [])
       ]);
+
+      renderTerminalHero(dash);
+      renderMarketTerminal(dash);
 
       setText("d-marketGrade",  dash.market?.marketGrade);
       setText("d-marketPhase",  dash.market?.marketPhase);
@@ -1720,18 +2239,19 @@ function clearErr(boxId) {
       setText("d-pnlWinRate", pnl.avgWinRate != null ? `${pnl.avgWinRate}%` : "-");
       setText("d-pnlDays", pnl.days);
 
-      // 候選股評分快取（供 Dashboard 即時報價欄顯示）
-      try {
-        const cands = await api("/api/candidates/current");
-        _candidateScoreCache = {};
-        (cands || []).forEach(c => {
-          _candidateScoreCache[c.symbol] = {
-            sortScore: resolveCandidateSortScore(c),
-            displayScore: resolveCandidateDisplayScore(c),
-            entryPriceZone: c.entryPriceZone
-          };
-        });
-      } catch(_) { /* 不影響主 Dashboard */ }
+      // 候選股評分快取（供 Dashboard / 即時報價使用）
+      _candidateScoreCache = {};
+      const sortedCandidates = sortCandidatesByScore(candidates || []);
+      _dashboardCandidates = sortedCandidates;
+      sortedCandidates.forEach(c => {
+        _candidateScoreCache[c.symbol] = {
+          sortScore: resolveCandidateSortScore(c),
+          displayScore: resolveCandidateDisplayScore(c),
+          entryPriceZone: c.entryPriceZone
+        };
+      });
+      renderActionList(sortedCandidates, {});
+      renderWatchlistCards([], sortedCandidates);
 
       // Positions
       $("d-positionsBody").innerHTML = (pos || []).length
@@ -1743,6 +2263,7 @@ function clearErr(boxId) {
             <td class="small">${fmtTime(p.openedAt)}</td>
           </tr>`).join("")
         : `<tr class="empty-row"><td colspan="5">無持倉</td></tr>`;
+      renderPositionCards(pos || []);
 
       // Notifications
       $("d-notificationsBody").innerHTML = (notifs || []).length
@@ -1779,6 +2300,7 @@ function clearErr(boxId) {
      PAGE: Candidates
   ───────────────────────────────────────────── */
   let _candidateCache = {};  // symbol -> CandidateResponse，供編輯 modal 使用
+  let _dashboardCandidates = [];
 
   function resolveCandidateSortScore(c) {
     const toNum = v => v == null ? null : Number(v);
@@ -2213,15 +2735,146 @@ function clearErr(boxId) {
   /* ─────────────────────────────────────────────
      PAGE: Decisions
   ───────────────────────────────────────────── */
+  const safeJson = (raw) => {
+    try { return raw ? JSON.parse(raw) : {}; } catch(_) { return {}; }
+  };
+
+  const timeOnly = (s) => {
+    if (!s) return "-";
+    const t = String(s).replace("T", " ");
+    return t.length >= 16 ? t.slice(11, 16) : t;
+  };
+
+  const dateKey = (s) => s ? String(s).slice(0, 10) : "-";
+
+  function decisionKind(decision) {
+    const d = (decision || "WATCH").toUpperCase();
+    if (d === "ENTER" || d === "BUY" || d === "CAN_ENTER") return "enter";
+    if (d === "WAIT") return "wait";
+    if (d === "WATCH" || d === "ONLY_WATCH") return "watch";
+    if (d === "PLAN") return "plan";
+    if (d === "BLOCKED") return "blocked";
+    return "rest";
+  }
+
+  function decisionLabel(decision) {
+    const d = (decision || "WATCH").toUpperCase();
+    const map = {
+      ENTER: "可進場",
+      BUY: "買進",
+      WAIT: "等待",
+      WATCH: "觀察",
+      REST: "休息",
+      PLAN: "計畫",
+      BLOCKED: "風控阻擋",
+      CAN_ENTER: "可進場",
+      ONLY_WATCH: "觀察"
+    };
+    return map[d] || zh(d) || d;
+  }
+
+  function sessionLabel(session) {
+    const s = (session || "-").toUpperCase();
+    const map = {
+      PREMARKET: "盤前",
+      OPENING: "09:30",
+      MIDDAY: "盤中",
+      POSTMARKET: "盤後",
+      T86_TOMORROW: "明日策略"
+    };
+    return map[s] || s;
+  }
+
+  function decisionBadgeHtml(decision) {
+    const kind = decisionKind(decision);
+    return `<span class="pill decision-badge ${kind}">${esc(decisionLabel(decision))}</span>`;
+  }
+
+  function sessionBadgeHtml(session) {
+    return `<span class="pill session-badge">${esc(sessionLabel(session))}</span>`;
+  }
+
+  function actionability(decision, fallbackReason) {
+    const kind = decisionKind(decision);
+    if (fallbackReason || kind === "blocked") return { cls: "blocked", label: "風控/降級" };
+    if (kind === "enter") return { cls: "actionable", label: "可操作" };
+    if (kind === "watch" || kind === "wait") return { cls: "observe", label: "觀察" };
+    if (kind === "plan") return { cls: "observe", label: "計畫" };
+    return { cls: "no-action", label: "不操作" };
+  }
+
+  function actionabilityBadgeHtml(decision, fallbackReason) {
+    const a = actionability(decision, fallbackReason);
+    return `<span class="pill action-badge ${a.cls}">${a.label}</span>`;
+  }
+
+  function monitorKind(v) {
+    const s = (v || "OFF").toUpperCase();
+    if (s === "ON" || s === "ACTIVE") return "on";
+    if (s === "OFF_HARD") return "off_hard";
+    if (s === "OFF_SOFT") return "off_soft";
+    if (s === "WATCH") return "watch";
+    return "off_soft";
+  }
+
+  function monitorBadgeHtml(v) {
+    const kind = monitorKind(v);
+    const labels = { on: "ON", off_hard: "OFF HARD", off_soft: "OFF SOFT", watch: "WATCH" };
+    return `<span class="pill monitor-badge ${kind}"><span class="monitor-dot ${kind}"></span>${labels[kind]}</span>`;
+  }
+
+  function eventLabel(v) {
+    const s = (v || "NONE").toUpperCase();
+    const map = {
+      NONE: "無重大事件",
+      MARKET_UPGRADE: "市場轉強",
+      MARKET_DOWNGRADE: "市場轉弱",
+      MONITOR_ON: "開啟監控",
+      MONITOR_OFF: "關閉監控",
+      REOPEN_READY: "接近重開",
+      RISK_ONLY: "只做風控",
+      NO_OPPORTUNITY: "無新機會",
+      ENTRY_READY: "接近進場",
+      BREAKOUT: "突破",
+      PULLBACK_HOLD: "回測不破",
+      STOP_LOSS: "停損",
+      TAKE_PROFIT: "停利",
+      POSITION_MANAGE: "持倉管理",
+      CANDIDATE_CANCEL: "取消觀察",
+      WATCHLIST_UPDATE: "名單更新"
+    };
+    return map[s] || zh(s) || s;
+  }
+
   function renderMonitorRows(monitor) {
-    $("dec-monitorBody").innerHTML = (monitor || []).length
-      ? (monitor || []).map(m => `<tr>
-          <td class="mono small">${fmtTime(m.createdAt)}</td>
-          <td>${esc(m.monitorMode)}</td>
-          <td class="small">${esc(m.triggerEvent)}</td>
-          <td class="small">${esc(m.action)}</td>
-        </tr>`).join("")
-      : `<tr class="empty-row"><td colspan="4">無資料</td></tr>`;
+    const rows = monitor || [];
+    const body = $("dec-monitorBody");
+    if (!rows.length) {
+      body.innerHTML = `<div class="decision-empty">今日沒有 5 分鐘監控事件</div>`;
+      return;
+    }
+    const latest = rows[0];
+    body.innerHTML = `
+      <div class="feed-current">
+        <div>
+          <div class="small">目前監控狀態</div>
+          <div style="font-weight:900">${monitorBadgeHtml(latest.monitorMode)} <span class="small">${eventLabel(latest.triggerEvent)}</span></div>
+        </div>
+        <div class="mono small">${fmtTime(latest.createdAt || latest.decisionTime)}</div>
+      </div>
+      <div class="feed-list">
+        ${rows.map(m => {
+          const kind = monitorKind(m.monitorMode);
+          return `<div class="monitor-item">
+            <div class="mono small">${timeOnly(m.createdAt || m.decisionTime)}</div>
+            <div>
+              ${monitorBadgeHtml(m.monitorMode)}
+              <span class="${(m.triggerEvent || "NONE") === "NONE" ? "monitor-event-muted" : ""} small" style="margin-left:6px">${eventLabel(m.triggerEvent)}</span>
+              <div class="small summary-truncate" title="${esc(m.action || m.summaryForLog || "")}">${esc(m.action || m.summaryForLog || "無新動作")}</div>
+            </div>
+          </div>`;
+        }).join("")}
+      </div>`;
   }
 
   function renderNotifRows(notifs) {
@@ -2248,12 +2901,14 @@ function clearErr(boxId) {
       renderDecisionChart(history || []);
 
       $("dec-hourlyBody").innerHTML = (hourly || []).length
-        ? (hourly || []).map(h => `<tr>
-            <td class="mono small">${fmtTime(h.createdAt)}</td>
-            <td>${esc(h.hourlyGate)}</td>
-            <td class="small">${esc(h.triggerEvent)}</td>
-          </tr>`).join("")
-        : `<tr class="empty-row"><td colspan="3">無資料</td></tr>`;
+        ? (hourly || []).map(h => `<div class="monitor-item">
+            <div class="mono small">${timeOnly(h.createdAt)}</div>
+            <div>
+              ${monitorBadgeHtml(h.hourlyGate)}
+              <span class="${(h.triggerEvent || "NONE") === "NONE" ? "monitor-event-muted" : ""} small" style="margin-left:6px">${eventLabel(h.triggerEvent)}</span>
+            </div>
+          </div>`).join("")
+        : `<div class="decision-empty">無整點閘道紀錄</div>`;
 
       // 預設只顯示當日
       renderMonitorRows(monitor);
@@ -2306,66 +2961,105 @@ function clearErr(boxId) {
   function renderDecisionChart(rows) {
     const chart   = $("dec-chart");
     const summary = $("dec-summary");
-    const tbody   = $("dec-tableBody");
+    const timeline = $("dec-timeline");
     if (!rows.length) {
-      chart.innerHTML = `<div class="mono" style="color:var(--muted)">無決策歷史</div>`;
+      chart.innerHTML = `<div class="decision-empty">無決策歷史</div>`;
       summary.innerHTML = "";
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="5">無資料</td></tr>`;
+      timeline.innerHTML = `<div class="decision-empty">無資料</div>`;
       return;
     }
-    let enter=0, watch=0, rest=0;
-    const max = rows.length;
-    chart.innerHTML = rows.slice().reverse().map((r, i) => {
-      const d = (r.decision||"WATCH").toUpperCase();
-      if (d==="ENTER") enter++;
-      else if (d==="REST") rest++;
-      else watch++;
-      const h = Math.max(8, Math.round(((i+1)/max)*120));
-      const cls = d==="ENTER"?"enter":d==="REST"?"rest":"watch";
-      return `<div class="decision-col" title="${esc(r.tradingDate)} ${esc(d)}">
-        <div class="decision-bar ${cls}" style="height:${h}px"></div>
+    const today = new Date().toLocaleDateString("sv-SE");
+    const latest = rows[0];
+    const counts = { enter:0, wait:0, watch:0, rest:0, plan:0, blocked:0 };
+    rows.forEach(r => counts[decisionKind(r.decision)] = (counts[decisionKind(r.decision)] || 0) + 1);
+
+    chart.innerHTML = rows.slice().reverse().slice(-18).map((r, i, arr) => {
+      const payload = safeJson(r.payloadJson);
+      const kind = decisionKind(r.decision);
+      const selected = Number(payload.selected_count ?? 0);
+      const rejected = Number(payload.rejected_count ?? 0);
+      const h = Math.max(18, Math.min(112, 28 + selected * 18 + rejected * 5));
+      const isToday = dateKey(r.tradingDate) === today || i === arr.length - 1;
+      const tip = `${dateKey(r.tradingDate)} ${timeOnly(r.createdAt)}｜${sessionLabel(r.sourceTaskType)}｜${decisionLabel(r.decision)}｜入選 ${selected} / 排除 ${rejected}`;
+      return `<div class="decision-col ${isToday ? "today" : ""}" title="${esc(tip)}">
+        <div class="decision-bar ${kind}" style="height:${h}px"></div>
         <div class="decision-label">${esc((r.tradingDate||"").slice(5))}</div>
       </div>`;
     }).join("");
+
+    const latestPayload = safeJson(latest.payloadJson);
+    const latestAction = actionability(latest.decision, latest.fallbackReason);
     summary.innerHTML = `
-      <span class="pill ok">可進場 ${enter}</span>
-      <span class="pill warn">僅觀察 ${watch}</span>
-      <span class="pill err">建議休息 ${rest}</span>`;
-    tbody.innerHTML = rows.slice(0,15).map(r => {
-      let payload = {};
-      try { payload = JSON.parse(r.payloadJson || "{}"); } catch(_) {}
-      const selCount  = payload.selected_count ?? "–";
-      const rejCount  = payload.rejected_count ?? "–";
-      const selStocks = payload.selected_stocks;
-      const rowId     = `dec-row-${r.id}`;
-      const detailId  = `dec-detail-${r.id}`;
-      const hasDetail = selStocks && selStocks.length > 0;
-      const detail = hasDetail ? `<tr id="${detailId}" style="display:none;background:var(--bg2)">
-        <td colspan="5" style="padding:8px 12px">
-          <table style="width:100%;font-size:12px">
-            <thead><tr><th>代號</th><th>名稱</th><th>進場類型</th><th>進場區間</th><th>停損</th><th>停利1</th><th>停利2</th><th>倉位建議(元)</th><th>理由</th></tr></thead>
-            <tbody>${selStocks.map(s => `<tr>
-              <td class="mono">${esc(s.stockCode)}</td>
-              <td>${esc(s.stockName)}</td>
-              <td>${esc(s.entryType)}</td>
-              <td>${esc(s.entryPriceZone)}</td>
-              <td class="num-neg">${s.stopLossPrice ?? "–"}</td>
-              <td class="num-pos">${s.takeProfit1 ?? "–"}</td>
-              <td class="num-pos">${s.takeProfit2 ?? "–"}</td>
-              <td>${s.suggestedPositionSize != null ? fmtPrice(s.suggestedPositionSize) : "–"}</td>
-              <td class="small">${esc(s.rationale)}</td>
-            </tr>`).join("")}</tbody>
-          </table>
-        </td>
-      </tr>` : "";
-      return `<tr id="${rowId}" style="cursor:${hasDetail?'pointer':'default'}"
-        ${hasDetail ? `onclick="const d=document.getElementById('${detailId}');d.style.display=d.style.display==='none'?'table-row':'none'"` : ""}>
-        <td class="mono">${fmtDate(r.tradingDate)}</td>
-        <td>${decisionPill(r.decision)}</td>
-        <td>${selCount}</td>
-        <td>${rejCount}</td>
-        <td class="small">${esc(r.summary)}</td>
-      </tr>${detail}`;
+      <div class="decision-status-card">
+        <div class="label">今日狀態</div>
+        <div class="value">${decisionBadgeHtml(latest.decision)}</div>
+        <div class="sub">${esc(latestAction.label)}</div>
+      </div>
+      <div class="decision-status-card">
+        <div class="label">最新決策時間</div>
+        <div class="value mono">${esc(timeOnly(latest.createdAt))}</div>
+        <div class="sub">${esc(sessionLabel(latest.sourceTaskType))}</div>
+      </div>
+      <div class="decision-status-card">
+        <div class="label">可操作標的</div>
+        <div class="value mono">${esc(latestPayload.selected_count ?? 0)}</div>
+        <div class="sub">selected</div>
+      </div>
+      <div class="decision-status-card">
+        <div class="label">風控 / 排除</div>
+        <div class="value mono">${esc(latestPayload.rejected_count ?? 0)}</div>
+        <div class="sub">${esc(latest.fallbackReason || "正常")}</div>
+      </div>
+      <div class="decision-status-card">
+        <div class="label">近 30 筆分布</div>
+        <div class="value mono">${counts.enter}/${counts.watch + counts.wait}/${counts.rest}</div>
+        <div class="sub">進場 / 觀察 / 休息</div>
+      </div>`;
+
+    const grouped = {};
+    rows.slice(0, 30).forEach(r => {
+      const k = dateKey(r.tradingDate);
+      if (!grouped[k]) grouped[k] = [];
+      grouped[k].push(r);
+    });
+    timeline.innerHTML = Object.entries(grouped).map(([date, items]) => {
+      const dayBody = items.map(r => {
+        const payload = safeJson(r.payloadJson);
+        const selCount  = payload.selected_count ?? 0;
+        const rejCount  = payload.rejected_count ?? 0;
+        const reasons = payload.rejected_reasons || [];
+        const isLatestFinal = r.id === latest.id || (date === today && r.sourceTaskType === "OPENING");
+        const fallback = r.fallbackReason ? `降級：${r.fallbackReason}` : "";
+        const reasonText = fallback || (Array.isArray(reasons) && reasons.length ? reasons[0] : "");
+        const titleSummary = r.summary || payload.summary || "";
+        return `<div class="decision-item ${isLatestFinal ? "latest-final" : ""}">
+          <div>
+            <div class="decision-time">${esc(timeOnly(r.createdAt))}</div>
+            <div class="small mono">#${esc(r.id)}</div>
+          </div>
+          <div>
+            <div class="decision-meta">
+              ${isLatestFinal ? `<span class="latest-chip">LATEST FINAL</span>` : ""}
+              ${sessionBadgeHtml(r.sourceTaskType)}
+              ${decisionBadgeHtml(r.decision)}
+              ${actionabilityBadgeHtml(r.decision, r.fallbackReason)}
+              <span class="decision-counts">入選 ${esc(selCount)} / 排除 ${esc(rejCount)}</span>
+            </div>
+            <div class="decision-text summary-truncate" title="${esc(titleSummary)}">${esc(titleSummary || "無摘要")}</div>
+            <div class="decision-reason">
+              <span>AI：${esc(r.aiStatus || "-")}</span>
+              ${reasonText ? `<span>原因：${esc(reasonText)}</span>` : ""}
+            </div>
+          </div>
+        </div>`;
+      }).join("");
+      return `<section class="decision-day">
+        <div class="decision-day-head">
+          <span>${esc(date)}</span>
+          <span class="decision-day-count">${items.length} 筆決策</span>
+        </div>
+        <div class="decision-feed">${dayBody}</div>
+      </section>`;
     }).join("");
   }
 
@@ -3202,6 +3896,10 @@ window.finalizeCatchup = async function(taskId) {
         if (sb !== sa) return sb - sa;
         return a.symbol.localeCompare(b.symbol);
       });
+      const quotesBySymbol = {};
+      sortedData.forEach(q => quotesBySymbol[q.symbol] = q);
+      if ($("d-actionList")) renderActionList(_dashboardCandidates, quotesBySymbol);
+      if ($("d-watchlist")) renderWatchlistCards(sortedData, _dashboardCandidates);
 
       // Dashboard 精簡版（含評分欄）— 若行數相同做逐 cell 更新，避免閃爍
       const dBody = $("d-liveBody");
