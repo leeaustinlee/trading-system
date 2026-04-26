@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
  *
  * <h3>設定 key 對應</h3>
  * <ul>
- *   <li>{@code theme.engine.v2.enabled}（預設 false）— 主 flag；關閉時 service 直接回 DISABLED</li>
+ *   <li>{@code theme.engine.v2.enabled}（v2.13 起預設 true，shadow 必開）— 主 flag；關閉時 service 直接回 DISABLED</li>
  *   <li>{@code theme.snapshot.validation.enabled}（預設 true）— schema 驗證開關</li>
  *   <li>{@code theme.snapshot.fallback.enabled}（預設 true）— stale / invalid 時是否退回到上一份有效快照</li>
  *   <li>{@code theme.snapshot.path}（預設 {@code D:\ai\stock\theme-snapshot.json}）</li>
@@ -44,7 +44,7 @@ public class ThemeSnapshotProperties {
     }
 
     public boolean engineEnabled() {
-        return config.getBoolean("theme.engine.v2.enabled", false);
+        return config.getBoolean("theme.engine.v2.enabled", true);
     }
 
     public boolean validationEnabled() {
@@ -72,7 +72,7 @@ public class ThemeSnapshotProperties {
     // ── PR4：Gate trace ──────────────────────────────────────────────────
 
     public boolean gateTraceEnabled() {
-        return config.getBoolean("theme.gate.trace.enabled", false);
+        return config.getBoolean("theme.gate.trace.enabled", true);
     }
 
     // ── PR5：Shadow mode ────────────────────────────────────────────────
@@ -80,7 +80,7 @@ public class ThemeSnapshotProperties {
     public static final String DEFAULT_SHADOW_REPORT_PATH = "D:\\ai\\stock\\logs";
 
     public boolean shadowModeEnabled() {
-        return config.getBoolean("theme.shadow_mode.enabled", false);
+        return config.getBoolean("theme.shadow_mode.enabled", true);
     }
 
     /**

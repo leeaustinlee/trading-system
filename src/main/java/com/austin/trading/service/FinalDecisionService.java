@@ -2028,10 +2028,10 @@ public class FinalDecisionService {
     private String computeBucket(BigDecimal finalRank, double rr, boolean isVetoed) {
         if (isVetoed) return "REJECTED_HARD_VETO";
         if (finalRank == null) return "REJECTED_NO_SCORE";
-        BigDecimal apMin = scoreConfigService.getDecimal("scoring.grade_ap_min", new BigDecimal("8.5"));
-        BigDecimal aMin  = scoreConfigService.getDecimal("scoring.grade_a_min",  new BigDecimal("7.6"));
-        BigDecimal bMin  = scoreConfigService.getDecimal("scoring.grade_b_min",  new BigDecimal("6.8"));
-        BigDecimal rrMinAp = scoreConfigService.getDecimal("scoring.rr_min_ap", new BigDecimal("2.2"));
+        BigDecimal apMin = scoreConfigService.getDecimal("scoring.grade_ap_min", new BigDecimal("8.8"));
+        BigDecimal aMin  = scoreConfigService.getDecimal("scoring.grade_a_min",  new BigDecimal("8.2"));
+        BigDecimal bMin  = scoreConfigService.getDecimal("scoring.grade_b_min",  new BigDecimal("7.4"));
+        BigDecimal rrMinAp = scoreConfigService.getDecimal("scoring.rr_min_ap", new BigDecimal("2.5"));
         if (finalRank.compareTo(apMin) >= 0 && rr >= rrMinAp.doubleValue()) return "A_PLUS";
         if (finalRank.compareTo(aMin)  >= 0) return "A";
         if (finalRank.compareTo(bMin)  >= 0) return "B";

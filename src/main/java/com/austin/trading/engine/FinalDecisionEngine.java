@@ -27,9 +27,9 @@ import java.util.Map;
  *
  * <h3>分級規則（全部由 score_config 控制）</h3>
  * <ul>
- *   <li>A+：final_rank_score &gt;= scoring.grade_ap_min（預設 8.5），且 RR &gt;= rr_min_ap</li>
- *   <li>A ：final_rank_score &gt;= scoring.grade_a_min（預設 7.6）</li>
- *   <li>B ：final_rank_score &gt;= scoring.grade_b_min（預設 6.8）</li>
+ *   <li>A+：final_rank_score &gt;= scoring.grade_ap_min（預設 8.8），且 RR &gt;= rr_min_ap（預設 2.5）</li>
+ *   <li>A ：final_rank_score &gt;= scoring.grade_a_min（預設 8.2）</li>
+ *   <li>B ：final_rank_score &gt;= scoring.grade_b_min（預設 7.4）</li>
  *   <li>C ：其餘</li>
  * </ul>
  *
@@ -134,10 +134,10 @@ public class FinalDecisionEngine {
         }
 
         // ── 讀取分級門檻 ──────────────────────────────────────────────────────
-        BigDecimal gradeApMin       = config.getDecimal("scoring.grade_ap_min", new BigDecimal("8.5"));
-        BigDecimal gradeAMin        = config.getDecimal("scoring.grade_a_min",  new BigDecimal("7.6"));
-        BigDecimal gradeBMin        = config.getDecimal("scoring.grade_b_min",  new BigDecimal("6.8"));
-        BigDecimal rrMinAp          = config.getDecimal("scoring.rr_min_ap",    new BigDecimal("2.2"));
+        BigDecimal gradeApMin       = config.getDecimal("scoring.grade_ap_min", new BigDecimal("8.8"));
+        BigDecimal gradeAMin        = config.getDecimal("scoring.grade_a_min",  new BigDecimal("8.2"));
+        BigDecimal gradeBMin        = config.getDecimal("scoring.grade_b_min",  new BigDecimal("7.4"));
+        BigDecimal rrMinAp          = config.getDecimal("scoring.rr_min_ap",    new BigDecimal("2.5"));
         BigDecimal mainStreamBoost  = config.getDecimal("ranking.main_stream_boost", new BigDecimal("0.3"));
         int maxPickAPlus            = config.getInt("decision.max_pick_aplus",  2);
         int maxPickA                = config.getInt("decision.max_pick_a",      2);

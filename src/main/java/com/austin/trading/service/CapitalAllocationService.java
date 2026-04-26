@@ -160,7 +160,7 @@ public class CapitalAllocationService {
                 "capital.cash_reserve_pct", new BigDecimal("0.10"));
         BigDecimal minTradeAmt = scoreConfigService.getDecimal(
                 "capital.min_trade_amount", new BigDecimal("10000"));
-        int lotSize = scoreConfigService.getInt("capital.round_lot_size", 1);
+        int lotSize = scoreConfigService.getInt("capital.round_lot_size", 1000);
         BigDecimal reduceHintPct = scoreConfigService.getDecimal(
                 "capital.reduce_hint_pct", new BigDecimal("0.40"));
 

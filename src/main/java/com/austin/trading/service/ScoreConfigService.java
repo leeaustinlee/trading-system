@@ -153,7 +153,7 @@ public class ScoreConfigService {
         //   1. `theme.engine.v2.enabled=false` 時，ThemeSnapshotService 直接回 DISABLED，
         //      下游 gate 必須以 WAIT 為 fallback，不能當作 PASS。
         //   2. Claude/Codex 對 enum 不認識的值（UNKNOWN）也不能當 PASS；由 gate layer 強制 WAIT/trace。
-        DEFAULTS.put("theme.engine.v2.enabled",             new String[]{"false", "BOOLEAN", "Theme Engine v2 主 flag；關閉時不提供 snapshot 給下游"});
+        DEFAULTS.put("theme.engine.v2.enabled",             new String[]{"true",  "BOOLEAN", "Theme Engine v2 主 flag；shadow 必開（不影響 live decision）"});
         DEFAULTS.put("theme.snapshot.validation.enabled",   new String[]{"true",  "BOOLEAN", "Theme snapshot schema validation 開關（預設開）"});
         DEFAULTS.put("theme.snapshot.fallback.enabled",     new String[]{"true",  "BOOLEAN", "Theme snapshot stale / invalid 時是否回退到最後有效快照（預設開）"});
         DEFAULTS.put("theme.snapshot.path",                 new String[]{"D:\\ai\\stock\\theme-snapshot.json", "STRING", "Theme snapshot JSON 檔路徑（Asia/Taipei）"});
@@ -169,7 +169,7 @@ public class ScoreConfigService {
         DEFAULTS.put("theme.claude.research.max_age_minutes", new String[]{"120",  "INTEGER", "Claude theme research 新鮮度門檻（分；比 snapshot 寬鬆，研究頻率較低）"});
 
         // ── Theme Engine v2 / PR4: 8-gate trace（trace-only，不影響 legacy decision）────
-        DEFAULTS.put("theme.gate.trace.enabled",            new String[]{"false", "BOOLEAN", "PR4 dual-run gate trace 開關（預設關；trace-only 不改 live decision）"});
+        DEFAULTS.put("theme.gate.trace.enabled",            new String[]{"true",  "BOOLEAN", "PR4 dual-run gate trace 開關；trace-only，不改 live decision"});
         DEFAULTS.put("theme.gate.strength_min",             new String[]{"7.0",   "DECIMAL", "G2 theme_veto：題材強度最低門檻"});
         DEFAULTS.put("theme.gate.entry_strength_min",       new String[]{"7.5",   "DECIMAL", "G3 rotation：新倉題材強度最低門檻（rotation IN 情境）"});
         DEFAULTS.put("theme.gate.rr_min",                   new String[]{"2.0",   "DECIMAL", "G6 RR gate：最低風報比（trace-only，不改 legacy RR）"});
@@ -178,7 +178,7 @@ public class ScoreConfigService {
         DEFAULTS.put("theme.gate.final_rank_a_min",         new String[]{"7.6",   "DECIMAL", "G8 final_rank：A bucket 門檻；低於視為 C bucket → BLOCK"});
 
         // ── Theme Engine v2 / PR5: shadow mode（預設全關，trace-only）────
-        DEFAULTS.put("theme.shadow_mode.enabled",           new String[]{"false", "BOOLEAN", "PR5 shadow mode：雙路徑 diff + 落 log/daily report（預設關；不影響 live decision）"});
+        DEFAULTS.put("theme.shadow_mode.enabled",           new String[]{"true",  "BOOLEAN", "PR5 shadow mode：雙路徑 diff + 落 log/daily report；不影響 live decision"});
         DEFAULTS.put("theme.shadow_report.path",            new String[]{"D:\\ai\\stock\\logs", "STRING", "PR5 shadow report 輸出資料夾（Windows 預設）"});
         DEFAULTS.put("theme.shadow_report.path_wsl",        new String[]{"",      "STRING", "PR5 shadow report 輸出資料夾（WSL/Linux override；非空時優先）"});
         DEFAULTS.put("theme.line.summary.enabled",          new String[]{"false", "BOOLEAN", "PR5 shadow report 每日 LINE 摘要開關（預設關）"});
@@ -201,7 +201,7 @@ public class ScoreConfigService {
         DEFAULTS.put("capital.theme_exposure_limit",        new String[]{"0.40",  "DECIMAL", "Capital：同題材曝險上限 (40%)"});
         DEFAULTS.put("capital.min_trade_amount",            new String[]{"10000", "DECIMAL", "Capital：單筆最低金額（< 此金額視為 CASH_RESERVE）"});
         DEFAULTS.put("capital.cash_reserve_pct",            new String[]{"0.10",  "DECIMAL", "Capital：保留現金佔權益比例 (10%)"});
-        DEFAULTS.put("capital.round_lot_size",              new String[]{"1",     "INTEGER", "Capital：股數最小單位（台股可 1 股；整張取 1000）"});
+        DEFAULTS.put("capital.round_lot_size",              new String[]{"1000",  "INTEGER", "Capital：股數最小單位（台股整股交易為 1000；零股請另走零股流程）"});
         DEFAULTS.put("capital.reduce_hint_pct",             new String[]{"0.40",  "DECIMAL", "Capital：REDUCE_SIZE_SUGGESTION 建議減碼比例中位（30–50% 取中）"});
 
         // ── v2.9 Price Gate Refactor（Gate 6/7）──────────────────────────────

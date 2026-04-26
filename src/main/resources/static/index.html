@@ -701,6 +701,49 @@
     .decision-hero.terminal-blocked .hero-action { background: var(--c-blocked); color: #fff; border-color: transparent; }
     .decision-hero.terminal-plan .hero-action { background: var(--c-plan); color: #fff; border-color: transparent; }
 
+    /* AI Status badge（Claude / Codex 即時狀態，hero 區內） */
+    .ai-status-badge { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0; }
+    .ai-status-badge .ai-pill {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:2px 8px; border-radius:10px;
+      font-family: var(--mono); font-size:11px; font-weight:800;
+      letter-spacing:.5px; text-transform:uppercase;
+      background: rgba(255,255,255,.08); color:#fff;
+      border:1px solid rgba(255,255,255,.18);
+    }
+    .ai-status-badge .ai-pill.ok      { background: rgba(46,160,67,.22); border-color: rgba(46,160,67,.55); }
+    .ai-status-badge .ai-pill.warn    { background: rgba(245,159,0,.22); border-color: rgba(245,159,0,.55); }
+    .ai-status-badge .ai-pill.alert   { background: rgba(229,53,53,.22); border-color: rgba(229,53,53,.65); }
+    .ai-status-badge .ai-pill .dot { width:6px; height:6px; border-radius:50%; background: currentColor; }
+
+    /* 持倉卡：距停損距離 bar */
+    .stop-distance-row { display:flex; align-items:center; gap:6px; margin-top:4px; font-size:11px; color: var(--muted); font-family: var(--mono); }
+    .stop-distance-bar {
+      position:relative; flex:1; height:6px; border-radius:3px;
+      background: rgba(255,255,255,.08); overflow:hidden;
+    }
+    .stop-distance-bar > span {
+      position:absolute; left:0; top:0; bottom:0;
+      background: linear-gradient(90deg, var(--dn) 0%, var(--c-wait) 50%, var(--up) 100%);
+      transition: width .25s ease;
+    }
+    .stop-distance-bar.danger > span { background: var(--dn); }
+    .stop-distance-bar.warn   > span { background: var(--c-wait); }
+    .stop-distance-bar.safe   > span { background: var(--up); }
+    .stop-distance-row b.danger { color: var(--dn); }
+    .stop-distance-row b.warn   { color: var(--c-wait); }
+    .stop-distance-row b.safe   { color: var(--up); }
+
+    /* 資金 strip：題材曝險小條 */
+    .theme-exposure-strip { margin-top:6px; padding:6px 8px; border-radius:6px;
+      background: rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.06); }
+    .theme-exposure-strip .theme-row { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:11px; font-family: var(--mono); }
+    .theme-exposure-strip .theme-row + .theme-row { margin-top:3px; }
+    .theme-exposure-strip .theme-row span { color: var(--muted); letter-spacing:.4px; text-transform: uppercase; font-weight:800; }
+    .theme-exposure-strip .theme-row b { color: var(--ink); }
+    .theme-exposure-strip .theme-row b.over { color: var(--dn); }
+    .theme-exposure-strip .theme-row b.warn { color: var(--c-wait); }
+
     /* Scheduler / Orchestration monitor */
     .scheduler-status-row { display:grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap:8px; margin-bottom:10px; }
     .scheduler-status-card { border:1px solid var(--line); border-radius:var(--radius-sm); padding:8px 10px; background: var(--panel); }
@@ -847,6 +890,8 @@
     <section id="d-decisionHero" class="decision-hero terminal-rest">
       <div class="hero-left">
         <div id="d-heroSignal" class="hero-signal">讀取中</div>
+        <div id="d-aiStatusBadge" class="ai-status-badge"
+             title="Claude / Codex 任務即時狀態，REST/WAIT 時可確認 AI 是否完成"></div>
         <div id="d-heroTitle" class="hero-title">讀取今日交易指令</div>
         <div id="d-heroSummary" class="hero-summary">正在整合市場、候選股、持倉與 AI 決策。</div>
       </div>
@@ -913,6 +958,9 @@
           <span>勝率 <b id="d-pnlWinRate">-</b></span>
           <span>交易天數 <b id="d-pnlDays">-</b></span>
           <button class="terminal-link" id="d-capEditBtn">資金設定</button>
+        </div>
+        <div id="d-themeExposure" class="theme-exposure-strip" style="display:none">
+          <div class="theme-row"><span>主題曝險</span><b id="d-themeExposureValue">-</b></div>
         </div>
       </section>
 
@@ -2160,12 +2208,47 @@ function clearErr(boxId) {
     if (signalEl) {
       signalEl.innerHTML = `<span class="hero-action">${esc(heroActionLabel(kind))}</span>${esc(heroSignalLabel(decision, kind))}`;
     }
+    renderAiStatusBadge(decision, payload);
     $("d-heroTitle").textContent = terminalDecisionText(decision, selected);
     const fallback = decision?.fallbackReason ? `（降級：${decision.fallbackReason}）` : "";
     $("d-heroSummary").textContent = (decision?.summary || "尚無正式決策，等待 AI / Java 決策鏈完成。") + fallback;
     $("d-heroSelected").textContent = selected;
     $("d-heroRejected").textContent = rejected;
     $("d-heroTime").textContent = timeOnly(decision?.createdAt);
+  }
+
+  function renderAiStatusBadge(decision, payload) {
+    const el = $("d-aiStatusBadge");
+    if (!el) return;
+    const aiStatus = (decision?.aiStatus || "").toUpperCase();
+    const fallback = (decision?.fallbackReason || "").toUpperCase();
+    // AI readiness：FULL_AI_READY / PARTIAL_AI_READY / AI_NOT_READY
+    let readyCls = "warn", readyTxt = "AI 未知";
+    if (aiStatus === "FULL_AI_READY")     { readyCls = "ok";    readyTxt = "AI 完整就緒"; }
+    else if (aiStatus === "PARTIAL_AI_READY") { readyCls = "warn";  readyTxt = "AI 部分就緒"; }
+    else if (aiStatus === "AI_NOT_READY") { readyCls = "alert"; readyTxt = "AI 未就緒"; }
+    else if (!aiStatus)                    { readyCls = "warn";  readyTxt = "AI 狀態 N/A"; }
+
+    // Claude / Codex 個別狀態（payload 若無資料則用 fallbackReason 推斷）
+    let claudeCls = "ok", claudeTxt = "Claude OK";
+    let codexCls  = "ok", codexTxt  = "Codex OK";
+    if (fallback === "CODEX_MISSING" || aiStatus === "PARTIAL_AI_READY") {
+      codexCls = "alert"; codexTxt = "Codex 未完成";
+    }
+    if (fallback === "AI_NOT_READY" || aiStatus === "AI_NOT_READY") {
+      claudeCls = "alert"; claudeTxt = "Claude 未完成";
+      codexCls  = "alert"; codexTxt  = "Codex 未完成";
+    }
+    if (fallback === "AI_TIMEOUT") {
+      claudeCls = "alert"; claudeTxt = "AI Timeout";
+      codexCls  = "alert"; codexTxt  = "AI Timeout";
+    }
+
+    el.innerHTML = `
+      <span class="ai-pill ${readyCls}"><span class="dot"></span>${esc(readyTxt)}</span>
+      <span class="ai-pill ${claudeCls}">${esc(claudeTxt)}</span>
+      <span class="ai-pill ${codexCls}">${esc(codexTxt)}</span>
+    `;
   }
 
   function renderMarketTerminal(dash) {
@@ -2252,6 +2335,7 @@ function clearErr(boxId) {
   function renderPositionCards(pos) {
     const el = $("d-positionCards");
     if (!el) return;
+    renderThemeExposure(pos);
     if (!pos || !pos.length) {
       el.innerHTML = `<div class="terminal-empty">目前無持倉，等待下一個高品質 setup。</div>`;
       return;
@@ -2272,6 +2356,7 @@ function clearErr(boxId) {
       const POS_ACTION_LABEL = { HOLD: "續抱", ADD: "加碼", REDUCE: "減碼", EXIT: "出場" };
       const btn = (code) => `<button class="${reco === code ? "recommended" : ""}" data-action="${code}"
         onclick="dashPositionAction('${code}', ${p.id || "null"}, '${esc(p.symbol || "")}')">${POS_ACTION_LABEL[code]}</button>`;
+      const stopDistanceHtml = renderStopDistanceBar(p);
       return `<article class="position-card ${cls}">
         <div class="position-top">
           <div>
@@ -2289,12 +2374,92 @@ function clearErr(boxId) {
           <span>停利1 <b>${tp1}</b></span>
           <span>停利2 <b>${tp2}</b></span>
         </div>
+        ${stopDistanceHtml}
         <div class="trade-thesis">${esc(advice || "續抱觀察")}</div>
         <div class="position-actions">
           ${btn("HOLD")}${btn("ADD")}${btn("REDUCE")}${btn("EXIT")}
         </div>
       </article>`;
     }).join("");
+  }
+
+  /**
+   * 資金 strip 下方的「題材曝險」摘要。
+   *
+   * <p>沒有專屬 API；用前端從持倉資料即時聚合：</p>
+   * <ul>
+   *   <li>把所有 OPEN 持倉依 themeTag 分組 → 加總 cost (qty × avgCost)</li>
+   *   <li>把 cost 占 total invested 的百分比，挑最高一檔顯示（top theme exposure）</li>
+   *   <li>占比 ≥ 40% 顯示 over（紅）；≥ 25% 顯示 warn（橘）；< 25% 一般</li>
+   *   <li>無持倉 / 缺 themeTag → 顯示 unavailable</li>
+   * </ul>
+   */
+  function renderThemeExposure(pos) {
+    const el = $("d-themeExposure");
+    if (!el) return;
+    if (!pos || !pos.length) {
+      el.style.display = "none";
+      return;
+    }
+    const map = {};
+    let totalCost = 0;
+    for (const p of pos) {
+      const cost = (Number(p.qty) || 0) * (Number(p.avgCost) || 0);
+      if (!Number.isFinite(cost) || cost <= 0) continue;
+      const tag = (p.themeTag && String(p.themeTag).trim()) || "未標題材";
+      map[tag] = (map[tag] || 0) + cost;
+      totalCost += cost;
+    }
+    if (totalCost <= 0) {
+      el.style.display = "block";
+      $("d-themeExposureValue").innerHTML = `<span style="color:var(--muted)">unavailable</span>`;
+      return;
+    }
+    const sorted = Object.entries(map).sort((a, b) => b[1] - a[1]);
+    const [topTag, topCost] = sorted[0];
+    const topPct = (topCost / totalCost) * 100;
+    let cls = "";
+    if (topPct >= 40) cls = "over";
+    else if (topPct >= 25) cls = "warn";
+    el.style.display = "block";
+    const allList = sorted.slice(0, 3).map(([t, c]) => {
+      const pct = ((c / totalCost) * 100).toFixed(0);
+      return `${esc(t)} ${pct}%`;
+    }).join("｜");
+    $("d-themeExposureValue").innerHTML =
+        `<b class="${cls}">${esc(topTag)}</b> ${topPct.toFixed(0)}% `
+        + `<span class="small" style="color:var(--muted)">（${allList}）</span>`;
+  }
+
+  /**
+   * 持倉卡的「離停損距離」可視化。
+   * - 離停損距離 < 2%   → danger（紅）
+   * - 2% ~ 5%           → warn（橘）
+   * - >= 5%             → safe（綠）
+   * 若資料缺失（停損 / 現價 / 均價任一缺）→ 顯示 unavailable，避免誤導。
+   */
+  function renderStopDistanceBar(p) {
+    const cur  = p?.currentPrice != null ? Number(p.currentPrice) : null;
+    const stop = p?.stopLossPrice != null ? Number(p.stopLossPrice) : null;
+    const trail = p?.trailingStopPrice != null ? Number(p.trailingStopPrice) : null;
+    if (!Number.isFinite(cur) || !Number.isFinite(stop) || stop <= 0) {
+      return `<div class="stop-distance-row"><span>離停損</span><b>資料不足</b></div>`;
+    }
+    const effStop = Number.isFinite(trail) && trail > 0 ? Math.max(stop, trail) : stop;
+    const distancePct = ((cur - effStop) / cur) * 100;
+    const absPct = Math.abs(distancePct);
+    let cls = "safe";
+    if (distancePct < 2)      cls = "danger";
+    else if (distancePct < 5) cls = "warn";
+    // Bar fill：把 0–10% 映射成 0–100%；超過 10% 視為 100%
+    const fillPct = Math.max(0, Math.min(100, distancePct * 10));
+    const trailHint = (Number.isFinite(trail) && trail > stop)
+        ? ` <span class="small">（已啟用移動停利 ${trail}）</span>` : "";
+    return `<div class="stop-distance-row">
+      <span>離停損</span>
+      <div class="stop-distance-bar ${cls}"><span style="width:${fillPct.toFixed(1)}%"></span></div>
+      <b class="${cls}">${distancePct >= 0 ? "" : "-"}${absPct.toFixed(1)}%</b>${trailHint}
+    </div>`;
   }
 
   // 首頁持倉卡 4 顆按鈕的 dispatcher。

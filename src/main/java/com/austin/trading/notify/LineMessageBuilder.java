@@ -48,6 +48,19 @@ public class LineMessageBuilder {
         sb.append("🎯 決策：").append(decisionText(decision.decision())).append("\n");
         sb.append("📌 結論：").append(clean(decision.summary())).append("\n");
 
+        // WAIT / REST：在結論下立刻列出 Top 2 阻擋原因，方便 Austin 一眼判斷
+        String dec = decision.decision() == null ? "" : decision.decision().toUpperCase(Locale.ROOT);
+        if (("WAIT".equals(dec) || "REST".equals(dec)) && !decision.rejectedReasons().isEmpty()) {
+            List<String> topReasons = pickTopBlockReasons(decision.rejectedReasons(), 2);
+            if (!topReasons.isEmpty()) {
+                sb.append("\n🚫 主要阻擋原因\n");
+                int idx = 1;
+                for (String r : topReasons) {
+                    sb.append(idx++).append(". ").append(clean(r)).append("\n");
+                }
+            }
+        }
+
         if (!decision.selectedStocks().isEmpty()) {
             sb.append("\n✅ 可執行標的\n");
             int count = 0;
@@ -398,6 +411,74 @@ public class LineMessageBuilder {
 
     private static String firstNonBlank(String first, String second) {
         return first != null && !first.isBlank() ? first : second;
+    }
+
+    /**
+     * 從 rejectedReasons 挑出 Top N 阻擋原因。
+     *
+     * <p>優先順序（最高至最低）：</p>
+     * <ol>
+     *   <li>hard gate（REGIME_BLOCKED / market_grade=C / decision_lock / portfolio gate / cooldown）</li>
+     *   <li>Codex bucket / Codex 相關（CODEX_NOT_READY / CODEX_MISSING / CODEX_*）</li>
+     *   <li>VETO_*（hard veto 與 score divergence）</li>
+     *   <li>priceGate（PRICE_GATE / belowOpen / belowPrevClose / VWAP）</li>
+     *   <li>allocation（CASH_RESERVE / RISK_BLOCK / EXPOSURE_LIMIT）</li>
+     *   <li>AI_NOT_READY / AI_TIMEOUT</li>
+     *   <li>其餘維持原順序</li>
+     * </ol>
+     */
+    static List<String> pickTopBlockReasons(List<String> reasons, int limit) {
+        if (reasons == null || reasons.isEmpty() || limit <= 0) return List.of();
+        java.util.LinkedHashMap<String, Integer> ranked = new java.util.LinkedHashMap<>();
+        for (String raw : reasons) {
+            if (raw == null || raw.isBlank()) continue;
+            String r = raw.trim();
+            String upper = r.toUpperCase(Locale.ROOT);
+            int priority;
+            if (upper.contains("REGIME_BLOCKED")
+                    || upper.contains("MARKET_GRADE=C")
+                    || upper.contains("DECISION_LOCK")
+                    || upper.contains("PORTFOLIO")
+                    || upper.contains("COOLDOWN")
+                    || upper.contains("MAX_POSITIONS")
+                    || upper.contains("PREMARKET_BIAS_ONLY")
+                    || upper.contains("LATE_SESSION_FORCE_REST")) {
+                priority = 1;
+            } else if (upper.contains("CODEX_NOT_READY")
+                    || upper.contains("CODEX_MISSING")
+                    || upper.startsWith("CODEX_")
+                    || upper.contains("BUCKET")) {
+                priority = 2;
+            } else if (upper.startsWith("VETO_")
+                    || upper.contains("SCORE_DIVERGENCE")
+                    || upper.contains("HARD_VETO")) {
+                priority = 3;
+            } else if (upper.contains("PRICEGATE")
+                    || upper.contains("PRICE_GATE")
+                    || upper.contains("BELOWOPEN")
+                    || upper.contains("BELOWPREVCLOSE")
+                    || upper.contains("VWAP")
+                    || upper.contains("WAIT_CONFIRMATION")) {
+                priority = 4;
+            } else if (upper.contains("CASH_RESERVE")
+                    || upper.contains("RISK_BLOCK")
+                    || upper.contains("EXPOSURE_LIMIT")
+                    || upper.contains("MIN_TRADE_AMOUNT")
+                    || upper.contains("ZERO_SHARES")) {
+                priority = 5;
+            } else if (upper.contains("AI_NOT_READY")
+                    || upper.contains("AI_TIMEOUT")) {
+                priority = 6;
+            } else {
+                priority = 9;
+            }
+            ranked.merge(r, priority, Math::min);
+        }
+        return ranked.entrySet().stream()
+                .sorted(java.util.Map.Entry.<String, Integer>comparingByValue())
+                .map(java.util.Map.Entry::getKey)
+                .limit(limit)
+                .toList();
     }
 
     private static String inferFallbackReason(List<String> reasons) {
