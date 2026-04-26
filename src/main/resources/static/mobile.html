@@ -384,6 +384,22 @@
 
   /* ─── value transition：dataset 換值時 .v 用 0.2s opacity 漸變（不過度） */
   .v, .pnl, .num, .mono { transition: color .15s ease }
+
+  /* ─── prefers-reduced-motion：尊重作業系統 reduce-motion 偏好 ─── */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+    .hero[data-d=ENTER] .hero-inner,
+    .hero[data-d=ALERT] .hero-inner,
+    .ai-pill.alert,
+    .badge.stop { animation: none !important }
+    .card:hover { transform: none !important }
+    .skel { animation: none !important; background: var(--bg-card) !important }
+  }
 </style>
 </head>
 <body>

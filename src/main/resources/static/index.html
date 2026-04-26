@@ -853,6 +853,25 @@
     .pl-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:6px; }
     .muted-text { color: var(--muted); }
   </style>
+  <script>
+    /* v2 mobile redirect：viewport < 480px 自動跳到手機版 mobile.html。
+     * 用戶想留在桌機版可加 ?desktop=1（會 setItem 偏好，下次也保留）。
+     * 偵測在 <head> 即時執行，避免桌機 layout 在手機上短暫閃現。 */
+    (function(){
+      try {
+        var qs = location.search || '';
+        var prefer = (sessionStorage && sessionStorage.getItem('forceDesktop'));
+        if (qs.indexOf('desktop=1') >= 0) {
+          if (sessionStorage) sessionStorage.setItem('forceDesktop', '1');
+          return;
+        }
+        if (prefer === '1') return;
+        if (window.innerWidth < 480) {
+          location.replace('/mobile.html' + (location.hash || ''));
+        }
+      } catch (e) { /* fail open，不影響桌機 */ }
+    })();
+  </script>
 </head>
 <body>
 
