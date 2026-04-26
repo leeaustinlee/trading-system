@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0e1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Trading Terminal · Mobile</title>
+<style>
+  /* ─── design tokens ──────────────────────────────────────────── */
+  :root{
+    --bg-base:#0a0e1a; --bg-card:#141a2a; --bg-card-2:#1c2438;
+    --bg-sticky:rgba(10,14,26,.94);
+    --ink:#e8edf5; --muted:#7a8499; --dim:#4d5670;
+    --c-buy:#22c55e; --c-wait:#f59f00; --c-watch:#3b82f6;
+    --c-plan:#8b5cf6; --c-rest:#6b7280; --c-stop:#ef4444;
+    --c-up:#22c55e; --c-dn:#ef4444;
+    --r:10px; --r-pill:999px;
+    --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--bg-base);color:var(--ink);
+    font:500 14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;
+    overscroll-behavior-y:contain}
+  .mono{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+  a{color:inherit;text-decoration:none}
+
+  /* ─── sticky hero ───────────────────────────────────────────── */
+  .hero{position:sticky;top:0;z-index:30;background:var(--bg-sticky);
+    backdrop-filter:saturate(160%) blur(8px);-webkit-backdrop-filter:saturate(160%) blur(8px);
+    padding:max(env(safe-area-inset-top),10px) var(--sp-4) var(--sp-3)}
+  .hero-inner{border-radius:var(--r);padding:var(--sp-3) var(--sp-4);
+    background:var(--bg-card);border-left:6px solid var(--c-rest);transition:border-color .2s}
+  .hero[data-d=ENTER] .hero-inner{border-left-color:var(--c-buy)}
+  .hero[data-d=WAIT]  .hero-inner,.hero[data-d=WATCH] .hero-inner{border-left-color:var(--c-wait)}
+  .hero[data-d=REST]  .hero-inner{border-left-color:var(--c-rest)}
+  .hero[data-d=PLAN]  .hero-inner{border-left-color:var(--c-plan)}
+  .hero[data-d=ALERT] .hero-inner{border-left-color:var(--c-stop)}
+  .hero h1{margin:0;font-size:24px;font-weight:800;letter-spacing:.5px;display:flex;align-items:baseline;gap:8px}
+  .hero h1 .count{font-size:14px;color:var(--muted);font-weight:600}
+  .hero .reason{margin-top:4px;color:var(--ink);font-size:13px;font-weight:600}
+  .hero .meta{margin-top:2px;color:var(--muted);font-size:11px;display:flex;justify-content:space-between}
+  .hero .meta .ts{font-family:var(--font-mono,inherit)}
+  .hero .topblocks{margin-top:8px;padding-top:8px;border-top:1px dashed var(--dim);display:none}
+  .hero[data-expanded=true] .topblocks{display:block}
+  .hero .topblocks ol{margin:0;padding-left:18px;font-size:12px;color:var(--muted)}
+  .hero .topblocks li{margin:2px 0}
+  .hero .chev{float:right;color:var(--muted);font-size:12px;margin-top:-22px}
+
+  /* ─── ai status ─────────────────────────────────────────────── */
+  .ai-status{padding:6px var(--sp-4);font-size:12px;color:var(--muted);
+    display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:space-between}
+  .ai-status .pills{display:flex;gap:6px;flex-wrap:wrap}
+  .ai-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--r-pill);
+    font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--ink)}
+  .ai-pill.ok    {background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.45);color:#86efac}
+  .ai-pill.warn  {background:rgba(245,159,0,.15);border-color:rgba(245,159,0,.45);color:#fcd34d}
+  .ai-pill.alert {background:rgba(239,68,68,.18);border-color:rgba(239,68,68,.55);color:#fca5a5}
+
+  /* ─── sticky filter chips ───────────────────────────────────── */
+  .filters{position:sticky;top:88px;z-index:20;background:var(--bg-sticky);
+    backdrop-filter:saturate(160%) blur(8px);padding:6px var(--sp-4) 8px;
+    display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+  .filters::-webkit-scrollbar{display:none}
+  .chip{flex-shrink:0;height:34px;padding:0 14px;border-radius:var(--r-pill);
+    background:var(--bg-card);color:var(--muted);font-weight:700;font-size:13px;
+    border:1px solid var(--dim);min-width:60px}
+  .chip.active{background:var(--ink);color:var(--bg-base);border-color:var(--ink)}
+  .chip .badge{margin-left:5px;font-size:11px;color:inherit;opacity:.7}
+
+  /* ─── content layout ────────────────────────────────────────── */
+  main{padding:0 var(--sp-4) calc(env(safe-area-inset-bottom,0) + 24px)}
+  .section{margin-top:var(--sp-4)}
+  .section-title{margin:0 0 6px;color:var(--muted);font-size:11px;font-weight:700;
+    letter-spacing:.6px;text-transform:uppercase;display:flex;justify-content:space-between}
+  .section-title .count{color:var(--dim)}
+
+  /* ─── card base ─────────────────────────────────────────────── */
+  .card{background:var(--bg-card);border-radius:var(--r);padding:12px 14px;
+    margin-bottom:var(--sp-2);border:1px solid transparent;transition:border-color .15s}
+  .card:active{background:var(--bg-card-2)}
+  .empty{color:var(--muted);font-size:13px;text-align:center;padding:18px;
+    background:var(--bg-card);border-radius:var(--r);border:1px dashed var(--dim)}
+
+  /* ─── action card ───────────────────────────────────────────── */
+  .a-card .row1{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+  .a-card .sym{font-size:16px;font-weight:800;letter-spacing:.5px}
+  .a-card .name{color:var(--muted);font-size:13px;margin-left:6px;font-weight:600}
+  .hint{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:var(--r-pill);
+    font-size:11px;font-weight:800;letter-spacing:.4px}
+  .hint.buy   {background:rgba(34,197,94,.18);color:#86efac;border:1px solid rgba(34,197,94,.45)}
+  .hint.wait  {background:rgba(245,159,0,.18);color:#fcd34d;border:1px solid rgba(245,159,0,.45)}
+  .hint.watch {background:rgba(59,130,246,.18);color:#93c5fd;border:1px solid rgba(59,130,246,.45)}
+  .hint.skip  {background:rgba(107,114,128,.18);color:#9ca3af;border:1px solid rgba(107,114,128,.45)}
+  .a-card .data{margin-top:6px;display:grid;grid-template-columns:auto 1fr;gap:3px 8px;font-size:13px}
+  .a-card .data .k{color:var(--muted);font-weight:600}
+  .a-card .data .v{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-weight:600}
+  .dist{display:inline-flex;align-items:center;gap:4px;font-weight:700}
+  .dist.danger{color:var(--c-stop)}
+  .dist.warn  {color:var(--c-wait)}
+  .dist.safe  {color:var(--c-buy)}
+  .dist.dim   {color:var(--muted)}
+  .a-card .more{display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--dim);
+    font-size:12px;color:var(--muted)}
+  .a-card.exp .more{display:block}
+  .a-card .more .meta-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:3px;font-size:12px}
+  .a-card .more .meta-row .v{color:var(--ink);font-weight:700}
+
+  /* ─── position card ─────────────────────────────────────────── */
+  .p-card .row1{display:flex;align-items:baseline;justify-content:space-between}
+  .p-card .pnl{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-weight:800;font-size:14px}
+  .p-card .pnl.up{color:var(--c-up)} .p-card .pnl.dn{color:var(--c-dn)}
+  .p-card .info{font-size:12px;color:var(--muted);margin-top:2px}
+  .p-card .stop-row{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px}
+  .p-card .stop-row .label{color:var(--muted);min-width:54px}
+  .stop-bar{position:relative;flex:1;height:6px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden}
+  .stop-bar > span{position:absolute;left:0;top:0;bottom:0;border-radius:4px}
+  .stop-bar.danger > span{background:var(--c-stop)}
+  .stop-bar.warn   > span{background:var(--c-wait)}
+  .stop-bar.safe   > span{background:var(--c-buy)}
+  .p-card .risk{font-size:11px;color:var(--muted);margin-top:2px}
+  .p-card .risk b.danger{color:var(--c-stop)}
+  .p-card .risk b.warn{color:var(--c-wait)}
+  .p-card .risk b.safe{color:var(--c-buy)}
+  .p-card .actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px}
+  .p-card .actions button{height:40px;border-radius:8px;font-size:13px;font-weight:700;
+    background:var(--bg-card-2);color:var(--ink);border:1px solid var(--dim)}
+  .p-card .actions button.hold{background:rgba(34,197,94,.12);color:#86efac;border-color:rgba(34,197,94,.4)}
+  .p-card .actions button.reduce{background:rgba(245,159,0,.12);color:#fcd34d;border-color:rgba(245,159,0,.4)}
+  .p-card .actions button.exit{background:rgba(239,68,68,.12);color:#fca5a5;border-color:rgba(239,68,68,.4)}
+  .p-card .more{display:none;margin-top:10px;padding-top:8px;border-top:1px dashed var(--dim);font-size:12px;color:var(--muted)}
+  .p-card.exp .more{display:block}
+
+  /* ─── capital strip ─────────────────────────────────────────── */
+  .capital{margin-top:var(--sp-4);background:var(--bg-card);border-radius:var(--r);
+    padding:10px 14px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+  .capital .v{color:var(--ink);font-weight:700;font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace}
+  .capital .v.up{color:var(--c-up)} .capital .v.dn{color:var(--c-dn)}
+  .theme-exposure{display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--dim);font-size:11px}
+  .theme-exposure .row{display:flex;justify-content:space-between}
+  .theme-exposure .row b.over{color:var(--c-stop)}
+  .theme-exposure .row b.warn{color:var(--c-wait)}
+  .capital.exp .theme-exposure{display:block}
+
+  /* ─── footer ────────────────────────────────────────────────── */
+  footer{margin-top:var(--sp-4);font-size:11px;color:var(--muted);
+    text-align:center;display:flex;justify-content:center;gap:10px;align-items:center}
+  footer button.refresh{padding:6px 12px;border-radius:var(--r-pill);
+    background:var(--bg-card);color:var(--muted);border:1px solid var(--dim);font-size:11px}
+  footer button.refresh:active{background:var(--bg-card-2)}
+
+  /* ─── error / loading ───────────────────────────────────────── */
+  .err{color:var(--c-stop);font-size:11px;margin-top:4px}
+  .skel{background:linear-gradient(90deg,var(--bg-card),var(--bg-card-2),var(--bg-card));
+    background-size:200% 100%;animation:skel 1.4s linear infinite;border-radius:var(--r);
+    height:18px;margin:4px 0}
+  @keyframes skel{0%{background-position:200% 0}100%{background-position:-200% 0}}
+</style>
+</head>
+<body>
+
+<!-- ═══ A. Decision Hero (sticky) ═══ -->
+<header class="hero" id="hero" data-d="REST">
+  <div class="hero-inner" id="heroInner">
+    <h1>
+      <span id="heroIcon">⚫</span>
+      <span id="heroTitle">讀取中…</span>
+      <span class="count" id="heroCount"></span>
+      <span class="chev" id="heroChev"></span>
+    </h1>
+    <div class="reason" id="heroReason">正在抓取今日決策…</div>
+    <div class="meta">
+      <span id="heroMeta">—</span>
+      <span class="ts mono" id="heroTime">--:--</span>
+    </div>
+    <div class="topblocks">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">主要阻擋原因</div>
+      <ol id="heroBlockList"></ol>
+    </div>
+  </div>
+</header>
+
+<!-- ═══ B. AI Status (one line) ═══ -->
+<div class="ai-status" id="aiStatus">
+  <div class="pills">
+    <span class="ai-pill" id="aiReadyPill">AI 載入中</span>
+    <span class="ai-pill" id="aiClaudePill">Claude</span>
+    <span class="ai-pill" id="aiCodexPill">Codex</span>
+  </div>
+  <span class="mono" id="aiTime">--:--</span>
+</div>
+
+<!-- ═══ C. Quick filter chips ═══ -->
+<div class="filters" id="filters">
+  <button class="chip active" data-f="all">全部</button>
+  <button class="chip" data-f="buy">可買 <span class="badge" id="bgBuy">0</span></button>
+  <button class="chip" data-f="wait">等待 <span class="badge" id="bgWait">0</span></button>
+  <button class="chip" data-f="position">持倉 <span class="badge" id="bgPos">0</span></button>
+</div>
+
+<main>
+  <!-- D. Action list -->
+  <section class="section" id="secActions">
+    <div class="section-title">行動清單 <span class="count" id="actionCount"></span></div>
+    <div id="actionList">
+      <div class="card skel" style="height:80px"></div>
+      <div class="card skel" style="height:80px"></div>
+    </div>
+  </section>
+
+  <!-- E. Position list -->
+  <section class="section" id="secPositions">
+    <div class="section-title">持倉 <span class="count" id="positionCount"></span></div>
+    <div id="positionList">
+      <div class="card skel" style="height:90px"></div>
+    </div>
+  </section>
+
+  <!-- F. Capital strip -->
+  <div class="capital" id="capStrip" onclick="toggleClass(this,'exp')">
+    <span>資金</span><span class="v" id="capTotal">—</span>
+    <span>現金比</span><span class="v" id="capRatio">—</span>
+    <span>未實現</span><span class="v mono" id="capUnreal">—</span>
+    <div class="theme-exposure" id="themeExposure"></div>
+  </div>
+
+  <!-- G. Footer -->
+  <footer>
+    <span>更新：<span class="mono" id="lastUpdate">--:--</span></span>
+    <button class="refresh" id="btnRefresh">↻ 重新整理</button>
+    <span>來源：Trading System</span>
+  </footer>
+</main>
+
+<script>
+/* ─── tiny utils ────────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+const fmt = (n,d=0)=> n==null||!isFinite(n) ? '—' : Number(n).toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:d});
+const fmtPct = (n,d=1)=> n==null||!isFinite(n) ? '—' : (n>=0?'+':'')+Number(n).toFixed(d)+'%';
+const fmtPrice = n => n==null||!isFinite(n) ? '—' : Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
+const truncate = (s,n)=> !s?'': (String(s).length>n ? String(s).slice(0,n)+'…' : String(s));
+const HHmm = iso => { if(!iso) return '--:--'; try{return new Date(iso).toTimeString().slice(0,5);}catch(e){return '--:--';} };
+const HHmmss = iso => { if(!iso) return '--:--:--'; try{return new Date(iso).toTimeString().slice(0,8);}catch(e){return '--:--:--';} };
+const safeJson = s => { try{ return s?JSON.parse(s):{}; }catch(e){ return {}; } };
+const toggleClass = (el,cls)=> el.classList.toggle(cls);
+
+async function safeFetch(url){
+  try{
+    const r = await fetch(url,{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return await r.json();
+  }catch(e){ console.warn('fetch fail',url,e.message); return null; }
+}
+
+/* ─── state ─────────────────────────────────────────────────── */
+const S = { dashboard:null, candidates:[], positions:[], capital:null, quotes:{}, filter:'all' };
+S.filter = (localStorage.getItem('mobile.filter') || 'all');
+
+/* ─── classify candidate hint ──────────────────────────────── */
+function classifyCandidate(c, quote){
+  if (c.isVetoed) return {cls:'skip', label:'⚫ 排除'};
+  const score = Number(c.finalRankScore ?? c.score ?? 0);
+  const include = c.includeInFinalPlan === true;
+  // Use scoring.grade_ap_min=8.8 as primary buy gate; raw "score" can be > 20 (legacy heuristic)
+  const buyByFinal = include && score >= 8.8;
+  const buyByLegacy = include && score >= 22;            // fallback if finalRankScore null but raw score high
+  if (buyByFinal || buyByLegacy) return {cls:'buy', label:'🟢 可進場'};
+  if (score >= 7.4 || score >= 18) return {cls:'wait', label:'🟡 等回測'};
+  // 過熱判斷
+  if (quote && quote.changePercent > 6) return {cls:'wait', label:'🟡 過熱等回測'};
+  return {cls:'watch', label:'🔵 觀察'};
+}
+
+function distToStop(currentPrice, stopLossPrice){
+  const cp = Number(currentPrice), sl = Number(stopLossPrice);
+  if (!isFinite(cp) || !isFinite(sl) || sl<=0) return {pct:null, cls:'dim', text:'資料不足'};
+  const pct = (cp - sl) / cp * 100;
+  const cls = pct < 2 ? 'danger' : pct < 5 ? 'warn' : 'safe';
+  return {pct, cls, text:fmtPct(pct,1)};
+}
+
+/* ─── A. Decision Hero ──────────────────────────────────────── */
+function renderHero(){
+  const fd = S.dashboard?.finalDecision;
+  const hero = $('hero');
+  if (!fd){
+    hero.dataset.d = 'ALERT';
+    $('heroIcon').textContent='🔴'; $('heroTitle').textContent='AI 未就緒';
+    $('heroCount').textContent=''; $('heroReason').textContent='等待今日決策資料…';
+    $('heroMeta').textContent='—'; $('heroTime').textContent='--:--'; $('heroChev').textContent='';
+    return;
+  }
+  const decision = (fd.decision||'').toUpperCase();
+  const payload = safeJson(fd.payloadJson);
+  const selectedCount = payload.selected_count ?? (payload.selected_stocks?.length || 0);
+  const rejected = payload.rejected_reasons || [];
+
+  let icon='⚫', title='REST', titleSuffix='';
+  if (decision==='ENTER'){ icon='🟢'; title='ENTER'; titleSuffix=`（${selectedCount} 檔）`; }
+  else if (decision==='WATCH'||decision==='WAIT'){ icon='🟡'; title='WAIT'; titleSuffix='（不追）'; }
+  else if (decision==='REST'){ icon='⚫'; title='REST'; titleSuffix='（休息）'; }
+  else if (decision==='PLAN'){ icon='🔵'; title='PLAN'; titleSuffix='（盤後規劃）'; }
+  else { icon='⚫'; title=decision || '—'; }
+
+  hero.dataset.d = (decision==='WATCH'?'WAIT':decision) || 'REST';
+  $('heroIcon').textContent = icon;
+  $('heroTitle').textContent = title;
+  $('heroCount').textContent = titleSuffix;
+
+  // 原因（≤ 10 字）
+  let reason = '';
+  if (decision==='ENTER' && payload.selected_stocks?.length){
+    reason = payload.selected_stocks[0].rationale || payload.selected_stocks[0].stockName || '';
+  }
+  reason = reason || fd.summary || '';
+  reason = truncate(reason, 16);
+  $('heroReason').textContent = reason || (decision==='ENTER' ? '可執行' : '今日休息');
+
+  $('heroMeta').textContent = `來源 ${fd.sourceTaskType || '—'}`;
+  $('heroTime').textContent = HHmm(fd.createdAt);
+
+  // Top 2 阻擋原因（WAIT/REST 才顯示）
+  $('heroChev').textContent = (decision==='WAIT'||decision==='WATCH'||decision==='REST') && rejected.length ? '▾ 看原因' : '';
+  const ol = $('heroBlockList');
+  ol.innerHTML = '';
+  if (rejected.length){
+    pickTopReasons(rejected, 2).forEach(r => {
+      const li = document.createElement('li'); li.textContent = truncate(r, 30); ol.appendChild(li);
+    });
+  }
+}
+$('hero').addEventListener('click', () => {
+  const d = $('hero').dataset.d;
+  if (d==='WAIT' || d==='REST') $('hero').dataset.expanded = $('hero').dataset.expanded==='true' ? 'false' : 'true';
+});
+
+// 與 LineMessageBuilder.pickTopBlockReasons 同邏輯
+function pickTopReasons(reasons, limit){
+  const out = new Map();
+  for (const raw of reasons||[]){
+    if (!raw) continue;
+    const r = String(raw).trim();
+    if (!r) continue;
+    const u = r.toUpperCase();
+    let p = 9;
+    if (u.includes('REGIME_BLOCKED')||u.includes('MARKET_GRADE=C')||u.includes('DECISION_LOCK')||u.includes('PORTFOLIO')||u.includes('COOLDOWN')||u.includes('MAX_POSITIONS')||u.includes('PREMARKET_BIAS_ONLY')||u.includes('LATE_SESSION_FORCE_REST')) p=1;
+    else if (u.includes('CODEX_NOT_READY')||u.includes('CODEX_MISSING')||u.startsWith('CODEX_')||u.includes('BUCKET')) p=2;
+    else if (u.startsWith('VETO_')||u.includes('SCORE_DIVERGENCE')||u.includes('HARD_VETO')) p=3;
+    else if (u.includes('PRICEGATE')||u.includes('PRICE_GATE')||u.includes('BELOWOPEN')||u.includes('BELOWPREVCLOSE')||u.includes('VWAP')||u.includes('WAIT_CONFIRMATION')) p=4;
+    else if (u.includes('CASH_RESERVE')||u.includes('RISK_BLOCK')||u.includes('EXPOSURE_LIMIT')||u.includes('MIN_TRADE_AMOUNT')||u.includes('ZERO_SHARES')) p=5;
+    else if (u.includes('AI_NOT_READY')||u.includes('AI_TIMEOUT')) p=6;
+    if (!out.has(r) || out.get(r) > p) out.set(r,p);
+  }
+  return [...out.entries()].sort((a,b)=>a[1]-b[1]).slice(0,limit).map(e=>e[0]);
+}
+
+/* ─── B. AI Status ──────────────────────────────────────────── */
+function renderAiStatus(){
+  const fd = S.dashboard?.finalDecision;
+  const ready = (fd?.aiStatus || '').toUpperCase();
+  const fb = (fd?.fallbackReason || '').toUpperCase();
+  let readyCls='warn', readyTxt='AI 未知';
+  if (ready==='FULL_AI_READY'){ readyCls='ok'; readyTxt='AI READY'; }
+  else if (ready==='PARTIAL_AI_READY'){ readyCls='warn'; readyTxt='AI PARTIAL'; }
+  else if (ready==='AI_NOT_READY'){ readyCls='alert'; readyTxt='AI 未就緒'; }
+  $('aiReadyPill').className = 'ai-pill '+readyCls;
+  $('aiReadyPill').textContent = readyTxt;
+
+  let claudeCls='ok', claudeTxt='Claude OK';
+  let codexCls='ok', codexTxt='Codex OK';
+  if (fb==='CODEX_MISSING' || ready==='PARTIAL_AI_READY'){ codexCls='alert'; codexTxt='Codex 未完成'; }
+  if (fb==='AI_NOT_READY' || ready==='AI_NOT_READY'){ claudeCls='alert'; claudeTxt='Claude 未完成'; codexCls='alert'; codexTxt='Codex 未完成'; }
+  if (fb==='AI_TIMEOUT'){ claudeCls='alert'; claudeTxt='AI Timeout'; codexCls='alert'; codexTxt='AI Timeout'; }
+  $('aiClaudePill').className = 'ai-pill '+claudeCls; $('aiClaudePill').textContent = claudeTxt;
+  $('aiCodexPill').className  = 'ai-pill '+codexCls;  $('aiCodexPill').textContent  = codexTxt;
+
+  const t = fd?.codexDoneAt || fd?.claudeDoneAt;
+  $('aiTime').textContent = HHmm(t);
+}
+
+/* ─── C. Filter chips ───────────────────────────────────────── */
+$('filters').addEventListener('click', e => {
+  const btn = e.target.closest('.chip'); if(!btn) return;
+  S.filter = btn.dataset.f;
+  localStorage.setItem('mobile.filter', S.filter);
+  applyFilter();
+});
+function applyFilter(){
+  document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.f===S.filter));
+  const showActions = S.filter !== 'position';
+  const showPositions = S.filter === 'all' || S.filter === 'position';
+  $('secActions').style.display = showActions ? '' : 'none';
+  $('secPositions').style.display = showPositions ? '' : 'none';
+  // 內部過濾 action card 顯示 hint 類別
+  document.querySelectorAll('#actionList .a-card').forEach(card => {
+    const h = card.dataset.hint;
+    let show = true;
+    if (S.filter === 'buy')  show = (h==='buy');
+    if (S.filter === 'wait') show = (h==='wait' || h==='watch');
+    card.style.display = show ? '' : 'none';
+  });
+}
+
+/* ─── D. Action list ────────────────────────────────────────── */
+function renderActions(){
+  const list = $('actionList');
+  list.innerHTML = '';
+  let nBuy=0, nWait=0;
+  const cands = S.candidates || [];
+  if (!cands.length){
+    list.innerHTML = '<div class="empty">目前無候選股</div>';
+    $('actionCount').textContent = '0';
+    $('bgBuy').textContent='0'; $('bgWait').textContent='0';
+    return;
+  }
+  cands.forEach(c => {
+    const q = S.quotes[c.symbol];
+    const cur = q?.currentPrice;
+    const hint = classifyCandidate(c, q);
+    if (hint.cls==='buy') nBuy++;
+    else if (hint.cls==='wait') nWait++;
+
+    const dist = distToStop(cur, c.stopLossPrice);
+    const score = c.finalRankScore ?? c.score;
+    const rr = c.riskRewardRatio;
+    const card = document.createElement('div');
+    card.className = 'card a-card';
+    card.dataset.hint = hint.cls;
+    card.innerHTML = `
+      <div class="row1">
+        <div><span class="sym mono">${c.symbol}</span><span class="name">${c.stockName||''}</span></div>
+        <span class="hint ${hint.cls}">${hint.label}</span>
+      </div>
+      <div class="data">
+        <span class="k">進場</span><span class="v">${c.entryPriceZone||'—'}</span>
+        <span class="k">停損</span><span class="v">${fmtPrice(c.stopLossPrice)}</span>
+        <span class="k">距停損</span><span class="v"><span class="dist ${dist.cls}">${dist.text}</span>${cur?` <span style="color:var(--muted);font-weight:500">@${fmtPrice(cur)}</span>`:''}</span>
+      </div>
+      <div class="more">
+        <div class="meta-row">
+          <span>RR <span class="v">${rr!=null?Number(rr).toFixed(2):'—'}</span></span>
+          <span>score <span class="v">${score!=null?Number(score).toFixed(1):'—'}</span></span>
+          <span>${c.themeTag||'未標題材'}</span>
+        </div>
+        <div>${truncate(c.reason||'', 36)}</div>
+      </div>
+    `;
+    card.addEventListener('click', () => card.classList.toggle('exp'));
+    list.appendChild(card);
+  });
+  $('actionCount').textContent = `${cands.length}`;
+  $('bgBuy').textContent  = nBuy;
+  $('bgWait').textContent = nWait;
+}
+
+/* ─── E. Position cards ────────────────────────────────────── */
+function renderPositions(){
+  const list = $('positionList');
+  list.innerHTML = '';
+  const ps = S.positions || [];
+  if (!ps.length){
+    list.innerHTML = '<div class="empty">目前無持倉，等待下一個高品質 setup</div>';
+    $('positionCount').textContent = '0';
+    $('bgPos').textContent='0';
+    return;
+  }
+  ps.forEach(p => {
+    const q = S.quotes[p.symbol];
+    const cur = q?.currentPrice ?? null;
+    const cost = Number(p.avgCost);
+    const pnlPct = (cur && isFinite(cur) && isFinite(cost) && cost>0) ? ((cur-cost)/cost*100) : null;
+    const dist = distToStop(cur, p.stopLossPrice);
+    const riskTxt = dist.cls==='danger'?'高':dist.cls==='warn'?'中':dist.cls==='safe'?'低':'未知';
+    const fillPct = dist.pct==null ? 0 : Math.max(0, Math.min(100, dist.pct*10));
+
+    const card = document.createElement('div');
+    card.className = 'p-card card';
+    card.innerHTML = `
+      <div class="row1">
+        <div><span class="sym mono" style="font-size:16px;font-weight:800">${p.symbol}</span>
+             <span class="name" style="color:var(--muted);font-size:13px;margin-left:6px">${p.stockName||''}</span></div>
+        <span class="pnl ${pnlPct==null?'':pnlPct>=0?'up':'dn'}">${pnlPct==null?'—':fmtPct(pnlPct,2)}</span>
+      </div>
+      <div class="info">${fmt(p.qty)} 股 · 成本 ${fmtPrice(p.avgCost)}${cur?` · 現價 ${fmtPrice(cur)}`:''}</div>
+      <div class="stop-row">
+        <span class="label">距停損</span>
+        <div class="stop-bar ${dist.cls==='dim'?'':dist.cls}"><span style="width:${fillPct.toFixed(1)}%"></span></div>
+        <span class="dist ${dist.cls}">${dist.text}</span>
+      </div>
+      <div class="risk">風險：<b class="${dist.cls}">${riskTxt}</b> · 停損 ${fmtPrice(p.stopLossPrice)} · TP1 ${fmtPrice(p.takeProfit1)}</div>
+      <div class="actions">
+        <button class="hold" data-act="HOLD">續抱</button>
+        <button class="reduce" data-act="REDUCE">減碼</button>
+        <button class="exit" data-act="EXIT">出場</button>
+      </div>
+      <div class="more">
+        <div>策略：<b style="color:var(--ink)">${p.strategyType||'SETUP'}</b> · TP2 ${fmtPrice(p.takeProfit2)}</div>
+        <div>建倉：${HHmmss(p.openedAt)}${p.note?' · '+truncate(p.note,30):''}</div>
+      </div>
+    `;
+    // 主體點擊展開（避開按鈕區）
+    card.addEventListener('click', e => {
+      if (e.target.closest('.actions')) return;
+      card.classList.toggle('exp');
+    });
+    card.querySelectorAll('.actions button').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const act = btn.dataset.act;
+        if (act==='HOLD') alert(`續抱 ${p.symbol} ${p.stockName||''}\n\n停損 ${fmtPrice(p.stopLossPrice)} · TP1 ${fmtPrice(p.takeProfit1)}\n持續監控，到價再決策。`);
+        else if (act==='REDUCE') confirm(`減碼 ${p.symbol}？\n\n（系統不自動下單，請至券商手動執行；本次只記錄意圖）`);
+        else if (act==='EXIT') confirm(`出場 ${p.symbol}？\n\n（系統不自動下單，請至券商手動執行；本次只記錄意圖）`);
+      });
+    });
+    list.appendChild(card);
+  });
+  $('positionCount').textContent = `${ps.length} 檔`;
+  $('bgPos').textContent = ps.length;
+}
+
+/* ─── F. Capital strip ──────────────────────────────────────── */
+function renderCapital(){
+  const c = S.capital;
+  if (!c){
+    $('capTotal').textContent='unavailable';
+    $('capRatio').textContent='—'; $('capUnreal').textContent='—';
+    return;
+  }
+  $('capTotal').textContent = fmt(c.totalAssets || c.totalEquity, 0);
+  $('capRatio').textContent = c.cashRatio != null ? Math.round(c.cashRatio*100)+'%' : '—';
+  const u = c.unrealizedPnl;
+  const ue = $('capUnreal');
+  ue.textContent = u==null ? '—' : (u>=0?'+':'') + fmt(u,0);
+  ue.className = 'v mono ' + (u==null?'':u>=0?'up':'dn');
+  // theme exposure
+  renderThemeExposure();
+}
+function renderThemeExposure(){
+  const wrap = $('themeExposure');
+  const ps = S.positions || [];
+  if (!ps.length){ wrap.innerHTML = '<div style="color:var(--muted)">unavailable</div>'; return; }
+  const map = {}; let total = 0;
+  for (const p of ps){
+    const cost = (Number(p.qty)||0) * (Number(p.avgCost)||0);
+    if (!isFinite(cost) || cost<=0) continue;
+    const tag = (p.themeTag||'').trim() || '未標題材';
+    map[tag] = (map[tag]||0) + cost;
+    total += cost;
+  }
+  if (total<=0){ wrap.innerHTML = '<div style="color:var(--muted)">unavailable</div>'; return; }
+  const sorted = Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  wrap.innerHTML = '<div style="font-size:10px;color:var(--muted);margin-bottom:3px">主題曝險 (top 3)</div>' +
+    sorted.map(([t,c])=>{
+      const pct = c/total*100;
+      const cls = pct>=40?'over':pct>=25?'warn':'';
+      return `<div class="row"><span>${t}</span><b class="${cls}">${pct.toFixed(0)}%</b></div>`;
+    }).join('');
+}
+
+/* ─── data load ─────────────────────────────────────────────── */
+async function fetchAll(){
+  const [dashboard, candidates, positions, capital] = await Promise.all([
+    safeFetch('/api/dashboard/current'),
+    safeFetch('/api/candidates/current'),
+    safeFetch('/api/positions/open?size=10'),
+    safeFetch('/api/capital/summary')
+  ]);
+  S.dashboard  = dashboard;
+  S.candidates = Array.isArray(candidates) ? candidates : [];
+  S.positions  = Array.isArray(positions) ? positions : [];
+  S.capital    = capital;
+
+  // collect symbols and fetch live quotes
+  const syms = new Set();
+  S.candidates.forEach(c => c.symbol && syms.add(c.symbol));
+  S.positions.forEach(p => p.symbol && syms.add(p.symbol));
+  if (syms.size){
+    const csv = [...syms].join(',');
+    const quotes = await safeFetch('/api/candidates/live-quotes?symbols='+encodeURIComponent(csv));
+    S.quotes = {};
+    if (Array.isArray(quotes)){
+      for (const q of quotes) if (q?.symbol) S.quotes[q.symbol] = q;
+    }
+  } else {
+    S.quotes = {};
+  }
+  render();
+  $('lastUpdate').textContent = HHmmss(new Date().toISOString());
+}
+
+function render(){
+  renderHero();
+  renderAiStatus();
+  renderActions();
+  renderPositions();
+  renderCapital();
+  applyFilter();
+}
+
+/* ─── boot + polling ───────────────────────────────────────── */
+fetchAll();
+let pollTimer = setInterval(fetchAll, 30000);
+$('btnRefresh').addEventListener('click', () => { fetchAll(); });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) fetchAll();
+});
+</script>
+</body>
+</html>
