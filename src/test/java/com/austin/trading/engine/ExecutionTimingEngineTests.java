@@ -16,8 +16,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -326,5 +328,98 @@ class ExecutionTimingEngineTests {
 
         ExecutionTimingDecision d = engine.evaluateOne(in);
         assertThat(d.payloadJson()).isNotNull().startsWith("{").contains("mode").contains("urgency");
+    }
+
+    // ── v2.15 Swing setup gate ─────────────────────────────────────────────
+
+    @Test
+    void evaluateSwingSetup_breakoutWithVolume_passes() {
+        // 突破 + 量增 → BREAKOUT+VOLUME
+        TimingEvaluationInput in = new TimingEvaluationInput(
+                candidate("2330"), validSetup("2330", SetupEngine.SETUP_BREAKOUT), bullRegime(),
+                false, false, false,
+                /*entryTriggered*/ true, /*volumeSpike*/ true, 0);
+        ExecutionTimingEngine.SwingSetupResult r = engine.evaluateSwingSetup(in);
+        assertThat(r.passed()).isTrue();
+        assertThat(r.reason()).isEqualTo("BREAKOUT+VOLUME");
+    }
+
+    @Test
+    void evaluateSwingSetup_newHighWithVolume_passes() {
+        TimingEvaluationInput in = new TimingEvaluationInput(
+                candidate("2330"), validSetup("2330", SetupEngine.SETUP_BREAKOUT), bullRegime(),
+                /*nearDayHigh*/ true, /*belowOpen*/ false, false,
+                /*entryTriggered*/ false, /*volumeSpike*/ true, 0);
+        ExecutionTimingEngine.SwingSetupResult r = engine.evaluateSwingSetup(in);
+        assertThat(r.passed()).isTrue();
+        assertThat(r.reason()).isEqualTo("NEW_HIGH+VOLUME");
+    }
+
+    @Test
+    void evaluateSwingSetup_steadyTrend_passes() {
+        TimingEvaluationInput in = new TimingEvaluationInput(
+                candidate("2330"), validSetup("2330", SetupEngine.SETUP_BREAKOUT), bullRegime(),
+                false, /*belowOpen*/ false, /*belowPrevClose*/ false,
+                /*entryTriggered*/ true, /*volumeSpike*/ false, 0);
+        ExecutionTimingEngine.SwingSetupResult r = engine.evaluateSwingSetup(in);
+        assertThat(r.passed()).isTrue();
+        assertThat(r.reason()).isEqualTo("STEADY_TREND");
+    }
+
+    @Test
+    void evaluateSwingSetup_noSignals_fails() {
+        // 沒突破、沒量、跌破開盤 → NO_SWING_CONFIRMATION
+        TimingEvaluationInput in = new TimingEvaluationInput(
+                candidate("2330"), validSetup("2330", SetupEngine.SETUP_BREAKOUT), bullRegime(),
+                false, /*belowOpen*/ true, /*belowPrevClose*/ true,
+                /*entryTriggered*/ false, /*volumeSpike*/ false, 0);
+        ExecutionTimingEngine.SwingSetupResult r = engine.evaluateSwingSetup(in);
+        assertThat(r.passed()).isFalse();
+        assertThat(r.reason()).isEqualTo("NO_SWING_CONFIRMATION");
+    }
+
+    @Test
+    void swingSetupGate_disabled_doesNotBlock() {
+        // 預設 mock getBoolean 回 false → swing-setup disabled，跑舊邏輯
+        TimingEvaluationInput in = new TimingEvaluationInput(
+                candidate("2330"), validSetup("2330", SetupEngine.SETUP_BREAKOUT), bullRegime(),
+                false, false, false, /*entryTriggered*/ true, /*volumeSpike*/ false, 0);
+        ExecutionTimingDecision d = engine.evaluateOne(in);
+        assertThat(d.approved()).isTrue();
+        assertThat(d.timingMode()).isEqualTo(ExecutionTimingEngine.MODE_BREAKOUT_READY);
+    }
+
+    @Test
+    void swingSetupGate_enabled_blocksWhenNoConfirmation() {
+        // 重 mock：execution.swing-setup.enabled = true
+        ScoreConfigService config = mock(ScoreConfigService.class);
+        when(config.getInt(anyString(), anyInt())).thenAnswer(inv -> inv.getArgument(1));
+        when(config.getBoolean(eq("execution.swing-setup.enabled"), anyBoolean())).thenReturn(true);
+        ExecutionTimingEngine swEngine = new ExecutionTimingEngine(config, new ObjectMapper());
+
+        TimingEvaluationInput in = new TimingEvaluationInput(
+                candidate("2330"), validSetup("2330", SetupEngine.SETUP_BREAKOUT), bullRegime(),
+                false, /*belowOpen*/ true, /*belowPrevClose*/ true,
+                /*entryTriggered*/ false, /*volumeSpike*/ false, 0);
+        ExecutionTimingDecision d = swEngine.evaluateOne(in);
+        assertThat(d.approved()).isFalse();
+        assertThat(d.timingMode()).isEqualTo(ExecutionTimingEngine.MODE_WAIT);
+        assertThat(d.rejectionReason()).contains("SWING_SETUP_NOT_CONFIRMED");
+    }
+
+    @Test
+    void swingSetupGate_enabled_passesWhenBreakoutWithVolume() {
+        ScoreConfigService config = mock(ScoreConfigService.class);
+        when(config.getInt(anyString(), anyInt())).thenAnswer(inv -> inv.getArgument(1));
+        when(config.getBoolean(eq("execution.swing-setup.enabled"), anyBoolean())).thenReturn(true);
+        ExecutionTimingEngine swEngine = new ExecutionTimingEngine(config, new ObjectMapper());
+
+        TimingEvaluationInput in = new TimingEvaluationInput(
+                candidate("2330"), validSetup("2330", SetupEngine.SETUP_BREAKOUT), bullRegime(),
+                false, false, false,
+                /*entryTriggered*/ true, /*volumeSpike*/ true, 0);
+        ExecutionTimingDecision d = swEngine.evaluateOne(in);
+        assertThat(d.approved()).isTrue();
+        assertThat(d.timingMode()).isEqualTo(ExecutionTimingEngine.MODE_BREAKOUT_READY);
     }
 }

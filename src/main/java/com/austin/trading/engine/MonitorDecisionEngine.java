@@ -2,6 +2,7 @@ package com.austin.trading.engine;
 
 import com.austin.trading.dto.request.MonitorEvaluateRequest;
 import com.austin.trading.dto.response.MonitorDecisionResponse;
+import com.austin.trading.service.ScoreConfigService;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalTime;
@@ -9,6 +10,23 @@ import java.util.Locale;
 
 @Component
 public class MonitorDecisionEngine {
+
+    /** v2.15：swing-friendly cooldown 時間視窗。 */
+    private static final LocalTime SWING_BAND_START = LocalTime.of(11, 0);
+    private static final LocalTime SWING_BAND_END   = LocalTime.of(13, 0);
+
+    private final ScoreConfigService scoreConfig;
+
+    /** Spring DI 用：注入 ScoreConfigService 讀 feature flag。 */
+    @org.springframework.beans.factory.annotation.Autowired
+    public MonitorDecisionEngine(ScoreConfigService scoreConfig) {
+        this.scoreConfig = scoreConfig;
+    }
+
+    /** 向下相容 ctor（無 ScoreConfigService）：feature flag 視為 false，跑舊邏輯。 */
+    public MonitorDecisionEngine() {
+        this.scoreConfig = null;
+    }
 
     public MonitorDecisionResponse evaluate(MonitorEvaluateRequest request) {
         String marketGrade = normalize(request.marketGrade());
@@ -33,6 +51,18 @@ public class MonitorDecisionEngine {
 
         if ("LATE".equals(timeDecay) && !request.hasPosition() && !"A".equals(marketGrade)) {
             monitorMode = "OFF";
+        }
+
+        // v2.15：swing-friendly cooldown — 11:00–13:00 期間，B 級非空手且非 LOCKED，從 OFF 救回 WATCH
+        if (isSwingCooldownEnabled() && "OFF".equals(monitorMode)) {
+            LocalTime t = request.evaluationTime() == null ? LocalTime.now() : request.evaluationTime();
+            boolean inSwingBand = !t.isBefore(SWING_BAND_START) && t.isBefore(SWING_BAND_END);
+            boolean swingFriendlyGrade = "A".equals(marketGrade) || "B".equals(marketGrade);
+            boolean notHardLocked = !"LOCKED".equals(decisionLock);
+            if (inSwingBand && swingFriendlyGrade && notHardLocked
+                    && !"C".equals(marketGrade) && !"REST".equals(decision)) {
+                monitorMode = "WATCH";
+            }
         }
 
         String triggerEvent = resolveTriggerEvent(request, marketGrade, monitorMode);
@@ -119,6 +149,12 @@ public class MonitorDecisionEngine {
             case "B" -> "高檔震盪期";
             default -> "出貨 / 鈍化期";
         };
+    }
+
+    /** v2.15：feature flag — DEFAULT false 先 shadow。 */
+    private boolean isSwingCooldownEnabled() {
+        if (scoreConfig == null) return false;
+        return scoreConfig.getBoolean("monitor.swing-cooldown.enabled", false);
     }
 
     private String normalize(String value) {

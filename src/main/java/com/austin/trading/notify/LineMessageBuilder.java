@@ -434,6 +434,7 @@ public class LineMessageBuilder {
             if (raw == null || raw.isBlank()) continue;
             String r = raw.trim();
             String upper = r.toUpperCase(Locale.ROOT);
+            // v2.15：priority scale ×10，方便插入新 tier（CHASED_HIGH 介於 hard gate 與 Codex 之間）
             int priority;
             if (upper.contains("REGIME_BLOCKED")
                     || upper.contains("MARKET_GRADE=C")
@@ -443,34 +444,38 @@ public class LineMessageBuilder {
                     || upper.contains("MAX_POSITIONS")
                     || upper.contains("PREMARKET_BIAS_ONLY")
                     || upper.contains("LATE_SESSION_FORCE_REST")) {
-                priority = 1;
+                priority = 10;
+            } else if (upper.contains("CHASED_HIGH_BLOCK")
+                    || upper.contains("CHASED_HIGH_WARN")) {
+                // v2.15：追高攔截，hard gate 之後、Codex 之前
+                priority = 15;
             } else if (upper.contains("CODEX_NOT_READY")
                     || upper.contains("CODEX_MISSING")
                     || upper.startsWith("CODEX_")
                     || upper.contains("BUCKET")) {
-                priority = 2;
+                priority = 20;
             } else if (upper.startsWith("VETO_")
                     || upper.contains("SCORE_DIVERGENCE")
                     || upper.contains("HARD_VETO")) {
-                priority = 3;
+                priority = 30;
             } else if (upper.contains("PRICEGATE")
                     || upper.contains("PRICE_GATE")
                     || upper.contains("BELOWOPEN")
                     || upper.contains("BELOWPREVCLOSE")
                     || upper.contains("VWAP")
                     || upper.contains("WAIT_CONFIRMATION")) {
-                priority = 4;
+                priority = 40;
             } else if (upper.contains("CASH_RESERVE")
                     || upper.contains("RISK_BLOCK")
                     || upper.contains("EXPOSURE_LIMIT")
                     || upper.contains("MIN_TRADE_AMOUNT")
                     || upper.contains("ZERO_SHARES")) {
-                priority = 5;
+                priority = 50;
             } else if (upper.contains("AI_NOT_READY")
                     || upper.contains("AI_TIMEOUT")) {
-                priority = 6;
+                priority = 60;
             } else {
-                priority = 9;
+                priority = 90;
             }
             ranked.merge(r, priority, Math::min);
         }

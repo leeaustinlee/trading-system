@@ -514,6 +514,75 @@ class FinalDecisionEngineTests {
                 "無候選時應輸出『持倉管理為主』類 summary：" + result.summary());
     }
 
+    // ── v2.15 ChasedHigh hard gate ───────────────────────────────────────────
+
+    @Test
+    void chasedHighGate_shadowMode_doesNotBlockEnter() {
+        // 預設 enabled=false（shadow），追高仍應 ENTER；trace 只記不擋
+        when(config.getBoolean(eq("entry.chased-high-gate.enabled"), anyBoolean())).thenReturn(false);
+        when(config.getDecimal(eq("entry.chased-high-gate.threshold"), any())).thenReturn(new BigDecimal("0.02"));
+        when(config.getDecimal(eq("entry.chased-high-gate.warn_threshold"), any())).thenReturn(new BigDecimal("0.04"));
+
+        // entryPriceZone="100-102" → upper=102；currentPrice=101 → chased（102×0.98=99.96, 101≥99.96）
+        FinalDecisionCandidateRequest c = priceGateCandidate(
+                "2330", new BigDecimal("9.2"),
+                false, false,
+                /*current*/ new BigDecimal("101"),
+                /*open*/    new BigDecimal("100"),
+                /*prev*/    new BigDecimal("99"),
+                null, null,
+                "BULL_TREND");
+        FinalDecisionResponse r = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(c)),
+                MarketSession.LIVE_TRADING);
+
+        assertEquals("ENTER", r.decision(), "shadow mode 不應該擋下追高候選");
+        assertEquals(1, r.selectedStocks().size());
+    }
+
+    @Test
+    void chasedHighGate_enabled_blocksChasedCandidate() {
+        // enabled=true，追高直接被擋；reason 含 CHASED_HIGH_BLOCK
+        when(config.getBoolean(eq("entry.chased-high-gate.enabled"), anyBoolean())).thenReturn(true);
+        when(config.getDecimal(eq("entry.chased-high-gate.threshold"), any())).thenReturn(new BigDecimal("0.02"));
+        when(config.getDecimal(eq("entry.chased-high-gate.warn_threshold"), any())).thenReturn(new BigDecimal("0.04"));
+
+        FinalDecisionCandidateRequest chased = priceGateCandidate(
+                "2330", new BigDecimal("9.2"),
+                false, false,
+                new BigDecimal("101"),    // chased
+                new BigDecimal("100"), new BigDecimal("99"),
+                null, null, "BULL_TREND");
+        FinalDecisionResponse r = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(chased)),
+                MarketSession.LIVE_TRADING);
+
+        // 沒其他候選 → 全部 chased 被擋 → REST
+        assertEquals("REST", r.decision());
+        assertTrue(r.rejectedReasons().stream().anyMatch(s -> s.contains("CHASED_HIGH_BLOCK")),
+                "rejected reasons 應包含 CHASED_HIGH_BLOCK：" + r.rejectedReasons());
+    }
+
+    @Test
+    void chasedHighGate_enabled_warnDoesNotBlock() {
+        // enabled=true 但 currentPrice 在 warn 區間（2%~4%）內，應仍 ENTER
+        when(config.getBoolean(eq("entry.chased-high-gate.enabled"), anyBoolean())).thenReturn(true);
+        when(config.getDecimal(eq("entry.chased-high-gate.threshold"), any())).thenReturn(new BigDecimal("0.02"));
+        when(config.getDecimal(eq("entry.chased-high-gate.warn_threshold"), any())).thenReturn(new BigDecimal("0.04"));
+
+        // entryZone upper=102；currentPrice=99 → 99<99.96(2%) 但 99>=97.92(4%) → WARN，不擋
+        FinalDecisionCandidateRequest c = priceGateCandidate(
+                "2330", new BigDecimal("9.2"),
+                false, false,
+                new BigDecimal("99"),
+                new BigDecimal("98"), new BigDecimal("97"),
+                null, null, "BULL_TREND");
+        FinalDecisionResponse r = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(c)),
+                MarketSession.LIVE_TRADING);
+        assertEquals("ENTER", r.decision(), "WARN 級別應仍可 ENTER，不阻擋");
+    }
+
     // ── Hard veto skip ───────────────────────────────────────────────────────
 
     @Test

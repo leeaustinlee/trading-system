@@ -54,11 +54,24 @@ public class FinalDecisionEngine {
 
     private final ScoreConfigService config;
     private final PriceGateEvaluator priceGateEvaluator;
+    /** v2.15：ChasedHigh hard gate，shadow / live 由 entry.chased-high-gate.enabled 控制。 */
+    private final ChasedHighEntryEngine chasedHighEntryEngine;
 
-    public FinalDecisionEngine(ScoreConfigService config, PriceGateEvaluator priceGateEvaluator) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public FinalDecisionEngine(ScoreConfigService config, PriceGateEvaluator priceGateEvaluator,
+                                ChasedHighEntryEngine chasedHighEntryEngine) {
         this.config = config;
         this.priceGateEvaluator = priceGateEvaluator;
+        this.chasedHighEntryEngine = chasedHighEntryEngine;
     }
+
+    /** Test-friendly ctor（無 chased-high 引擎時退回 shadow 行為）。 */
+    public FinalDecisionEngine(ScoreConfigService config, PriceGateEvaluator priceGateEvaluator) {
+        this(config, priceGateEvaluator, new ChasedHighEntryEngine());
+    }
+
+    /** ChasedHigh 評估結果：用於 trace + 決策。 */
+    public enum ChasedHighOutcome { OK, WARN, BLOCK, NO_DATA }
 
     public FinalDecisionResponse evaluate(FinalDecisionEvaluateRequest request) {
         return evaluate(request, MarketSession.fromTime(LocalTime.now(MARKET_ZONE)),
@@ -143,6 +156,11 @@ public class FinalDecisionEngine {
         int maxPickA                = config.getInt("decision.max_pick_a",      2);
         int maxPickB                = config.getInt("decision.max_pick_b",      1);
 
+        // v2.15：ChasedHigh 接到 ENTER path
+        boolean chasedHighEnabled   = config.getBoolean("entry.chased-high-gate.enabled", false);
+        BigDecimal chasedThreshold  = config.getDecimal("entry.chased-high-gate.threshold", new BigDecimal("0.02"));
+        BigDecimal chasedWarn       = config.getDecimal("entry.chased-high-gate.warn_threshold", new BigDecimal("0.04"));
+
         List<FinalDecisionCandidateRequest> candidates =
                 request.candidates() == null ? List.of() : request.candidates();
         List<String> rejected = new ArrayList<>();
@@ -177,6 +195,24 @@ public class FinalDecisionEngine {
                         c.stockCode(), priceGate.reason());
                 waitBucket.add(c);
                 continue;
+            }
+
+            // v2.15 ChasedHigh hard gate（feature flag）
+            ChasedHighOutcome chasedOutcome = evaluateChasedHigh(c, chasedThreshold, chasedWarn);
+            if (chasedOutcome == ChasedHighOutcome.BLOCK) {
+                if (chasedHighEnabled) {
+                    log.info("[FinalDecisionEngine] CHASED_HIGH_BLOCK: {} cur={} entryZone={}",
+                            c.stockCode(), c.currentPrice(), c.entryPriceZone());
+                    rejected.add(c.stockCode() + " CHASED_HIGH_BLOCK（離日高 < " + chasedThreshold + "）");
+                    continue;
+                } else {
+                    // shadow：記入 trace 但不擋
+                    log.info("[FinalDecisionEngine] [SHADOW] CHASED_HIGH would block: {} cur={} entryZone={}",
+                            c.stockCode(), c.currentPrice(), c.entryPriceZone());
+                }
+            } else if (chasedOutcome == ChasedHighOutcome.WARN) {
+                log.debug("[FinalDecisionEngine] CHASED_HIGH_WARN: {} cur={} entryZone={}",
+                        c.stockCode(), c.currentPrice(), c.entryPriceZone());
             }
 
             BigDecimal rankScore = c.finalRankScore();
@@ -316,6 +352,43 @@ public class FinalDecisionEngine {
 
     private FinalDecisionResponse rest(String summary, List<String> rejectedReasons) {
         return new FinalDecisionResponse("REST", List.of(), rejectedReasons, summary);
+    }
+
+    /**
+     * v2.15：每筆候選的 chased-high 判斷。
+     *
+     * <p>因 FinalDecisionCandidateRequest 沒有 dayHigh 欄位，這裡用 entryPriceZone 上緣
+     * 當作「期望最高合理進場點」proxy：currentPrice 接近上緣即視為追高。
+     * 若 currentPrice 或 entryPriceZone 缺，回 NO_DATA（不擋、不警告）。</p>
+     */
+    public ChasedHighOutcome evaluateChasedHigh(FinalDecisionCandidateRequest c,
+                                                 BigDecimal blockThreshold,
+                                                 BigDecimal warnThreshold) {
+        BigDecimal cur = c.currentPrice();
+        if (cur == null || cur.signum() <= 0) return ChasedHighOutcome.NO_DATA;
+        Double zoneUpper = parseEntryZoneUpper(c.entryPriceZone());
+        if (zoneUpper == null || zoneUpper <= 0) return ChasedHighOutcome.NO_DATA;
+        double curD = cur.doubleValue();
+        double blockT = blockThreshold == null ? 0.02 : blockThreshold.doubleValue();
+        double warnT  = warnThreshold  == null ? 0.04 : warnThreshold.doubleValue();
+        if (chasedHighEntryEngine.isChased(curD, zoneUpper, blockT)) return ChasedHighOutcome.BLOCK;
+        if (chasedHighEntryEngine.isChased(curD, zoneUpper, warnT))  return ChasedHighOutcome.WARN;
+        return ChasedHighOutcome.OK;
+    }
+
+    /** 解析 "510.22-531.26" 格式的上緣，失敗回 null。 */
+    static Double parseEntryZoneUpper(String entryPriceZone) {
+        if (entryPriceZone == null || entryPriceZone.isBlank()) return null;
+        String s = entryPriceZone.trim();
+        int dash = s.indexOf('-');
+        try {
+            if (dash > 0 && dash < s.length() - 1) {
+                return Double.parseDouble(s.substring(dash + 1).trim());
+            }
+            return Double.parseDouble(s);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════

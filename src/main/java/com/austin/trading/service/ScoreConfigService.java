@@ -210,6 +210,20 @@ public class ScoreConfigService {
         DEFAULTS.put("trading.price_gate.low_volume_ratio_threshold",       new String[]{"0.8",   "DECIMAL", "Price Gate：量能比低於此值視為量縮（current / avg，預設 0.8）"});
         DEFAULTS.put("trading.price_gate.far_from_open_pct_threshold",      new String[]{"0.01",  "DECIMAL", "Price Gate：距開盤偏離絕對值超過此比例視為遠離（預設 1%）"});
         DEFAULTS.put("trading.price_gate.bull_shallow_drop_pct_threshold",  new String[]{"0.01",  "DECIMAL", "Price Gate：跌破昨收小於此比例視為淺跌（BULL_TREND 下降級 WAIT，預設 1%）"});
+
+        // ── v2.15 Phase 1 假完成模組接線 feature flags ─────────────────
+        // 規則：
+        //  - 三個 flag 都對 trace 寫 shadow，不影響 live decision 直到 enabled=true
+        //  - chased-high / monitor-cooldown 預設 false 先觀察兩週 shadow 紀錄
+        //  - swing-setup 預設 true（1–2 週波段這是必要 gate）
+        DEFAULTS.put("entry.chased-high-gate.enabled",            new String[]{"false", "BOOLEAN", "ChasedHighEntryEngine 接到 ENTER path 作 hard gate；預設 false 跑 shadow"});
+        DEFAULTS.put("entry.chased-high-gate.threshold",          new String[]{"0.02",  "DECIMAL", "離日高 < 此比例視為追高（預設 2%）"});
+        DEFAULTS.put("entry.chased-high-gate.warn_threshold",     new String[]{"0.04",  "DECIMAL", "離日高 < 此比例視為 WARN（不擋；預設 4%）"});
+        DEFAULTS.put("execution.swing-setup.enabled",             new String[]{"true",  "BOOLEAN", "ExecutionTimingEngine 加多日 swing setup 確認；預設 true（波段必要）"});
+        DEFAULTS.put("execution.swing-setup.lookback_days",       new String[]{"5",     "INTEGER", "swing setup 觀察天數（5 個交易日）"});
+        DEFAULTS.put("execution.swing-setup.volume_multiplier",   new String[]{"1.2",   "DECIMAL", "量增條件：當日量 / N 日均量 ≥ 此倍數"});
+        DEFAULTS.put("monitor.swing-cooldown.enabled",            new String[]{"false", "BOOLEAN", "MonitorDecisionEngine swing-friendly cooldown；預設 false 跑 shadow"});
+        DEFAULTS.put("monitor.swing-cooldown.b_grade_distance_pct", new String[]{"0.01","DECIMAL", "B 級接近進場下緣 ≤ 此比例可送 SELECT_BUY_NOW（預設 1%）"});
     }
 
     public ScoreConfigService(ScoreConfigRepository repository) {

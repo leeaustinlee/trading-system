@@ -80,12 +80,52 @@ public class ExecutionTimingEngine {
                     "STALE_SIGNAL(age=" + in.signalAgeDays() + " maxDays=" + staleDays + ")");
         }
 
+        // v2.15：swing setup hard gate（feature flag DEFAULT true，1–2 週波段必要）
+        boolean swingEnabled = scoreConfig.getBoolean("execution.swing-setup.enabled", true);
+        SwingSetupResult swing = evaluateSwingSetup(in);
+        if (swingEnabled && !swing.passed()) {
+            return blocked(in, MODE_WAIT,
+                    "SWING_SETUP_NOT_CONFIRMED(" + swing.reason() + ")");
+        }
+
         return switch (type) {
             case SetupEngine.SETUP_BREAKOUT -> evalBreakout(in, staleDays);
             case SetupEngine.SETUP_PULLBACK -> evalPullback(in, staleDays);
             case SetupEngine.SETUP_EVENT    -> evalEvent(in, staleDays);
             default -> blocked(in, MODE_NO_SETUP, "UNKNOWN_SETUP_TYPE:" + type);
         };
+    }
+
+    /** v2.15：swing setup 結果（pure data，方便 unit test 與 trace 紀錄）。 */
+    public record SwingSetupResult(boolean passed, String reason) {}
+
+    /**
+     * v2.15：多日 swing setup 確認。
+     *
+     * <p>因 TimingEvaluationInput 暫時不直接帶 daily kline 序列，先用現有 signal flags 做
+     * 多日 setup 的近似檢查（後續可改成接 kline repo 計算實際 5MA / 量比）。</p>
+     *
+     * <p>滿足以下任一即視為 PASSED：</p>
+     * <ul>
+     *   <li>BREAKOUT+VOLUME — entryTriggered=true 且 volumeSpike=true（突破 + 量增）</li>
+     *   <li>NEW_HIGH+VOLUME — nearDayHigh=true 且 volumeSpike=true 且未跌破開盤（新高 + 量 + 收紅）</li>
+     *   <li>STEADY_TREND — entryTriggered=true 且未跌破開盤與昨收（突破後守穩）</li>
+     * </ul>
+     *
+     * <p>否則回 NO_SWING_CONFIRMATION（在 enabled=true 時阻擋）。</p>
+     */
+    public SwingSetupResult evaluateSwingSetup(TimingEvaluationInput in) {
+        if (in == null) return new SwingSetupResult(false, "NULL_INPUT");
+        boolean breakoutWithVolume = in.entryTriggered() && in.volumeSpike();
+        if (breakoutWithVolume) return new SwingSetupResult(true, "BREAKOUT+VOLUME");
+
+        boolean newHighWithVolume = in.nearDayHigh() && in.volumeSpike() && !in.belowOpen();
+        if (newHighWithVolume)    return new SwingSetupResult(true, "NEW_HIGH+VOLUME");
+
+        boolean steadyTrend = in.entryTriggered() && !in.belowOpen() && !in.belowPrevClose();
+        if (steadyTrend)          return new SwingSetupResult(true, "STEADY_TREND");
+
+        return new SwingSetupResult(false, "NO_SWING_CONFIRMATION");
     }
 
     // ── Per-setup-type evaluators ──────────────────────────────────────────
