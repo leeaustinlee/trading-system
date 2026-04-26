@@ -12,6 +12,12 @@ spring:
       ddl-auto: update
     open-in-view: false
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,scheduledtasks
+
 logging:
   level:
     root: INFO
