@@ -1298,7 +1298,9 @@ public class FinalDecisionService {
                 volumeRatioBd,
                 distanceFromOpenPct,
                 dropFromPrevClosePct,
-                c.marketRegime()          // regime 由主流程透過 applyMarketRegime 補上
+                c.marketRegime(),         // regime 由主流程透過 applyMarketRegime 補上
+                // v2.16：實際當日最高價（從 Codex live-quote），ChasedHigh evaluator 優先採用
+                dayHigh > 0 ? BigDecimal.valueOf(dayHigh) : null
         );
     }
 
@@ -1331,7 +1333,8 @@ public class FinalDecisionService {
                 c.consensusScore(), c.disagreementPenalty(), c.volumeSpike(),
                 c.priceNotBreakHigh(), c.entryTooExtended(), c.entryTriggered(),
                 c.currentPrice(), c.openPrice(), c.previousClose(), c.vwapPrice(),
-                c.volumeRatio(), c.distanceFromOpenPct(), c.dropFromPrevClosePct(), regimeType
+                c.volumeRatio(), c.distanceFromOpenPct(), c.dropFromPrevClosePct(), regimeType,
+                c.dayHigh()
         );
     }
 

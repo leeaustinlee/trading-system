@@ -1350,9 +1350,24 @@ function buildCapitalStrip(){
     `<span>現金比</span><span class="v mono">${c.cashRatio!=null?Math.round(c.cashRatio*100)+'%':'—'}</span>`+
     `<span>未實現</span><span class="v mono ${c.unrealizedPnl>=0?'up':'dn'}">${c.unrealizedPnl==null?'—':(c.unrealizedPnl>=0?'+':'')+fmt(c.unrealizedPnl,0)}</span>`+
     `<div class="theme-exposure" id="themeExposure"></div>`;
-  // theme exposure aggregated from positions
-  setTimeout(() => {
+  // v2.16 Batch C：優先呼叫後端 /api/themes/exposure（含 limit/status），缺資料 fallback 前端聚合
+  (async () => {
     const tw = wrap.querySelector('#themeExposure'); if (!tw) return;
+    const apiResp = await safeFetch('/api/themes/exposure');
+    if (apiResp && Array.isArray(apiResp.exposures) && apiResp.exposures.length){
+      const top = apiResp.exposures.slice(0, 3);
+      const limit = apiResp.limitPct != null ? Number(apiResp.limitPct).toFixed(0) : '30';
+      const warn  = apiResp.warnPct  != null ? Number(apiResp.warnPct).toFixed(0)  : '20';
+      tw.innerHTML = `<div style="font-size:10px;color:var(--muted);margin-bottom:3px">主題曝險（後端｜limit ${limit}% / warn ${warn}%）</div>`+
+        top.map(it => {
+          const status = it.status || 'OK';
+          const cls = status === 'OVER_LIMIT' ? 'over' : status === 'WARN' ? 'warn' : '';
+          const pctStr = it.exposurePct != null ? Number(it.exposurePct).toFixed(0) : '—';
+          return `<div class="row"><span>${it.theme}</span><b class="${cls}">${pctStr}% · ${status}</b></div>`;
+        }).join('');
+      return;
+    }
+    // fallback：前端用 positions 聚合（缺後端時保險用）
     const ps = S.positions || [];
     if (!ps.length){ tw.innerHTML='<div style="color:var(--muted)">unavailable</div>'; return; }
     const map={}; let total=0;
@@ -1364,9 +1379,9 @@ function buildCapitalStrip(){
     }
     if (total<=0){ tw.innerHTML='<div style="color:var(--muted)">unavailable</div>'; return; }
     const sorted = Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,3);
-    tw.innerHTML = '<div style="font-size:10px;color:var(--muted);margin-bottom:3px">主題曝險 (top 3)</div>'+
+    tw.innerHTML = '<div style="font-size:10px;color:var(--muted);margin-bottom:3px">主題曝險 (top 3 · 前端聚合)</div>'+
       sorted.map(([t,c])=>{ const pct=c/total*100; const cls=pct>=40?'over':pct>=25?'warn':''; return `<div class="row"><span>${t}</span><b class="${cls}">${pct.toFixed(0)}%</b></div>`; }).join('');
-  }, 0);
+  })();
   wrap.addEventListener('click', () => wrap.classList.toggle('exp'));
   return wrap;
 }

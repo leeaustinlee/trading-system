@@ -2,7 +2,9 @@ package com.austin.trading.controller;
 
 import com.austin.trading.dto.request.ClaudeThemeScoreRequest;
 import com.austin.trading.dto.response.StockThemeMappingResponse;
+import com.austin.trading.dto.response.ThemeExposureResponse;
 import com.austin.trading.dto.response.ThemeSnapshotResponse;
+import com.austin.trading.service.ThemeExposureService;
 import com.austin.trading.service.ThemeService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -17,9 +19,21 @@ import java.util.Map;
 public class ThemeController {
 
     private final ThemeService themeService;
+    private final ThemeExposureService themeExposureService;
 
-    public ThemeController(ThemeService themeService) {
+    public ThemeController(ThemeService themeService,
+                            ThemeExposureService themeExposureService) {
         this.themeService = themeService;
+        this.themeExposureService = themeExposureService;
+    }
+
+    /**
+     * v2.16 Batch C：GET /api/themes/exposure
+     * 回傳每個題材的當前曝險百分比 + status (OK/WARN/OVER_LIMIT) + limit/warn 閾值。
+     */
+    @GetMapping("/exposure")
+    public ThemeExposureResponse exposure() {
+        return themeExposureService.computeCurrentExposure();
     }
 
     /** GET /api/themes/snapshots?date=2026-04-18 */

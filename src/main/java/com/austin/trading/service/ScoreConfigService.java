@@ -224,6 +224,11 @@ public class ScoreConfigService {
         DEFAULTS.put("execution.swing-setup.volume_multiplier",   new String[]{"1.2",   "DECIMAL", "量增條件：當日量 / N 日均量 ≥ 此倍數"});
         DEFAULTS.put("monitor.swing-cooldown.enabled",            new String[]{"false", "BOOLEAN", "MonitorDecisionEngine swing-friendly cooldown；預設 false 跑 shadow"});
         DEFAULTS.put("monitor.swing-cooldown.b_grade_distance_pct", new String[]{"0.01","DECIMAL", "B 級接近進場下緣 ≤ 此比例可送 SELECT_BUY_NOW（預設 1%）"});
+
+        // ── v2.16 Batch C：交易 kill switch / theme exposure 限額 ─────────────
+        DEFAULTS.put("trading.status.allow_trade",                 new String[]{"true",  "BOOLEAN", "整體交易 kill switch；false → FinalDecision 全 REST、Monitor 全 OFF（緊急停止用）"});
+        DEFAULTS.put("theme.exposure_limit_pct",                   new String[]{"30",    "DECIMAL", "單一題材曝險上限百分比；超過 → status=OVER_LIMIT"});
+        DEFAULTS.put("theme.exposure_warn_pct",                    new String[]{"20",    "DECIMAL", "單一題材曝險預警百分比；介於 warn 與 limit → status=WARN"});
     }
 
     public ScoreConfigService(ScoreConfigRepository repository) {

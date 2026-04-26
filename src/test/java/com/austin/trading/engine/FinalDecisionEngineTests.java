@@ -58,6 +58,8 @@ class FinalDecisionEngineTests {
                 .thenReturn(new BigDecimal("0.01"));
         when(config.getDecimal(eq("trading.price_gate.bull_shallow_drop_pct_threshold"), any()))
                 .thenReturn(new BigDecimal("0.01"));
+        // v2.16 kill switch：預設 true 讓既有測試流程不被新 gate 攔下
+        when(config.getBoolean(eq("trading.status.allow_trade"), anyBoolean())).thenReturn(true);
         priceGateEvaluator = new PriceGateEvaluator(config);
         engine = new FinalDecisionEngine(config, priceGateEvaluator);
     }
@@ -514,6 +516,33 @@ class FinalDecisionEngineTests {
                 "無候選時應輸出『持倉管理為主』類 summary：" + result.summary());
     }
 
+    // ── v2.16 TRADING_DISABLED kill switch ──────────────────────────────────
+
+    @Test
+    void killSwitch_disabled_returnsRestImmediately() {
+        when(config.getBoolean(eq("trading.status.allow_trade"), anyBoolean())).thenReturn(false);
+        // 即使 candidate 完美，也應 REST
+        FinalDecisionResponse r = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(
+                        candidate("2330", 2.5, "VALUE_FAIR", new BigDecimal("9.2"))
+                )),
+                MarketSession.LIVE_TRADING);
+        assertEquals("REST", r.decision());
+        assertTrue(r.rejectedReasons().stream().anyMatch(s -> s.contains("TRADING_DISABLED")),
+                "rejected reasons 應含 TRADING_DISABLED：" + r.rejectedReasons());
+    }
+
+    @Test
+    void killSwitch_enabled_doesNotAffectFlow() {
+        when(config.getBoolean(eq("trading.status.allow_trade"), anyBoolean())).thenReturn(true);
+        FinalDecisionResponse r = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(
+                        candidate("2330", 2.5, "VALUE_FAIR", new BigDecimal("9.2"))
+                )),
+                MarketSession.LIVE_TRADING);
+        assertEquals("ENTER", r.decision(), "kill switch=true 時 ENTER 流程不變");
+    }
+
     // ── v2.15 ChasedHigh hard gate ───────────────────────────────────────────
 
     @Test
@@ -561,6 +590,49 @@ class FinalDecisionEngineTests {
         assertEquals("REST", r.decision());
         assertTrue(r.rejectedReasons().stream().anyMatch(s -> s.contains("CHASED_HIGH_BLOCK")),
                 "rejected reasons 應包含 CHASED_HIGH_BLOCK：" + r.rejectedReasons());
+    }
+
+    @Test
+    void chasedHighGate_usesRealDayHighWhenPresent() {
+        // v2.16：candidate 帶實際 dayHigh=120 → 用 dayHigh 而非 entryZone (102)
+        // entryZone 上緣 102，但 dayHigh 120 → currentPrice 119 接近 dayHigh 120 (1%)
+        when(config.getBoolean(eq("entry.chased-high-gate.enabled"), anyBoolean())).thenReturn(true);
+        when(config.getDecimal(eq("entry.chased-high-gate.threshold"), any())).thenReturn(new BigDecimal("0.02"));
+        when(config.getDecimal(eq("entry.chased-high-gate.warn_threshold"), any())).thenReturn(new BigDecimal("0.04"));
+
+        FinalDecisionCandidateRequest c = priceGateCandidateWithDayHigh(
+                "2330", new BigDecimal("9.2"),
+                /*current*/ new BigDecimal("119"),
+                /*open*/    new BigDecimal("100"),
+                /*prev*/    new BigDecimal("98"),
+                /*dayHigh*/ new BigDecimal("120"));
+        FinalDecisionResponse r = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(c)),
+                MarketSession.LIVE_TRADING);
+        // 119 / 120 = 0.9917；1 - 0.9917 = 0.0083 < 2% → CHASED_HIGH_BLOCK
+        assertEquals("REST", r.decision());
+        assertTrue(r.rejectedReasons().stream().anyMatch(s -> s.contains("CHASED_HIGH_BLOCK")),
+                "應使用真實 dayHigh 攔截：" + r.rejectedReasons());
+    }
+
+    @Test
+    void chasedHighGate_fallsBackToEntryZoneWhenDayHighNull() {
+        // v2.16：dayHigh=null → fallback 到 entryPriceZone 上緣（既有 v2.15 行為）
+        when(config.getBoolean(eq("entry.chased-high-gate.enabled"), anyBoolean())).thenReturn(true);
+        when(config.getDecimal(eq("entry.chased-high-gate.threshold"), any())).thenReturn(new BigDecimal("0.02"));
+        when(config.getDecimal(eq("entry.chased-high-gate.warn_threshold"), any())).thenReturn(new BigDecimal("0.04"));
+
+        // entryZone "100-102"；currentPrice 101；dayHigh null → 用 102 為基準
+        FinalDecisionCandidateRequest c = priceGateCandidateWithDayHigh(
+                "2330", new BigDecimal("9.2"),
+                new BigDecimal("101"), new BigDecimal("100"), new BigDecimal("99"),
+                /*dayHigh*/ null);
+        FinalDecisionResponse r = engine.evaluate(
+                new FinalDecisionEvaluateRequest("A", "NONE", "EARLY", false, List.of(c)),
+                MarketSession.LIVE_TRADING);
+        assertEquals("REST", r.decision());
+        assertTrue(r.rejectedReasons().stream().anyMatch(s -> s.contains("CHASED_HIGH_BLOCK")),
+                "缺 dayHigh 時應 fallback 到 entryZone 上緣攔截：" + r.rejectedReasons());
     }
 
     @Test
@@ -666,6 +738,36 @@ class FinalDecisionEngineTests {
                 null, null,         // consensusScore, disagreementPenalty
                 null, null, entryTooExtended,   // volumeSpike, priceNotBreakHigh, entryTooExtended
                 entryTriggered
+        );
+    }
+
+    /**
+     * v2.16 builder：priceGate + 實際 dayHigh。fallback 走另一個 helper。
+     */
+    private FinalDecisionCandidateRequest priceGateCandidateWithDayHigh(
+            String code, BigDecimal finalRankScore,
+            BigDecimal currentPrice, BigDecimal openPrice, BigDecimal previousClose,
+            BigDecimal dayHigh) {
+        BigDecimal distanceFromOpenPct = (currentPrice != null && openPrice != null && openPrice.signum() > 0)
+                ? currentPrice.subtract(openPrice).divide(openPrice, 6, java.math.RoundingMode.HALF_UP)
+                : null;
+        BigDecimal dropFromPrevClosePct = (currentPrice != null && previousClose != null && previousClose.signum() > 0)
+                ? previousClose.subtract(currentPrice).divide(previousClose, 6, java.math.RoundingMode.HALF_UP)
+                : null;
+        return new FinalDecisionCandidateRequest(
+                code, "TEST-" + code, "VALUE_FAIR", "BREAKOUT",
+                2.5, true, true,
+                false, false, false,
+                false, true,
+                "dayhigh-test", "100-102",
+                98.0, 108.0, 115.0,
+                null, null, null,
+                finalRankScore, false,
+                null, null, null, null, null, null,
+                null, null, false, true,
+                currentPrice, openPrice, previousClose, null, null,
+                distanceFromOpenPct, dropFromPrevClosePct, "BULL_TREND",
+                dayHigh
         );
     }
 

@@ -29,6 +29,24 @@ public class MonitorDecisionEngine {
     }
 
     public MonitorDecisionResponse evaluate(MonitorEvaluateRequest request) {
+        // v2.16：全域 kill switch — false 時 monitor 直接 OFF，不繼續評估
+        if (scoreConfig != null && !scoreConfig.getBoolean("trading.status.allow_trade", true)) {
+            String marketGrade = normalize(request.marketGrade());
+            String decision = normalize(request.decision());
+            String marketPhase = request.marketPhase() == null || request.marketPhase().isBlank()
+                    ? defaultPhase(marketGrade) : request.marketPhase();
+            return new MonitorDecisionResponse(
+                    marketGrade, marketPhase, decision, "OFF",
+                    false, "MARKET_DOWNGRADE",
+                    "TRADING_DISABLED：kill switch 啟動，五分鐘監控暫停。",
+                    "下一輪確認 trading.status.allow_trade 是否恢復 true。",
+                    normalizeOrDefault(request.decisionLock(), "NONE"), 10,
+                    normalizeOrDefault(request.previousEventType(), "NONE"),
+                    normalizeOrDefault(request.timeDecayStage(), "EARLY"),
+                    "TRADING_DISABLED kill_switch=true"
+            );
+        }
+
         String marketGrade = normalize(request.marketGrade());
         String decision = normalize(request.decision());
         // v2.4：以 evaluationTime 為準重新計算 timeDecay，不盲信 request 的 stale 輸入
@@ -54,6 +72,8 @@ public class MonitorDecisionEngine {
         }
 
         // v2.15：swing-friendly cooldown — 11:00–13:00 期間，B 級非空手且非 LOCKED，從 OFF 救回 WATCH
+        // v2.16 強化：B 級若 currentPrice 在 entryZoneLowerBound 的 b_grade_distance_pct 內 → 升級 SELECT_BUY_NOW
+        boolean bgradeBuyNow = false;
         if (isSwingCooldownEnabled() && "OFF".equals(monitorMode)) {
             LocalTime t = request.evaluationTime() == null ? LocalTime.now() : request.evaluationTime();
             boolean inSwingBand = !t.isBefore(SWING_BAND_START) && t.isBefore(SWING_BAND_END);
@@ -61,7 +81,13 @@ public class MonitorDecisionEngine {
             boolean notHardLocked = !"LOCKED".equals(decisionLock);
             if (inSwingBand && swingFriendlyGrade && notHardLocked
                     && !"C".equals(marketGrade) && !"REST".equals(decision)) {
-                monitorMode = "WATCH";
+                // B 級檢查接近進場下緣：(currentPrice - lower) / lower ≤ b_grade_distance_pct
+                if ("B".equals(marketGrade) && isCloseToEntryLower(request)) {
+                    monitorMode = "ACTIVE";  // upgrade 到積極監控
+                    bgradeBuyNow = true;     // signal triggerEvent / summary 帶 SELECT_BUY_NOW 語意
+                } else {
+                    monitorMode = "WATCH";
+                }
             }
         }
 
@@ -88,7 +114,8 @@ public class MonitorDecisionEngine {
                 + " trigger=" + triggerEvent
                 + " notify=" + shouldNotify
                 + " lock=" + decisionLock
-                + " stage=" + timeDecay;
+                + " stage=" + timeDecay
+                + (bgradeBuyNow ? " event=SELECT_BUY_NOW(b_grade_near_entry)" : "");
 
         return new MonitorDecisionResponse(
                 marketGrade,
@@ -155,6 +182,23 @@ public class MonitorDecisionEngine {
     private boolean isSwingCooldownEnabled() {
         if (scoreConfig == null) return false;
         return scoreConfig.getBoolean("monitor.swing-cooldown.enabled", false);
+    }
+
+    /**
+     * v2.16：判斷 currentPrice 是否在 entryZoneLowerBound 之上、且距離 ≤ b_grade_distance_pct。
+     * 兩者皆 null 視為不近（保守，回 false）。
+     */
+    private boolean isCloseToEntryLower(MonitorEvaluateRequest req) {
+        java.math.BigDecimal price = req.currentPrice();
+        java.math.BigDecimal lower = req.entryZoneLowerBound();
+        if (price == null || lower == null || lower.signum() <= 0) return false;
+        if (price.compareTo(lower) < 0) return false; // 已跌破下緣，不算「接近」
+        double pct = price.subtract(lower).doubleValue() / lower.doubleValue();
+        double threshold = scoreConfig == null
+                ? 0.01
+                : scoreConfig.getDecimal("monitor.swing-cooldown.b_grade_distance_pct",
+                        new java.math.BigDecimal("0.01")).doubleValue();
+        return pct <= threshold;
     }
 
     private String normalize(String value) {

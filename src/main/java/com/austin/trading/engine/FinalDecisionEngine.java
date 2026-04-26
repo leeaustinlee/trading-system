@@ -112,6 +112,13 @@ public class FinalDecisionEngine {
      */
     private FinalDecisionResponse evaluateIntradayEntry(FinalDecisionEvaluateRequest request,
                                                           MarketSession session) {
+        // v2.16：trading.status.allow_trade 全域 kill switch（最高優先；早於 session/grade）
+        if (!config.getBoolean("trading.status.allow_trade", true)) {
+            log.warn("[FinalDecisionEngine] REST: trading.status.allow_trade=false (kill switch)");
+            return rest("交易 kill switch 啟動，今日全面禁止進場。",
+                    List.of("TRADING_DISABLED"));
+        }
+
         // v2.7 Session-Aware gate
         if (!session.allowsFinalDecision()) {
             String summary = session == MarketSession.PREMARKET
@@ -355,24 +362,34 @@ public class FinalDecisionEngine {
     }
 
     /**
-     * v2.15：每筆候選的 chased-high 判斷。
+     * v2.15 / v2.16：每筆候選的 chased-high 判斷。
      *
-     * <p>因 FinalDecisionCandidateRequest 沒有 dayHigh 欄位，這裡用 entryPriceZone 上緣
-     * 當作「期望最高合理進場點」proxy：currentPrice 接近上緣即視為追高。
-     * 若 currentPrice 或 entryPriceZone 缺，回 NO_DATA（不擋、不警告）。</p>
+     * <p>v2.16：若 candidate 帶有實際當日 dayHigh（從 live-quotes 取得）優先使用；
+     * 否則 fallback 到 entryPriceZone 上緣（v2.15 行為）。</p>
+     *
+     * <p>若 currentPrice 缺、且 dayHigh 與 entryPriceZone 都不可用 → NO_DATA。</p>
      */
     public ChasedHighOutcome evaluateChasedHigh(FinalDecisionCandidateRequest c,
                                                  BigDecimal blockThreshold,
                                                  BigDecimal warnThreshold) {
         BigDecimal cur = c.currentPrice();
         if (cur == null || cur.signum() <= 0) return ChasedHighOutcome.NO_DATA;
-        Double zoneUpper = parseEntryZoneUpper(c.entryPriceZone());
-        if (zoneUpper == null || zoneUpper <= 0) return ChasedHighOutcome.NO_DATA;
+
+        // v2.16：優先用真實 dayHigh，fallback 到 entryPriceZone 上緣
+        Double reference = null;
+        if (c.dayHigh() != null && c.dayHigh().signum() > 0) {
+            reference = c.dayHigh().doubleValue();
+        } else {
+            Double zoneUpper = parseEntryZoneUpper(c.entryPriceZone());
+            if (zoneUpper != null && zoneUpper > 0) reference = zoneUpper;
+        }
+        if (reference == null) return ChasedHighOutcome.NO_DATA;
+
         double curD = cur.doubleValue();
         double blockT = blockThreshold == null ? 0.02 : blockThreshold.doubleValue();
         double warnT  = warnThreshold  == null ? 0.04 : warnThreshold.doubleValue();
-        if (chasedHighEntryEngine.isChased(curD, zoneUpper, blockT)) return ChasedHighOutcome.BLOCK;
-        if (chasedHighEntryEngine.isChased(curD, zoneUpper, warnT))  return ChasedHighOutcome.WARN;
+        if (chasedHighEntryEngine.isChased(curD, reference, blockT)) return ChasedHighOutcome.BLOCK;
+        if (chasedHighEntryEngine.isChased(curD, reference, warnT))  return ChasedHighOutcome.WARN;
         return ChasedHighOutcome.OK;
     }
 

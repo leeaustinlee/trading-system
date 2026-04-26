@@ -435,8 +435,11 @@ public class LineMessageBuilder {
             String r = raw.trim();
             String upper = r.toUpperCase(Locale.ROOT);
             // v2.15：priority scale ×10，方便插入新 tier（CHASED_HIGH 介於 hard gate 與 Codex 之間）
+            // v2.16：TRADING_DISABLED kill switch 最優先（priority 5），位於所有 hard gate 之前
             int priority;
-            if (upper.contains("REGIME_BLOCKED")
+            if (upper.contains("TRADING_DISABLED")) {
+                priority = 5;
+            } else if (upper.contains("REGIME_BLOCKED")
                     || upper.contains("MARKET_GRADE=C")
                     || upper.contains("DECISION_LOCK")
                     || upper.contains("PORTFOLIO")
