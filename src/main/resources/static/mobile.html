@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0a0e1a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -10,27 +10,45 @@
 <style>
   /* ─── design tokens ──────────────────────────────────────────── */
   :root{
-    --bg-base:#0a0e1a; --bg-card:#141a2a; --bg-card-2:#1c2438;
+    --bg-base:#0a0e1a; --bg-card:#141a2a; --bg-card-2:#1c2438; --bg-card-3:#222a40;
     --bg-sticky:rgba(10,14,26,.94);
-    --ink:#e8edf5; --muted:#7a8499; --dim:#4d5670;
-    --c-buy:#22c55e; --c-wait:#f59f00; --c-watch:#3b82f6;
-    --c-plan:#8b5cf6; --c-rest:#6b7280; --c-stop:#ef4444;
+    --ink:#e8edf5; --muted:#7a8499; --dim:#4d5670; --line:rgba(255,255,255,.08);
+
+    /* 語意色 */
+    --c-buy:#22c55e;   --c-buy-bg:rgba(34,197,94,.15);   --c-buy-border:rgba(34,197,94,.45);
+    --c-wait:#f59f00;  --c-wait-bg:rgba(245,159,0,.15);  --c-wait-border:rgba(245,159,0,.45);
+    --c-watch:#3b82f6; --c-watch-bg:rgba(59,130,246,.15);--c-watch-border:rgba(59,130,246,.45);
+    --c-plan:#8b5cf6;  --c-plan-bg:rgba(139,92,246,.15); --c-plan-border:rgba(139,92,246,.45);
+    --c-rest:#6b7280;  --c-rest-bg:rgba(107,114,128,.15);--c-rest-border:rgba(107,114,128,.45);
+    --c-stop:#ef4444;  --c-stop-bg:rgba(239,68,68,.18);  --c-stop-border:rgba(239,68,68,.55);
     --c-up:#22c55e; --c-dn:#ef4444;
+
     --r:10px; --r-pill:999px;
     --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px;
+    --tap:44px;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0;background:var(--bg-base);color:var(--ink);
     font:500 14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;
-    overscroll-behavior-y:contain}
-  .mono{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace}
+    overscroll-behavior-y:contain;overflow-x:hidden}
+  body{padding-bottom:calc(64px + env(safe-area-inset-bottom,0))} /* leave room for bottom nav */
+  .mono{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
   button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
   a{color:inherit;text-decoration:none}
 
-  /* ─── sticky hero ───────────────────────────────────────────── */
-  .hero{position:sticky;top:0;z-index:30;background:var(--bg-sticky);
+  /* ─── header / page title bar ───────────────────────────────── */
+  .m-header{position:sticky;top:0;z-index:30;background:var(--bg-sticky);
     backdrop-filter:saturate(160%) blur(8px);-webkit-backdrop-filter:saturate(160%) blur(8px);
-    padding:max(env(safe-area-inset-top),10px) var(--sp-4) var(--sp-3)}
+    padding:max(env(safe-area-inset-top),8px) var(--sp-4) 0}
+  .m-header .row{display:flex;align-items:center;justify-content:space-between;height:36px}
+  .m-header .title{font-size:14px;font-weight:800;letter-spacing:.5px}
+  .m-header .right{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--muted)}
+  .m-header .refresh{padding:4px 10px;border-radius:var(--r-pill);background:var(--bg-card);
+    color:var(--muted);border:1px solid var(--dim);font-size:11px;min-height:30px}
+  .m-header .refresh:active{background:var(--bg-card-2)}
+
+  /* ─── decision hero (overview only, sticky inside view) ─────── */
+  .hero{padding:6px var(--sp-4) var(--sp-3)}
   .hero-inner{border-radius:var(--r);padding:var(--sp-3) var(--sp-4);
     background:var(--bg-card);border-left:6px solid var(--c-rest);transition:border-color .2s}
   .hero[data-d=ENTER] .hero-inner{border-left-color:var(--c-buy)}
@@ -42,62 +60,70 @@
   .hero h1 .count{font-size:14px;color:var(--muted);font-weight:600}
   .hero .reason{margin-top:4px;color:var(--ink);font-size:13px;font-weight:600}
   .hero .meta{margin-top:2px;color:var(--muted);font-size:11px;display:flex;justify-content:space-between}
-  .hero .meta .ts{font-family:var(--font-mono,inherit)}
   .hero .topblocks{margin-top:8px;padding-top:8px;border-top:1px dashed var(--dim);display:none}
   .hero[data-expanded=true] .topblocks{display:block}
   .hero .topblocks ol{margin:0;padding-left:18px;font-size:12px;color:var(--muted)}
   .hero .topblocks li{margin:2px 0}
   .hero .chev{float:right;color:var(--muted);font-size:12px;margin-top:-22px}
 
-  /* ─── ai status ─────────────────────────────────────────────── */
+  /* ─── ai status pill row ────────────────────────────────────── */
   .ai-status{padding:6px var(--sp-4);font-size:12px;color:var(--muted);
     display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:space-between}
   .ai-status .pills{display:flex;gap:6px;flex-wrap:wrap}
   .ai-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--r-pill);
     font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
     background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--ink)}
-  .ai-pill.ok    {background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.45);color:#86efac}
-  .ai-pill.warn  {background:rgba(245,159,0,.15);border-color:rgba(245,159,0,.45);color:#fcd34d}
-  .ai-pill.alert {background:rgba(239,68,68,.18);border-color:rgba(239,68,68,.55);color:#fca5a5}
+  .ai-pill.ok    {background:var(--c-buy-bg); border-color:var(--c-buy-border); color:#86efac}
+  .ai-pill.warn  {background:var(--c-wait-bg);border-color:var(--c-wait-border);color:#fcd34d}
+  .ai-pill.alert {background:var(--c-stop-bg);border-color:var(--c-stop-border);color:#fca5a5}
 
-  /* ─── sticky filter chips ───────────────────────────────────── */
-  .filters{position:sticky;top:88px;z-index:20;background:var(--bg-sticky);
-    backdrop-filter:saturate(160%) blur(8px);padding:6px var(--sp-4) 8px;
-    display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
-  .filters::-webkit-scrollbar{display:none}
+  /* ─── status badge / risk badge / hint pill (component) ─────── */
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:var(--r-pill);
+    font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;line-height:1.1}
+  .badge.buy   {background:var(--c-buy-bg);  color:#86efac;border:1px solid var(--c-buy-border)}
+  .badge.wait  {background:var(--c-wait-bg); color:#fcd34d;border:1px solid var(--c-wait-border)}
+  .badge.watch {background:var(--c-watch-bg);color:#93c5fd;border:1px solid var(--c-watch-border)}
+  .badge.plan  {background:var(--c-plan-bg); color:#c4b5fd;border:1px solid var(--c-plan-border)}
+  .badge.rest  {background:var(--c-rest-bg); color:#cbd5e1;border:1px solid var(--c-rest-border)}
+  .badge.stop  {background:var(--c-stop-bg); color:#fca5a5;border:1px solid var(--c-stop-border)}
+  .badge.skip  {background:rgba(107,114,128,.18);color:#9ca3af;border:1px solid rgba(107,114,128,.45)}
+
+  /* ─── nav chips (filter / horizontal scroll) ────────────────── */
+  .chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;
+    padding:6px var(--sp-4) 8px;background:var(--bg-base)}
+  .chips::-webkit-scrollbar{display:none}
   .chip{flex-shrink:0;height:34px;padding:0 14px;border-radius:var(--r-pill);
     background:var(--bg-card);color:var(--muted);font-weight:700;font-size:13px;
     border:1px solid var(--dim);min-width:60px}
   .chip.active{background:var(--ink);color:var(--bg-base);border-color:var(--ink)}
-  .chip .badge{margin-left:5px;font-size:11px;color:inherit;opacity:.7}
+  .chip .badge-num{margin-left:5px;font-size:11px;color:inherit;opacity:.7}
 
-  /* ─── content layout ────────────────────────────────────────── */
-  main{padding:0 var(--sp-4) calc(env(safe-area-inset-bottom,0) + 24px)}
-  .section{margin-top:var(--sp-4)}
+  /* ─── content / card base ───────────────────────────────────── */
+  main{padding:0 var(--sp-4)}
+  .section{margin-top:var(--sp-3)}
   .section-title{margin:0 0 6px;color:var(--muted);font-size:11px;font-weight:700;
-    letter-spacing:.6px;text-transform:uppercase;display:flex;justify-content:space-between}
+    letter-spacing:.6px;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}
   .section-title .count{color:var(--dim)}
 
-  /* ─── card base ─────────────────────────────────────────────── */
   .card{background:var(--bg-card);border-radius:var(--r);padding:12px 14px;
     margin-bottom:var(--sp-2);border:1px solid transparent;transition:border-color .15s}
   .card:active{background:var(--bg-card-2)}
   .empty{color:var(--muted);font-size:13px;text-align:center;padding:18px;
     background:var(--bg-card);border-radius:var(--r);border:1px dashed var(--dim)}
+  .skel{background:linear-gradient(90deg,var(--bg-card),var(--bg-card-2),var(--bg-card));
+    background-size:200% 100%;animation:skel 1.4s linear infinite;border-radius:var(--r);
+    height:18px;margin:4px 0}
+  @keyframes skel{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
-  /* ─── action card ───────────────────────────────────────────── */
-  .a-card .row1{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+  /* ─── action card (candidates / overview) ───────────────────── */
+  .a-card .row1{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0}
+  .a-card .row1 > div{min-width:0;overflow:hidden}
+  .a-card .row1 .badge{flex-shrink:0}
   .a-card .sym{font-size:16px;font-weight:800;letter-spacing:.5px}
   .a-card .name{color:var(--muted);font-size:13px;margin-left:6px;font-weight:600}
-  .hint{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:var(--r-pill);
-    font-size:11px;font-weight:800;letter-spacing:.4px}
-  .hint.buy   {background:rgba(34,197,94,.18);color:#86efac;border:1px solid rgba(34,197,94,.45)}
-  .hint.wait  {background:rgba(245,159,0,.18);color:#fcd34d;border:1px solid rgba(245,159,0,.45)}
-  .hint.watch {background:rgba(59,130,246,.18);color:#93c5fd;border:1px solid rgba(59,130,246,.45)}
-  .hint.skip  {background:rgba(107,114,128,.18);color:#9ca3af;border:1px solid rgba(107,114,128,.45)}
   .a-card .data{margin-top:6px;display:grid;grid-template-columns:auto 1fr;gap:3px 8px;font-size:13px}
   .a-card .data .k{color:var(--muted);font-weight:600}
-  .a-card .data .v{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-weight:600}
+  .a-card .data .v{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-weight:600;font-variant-numeric:tabular-nums}
   .dist{display:inline-flex;align-items:center;gap:4px;font-weight:700}
   .dist.danger{color:var(--c-stop)}
   .dist.warn  {color:var(--c-wait)}
@@ -108,10 +134,14 @@
   .a-card.exp .more{display:block}
   .a-card .more .meta-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:3px;font-size:12px}
   .a-card .more .meta-row .v{color:var(--ink);font-weight:700}
+  .a-card .quote{font-size:12px;color:var(--muted)}
+  .a-card .quote .up{color:var(--c-up)} .a-card .quote .dn{color:var(--c-dn)}
 
   /* ─── position card ─────────────────────────────────────────── */
-  .p-card .row1{display:flex;align-items:baseline;justify-content:space-between}
-  .p-card .pnl{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-weight:800;font-size:14px}
+  .p-card .row1{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0}
+  .p-card .row1 > div{min-width:0;overflow:hidden}
+  .p-card .row1 .pnl{flex-shrink:0}
+  .p-card .pnl{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums}
   .p-card .pnl.up{color:var(--c-up)} .p-card .pnl.dn{color:var(--c-dn)}
   .p-card .info{font-size:12px;color:var(--muted);margin-top:2px}
   .p-card .stop-row{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px}
@@ -125,127 +155,146 @@
   .p-card .risk b.danger{color:var(--c-stop)}
   .p-card .risk b.warn{color:var(--c-wait)}
   .p-card .risk b.safe{color:var(--c-buy)}
-  .p-card .actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px}
-  .p-card .actions button{height:40px;border-radius:8px;font-size:13px;font-weight:700;
+  .p-card .actions{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+  .p-card .actions button{height:var(--tap);border-radius:8px;font-size:12px;font-weight:700;
     background:var(--bg-card-2);color:var(--ink);border:1px solid var(--dim)}
-  .p-card .actions button.hold{background:rgba(34,197,94,.12);color:#86efac;border-color:rgba(34,197,94,.4)}
-  .p-card .actions button.reduce{background:rgba(245,159,0,.12);color:#fcd34d;border-color:rgba(245,159,0,.4)}
-  .p-card .actions button.exit{background:rgba(239,68,68,.12);color:#fca5a5;border-color:rgba(239,68,68,.4)}
+  .p-card .actions button.hold  {background:var(--c-buy-bg);color:#86efac;border-color:var(--c-buy-border)}
+  .p-card .actions button.add   {background:var(--c-watch-bg);color:#93c5fd;border-color:var(--c-watch-border)}
+  .p-card .actions button.reduce{background:var(--c-wait-bg);color:#fcd34d;border-color:var(--c-wait-border)}
+  .p-card .actions button.exit  {background:var(--c-stop-bg);color:#fca5a5;border-color:var(--c-stop-border)}
   .p-card .more{display:none;margin-top:10px;padding-top:8px;border-top:1px dashed var(--dim);font-size:12px;color:var(--muted)}
   .p-card.exp .more{display:block}
 
+  /* ─── timeline / activity feed ──────────────────────────────── */
+  .timeline-day{margin:14px 0 6px;font-size:11px;color:var(--muted);
+    font-weight:800;letter-spacing:.5px;text-transform:uppercase}
+  .tl-item{position:relative;padding:10px 12px 10px 26px;background:var(--bg-card);
+    border-radius:var(--r);margin-bottom:6px}
+  .tl-item::before{content:"";position:absolute;left:10px;top:14px;width:8px;height:8px;
+    border-radius:50%;background:var(--c-rest)}
+  .tl-item[data-d=ENTER]::before{background:var(--c-buy)}
+  .tl-item[data-d=WAIT]::before,.tl-item[data-d=WATCH]::before{background:var(--c-wait)}
+  .tl-item[data-d=REST]::before{background:var(--c-rest)}
+  .tl-item[data-d=PLAN]::before{background:var(--c-plan)}
+  .tl-item.latest{border-left:3px solid var(--c-buy);padding-left:23px}
+  .tl-item .head{display:flex;justify-content:space-between;align-items:baseline}
+  .tl-item .ts{font-size:11px;color:var(--muted);font-family:"SF Mono",monospace}
+  .tl-item .body{font-size:13px;color:var(--ink);margin-top:2px}
+  .tl-item .sub{font-size:11px;color:var(--muted);margin-top:2px}
+
+  /* ─── metric strip (pnl summary) ────────────────────────────── */
+  .metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:var(--sp-3)}
+  .metric{background:var(--bg-card);border-radius:var(--r);padding:10px 12px}
+  .metric .k{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+  .metric .v{font-size:18px;font-weight:800;font-family:"SF Mono",monospace;font-variant-numeric:tabular-nums;margin-top:2px}
+  .metric .v.up{color:var(--c-up)} .metric .v.dn{color:var(--c-dn)}
+  .metric .sub{font-size:10px;color:var(--dim);margin-top:2px}
+
+  /* ─── collapsible section ──────────────────────────────────── */
+  .collapsible{background:var(--bg-card);border-radius:var(--r);margin-bottom:8px;overflow:hidden}
+  .collapsible > .head{padding:12px 14px;display:flex;justify-content:space-between;align-items:center;
+    cursor:pointer;font-size:13px;font-weight:700;min-height:var(--tap)}
+  .collapsible > .head .chev{font-size:11px;color:var(--muted);transition:transform .2s}
+  .collapsible.open > .head .chev{transform:rotate(180deg)}
+  .collapsible > .body{display:none;padding:0 14px 12px;font-size:12px;color:var(--muted);border-top:1px dashed var(--dim)}
+  .collapsible.open > .body{display:block;padding-top:8px}
+  .collapsible pre{white-space:pre-wrap;word-break:break-word;background:var(--bg-card-2);
+    padding:8px;border-radius:6px;font-size:11px;line-height:1.5;max-height:280px;overflow:auto}
+
   /* ─── capital strip ─────────────────────────────────────────── */
-  .capital{margin-top:var(--sp-4);background:var(--bg-card);border-radius:var(--r);
-    padding:10px 14px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
-  .capital .v{color:var(--ink);font-weight:700;font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace}
+  .capital{margin-top:var(--sp-3);background:var(--bg-card);border-radius:var(--r);
+    padding:10px 14px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px}
+  .capital .v{color:var(--ink);font-weight:700;font-family:"SF Mono",monospace;font-variant-numeric:tabular-nums}
   .capital .v.up{color:var(--c-up)} .capital .v.dn{color:var(--c-dn)}
-  .theme-exposure{display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--dim);font-size:11px}
-  .theme-exposure .row{display:flex;justify-content:space-between}
+  .theme-exposure{display:none;width:100%;margin-top:8px;padding-top:8px;border-top:1px dashed var(--dim);font-size:11px}
+  .theme-exposure .row{display:flex;justify-content:space-between;margin:2px 0}
   .theme-exposure .row b.over{color:var(--c-stop)}
   .theme-exposure .row b.warn{color:var(--c-wait)}
   .capital.exp .theme-exposure{display:block}
 
-  /* ─── footer ────────────────────────────────────────────────── */
-  footer{margin-top:var(--sp-4);font-size:11px;color:var(--muted);
-    text-align:center;display:flex;justify-content:center;gap:10px;align-items:center}
-  footer button.refresh{padding:6px 12px;border-radius:var(--r-pill);
-    background:var(--bg-card);color:var(--muted);border:1px solid var(--dim);font-size:11px}
-  footer button.refresh:active{background:var(--bg-card-2)}
+  /* ─── scheduler row ─────────────────────────────────────────── */
+  .sched-card{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center}
+  .sched-card .sub{grid-column:1/-1;font-size:11px;color:var(--muted);font-family:"SF Mono",monospace;font-variant-numeric:tabular-nums}
+  .sched-card .name{font-size:13px;font-weight:700}
+  .sched-card .badge{font-size:10px}
+  .sched-card.fail{border:1px solid var(--c-stop-border)}
+  .sched-card.warn{border:1px solid var(--c-wait-border)}
 
-  /* ─── error / loading ───────────────────────────────────────── */
+  /* ─── bottom tab bar ────────────────────────────────────────── */
+  .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:50;
+    background:var(--bg-sticky);backdrop-filter:saturate(160%) blur(10px);
+    -webkit-backdrop-filter:saturate(160%) blur(10px);
+    border-top:1px solid var(--line);
+    padding:6px env(safe-area-inset-right,0) calc(env(safe-area-inset-bottom,0) + 6px) env(safe-area-inset-left,0)}
+  .tabbar-scroll{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;padding:0 8px}
+  .tabbar-scroll::-webkit-scrollbar{display:none}
+  .tab{flex-shrink:0;min-width:64px;min-height:48px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:2px;
+    padding:4px 10px;border-radius:8px;color:var(--muted);font-size:10px;font-weight:700}
+  .tab .ico{font-size:18px;line-height:1}
+  .tab.active{color:var(--ink);background:var(--bg-card-2)}
+  .tab.active .ico{color:var(--c-buy)}
+
+  /* ─── shared: error / loading helpers ───────────────────────── */
   .err{color:var(--c-stop);font-size:11px;margin-top:4px}
-  .skel{background:linear-gradient(90deg,var(--bg-card),var(--bg-card-2),var(--bg-card));
-    background-size:200% 100%;animation:skel 1.4s linear infinite;border-radius:var(--r);
-    height:18px;margin:4px 0}
-  @keyframes skel{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  .truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+  .grow{flex:1;min-width:0}
 </style>
 </head>
 <body>
 
-<!-- ═══ A. Decision Hero (sticky) ═══ -->
-<header class="hero" id="hero" data-d="REST">
-  <div class="hero-inner" id="heroInner">
-    <h1>
-      <span id="heroIcon">⚫</span>
-      <span id="heroTitle">讀取中…</span>
-      <span class="count" id="heroCount"></span>
-      <span class="chev" id="heroChev"></span>
-    </h1>
-    <div class="reason" id="heroReason">正在抓取今日決策…</div>
-    <div class="meta">
-      <span id="heroMeta">—</span>
-      <span class="ts mono" id="heroTime">--:--</span>
-    </div>
-    <div class="topblocks">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">主要阻擋原因</div>
-      <ol id="heroBlockList"></ol>
+<header class="m-header" id="mHeader">
+  <div class="row">
+    <div class="title" id="hdrTitle">總覽</div>
+    <div class="right">
+      <span class="mono" id="hdrTime">--:--:--</span>
+      <button class="refresh" id="btnRefresh">↻</button>
     </div>
   </div>
 </header>
 
-<!-- ═══ B. AI Status (one line) ═══ -->
-<div class="ai-status" id="aiStatus">
-  <div class="pills">
-    <span class="ai-pill" id="aiReadyPill">AI 載入中</span>
-    <span class="ai-pill" id="aiClaudePill">Claude</span>
-    <span class="ai-pill" id="aiCodexPill">Codex</span>
+<main id="app"><!-- view rendered here --></main>
+
+<nav class="tabbar" aria-label="主選單">
+  <div class="tabbar-scroll" id="tabbarScroll">
+    <a class="tab" data-r="overview"  href="#/overview"><span class="ico">⊙</span><span>總覽</span></a>
+    <a class="tab" data-r="candidates" href="#/candidates"><span class="ico">★</span><span>候選</span></a>
+    <a class="tab" data-r="positions" href="#/positions"><span class="ico">▣</span><span>持倉</span></a>
+    <a class="tab" data-r="pnl"       href="#/pnl"><span class="ico">$</span><span>損益</span></a>
+    <a class="tab" data-r="decisions" href="#/decisions"><span class="ico">∿</span><span>決策</span></a>
+    <a class="tab" data-r="research"  href="#/research"><span class="ico">⌬</span><span>AI</span></a>
+    <a class="tab" data-r="scheduler" href="#/scheduler"><span class="ico">◷</span><span>排程</span></a>
+    <a class="tab" data-r="advanced"  href="#/advanced"><span class="ico">⚙</span><span>進階</span></a>
   </div>
-  <span class="mono" id="aiTime">--:--</span>
-</div>
-
-<!-- ═══ C. Quick filter chips ═══ -->
-<div class="filters" id="filters">
-  <button class="chip active" data-f="all">全部</button>
-  <button class="chip" data-f="buy">可買 <span class="badge" id="bgBuy">0</span></button>
-  <button class="chip" data-f="wait">等待 <span class="badge" id="bgWait">0</span></button>
-  <button class="chip" data-f="position">持倉 <span class="badge" id="bgPos">0</span></button>
-</div>
-
-<main>
-  <!-- D. Action list -->
-  <section class="section" id="secActions">
-    <div class="section-title">行動清單 <span class="count" id="actionCount"></span></div>
-    <div id="actionList">
-      <div class="card skel" style="height:80px"></div>
-      <div class="card skel" style="height:80px"></div>
-    </div>
-  </section>
-
-  <!-- E. Position list -->
-  <section class="section" id="secPositions">
-    <div class="section-title">持倉 <span class="count" id="positionCount"></span></div>
-    <div id="positionList">
-      <div class="card skel" style="height:90px"></div>
-    </div>
-  </section>
-
-  <!-- F. Capital strip -->
-  <div class="capital" id="capStrip" onclick="toggleClass(this,'exp')">
-    <span>資金</span><span class="v" id="capTotal">—</span>
-    <span>現金比</span><span class="v" id="capRatio">—</span>
-    <span>未實現</span><span class="v mono" id="capUnreal">—</span>
-    <div class="theme-exposure" id="themeExposure"></div>
-  </div>
-
-  <!-- G. Footer -->
-  <footer>
-    <span>更新：<span class="mono" id="lastUpdate">--:--</span></span>
-    <button class="refresh" id="btnRefresh">↻ 重新整理</button>
-    <span>來源：Trading System</span>
-  </footer>
-</main>
+</nav>
 
 <script>
-/* ─── tiny utils ────────────────────────────────────────────── */
+'use strict';
+/* ════════════════════════════════════════════════════════════════
+   utils
+════════════════════════════════════════════════════════════════ */
 const $ = id => document.getElementById(id);
-const fmt = (n,d=0)=> n==null||!isFinite(n) ? '—' : Number(n).toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:d});
-const fmtPct = (n,d=1)=> n==null||!isFinite(n) ? '—' : (n>=0?'+':'')+Number(n).toFixed(d)+'%';
-const fmtPrice = n => n==null||!isFinite(n) ? '—' : Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
+const el = (tag, attrs={}, kids=[]) => {
+  const e = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs||{})){
+    if (k==='class') e.className=v;
+    else if (k==='html') e.innerHTML=v;
+    else if (k==='text') e.textContent=v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (k==='dataset') for (const [dk,dv] of Object.entries(v)) e.dataset[dk]=dv;
+    else if (v!=null) e.setAttribute(k,v);
+  }
+  (Array.isArray(kids)?kids:[kids]).filter(x=>x!=null).forEach(k => e.append(k));
+  return e;
+};
+const fmt    = (n,d=0)=> n==null||!isFinite(+n) ? '—' : Number(n).toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:d});
+const fmtPct = (n,d=1)=> n==null||!isFinite(+n) ? '—' : (n>=0?'+':'')+Number(n).toFixed(d)+'%';
+const fmtPrice = n => n==null||!isFinite(+n) ? '—' : Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
 const truncate = (s,n)=> !s?'': (String(s).length>n ? String(s).slice(0,n)+'…' : String(s));
-const HHmm = iso => { if(!iso) return '--:--'; try{return new Date(iso).toTimeString().slice(0,5);}catch(e){return '--:--';} };
+const HHmm   = iso => { if(!iso) return '--:--'; try{return new Date(iso).toTimeString().slice(0,5);}catch(e){return '--:--';} };
 const HHmmss = iso => { if(!iso) return '--:--:--'; try{return new Date(iso).toTimeString().slice(0,8);}catch(e){return '--:--:--';} };
+const yyyymmdd = iso => { if(!iso) return ''; try{return new Date(iso).toISOString().slice(0,10);}catch(e){return '';} };
 const safeJson = s => { try{ return s?JSON.parse(s):{}; }catch(e){ return {}; } };
-const toggleClass = (el,cls)=> el.classList.toggle(cls);
 
 async function safeFetch(url){
   try{
@@ -255,25 +304,32 @@ async function safeFetch(url){
   }catch(e){ console.warn('fetch fail',url,e.message); return null; }
 }
 
-/* ─── state ─────────────────────────────────────────────────── */
-const S = { dashboard:null, candidates:[], positions:[], capital:null, quotes:{}, filter:'all' };
+/* ════════════════════════════════════════════════════════════════
+   global state + cache
+════════════════════════════════════════════════════════════════ */
+const S = {
+  dashboard:null, candidates:[], positions:[], capital:null, quotes:{},
+  pnlDaily:null, pnl20:null, pnl90:null,
+  decisionsHistory:null, hourlyHistory:null, monitorHistory:null,
+  notifications:null, schedulerJobs:null, scheduledTasks:null,
+  migrationHealth:null, themeMappings:null,
+  filter:'all',
+  lastFetchAt:null,
+};
 S.filter = (localStorage.getItem('mobile.filter') || 'all');
 
-/* ─── classify candidate hint ──────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════
+   classification helpers
+════════════════════════════════════════════════════════════════ */
 function classifyCandidate(c, quote){
-  if (c.isVetoed) return {cls:'skip', label:'⚫ 排除'};
+  if (c.isVetoed) return {cls:'skip', label:'⚫ 排除', code:'SKIP'};
   const score = Number(c.finalRankScore ?? c.score ?? 0);
   const include = c.includeInFinalPlan === true;
-  // Use scoring.grade_ap_min=8.8 as primary buy gate; raw "score" can be > 20 (legacy heuristic)
-  const buyByFinal = include && score >= 8.8;
-  const buyByLegacy = include && score >= 22;            // fallback if finalRankScore null but raw score high
-  if (buyByFinal || buyByLegacy) return {cls:'buy', label:'🟢 可進場'};
-  if (score >= 7.4 || score >= 18) return {cls:'wait', label:'🟡 等回測'};
-  // 過熱判斷
-  if (quote && quote.changePercent > 6) return {cls:'wait', label:'🟡 過熱等回測'};
-  return {cls:'watch', label:'🔵 觀察'};
+  if ((include && score >= 8.8) || (include && score >= 22)) return {cls:'buy', label:'🟢 BUY', code:'BUY'};
+  if (score >= 7.4 || score >= 18) return {cls:'wait', label:'🟡 WAIT', code:'WAIT'};
+  if (quote && quote.changePercent > 6) return {cls:'wait', label:'🟡 過熱', code:'WAIT'};
+  return {cls:'watch', label:'🔵 WATCH', code:'WATCH'};
 }
-
 function distToStop(currentPrice, stopLossPrice){
   const cp = Number(currentPrice), sl = Number(stopLossPrice);
   if (!isFinite(cp) || !isFinite(sl) || sl<=0) return {pct:null, cls:'dim', text:'資料不足'};
@@ -281,69 +337,11 @@ function distToStop(currentPrice, stopLossPrice){
   const cls = pct < 2 ? 'danger' : pct < 5 ? 'warn' : 'safe';
   return {pct, cls, text:fmtPct(pct,1)};
 }
-
-/* ─── A. Decision Hero ──────────────────────────────────────── */
-function renderHero(){
-  const fd = S.dashboard?.finalDecision;
-  const hero = $('hero');
-  if (!fd){
-    hero.dataset.d = 'ALERT';
-    $('heroIcon').textContent='🔴'; $('heroTitle').textContent='AI 未就緒';
-    $('heroCount').textContent=''; $('heroReason').textContent='等待今日決策資料…';
-    $('heroMeta').textContent='—'; $('heroTime').textContent='--:--'; $('heroChev').textContent='';
-    return;
-  }
-  const decision = (fd.decision||'').toUpperCase();
-  const payload = safeJson(fd.payloadJson);
-  const selectedCount = payload.selected_count ?? (payload.selected_stocks?.length || 0);
-  const rejected = payload.rejected_reasons || [];
-
-  let icon='⚫', title='REST', titleSuffix='';
-  if (decision==='ENTER'){ icon='🟢'; title='ENTER'; titleSuffix=`（${selectedCount} 檔）`; }
-  else if (decision==='WATCH'||decision==='WAIT'){ icon='🟡'; title='WAIT'; titleSuffix='（不追）'; }
-  else if (decision==='REST'){ icon='⚫'; title='REST'; titleSuffix='（休息）'; }
-  else if (decision==='PLAN'){ icon='🔵'; title='PLAN'; titleSuffix='（盤後規劃）'; }
-  else { icon='⚫'; title=decision || '—'; }
-
-  hero.dataset.d = (decision==='WATCH'?'WAIT':decision) || 'REST';
-  $('heroIcon').textContent = icon;
-  $('heroTitle').textContent = title;
-  $('heroCount').textContent = titleSuffix;
-
-  // 原因（≤ 10 字）
-  let reason = '';
-  if (decision==='ENTER' && payload.selected_stocks?.length){
-    reason = payload.selected_stocks[0].rationale || payload.selected_stocks[0].stockName || '';
-  }
-  reason = reason || fd.summary || '';
-  reason = truncate(reason, 16);
-  $('heroReason').textContent = reason || (decision==='ENTER' ? '可執行' : '今日休息');
-
-  $('heroMeta').textContent = `來源 ${fd.sourceTaskType || '—'}`;
-  $('heroTime').textContent = HHmm(fd.createdAt);
-
-  // Top 2 阻擋原因（WAIT/REST 才顯示）
-  $('heroChev').textContent = (decision==='WAIT'||decision==='WATCH'||decision==='REST') && rejected.length ? '▾ 看原因' : '';
-  const ol = $('heroBlockList');
-  ol.innerHTML = '';
-  if (rejected.length){
-    pickTopReasons(rejected, 2).forEach(r => {
-      const li = document.createElement('li'); li.textContent = truncate(r, 30); ol.appendChild(li);
-    });
-  }
-}
-$('hero').addEventListener('click', () => {
-  const d = $('hero').dataset.d;
-  if (d==='WAIT' || d==='REST') $('hero').dataset.expanded = $('hero').dataset.expanded==='true' ? 'false' : 'true';
-});
-
-// 與 LineMessageBuilder.pickTopBlockReasons 同邏輯
 function pickTopReasons(reasons, limit){
   const out = new Map();
   for (const raw of reasons||[]){
     if (!raw) continue;
-    const r = String(raw).trim();
-    if (!r) continue;
+    const r = String(raw).trim(); if (!r) continue;
     const u = r.toUpperCase();
     let p = 9;
     if (u.includes('REGIME_BLOCKED')||u.includes('MARKET_GRADE=C')||u.includes('DECISION_LOCK')||u.includes('PORTFOLIO')||u.includes('COOLDOWN')||u.includes('MAX_POSITIONS')||u.includes('PREMARKET_BIAS_ONLY')||u.includes('LATE_SESSION_FORCE_REST')) p=1;
@@ -357,256 +355,857 @@ function pickTopReasons(reasons, limit){
   return [...out.entries()].sort((a,b)=>a[1]-b[1]).slice(0,limit).map(e=>e[0]);
 }
 
-/* ─── B. AI Status ──────────────────────────────────────────── */
-function renderAiStatus(){
-  const fd = S.dashboard?.finalDecision;
+/* ════════════════════════════════════════════════════════════════
+   COMPONENTS (11 reusable functions)
+════════════════════════════════════════════════════════════════ */
+
+/** 1. MobileHeader — 由 #mHeader 控制；setHeader(title) 切標題 */
+function setHeader(title){ $('hdrTitle').textContent = title || ''; }
+
+/** 2. MobileTabBar — 由 .tabbar 渲染 + hash routing；highlightTab(route) 切高亮 */
+function highlightTab(route){
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.r===route));
+}
+
+/** 3. DecisionHero — 給 fd/payload 渲染 hero */
+function DecisionHero(fd){
+  const wrap = el('section',{class:'hero',id:'hero'});
+  if (!fd){
+    wrap.dataset.d = 'ALERT';
+    wrap.append(el('div',{class:'hero-inner',html:`
+      <h1>🔴 <span>AI 未就緒</span></h1>
+      <div class="reason">等待今日決策資料…</div>
+      <div class="meta"><span>—</span><span class="mono">--:--</span></div>`}));
+    return wrap;
+  }
+  const decision = (fd.decision||'').toUpperCase();
+  const payload = safeJson(fd.payloadJson);
+  const selectedCount = payload.selected_count ?? (payload.selected_stocks?.length || 0);
+  const rejected = payload.rejected_reasons || [];
+
+  let icon='⚫', title='REST', titleSuffix='';
+  if (decision==='ENTER'){ icon='🟢'; title='ENTER'; titleSuffix=`（${selectedCount} 檔）`; }
+  else if (decision==='WATCH'||decision==='WAIT'){ icon='🟡'; title='WAIT'; titleSuffix='（不追）'; }
+  else if (decision==='REST'){ icon='⚫'; title='REST'; titleSuffix='（休息）'; }
+  else if (decision==='PLAN'){ icon='🔵'; title='PLAN'; titleSuffix='（盤後規劃）'; }
+  else { title=decision || '—'; }
+
+  wrap.dataset.d = (decision==='WATCH'?'WAIT':decision) || 'REST';
+
+  let reason = '';
+  if (decision==='ENTER' && payload.selected_stocks?.length){
+    reason = payload.selected_stocks[0].rationale || payload.selected_stocks[0].stockName || '';
+  }
+  reason = reason || fd.summary || '';
+  reason = truncate(reason, 18);
+
+  const inner = el('div',{class:'hero-inner'});
+  const h1 = el('h1',{}, [
+    el('span',{text:icon}),
+    el('span',{text:' '+title}),
+    el('span',{class:'count',text:titleSuffix}),
+    el('span',{class:'chev',text: (decision==='WAIT'||decision==='WATCH'||decision==='REST') && rejected.length ? '▾ 看原因' : ''})
+  ]);
+  inner.append(h1);
+  inner.append(el('div',{class:'reason',text: reason || (decision==='ENTER'?'可執行':'今日休息')}));
+  inner.append(el('div',{class:'meta',html:`<span>來源 ${fd.sourceTaskType||'—'}</span><span class="mono">${HHmm(fd.createdAt)}</span>`}));
+  if (rejected.length){
+    const tb = el('div',{class:'topblocks'});
+    tb.append(el('div',{html:'<span style="font-size:11px;color:var(--muted);margin-bottom:4px">主要阻擋原因</span>'}));
+    const ol = el('ol');
+    pickTopReasons(rejected, 2).forEach(r => ol.append(el('li',{text:truncate(r,30)})));
+    tb.append(ol);
+    inner.append(tb);
+  }
+  wrap.append(inner);
+  wrap.addEventListener('click', () => {
+    if (wrap.dataset.d==='WAIT' || wrap.dataset.d==='REST') {
+      wrap.dataset.expanded = wrap.dataset.expanded==='true' ? 'false' : 'true';
+    }
+  });
+  return wrap;
+}
+
+/** 4. AIStatusPill — 渲染三顆 pill */
+function AIStatusPill(fd){
+  const wrap = el('div',{class:'ai-status'});
+  const pills = el('div',{class:'pills'});
   const ready = (fd?.aiStatus || '').toUpperCase();
   const fb = (fd?.fallbackReason || '').toUpperCase();
   let readyCls='warn', readyTxt='AI 未知';
   if (ready==='FULL_AI_READY'){ readyCls='ok'; readyTxt='AI READY'; }
   else if (ready==='PARTIAL_AI_READY'){ readyCls='warn'; readyTxt='AI PARTIAL'; }
   else if (ready==='AI_NOT_READY'){ readyCls='alert'; readyTxt='AI 未就緒'; }
-  $('aiReadyPill').className = 'ai-pill '+readyCls;
-  $('aiReadyPill').textContent = readyTxt;
-
   let claudeCls='ok', claudeTxt='Claude OK';
   let codexCls='ok', codexTxt='Codex OK';
   if (fb==='CODEX_MISSING' || ready==='PARTIAL_AI_READY'){ codexCls='alert'; codexTxt='Codex 未完成'; }
   if (fb==='AI_NOT_READY' || ready==='AI_NOT_READY'){ claudeCls='alert'; claudeTxt='Claude 未完成'; codexCls='alert'; codexTxt='Codex 未完成'; }
   if (fb==='AI_TIMEOUT'){ claudeCls='alert'; claudeTxt='AI Timeout'; codexCls='alert'; codexTxt='AI Timeout'; }
-  $('aiClaudePill').className = 'ai-pill '+claudeCls; $('aiClaudePill').textContent = claudeTxt;
-  $('aiCodexPill').className  = 'ai-pill '+codexCls;  $('aiCodexPill').textContent  = codexTxt;
-
-  const t = fd?.codexDoneAt || fd?.claudeDoneAt;
-  $('aiTime').textContent = HHmm(t);
+  pills.append(el('span',{class:'ai-pill '+readyCls,text:readyTxt}));
+  pills.append(el('span',{class:'ai-pill '+claudeCls,text:claudeTxt}));
+  pills.append(el('span',{class:'ai-pill '+codexCls,text:codexTxt}));
+  wrap.append(pills);
+  wrap.append(el('span',{class:'mono',text: HHmm(fd?.codexDoneAt || fd?.claudeDoneAt)}));
+  return wrap;
 }
 
-/* ─── C. Filter chips ───────────────────────────────────────── */
-$('filters').addEventListener('click', e => {
-  const btn = e.target.closest('.chip'); if(!btn) return;
-  S.filter = btn.dataset.f;
-  localStorage.setItem('mobile.filter', S.filter);
-  applyFilter();
-});
-function applyFilter(){
-  document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.f===S.filter));
-  const showActions = S.filter !== 'position';
-  const showPositions = S.filter === 'all' || S.filter === 'position';
-  $('secActions').style.display = showActions ? '' : 'none';
-  $('secPositions').style.display = showPositions ? '' : 'none';
-  // 內部過濾 action card 顯示 hint 類別
-  document.querySelectorAll('#actionList .a-card').forEach(card => {
-    const h = card.dataset.hint;
-    let show = true;
-    if (S.filter === 'buy')  show = (h==='buy');
-    if (S.filter === 'wait') show = (h==='wait' || h==='watch');
-    card.style.display = show ? '' : 'none';
-  });
+/** 5. StatusBadge — 通用狀態 badge */
+function StatusBadge(code, label){
+  const map = {ENTER:'buy', BUY:'buy', WAIT:'wait', WATCH:'watch', PLAN:'plan',
+               REST:'rest', SKIP:'skip', BLOCK:'stop', EXIT:'stop', SUCCESS:'buy',
+               FAILED:'stop', PENDING:'wait', RUNNING:'watch'};
+  const cls = map[String(code||'').toUpperCase()] || 'rest';
+  return el('span',{class:'badge '+cls, text: label || code || '—'});
 }
 
-/* ─── D. Action list ────────────────────────────────────────── */
-function renderActions(){
-  const list = $('actionList');
-  list.innerHTML = '';
-  let nBuy=0, nWait=0;
-  const cands = S.candidates || [];
-  if (!cands.length){
-    list.innerHTML = '<div class="empty">目前無候選股</div>';
-    $('actionCount').textContent = '0';
-    $('bgBuy').textContent='0'; $('bgWait').textContent='0';
-    return;
+/** 6. RiskBadge — 距停損 % 對應風險文字 */
+function RiskBadge(distancePct){
+  if (distancePct==null) return el('span',{class:'badge skip',text:'未知'});
+  const cls = distancePct<2?'stop':distancePct<5?'wait':'buy';
+  const txt = distancePct<2?'高':distancePct<5?'中':'低';
+  return el('span',{class:'badge '+cls,text:'風險 '+txt});
+}
+
+/** 7. StockActionCard — 候選股卡片（可展開） */
+function StockActionCard(c, quote){
+  const cur = quote?.currentPrice;
+  const hint = classifyCandidate(c, quote);
+  const dist = distToStop(cur, c.stopLossPrice);
+  const score = c.finalRankScore ?? c.score;
+  const rr = c.riskRewardRatio;
+
+  const card = el('div',{class:'card a-card', dataset:{hint:hint.cls, sym:c.symbol||''}});
+  card.append(el('div',{class:'row1'},[
+    el('div',{},[ el('span',{class:'sym mono',text:c.symbol||''}),
+                  el('span',{class:'name',text:c.stockName||''}) ]),
+    el('span',{class:'badge '+hint.cls, text:hint.label})
+  ]));
+  if (quote){
+    const pct = quote.changePercent;
+    const pctCls = pct>=0?'up':'dn';
+    card.append(el('div',{class:'quote',html:
+      `<span class="mono">${fmtPrice(cur)}</span> <span class="${pctCls}">${fmtPct(pct,2)}</span>` +
+      ` <span style="color:var(--dim)">|</span> 高 ${fmtPrice(quote.dayHigh)} 低 ${fmtPrice(quote.dayLow)}` }));
   }
-  cands.forEach(c => {
-    const q = S.quotes[c.symbol];
-    const cur = q?.currentPrice;
-    const hint = classifyCandidate(c, q);
-    if (hint.cls==='buy') nBuy++;
-    else if (hint.cls==='wait') nWait++;
+  const data = el('div',{class:'data'});
+  data.append(el('span',{class:'k',text:'進場'})); data.append(el('span',{class:'v',text:c.entryPriceZone||'—'}));
+  data.append(el('span',{class:'k',text:'停損'})); data.append(el('span',{class:'v',text:fmtPrice(c.stopLossPrice)}));
+  data.append(el('span',{class:'k',text:'TP1'}));  data.append(el('span',{class:'v',text:fmtPrice(c.takeProfit1)}));
+  data.append(el('span',{class:'k',text:'距停損'}));
+  data.append(el('span',{class:'v', html:`<span class="dist ${dist.cls}">${dist.text}</span>`}));
+  card.append(data);
 
-    const dist = distToStop(cur, c.stopLossPrice);
-    const score = c.finalRankScore ?? c.score;
-    const rr = c.riskRewardRatio;
-    const card = document.createElement('div');
-    card.className = 'card a-card';
-    card.dataset.hint = hint.cls;
-    card.innerHTML = `
-      <div class="row1">
-        <div><span class="sym mono">${c.symbol}</span><span class="name">${c.stockName||''}</span></div>
-        <span class="hint ${hint.cls}">${hint.label}</span>
-      </div>
-      <div class="data">
-        <span class="k">進場</span><span class="v">${c.entryPriceZone||'—'}</span>
-        <span class="k">停損</span><span class="v">${fmtPrice(c.stopLossPrice)}</span>
-        <span class="k">距停損</span><span class="v"><span class="dist ${dist.cls}">${dist.text}</span>${cur?` <span style="color:var(--muted);font-weight:500">@${fmtPrice(cur)}</span>`:''}</span>
-      </div>
-      <div class="more">
-        <div class="meta-row">
-          <span>RR <span class="v">${rr!=null?Number(rr).toFixed(2):'—'}</span></span>
-          <span>score <span class="v">${score!=null?Number(score).toFixed(1):'—'}</span></span>
-          <span>${c.themeTag||'未標題材'}</span>
-        </div>
-        <div>${truncate(c.reason||'', 36)}</div>
-      </div>
-    `;
-    card.addEventListener('click', () => card.classList.toggle('exp'));
-    list.appendChild(card);
-  });
-  $('actionCount').textContent = `${cands.length}`;
-  $('bgBuy').textContent  = nBuy;
-  $('bgWait').textContent = nWait;
+  const more = el('div',{class:'more'});
+  more.append(el('div',{class:'meta-row',html:
+    `<span>RR <span class="v">${rr!=null?Number(rr).toFixed(2):'—'}</span></span>` +
+    `<span>score <span class="v">${score!=null?Number(score).toFixed(1):'—'}</span></span>` +
+    `<span>${c.themeTag||'未標題材'}</span>` +
+    `<span>TP2 <span class="v">${fmtPrice(c.takeProfit2)}</span></span>`}));
+  more.append(el('div',{text: c.reason ? truncate(c.reason, 80) : '—'}));
+  card.append(more);
+  card.addEventListener('click', () => card.classList.toggle('exp'));
+  return card;
 }
 
-/* ─── E. Position cards ────────────────────────────────────── */
-function renderPositions(){
-  const list = $('positionList');
-  list.innerHTML = '';
-  const ps = S.positions || [];
-  if (!ps.length){
-    list.innerHTML = '<div class="empty">目前無持倉，等待下一個高品質 setup</div>';
-    $('positionCount').textContent = '0';
-    $('bgPos').textContent='0';
-    return;
-  }
-  ps.forEach(p => {
-    const q = S.quotes[p.symbol];
-    const cur = q?.currentPrice ?? null;
-    const cost = Number(p.avgCost);
-    const pnlPct = (cur && isFinite(cur) && isFinite(cost) && cost>0) ? ((cur-cost)/cost*100) : null;
-    const dist = distToStop(cur, p.stopLossPrice);
-    const riskTxt = dist.cls==='danger'?'高':dist.cls==='warn'?'中':dist.cls==='safe'?'低':'未知';
-    const fillPct = dist.pct==null ? 0 : Math.max(0, Math.min(100, dist.pct*10));
+/** 8. PositionCard — 持倉卡片 */
+function PositionCard(p, quote){
+  const cur = quote?.currentPrice ?? null;
+  const cost = Number(p.avgCost);
+  const pnlPct = (cur && isFinite(cur) && isFinite(cost) && cost>0) ? ((cur-cost)/cost*100) : null;
+  const dist = distToStop(cur, p.stopLossPrice);
+  const fillPct = dist.pct==null ? 0 : Math.max(0, Math.min(100, dist.pct*10));
+  const card = el('div',{class:'p-card card', dataset:{sym:p.symbol||'', pid:p.id}});
 
-    const card = document.createElement('div');
-    card.className = 'p-card card';
-    card.innerHTML = `
-      <div class="row1">
-        <div><span class="sym mono" style="font-size:16px;font-weight:800">${p.symbol}</span>
-             <span class="name" style="color:var(--muted);font-size:13px;margin-left:6px">${p.stockName||''}</span></div>
-        <span class="pnl ${pnlPct==null?'':pnlPct>=0?'up':'dn'}">${pnlPct==null?'—':fmtPct(pnlPct,2)}</span>
-      </div>
-      <div class="info">${fmt(p.qty)} 股 · 成本 ${fmtPrice(p.avgCost)}${cur?` · 現價 ${fmtPrice(cur)}`:''}</div>
-      <div class="stop-row">
-        <span class="label">距停損</span>
-        <div class="stop-bar ${dist.cls==='dim'?'':dist.cls}"><span style="width:${fillPct.toFixed(1)}%"></span></div>
-        <span class="dist ${dist.cls}">${dist.text}</span>
-      </div>
-      <div class="risk">風險：<b class="${dist.cls}">${riskTxt}</b> · 停損 ${fmtPrice(p.stopLossPrice)} · TP1 ${fmtPrice(p.takeProfit1)}</div>
-      <div class="actions">
-        <button class="hold" data-act="HOLD">續抱</button>
-        <button class="reduce" data-act="REDUCE">減碼</button>
-        <button class="exit" data-act="EXIT">出場</button>
-      </div>
-      <div class="more">
-        <div>策略：<b style="color:var(--ink)">${p.strategyType||'SETUP'}</b> · TP2 ${fmtPrice(p.takeProfit2)}</div>
-        <div>建倉：${HHmmss(p.openedAt)}${p.note?' · '+truncate(p.note,30):''}</div>
-      </div>
-    `;
-    // 主體點擊展開（避開按鈕區）
-    card.addEventListener('click', e => {
-      if (e.target.closest('.actions')) return;
-      card.classList.toggle('exp');
+  card.append(el('div',{class:'row1'},[
+    el('div',{},[
+      el('span',{class:'sym mono',style:'font-size:16px;font-weight:800',text:p.symbol||''}),
+      el('span',{class:'name',style:'color:var(--muted);font-size:13px;margin-left:6px',text:p.stockName||''})
+    ]),
+    el('span',{class:'pnl '+(pnlPct==null?'':pnlPct>=0?'up':'dn'),
+               text: pnlPct==null?'—':fmtPct(pnlPct,2)})
+  ]));
+  card.append(el('div',{class:'info', text:
+    `${fmt(p.qty)} 股 · 成本 ${fmtPrice(p.avgCost)}${cur?` · 現價 ${fmtPrice(cur)}`:''}`}));
+
+  const stopRow = el('div',{class:'stop-row'},[
+    el('span',{class:'label',text:'距停損'}),
+    el('div',{class:'stop-bar '+(dist.cls==='dim'?'':dist.cls)},[
+      el('span',{style:`width:${fillPct.toFixed(1)}%`})
+    ]),
+    el('span',{class:'dist '+dist.cls,text:dist.text})
+  ]);
+  card.append(stopRow);
+
+  const riskTxt = dist.cls==='danger'?'高':dist.cls==='warn'?'中':dist.cls==='safe'?'低':'未知';
+  card.append(el('div',{class:'risk',html:
+    `風險：<b class="${dist.cls}">${riskTxt}</b> · 停損 <b class="mono">${fmtPrice(p.stopLossPrice)}</b> · TP1 <b class="mono">${fmtPrice(p.takeProfit1)}</b>`}));
+
+  const acts = el('div',{class:'actions'});
+  ['hold','add','reduce','exit'].forEach(act => {
+    const labels = {hold:'續抱', add:'加碼', reduce:'減碼', exit:'出場'};
+    const btn = el('button',{class:act, dataset:{act:act.toUpperCase()}, text:labels[act]});
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const a = btn.dataset.act;
+      if (a==='HOLD') alert(`續抱 ${p.symbol} ${p.stockName||''}\n停損 ${fmtPrice(p.stopLossPrice)} · TP1 ${fmtPrice(p.takeProfit1)}\n持續監控，到價再決策。`);
+      else confirm(`${labels[act.toLowerCase()]} ${p.symbol}？\n（系統不自動下單，請至券商手動執行；本次只記錄意圖）`);
     });
-    card.querySelectorAll('.actions button').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.stopPropagation();
-        const act = btn.dataset.act;
-        if (act==='HOLD') alert(`續抱 ${p.symbol} ${p.stockName||''}\n\n停損 ${fmtPrice(p.stopLossPrice)} · TP1 ${fmtPrice(p.takeProfit1)}\n持續監控，到價再決策。`);
-        else if (act==='REDUCE') confirm(`減碼 ${p.symbol}？\n\n（系統不自動下單，請至券商手動執行；本次只記錄意圖）`);
-        else if (act==='EXIT') confirm(`出場 ${p.symbol}？\n\n（系統不自動下單，請至券商手動執行；本次只記錄意圖）`);
-      });
-    });
-    list.appendChild(card);
+    acts.append(btn);
   });
-  $('positionCount').textContent = `${ps.length} 檔`;
-  $('bgPos').textContent = ps.length;
+  card.append(acts);
+
+  const more = el('div',{class:'more'});
+  more.append(el('div',{html:`策略：<b style="color:var(--ink)">${p.strategyType||'SETUP'}</b> · TP2 <b class="mono">${fmtPrice(p.takeProfit2)}</b>`}));
+  more.append(el('div',{text:`建倉：${HHmmss(p.openedAt)} · ${truncate(p.note||'',40)}`}));
+  card.append(more);
+  card.addEventListener('click', e => {
+    if (e.target.closest('.actions')) return;
+    card.classList.toggle('exp');
+  });
+  return card;
 }
 
-/* ─── F. Capital strip ──────────────────────────────────────── */
-function renderCapital(){
-  const c = S.capital;
-  if (!c){
-    $('capTotal').textContent='unavailable';
-    $('capRatio').textContent='—'; $('capUnreal').textContent='—';
-    return;
-  }
-  $('capTotal').textContent = fmt(c.totalAssets || c.totalEquity, 0);
-  $('capRatio').textContent = c.cashRatio != null ? Math.round(c.cashRatio*100)+'%' : '—';
-  const u = c.unrealizedPnl;
-  const ue = $('capUnreal');
-  ue.textContent = u==null ? '—' : (u>=0?'+':'') + fmt(u,0);
-  ue.className = 'v mono ' + (u==null?'':u>=0?'up':'dn');
-  // theme exposure
-  renderThemeExposure();
+/** 9. TimelineItem — 決策歷史 / 排程歷史 row */
+function TimelineItem({decision, time, body, sub, latest, dataset}){
+  return el('div', {class:'tl-item'+(latest?' latest':''), dataset:{d:(decision||'').toUpperCase(), ...dataset||{}}}, [
+    el('div',{class:'head'},[
+      el('span',{class:'badge '+badgeCls(decision), text: decision||'—'}),
+      el('span',{class:'ts',text: time||''})
+    ]),
+    el('div',{class:'body',text: body||''}),
+    sub ? el('div',{class:'sub',text: sub}) : null
+  ]);
 }
-function renderThemeExposure(){
-  const wrap = $('themeExposure');
-  const ps = S.positions || [];
-  if (!ps.length){ wrap.innerHTML = '<div style="color:var(--muted)">unavailable</div>'; return; }
-  const map = {}; let total = 0;
-  for (const p of ps){
-    const cost = (Number(p.qty)||0) * (Number(p.avgCost)||0);
-    if (!isFinite(cost) || cost<=0) continue;
-    const tag = (p.themeTag||'').trim() || '未標題材';
-    map[tag] = (map[tag]||0) + cost;
-    total += cost;
-  }
-  if (total<=0){ wrap.innerHTML = '<div style="color:var(--muted)">unavailable</div>'; return; }
-  const sorted = Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,3);
-  wrap.innerHTML = '<div style="font-size:10px;color:var(--muted);margin-bottom:3px">主題曝險 (top 3)</div>' +
-    sorted.map(([t,c])=>{
-      const pct = c/total*100;
-      const cls = pct>=40?'over':pct>=25?'warn':'';
-      return `<div class="row"><span>${t}</span><b class="${cls}">${pct.toFixed(0)}%</b></div>`;
-    }).join('');
+function badgeCls(decision){
+  const map = {ENTER:'buy', BUY:'buy', WAIT:'wait', WATCH:'watch',
+               PLAN:'plan', REST:'rest', BLOCK:'stop', SUCCESS:'buy',
+               FAILED:'stop', PENDING:'wait', RUNNING:'watch'};
+  return map[String(decision||'').toUpperCase()] || 'rest';
 }
 
-/* ─── data load ─────────────────────────────────────────────── */
-async function fetchAll(){
-  const [dashboard, candidates, positions, capital] = await Promise.all([
+/** 10. MetricStrip — pnl / kpi 一排 */
+function MetricStrip(items){
+  const grid = el('div',{class:'metrics'});
+  (items||[]).forEach(m => {
+    const v = el('div',{class:'v '+(m.cls||'')+(m.mono===false?'':' mono'), text: m.value!=null?m.value:'—'});
+    const d = el('div',{class:'metric'},[
+      el('div',{class:'k',text:m.label||''}), v,
+      m.sub ? el('div',{class:'sub',text:m.sub}) : null
+    ]);
+    grid.append(d);
+  });
+  return grid;
+}
+
+/** 11. CollapsibleSection — 可摺疊區 */
+function CollapsibleSection(title, bodyNode, opts={}){
+  const wrap = el('section',{class:'collapsible'+(opts.open?' open':'')});
+  const head = el('div',{class:'head'},[
+    el('span',{text:title}), el('span',{class:'chev',text:'▾'})
+  ]);
+  head.addEventListener('click', () => wrap.classList.toggle('open'));
+  wrap.append(head);
+  const body = el('div',{class:'body'});
+  if (typeof bodyNode === 'string') body.innerHTML = bodyNode;
+  else if (bodyNode) body.append(bodyNode);
+  wrap.append(body);
+  return wrap;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   data load — split into per-tab fetchers + global
+════════════════════════════════════════════════════════════════ */
+async function fetchCommon(){
+  /* always-needed: dashboard + capital so AI status / hero sticky on every tab */
+  const [dashboard, capital] = await Promise.all([
     safeFetch('/api/dashboard/current'),
-    safeFetch('/api/candidates/current'),
-    safeFetch('/api/positions/open?size=10'),
     safeFetch('/api/capital/summary')
   ]);
-  S.dashboard  = dashboard;
+  S.dashboard = dashboard;
+  S.capital   = capital;
+}
+async function fetchOverview(){
+  const [candidates, positions] = await Promise.all([
+    safeFetch('/api/candidates/current'),
+    safeFetch('/api/positions/open?size=10'),
+  ]);
   S.candidates = Array.isArray(candidates) ? candidates : [];
   S.positions  = Array.isArray(positions) ? positions : [];
-  S.capital    = capital;
-
-  // collect symbols and fetch live quotes
+  await fetchQuotes();
+}
+async function fetchQuotes(){
   const syms = new Set();
-  S.candidates.forEach(c => c.symbol && syms.add(c.symbol));
-  S.positions.forEach(p => p.symbol && syms.add(p.symbol));
-  if (syms.size){
-    const csv = [...syms].join(',');
-    const quotes = await safeFetch('/api/candidates/live-quotes?symbols='+encodeURIComponent(csv));
-    S.quotes = {};
-    if (Array.isArray(quotes)){
-      for (const q of quotes) if (q?.symbol) S.quotes[q.symbol] = q;
+  S.candidates?.forEach(c => c.symbol && syms.add(c.symbol));
+  S.positions?.forEach(p => p.symbol && syms.add(p.symbol));
+  if (!syms.size){ S.quotes = {}; return; }
+  const csv = [...syms].join(',');
+  const quotes = await safeFetch('/api/candidates/live-quotes?symbols='+encodeURIComponent(csv));
+  S.quotes = {};
+  if (Array.isArray(quotes)) for (const q of quotes) if (q?.symbol) S.quotes[q.symbol] = q;
+}
+async function fetchCandidatesTab(){
+  const cands = await safeFetch('/api/candidates/current');
+  S.candidates = Array.isArray(cands) ? cands : [];
+  await fetchQuotes();
+}
+async function fetchPositionsTab(){
+  const ps = await safeFetch('/api/positions/open?size=20');
+  S.positions = Array.isArray(ps) ? ps : [];
+  await fetchQuotes();
+}
+async function fetchPnlTab(){
+  const [daily, p20, p90] = await Promise.all([
+    safeFetch('/api/pnl/daily'),
+    safeFetch('/api/pnl/summary?days=20'),
+    safeFetch('/api/pnl/summary?days=90'),
+  ]);
+  S.pnlDaily = daily; S.pnl20 = p20; S.pnl90 = p90;
+}
+async function fetchDecisionsTab(){
+  const [hist, hourly, monitor] = await Promise.all([
+    safeFetch('/api/decisions/history?limit=30'),
+    safeFetch('/api/decisions/hourly-gate/history?limit=20'),
+    safeFetch('/api/monitor/decisions/history?limit=30'),
+  ]);
+  S.decisionsHistory = Array.isArray(hist) ? hist : [];
+  S.hourlyHistory    = Array.isArray(hourly) ? hourly : [];
+  S.monitorHistory   = Array.isArray(monitor) ? monitor : [];
+}
+async function fetchResearchTab(){
+  const notes = await safeFetch('/api/notifications?limit=20');
+  S.notifications = Array.isArray(notes) ? notes : [];
+}
+async function fetchSchedulerTab(){
+  const [jobs, tasks, today] = await Promise.all([
+    safeFetch('/api/scheduler/jobs'),
+    safeFetch('/actuator/scheduledtasks'),
+    safeFetch('/api/orchestration/tasks/today'),
+  ]);
+  S.schedulerJobs   = Array.isArray(jobs) ? jobs : [];
+  S.scheduledTasks  = tasks;
+  S.orchestrationToday = Array.isArray(today) ? today : [];
+}
+async function fetchAdvancedTab(){
+  const [health, themes] = await Promise.all([
+    safeFetch('/api/system/migration/health'),
+    safeFetch('/api/themes/mappings'),
+  ]);
+  S.migrationHealth = health;
+  S.themeMappings = Array.isArray(themes) ? themes : [];
+}
+
+/* ════════════════════════════════════════════════════════════════
+   VIEWS — 8 tabs
+════════════════════════════════════════════════════════════════ */
+const Views = {};
+
+/* 1. overview */
+Views.overview = async () => {
+  setHeader('總覽');
+  const app = $('app'); app.innerHTML = '';
+  await fetchCommon(); await fetchOverview();
+
+  const fd = S.dashboard?.finalDecision;
+  app.append(DecisionHero(fd));
+  app.append(AIStatusPill(fd));
+
+  // quick filter chips
+  const chips = el('div',{class:'chips',id:'filters'});
+  ['all','buy','wait','position'].forEach(f => {
+    const labels = {all:'全部', buy:'可買', wait:'等待', position:'持倉'};
+    const ch = el('button',{class:'chip'+(S.filter===f?' active':''), dataset:{f}, html:`${labels[f]}<span class="badge-num" id="bg-${f}">·</span>`});
+    ch.addEventListener('click', () => {
+      S.filter = f; localStorage.setItem('mobile.filter', f);
+      Views.overview(); // re-render lightweight
+    });
+    chips.append(ch);
+  });
+  app.append(chips);
+
+  // action list
+  const showActions = S.filter !== 'position';
+  const showPositions = S.filter === 'all' || S.filter === 'position';
+  if (showActions){
+    const actSec = el('section',{class:'section'});
+    actSec.append(el('div',{class:'section-title',html:`行動清單 <span class="count">${S.candidates?.length||0}</span>`}));
+    if (!S.candidates?.length){
+      actSec.append(el('div',{class:'empty',text:'目前無候選股'}));
+    } else {
+      let nBuy=0, nWait=0;
+      S.candidates.forEach(c => {
+        const q = S.quotes[c.symbol];
+        const hint = classifyCandidate(c, q);
+        if (S.filter==='buy' && hint.cls!=='buy') return;
+        if (S.filter==='wait' && hint.cls!=='wait' && hint.cls!=='watch') return;
+        actSec.append(StockActionCard(c, q));
+        if (hint.cls==='buy') nBuy++;
+        else if (hint.cls==='wait') nWait++;
+      });
+      const bgB = $('bg-buy'), bgW = $('bg-wait'), bgP = $('bg-position');
+      if (bgB) bgB.textContent = String(nBuy);
+      if (bgW) bgW.textContent = String(nWait);
+      if (bgP) bgP.textContent = String(S.positions?.length||0);
     }
-  } else {
-    S.quotes = {};
+    app.append(actSec);
+  }
+  if (showPositions){
+    const posSec = el('section',{class:'section'});
+    posSec.append(el('div',{class:'section-title',html:`持倉 <span class="count">${S.positions?.length||0} 檔</span>`}));
+    if (!S.positions?.length) posSec.append(el('div',{class:'empty',text:'目前無持倉，等待下一個高品質 setup'}));
+    else S.positions.forEach(p => posSec.append(PositionCard(p, S.quotes[p.symbol])));
+    app.append(posSec);
+  }
+
+  // capital strip
+  app.append(buildCapitalStrip());
+};
+
+/* 2. candidates */
+Views.candidates = async () => {
+  setHeader('候選股');
+  const app = $('app'); app.innerHTML = '';
+  await fetchCommon(); await fetchCandidatesTab();
+  app.append(AIStatusPill(S.dashboard?.finalDecision));
+
+  const filterRow = el('div',{class:'chips'});
+  const filters = [
+    {k:'all',  label:'全部'},
+    {k:'buy',  label:'BUY'},
+    {k:'wait', label:'WAIT'},
+    {k:'watch',label:'WATCH'},
+    {k:'skip', label:'排除'},
+  ];
+  let activeFilter = localStorage.getItem('mobile.candFilter') || 'all';
+  filters.forEach(f => {
+    const ch = el('button',{class:'chip'+(activeFilter===f.k?' active':''),dataset:{f:f.k},text:f.label});
+    ch.addEventListener('click', () => {
+      activeFilter = f.k;
+      localStorage.setItem('mobile.candFilter', f.k);
+      filterRow.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.f===f.k));
+      list.querySelectorAll('.a-card').forEach(card => {
+        const h = card.dataset.hint;
+        card.style.display = (f.k==='all' || h===f.k) ? '' : 'none';
+      });
+    });
+    filterRow.append(ch);
+  });
+  app.append(filterRow);
+
+  const wrap = el('section',{class:'section'});
+  wrap.append(el('div',{class:'section-title',html:`候選股 <span class="count">${S.candidates.length}</span>`}));
+  const list = el('div');
+  if (!S.candidates.length) list.append(el('div',{class:'empty',text:'目前無候選股'}));
+  else S.candidates.forEach(c => {
+    const card = StockActionCard(c, S.quotes[c.symbol]);
+    if (activeFilter !== 'all' && card.dataset.hint !== activeFilter) card.style.display = 'none';
+    list.append(card);
+  });
+  wrap.append(list);
+  app.append(wrap);
+};
+
+/* 3. positions */
+Views.positions = async () => {
+  setHeader('持倉');
+  const app = $('app'); app.innerHTML = '';
+  await fetchCommon(); await fetchPositionsTab();
+  app.append(AIStatusPill(S.dashboard?.finalDecision));
+
+  const cap = S.capital;
+  app.append(MetricStrip([
+    {label:'未實現', value: cap?.unrealizedPnl!=null?(cap.unrealizedPnl>=0?'+':'')+fmt(cap.unrealizedPnl,0):'—',
+     cls: cap?.unrealizedPnl>=0?'up':'dn'},
+    {label:'已實現', value: cap?.realizedPnl!=null?(cap.realizedPnl>=0?'+':'')+fmt(cap.realizedPnl,0):'—',
+     cls: cap?.realizedPnl>=0?'up':'dn'},
+    {label:'持倉檔數', value: String(S.positions.length)},
+    {label:'總資產', value: cap?.totalAssets!=null?fmt(cap.totalAssets,0):'—'}
+  ]));
+
+  const sec = el('section',{class:'section'});
+  sec.append(el('div',{class:'section-title',html:`持倉清單 <span class="count">${S.positions.length} 檔</span>`}));
+  if (!S.positions.length) sec.append(el('div',{class:'empty',text:'目前無持倉'}));
+  else S.positions.forEach(p => sec.append(PositionCard(p, S.quotes[p.symbol])));
+  app.append(sec);
+
+  app.append(buildCapitalStrip());
+};
+
+/* 4. pnl */
+Views.pnl = async () => {
+  setHeader('損益');
+  const app = $('app'); app.innerHTML = '';
+  await fetchCommon(); await fetchPnlTab(); await fetchPositionsTab();
+
+  const cap = S.capital, today = S.pnlDaily;
+  app.append(MetricStrip([
+    {label:'今日淨損益', value: today?.netPnl!=null?(today.netPnl>=0?'+':'')+fmt(today.netPnl,0):'—',
+     cls: today?.netPnl>=0?'up':'dn',
+     sub: today ? `毛 ${fmt(today.grossPnl,0)} · 費稅 ${fmt(today.estimatedFeeAndTax,0)}` : '無資料'},
+    {label:'未實現', value: cap?.unrealizedPnl!=null?(cap.unrealizedPnl>=0?'+':'')+fmt(cap.unrealizedPnl,0):'—',
+     cls: cap?.unrealizedPnl>=0?'up':'dn',
+     sub: `${S.positions.length} 檔持倉`},
+    {label:'本月累積', value: S.pnl20?.totalRealizedPnl!=null?fmt(S.pnl20.totalRealizedPnl,0):'—',
+     cls: (S.pnl20?.totalRealizedPnl||0)>=0?'up':'dn',
+     sub: `${S.pnl20?.days||0} 個交易日`},
+    {label:'勝率', value: S.pnl20?.avgWinRate!=null?(Number(S.pnl20.avgWinRate)*100).toFixed(0)+'%':'—',
+     sub: '近 20 日'},
+    {label:'已實現 (90 日)', value: S.pnl90?.totalRealizedPnl!=null?fmt(S.pnl90.totalRealizedPnl,0):'—',
+     cls: (S.pnl90?.totalRealizedPnl||0)>=0?'up':'dn',
+     sub: `${S.pnl90?.days||0} 個交易日`},
+    {label:'最大回撤', value: '未提供',
+     sub: 'follow-up'},
+  ]));
+
+  // 今日交易紀錄折疊
+  const todayBody = el('div');
+  if (today){
+    todayBody.append(el('div',{html:
+      `<div>交易筆數：<b>${today.tradeCount||0}</b> · 勝 <b style="color:var(--c-up)">${today.winCount||0}</b> · 負 <b style="color:var(--c-dn)">${today.lossCount||0}</b></div>` +
+      `<div style="margin-top:4px">毛損益：<b class="mono">${fmt(today.grossPnl,2)}</b></div>` +
+      `<div>估費稅：<b class="mono">${fmt(today.estimatedFeeAndTax,2)}</b></div>` +
+      `<div>淨損益：<b class="mono ${today.netPnl>=0?'up':'dn'}" style="color:${today.netPnl>=0?'var(--c-up)':'var(--c-dn)'}">${fmt(today.netPnl,2)}</b></div>` +
+      `<div style="margin-top:4px;color:var(--dim);font-size:11px">交易日 ${today.tradingDate||'—'}</div>`}));
+  } else todayBody.append(el('div',{text:'無今日損益紀錄'}));
+  app.append(CollapsibleSection('今日損益細節', todayBody, {open:true}));
+
+  // 持倉未實現損益（複用 PositionCard）
+  const posBody = el('div');
+  if (!S.positions.length) posBody.append(el('div',{class:'empty',text:'無持倉'}));
+  else S.positions.forEach(p => posBody.append(PositionCard(p, S.quotes[p.symbol])));
+  app.append(CollapsibleSection('持倉未實現損益（'+S.positions.length+' 檔）', posBody));
+};
+
+/* 5. decisions */
+Views.decisions = async () => {
+  setHeader('決策歷史');
+  const app = $('app'); app.innerHTML = '';
+  await fetchCommon(); await fetchDecisionsTab();
+  app.append(AIStatusPill(S.dashboard?.finalDecision));
+
+  // 切換 chips
+  const tabs = [
+    {k:'final',  label:'09:30 決策'},
+    {k:'hourly', label:'整點 Gate'},
+    {k:'monitor',label:'5分鐘監控'},
+  ];
+  let active = localStorage.getItem('mobile.histTab') || 'final';
+  const chips = el('div',{class:'chips'});
+  tabs.forEach(t => {
+    const ch = el('button',{class:'chip'+(active===t.k?' active':''),dataset:{k:t.k},text:t.label});
+    ch.addEventListener('click', () => { active=t.k; localStorage.setItem('mobile.histTab',t.k); render(); });
+    chips.append(ch);
+  });
+  app.append(chips);
+
+  const wrap = el('section',{class:'section', id:'histList'});
+  app.append(wrap);
+
+  function render(){
+    chips.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.k===active));
+    wrap.innerHTML = '';
+    let rows = [];
+    if (active==='final')   rows = S.decisionsHistory;
+    if (active==='hourly')  rows = S.hourlyHistory;
+    if (active==='monitor') rows = S.monitorHistory;
+    if (!rows?.length){ wrap.append(el('div',{class:'empty',text:'無紀錄'})); return; }
+    // group by date
+    const groups = {};
+    rows.forEach(r => {
+      const d = (r.tradingDate||yyyymmdd(r.createdAt))||'—';
+      (groups[d] = groups[d]||[]).push(r);
+    });
+    Object.keys(groups).sort().reverse().forEach(d => {
+      wrap.append(el('div',{class:'timeline-day',text:d}));
+      groups[d].forEach((r,i) => {
+        const isLatest = (d === Object.keys(groups).sort().reverse()[0] && i===0);
+        const decision = r.decision || (active==='hourly' ? r.hourlyGate : r.monitorMode);
+        const payload = safeJson(r.payloadJson);
+        let body, sub;
+        if (active==='final'){
+          body = truncate(r.summary || '—', 80);
+          const sel = payload.selected_count ?? (payload.selected_stocks?.length||0);
+          const rej = payload.rejected_count ?? (payload.rejected_reasons?.length||0);
+          const rea = pickTopReasons(payload.rejected_reasons||[],1)[0];
+          sub = `選 ${sel} 排 ${rej}${rea?' · '+truncate(rea,20):''}`;
+        } else if (active==='hourly'){
+          body = `${payload.market_grade||'—'} 級 · ${payload.market_phase||'—'} · 5min ${r.shouldRun5mMonitor?'ON':'OFF'}`;
+          sub = `事件 ${r.triggerEvent||'NONE'} · ${HHmmss(r.createdAt)}`;
+        } else {
+          body = `monitor=${r.monitorMode||'—'} · grade=${payload.market_grade||'—'}`;
+          sub = `事件 ${r.triggerEvent||'NONE'}${r.shouldNotify?' · 已通知':''}`;
+        }
+        wrap.append(TimelineItem({
+          decision, time: HHmmss(r.createdAt || (r.gateTime?d+'T'+r.gateTime:null)),
+          body, sub, latest:isLatest, dataset:{}
+        }));
+      });
+    });
   }
   render();
-  $('lastUpdate').textContent = HHmmss(new Date().toISOString());
+};
+
+/* 6. research */
+Views.research = async () => {
+  setHeader('AI 研究');
+  const app = $('app'); app.innerHTML = '';
+  await fetchCommon(); await fetchResearchTab();
+  app.append(AIStatusPill(S.dashboard?.finalDecision));
+
+  const fd = S.dashboard?.finalDecision;
+  const payload = safeJson(fd?.payloadJson);
+  // Summary card
+  const summarySec = el('section',{class:'section'});
+  summarySec.append(el('div',{class:'section-title',text:'本輪 AI 結論'}));
+  const sumCard = el('div',{class:'card'});
+  sumCard.append(el('div',{html:
+    `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">${StatusBadge(fd?.decision,fd?.decision||'—').outerHTML}<span style="color:var(--muted);font-size:11px">${fd?.sourceTaskType||'—'} · ${HHmm(fd?.createdAt)}</span></div>`+
+    `<div style="font-size:13px;font-weight:600">${truncate(fd?.summary||'尚無 AI 結論',120)}</div>`+
+    `<div style="margin-top:6px;font-size:11px;color:var(--muted)">selected ${payload.selected_count??0} · rejected ${payload.rejected_count??0}</div>`
+  }));
+  summarySec.append(sumCard);
+  app.append(summarySec);
+
+  // Top reasons collapsible
+  const reasons = payload.rejected_reasons || [];
+  if (reasons.length){
+    const rb = el('div'); rb.append(el('ol',{html: pickTopReasons(reasons,3).map(r=>`<li>${truncate(r,60)}</li>`).join('')}));
+    app.append(CollapsibleSection(`阻擋原因 Top 3`, rb, {open:true}));
+  }
+
+  // 最新長篇研究 (notifications.content)
+  const notes = (S.notifications||[]).filter(n =>
+    /AI_TASK|RESEARCH|FINAL|PREMARKET|POSTMARKET|MIDDAY|OPENING|T86/.test(n.notificationType||''));
+  if (notes.length){
+    const sec = el('section',{class:'section'});
+    sec.append(el('div',{class:'section-title',html:`研究紀錄 <span class="count">${notes.length}</span>`}));
+    notes.slice(0,12).forEach(n => {
+      const titleHTML = el('div',{},[
+        el('div',{html:`<b>${n.title||n.notificationType||'AI 通知'}</b>`}),
+        el('div',{style:'font-size:11px;color:var(--muted);margin-top:2px',
+          text: HHmmss(n.eventTime)+' · '+(n.notificationType||'')})
+      ]);
+      const body = el('div');
+      body.append(el('pre',{text: truncate(n.content||'', 4000)}));
+      const collap = CollapsibleSection('', body);
+      // replace head content
+      const head = collap.querySelector('.head');
+      head.innerHTML = ''; head.append(titleHTML); head.append(el('span',{class:'chev',text:'▾'}));
+      sec.append(collap);
+    });
+    app.append(sec);
+  } else {
+    app.append(el('div',{class:'empty',style:'margin-top:12px',text:'近期無 AI 研究紀錄'}));
+  }
+};
+
+/* 7. scheduler */
+Views.scheduler = async () => {
+  setHeader('排程');
+  const app = $('app'); app.innerHTML = '';
+  await fetchSchedulerTab();
+
+  // Top metrics
+  const jobs = S.schedulerJobs || [];
+  const fail = jobs.filter(j => (j.lastStatus||'').toUpperCase()==='FAILED').length;
+  const ok   = jobs.filter(j => (j.lastStatus||'').toUpperCase()==='SUCCESS').length;
+  const enabled = jobs.filter(j => j.enabled).length;
+  app.append(MetricStrip([
+    {label:'啟用 job', value: String(enabled), sub:`共 ${jobs.length}`},
+    {label:'最近成功', value: String(ok), cls:'up'},
+    {label:'最近失敗', value: String(fail), cls: fail>0?'dn':'up'},
+    {label:'已註冊 cron', value: String(S.scheduledTasks?.cron?.length||0)},
+  ]));
+
+  // Jobs list
+  const sec = el('section',{class:'section'});
+  sec.append(el('div',{class:'section-title',html:`Job 狀態 <span class="count">${jobs.length}</span>`}));
+  if (!jobs.length) sec.append(el('div',{class:'empty',text:'無 scheduler 資料'}));
+  else jobs.forEach(j => {
+    const status = (j.lastStatus||'').toUpperCase();
+    const badge = StatusBadge(status, status||'PENDING');
+    const card = el('div',{class:'card sched-card'+(status==='FAILED'?' fail':''+(status==='PENDING'?' warn':''))},[
+      el('div',{class:'name',text:`${j.display||j.jobName} ${j.enabled?'':'· 停用'}`}),
+      badge,
+      el('div',{class:'sub',text:`cron ${j.cron||'—'} · ${HHmmss(j.lastRunAt)} · ${j.lastDurationMs||'—'}ms`}),
+    ]);
+    if (j.lastMessage) card.append(el('div',{style:'font-size:11px;color:var(--muted);grid-column:1/-1;margin-top:4px',
+      text: truncate(j.lastMessage, 70)}));
+    sec.append(card);
+  });
+  app.append(sec);
+
+  // Scheduled tasks (next execution)
+  const stWrap = el('div');
+  if (S.scheduledTasks?.cron?.length){
+    const list = [...S.scheduledTasks.cron].sort((a,b)=>
+      new Date(a.nextExecution.time)-new Date(b.nextExecution.time));
+    list.forEach(t => {
+      const cls = t.runnable.target.split('.').slice(-2,-1)[0];
+      stWrap.append(el('div',{class:'tl-item',html:
+        `<div class="head"><span class="badge watch">${cls}</span><span class="ts">${(t.expression||'').replace(/  +/g,' ')}</span></div>`+
+        `<div class="body">下次：<span class="mono">${HHmmss(t.nextExecution.time)}</span> <span style="color:var(--muted);font-size:11px">${yyyymmdd(t.nextExecution.time)}</span></div>`
+      }));
+    });
+  } else stWrap.append(el('div',{class:'empty',text:'actuator/scheduledtasks 未啟用'}));
+  app.append(CollapsibleSection(`下次觸發排程 (${S.scheduledTasks?.cron?.length||0})`, stWrap, {open:false}));
+
+  // FixedDelay
+  if (S.scheduledTasks?.fixedDelay?.length){
+    const fd = el('div');
+    S.scheduledTasks.fixedDelay.forEach(t => {
+      const cls = t.runnable.target.split('.').slice(-2,-1)[0];
+      const lastTime = t.lastExecution?.time;
+      const lastStatus = t.lastExecution?.status;
+      fd.append(el('div',{class:'tl-item',html:
+        `<div class="head"><span class="badge ${lastStatus==='SUCCESS'?'buy':'rest'}">${cls}</span><span class="ts">${t.interval/1000}s</span></div>`+
+        `<div class="body">最後：<span class="mono">${HHmmss(lastTime)}</span> ${lastStatus||'—'}</div>`
+      }));
+    });
+    app.append(CollapsibleSection(`fixedDelay (${S.scheduledTasks.fixedDelay.length})`, fd, {open:false}));
+  }
+};
+
+/* 8. advanced */
+Views.advanced = async () => {
+  setHeader('進階');
+  const app = $('app'); app.innerHTML = '';
+  await fetchCommon(); await fetchAdvancedTab();
+  app.append(AIStatusPill(S.dashboard?.finalDecision));
+
+  // System health
+  const h = S.migrationHealth;
+  if (h){
+    const okCount = (h.checks||[]).filter(c => c.ok).length;
+    const total = (h.checks||[]).length;
+    const allOk = h.ok;
+    app.append(MetricStrip([
+      {label:'系統健康', value: allOk?'OK':'WARN', cls: allOk?'up':'dn',
+       sub: `${okCount}/${total} 檢查通過`},
+      {label:'檢查時間', value: HHmm(h.checkedAt), sub: yyyymmdd(h.checkedAt), mono:false},
+    ]));
+    const checks = el('div');
+    (h.checks||[]).forEach(c => {
+      checks.append(el('div',{class:'card', style:'padding:8px 12px;display:flex;justify-content:space-between;font-size:12px',html:
+        `<span><span class="badge ${c.ok?'buy':'stop'}" style="margin-right:6px">${c.ok?'OK':'FAIL'}</span>${c.key}</span>`+
+        `<span style="color:var(--muted);font-size:11px">${truncate(c.detail,30)}</span>`
+      }));
+    });
+    app.append(CollapsibleSection(`健康檢查項目 (${total})`, checks));
+  }
+
+  // Score config status (latest)
+  const cfgCard = el('div',{class:'card'});
+  const cfgKeys = [
+    'capital.round_lot_size',
+    'scoring.grade_ap_min',
+    'scoring.rr_min_ap',
+    'final_decision.require_codex',
+    'theme.engine.v2.enabled',
+    'theme.gate.trace.enabled',
+    'theme.shadow_mode.enabled',
+    'theme.live_decision.enabled',
+  ];
+  cfgCard.append(el('div',{style:'font-size:13px;font-weight:700;margin-bottom:6px',text:'核心 score config'}));
+  const grid = el('div',{style:'display:grid;grid-template-columns:1fr auto;gap:3px 8px;font-size:12px'});
+  cfgCard.append(grid);
+  cfgKeys.forEach(async k => {
+    grid.append(el('span',{class:'mono',style:'color:var(--muted);font-size:11px',text:k}));
+    const v = el('span',{class:'mono',style:'font-weight:700',text:'…'});
+    grid.append(v);
+    const r = await safeFetch('/api/config/score/'+encodeURIComponent(k));
+    v.textContent = r?.configValue ?? '—';
+  });
+  app.append(cfgCard);
+
+  // Theme mappings (count summary)
+  const tm = S.themeMappings || [];
+  const themes = {};
+  tm.forEach(m => { themes[m.themeTag] = (themes[m.themeTag]||0)+1; });
+  const tmList = el('div');
+  if (!tm.length) tmList.append(el('div',{class:'empty',text:'無題材對映資料'}));
+  else Object.entries(themes).sort((a,b)=>b[1]-a[1]).forEach(([t,n]) => {
+    tmList.append(el('div',{style:'display:flex;justify-content:space-between;padding:4px 8px;font-size:12px',html:
+      `<span>${t}</span><span class="mono" style="color:var(--muted)">${n}</span>`}));
+  });
+  app.append(CollapsibleSection(`題材對映 (${tm.length})`, tmList));
+
+  // Logs / system info
+  const sysInfo = el('div',{html:
+    `<div>後端：Spring Boot · profile=prod</div>`+
+    `<div>桌機版：<a href="/index.html" style="color:var(--c-watch);text-decoration:underline">/index.html</a></div>`+
+    `<div>排程指標：<a href="/actuator/metrics/tasks.scheduled.execution" style="color:var(--c-watch);text-decoration:underline">tasks.scheduled.execution</a></div>`+
+    `<div>排程清單：<a href="/actuator/scheduledtasks" style="color:var(--c-watch);text-decoration:underline">scheduledtasks</a></div>`+
+    `<div>health：<a href="/actuator/health" style="color:var(--c-watch);text-decoration:underline">/actuator/health</a></div>`
+  });
+  app.append(CollapsibleSection('系統資訊與連結', sysInfo));
+};
+
+/* ════════════════════════════════════════════════════════════════
+   shared widget: capital strip
+════════════════════════════════════════════════════════════════ */
+function buildCapitalStrip(){
+  const c = S.capital;
+  const wrap = el('div',{class:'capital'});
+  if (!c){ wrap.append(el('span',{text:'資金 unavailable'})); return wrap; }
+  wrap.innerHTML = `<span>資金</span><span class="v mono">${fmt(c.totalAssets||c.totalEquity,0)}</span>`+
+    `<span>現金比</span><span class="v mono">${c.cashRatio!=null?Math.round(c.cashRatio*100)+'%':'—'}</span>`+
+    `<span>未實現</span><span class="v mono ${c.unrealizedPnl>=0?'up':'dn'}">${c.unrealizedPnl==null?'—':(c.unrealizedPnl>=0?'+':'')+fmt(c.unrealizedPnl,0)}</span>`+
+    `<div class="theme-exposure" id="themeExposure"></div>`;
+  // theme exposure aggregated from positions
+  setTimeout(() => {
+    const tw = wrap.querySelector('#themeExposure'); if (!tw) return;
+    const ps = S.positions || [];
+    if (!ps.length){ tw.innerHTML='<div style="color:var(--muted)">unavailable</div>'; return; }
+    const map={}; let total=0;
+    for (const p of ps){
+      const cost=(Number(p.qty)||0)*(Number(p.avgCost)||0);
+      if (!isFinite(cost)||cost<=0) continue;
+      const tag=(p.themeTag||'').trim()||'未標題材';
+      map[tag]=(map[tag]||0)+cost; total+=cost;
+    }
+    if (total<=0){ tw.innerHTML='<div style="color:var(--muted)">unavailable</div>'; return; }
+    const sorted = Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    tw.innerHTML = '<div style="font-size:10px;color:var(--muted);margin-bottom:3px">主題曝險 (top 3)</div>'+
+      sorted.map(([t,c])=>{ const pct=c/total*100; const cls=pct>=40?'over':pct>=25?'warn':''; return `<div class="row"><span>${t}</span><b class="${cls}">${pct.toFixed(0)}%</b></div>`; }).join('');
+  }, 0);
+  wrap.addEventListener('click', () => wrap.classList.toggle('exp'));
+  return wrap;
 }
 
-function render(){
-  renderHero();
-  renderAiStatus();
-  renderActions();
-  renderPositions();
-  renderCapital();
-  applyFilter();
+/* ════════════════════════════════════════════════════════════════
+   router
+════════════════════════════════════════════════════════════════ */
+function currentRoute(){
+  const h = (location.hash||'').replace(/^#\/?/, '').split('?')[0] || 'overview';
+  return Views[h] ? h : 'overview';
 }
-
-/* ─── boot + polling ───────────────────────────────────────── */
-fetchAll();
-let pollTimer = setInterval(fetchAll, 30000);
-$('btnRefresh').addEventListener('click', () => { fetchAll(); });
+async function navigate(){
+  const r = currentRoute();
+  highlightTab(r);
+  $('app').innerHTML = '<div class="card skel" style="height:80px;margin:12px 16px"></div><div class="card skel" style="height:120px;margin:0 16px"></div>';
+  try {
+    await Views[r]();
+    $('hdrTime').textContent = HHmmss(new Date().toISOString());
+    S.lastFetchAt = Date.now();
+  } catch(e){
+    console.error('view error', r, e);
+    $('app').innerHTML = `<div class="empty" style="margin:20px 16px">載入失敗：${e.message||e}</div>`;
+  }
+}
+window.addEventListener('hashchange', navigate);
+$('btnRefresh').addEventListener('click', navigate);
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) fetchAll();
+  if (!document.hidden && Date.now() - (S.lastFetchAt||0) > 25000) navigate();
 });
+
+/* polling: 30s */
+let _pollTimer = setInterval(() => {
+  if (!document.hidden) navigate();
+}, 30000);
+
+/* boot: ensure default route */
+if (!location.hash) location.hash = '#/overview';
+else navigate();
 </script>
 </body>
 </html>
