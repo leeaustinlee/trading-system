@@ -3,6 +3,7 @@ package com.austin.trading.service;
 import com.austin.trading.dto.request.DailyPnlCreateRequest;
 import com.austin.trading.dto.request.DailyPnlUpdateRequest;
 import com.austin.trading.dto.response.DailyPnlResponse;
+import com.austin.trading.dto.response.DrawdownResponse;
 import com.austin.trading.dto.response.PnlSummaryResponse;
 import com.austin.trading.entity.DailyPnlEntity;
 import com.austin.trading.entity.PositionEntity;
@@ -148,6 +149,102 @@ public class PnlService {
         if (entity.getGrossPnl() != null) entity.setRealizedPnl(entity.getGrossPnl());
 
         return toResponse(dailyPnlRepository.save(entity));
+    }
+
+    /**
+     * v2.14：計算最近 N 天的最大回撤。
+     *
+     * <p>輸入：daily_pnl 序列（按日累計）+ 可選 baseline。
+     * 邏輯：把每日 netPnl 累加成 equity 曲線，記 rolling peak；最大回撤 = max(peak - equity) /
+     * max(peak, baseline) × -100。返回值為負數（無回撤時為 0）。</p>
+     *
+     * @param days       lookback 視窗天數（1–365）
+     * @param baseline   分母 baseline；通常傳 capital.totalAssets，避免 equity 從 0 起算 % 失真。
+     *                   傳 null 時內部以 max(peak, 1) 為分母
+     */
+    public DrawdownResponse computeDrawdown(int days, BigDecimal baseline) {
+        int safeDays = Math.max(1, Math.min(days, 365));
+        // 取最近 safeDays 筆，repo 是 desc，這裡反轉成 asc 方便 walk
+        List<DailyPnlEntity> rowsDesc = dailyPnlRepository
+                .findAllByOrderByTradingDateDescCreatedAtDesc(PageRequest.of(0, safeDays));
+        List<DailyPnlEntity> rows = new java.util.ArrayList<>(rowsDesc);
+        java.util.Collections.reverse(rows);
+
+        return computeDrawdownFromRows(rows, safeDays, baseline);
+    }
+
+    /**
+     * Pure-data 版本，方便 unit test。
+     *
+     * <p>傳入按日期升序排好的 (date, netPnl) 序列 + baseline。
+     * netPnl 缺值時 fallback grossPnl，再不行視為 0。</p>
+     */
+    public static DrawdownResponse computeDrawdownFromRows(
+            List<DailyPnlEntity> rowsAsc, int windowDays, BigDecimal baseline) {
+
+        if (rowsAsc == null || rowsAsc.isEmpty()) {
+            return new DrawdownResponse(windowDays, BigDecimal.ZERO, null, null,
+                    BigDecimal.ZERO, 0, baseline);
+        }
+
+        BigDecimal equity = BigDecimal.ZERO;
+        BigDecimal peak = BigDecimal.ZERO;
+        LocalDate peakDate = null;
+        BigDecimal maxDD = BigDecimal.ZERO;       // 最大下跌絕對值
+        LocalDate maxPeakDate = null;
+        LocalDate maxTroughDate = null;
+        LocalDate currentPeakDate = null;
+        BigDecimal currentPeak = BigDecimal.ZERO;
+        // 為了取「目前回撤」，記住最後一個 peak 與目前 equity
+        for (DailyPnlEntity r : rowsAsc) {
+            BigDecimal pnl = pickDailyPnl(r);
+            equity = equity.add(pnl);
+            if (peakDate == null || equity.compareTo(peak) > 0) {
+                peak = equity;
+                peakDate = r.getTradingDate();
+                currentPeak = peak;
+                currentPeakDate = peakDate;
+            }
+            BigDecimal dd = peak.subtract(equity); // >= 0
+            if (dd.compareTo(maxDD) > 0) {
+                maxDD = dd;
+                maxPeakDate = peakDate;
+                maxTroughDate = r.getTradingDate();
+            }
+        }
+        BigDecimal denom = (baseline != null && baseline.signum() > 0)
+                ? baseline.max(peak.abs()) : peak.abs().max(BigDecimal.ONE);
+
+        BigDecimal maxDDPct = maxDD.signum() <= 0
+                ? BigDecimal.ZERO
+                : maxDD.divide(denom, 4, RoundingMode.HALF_UP)
+                        .multiply(new BigDecimal("-100"))
+                        .setScale(2, RoundingMode.HALF_UP);
+
+        BigDecimal currentDD = currentPeak.subtract(equity).max(BigDecimal.ZERO);
+        BigDecimal currentDDPct = currentDD.signum() <= 0
+                ? BigDecimal.ZERO
+                : currentDD.divide(denom, 4, RoundingMode.HALF_UP)
+                        .multiply(new BigDecimal("-100"))
+                        .setScale(2, RoundingMode.HALF_UP);
+
+        return new DrawdownResponse(
+                windowDays,
+                maxDDPct,
+                maxPeakDate,
+                maxTroughDate,
+                currentDDPct,
+                rowsAsc.size(),
+                baseline
+        );
+    }
+
+    private static BigDecimal pickDailyPnl(DailyPnlEntity r) {
+        if (r == null) return BigDecimal.ZERO;
+        if (r.getNetPnl() != null) return r.getNetPnl();
+        if (r.getGrossPnl() != null) return r.getGrossPnl();
+        if (r.getRealizedPnl() != null) return r.getRealizedPnl();
+        return BigDecimal.ZERO;
     }
 
     public PnlSummaryResponse getSummary(int days) {

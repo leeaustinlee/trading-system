@@ -6,6 +6,11 @@
 <meta name="theme-color" content="#0a0e1a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Trading">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
 <title>Trading Terminal · Mobile</title>
 <style>
   /* ─── design tokens ──────────────────────────────────────────── */
@@ -536,9 +541,19 @@ function PositionCard(p, quote){
   ]);
   card.append(stopRow);
 
-  const riskTxt = dist.cls==='danger'?'高':dist.cls==='warn'?'中':dist.cls==='safe'?'低':'未知';
+  // 風險等級：後端 review_log 優先（STRONG/WEAKEN/EXIT），fallback 用距停損 % 推導
+  let riskTxt, riskCls;
+  const rs = (p.reviewStatus||'').toUpperCase();
+  if (rs === 'STRONG'){ riskTxt='續抱'; riskCls='safe'; }
+  else if (rs === 'WEAKEN'){ riskTxt='轉弱'; riskCls='warn'; }
+  else if (rs === 'EXIT'){ riskTxt='出場'; riskCls='danger'; }
+  else {
+    riskTxt = dist.cls==='danger'?'高':dist.cls==='warn'?'中':dist.cls==='safe'?'低':'未知';
+    riskCls = dist.cls;
+  }
+  const riskSrc = rs ? '<span style="color:var(--dim)">（後端 review）</span>' : '';
   card.append(el('div',{class:'risk',html:
-    `風險：<b class="${dist.cls}">${riskTxt}</b> · 停損 <b class="mono">${fmtPrice(p.stopLossPrice)}</b> · TP1 <b class="mono">${fmtPrice(p.takeProfit1)}</b>`}));
+    `風險：<b class="${riskCls}">${riskTxt}</b>${riskSrc} · 停損 <b class="mono">${fmtPrice(p.stopLossPrice)}</b> · TP1 <b class="mono">${fmtPrice(p.takeProfit1)}</b>`}));
 
   const acts = el('div',{class:'actions'});
   ['hold','add','reduce','exit'].forEach(act => {
@@ -557,6 +572,10 @@ function PositionCard(p, quote){
   const more = el('div',{class:'more'});
   more.append(el('div',{html:`策略：<b style="color:var(--ink)">${p.strategyType||'SETUP'}</b> · TP2 <b class="mono">${fmtPrice(p.takeProfit2)}</b>`}));
   more.append(el('div',{text:`建倉：${HHmmss(p.openedAt)} · ${truncate(p.note||'',40)}`}));
+  if (p.reviewStatus){
+    more.append(el('div',{html:
+      `Review：<b style="color:var(--ink)">${p.reviewStatus}</b> · ${HHmm(p.reviewedAt)} · ${truncate(p.reviewReason||'',60)}`}));
+  }
   card.append(more);
   card.addEventListener('click', e => {
     if (e.target.closest('.actions')) return;
@@ -654,12 +673,13 @@ async function fetchPositionsTab(){
   await fetchQuotes();
 }
 async function fetchPnlTab(){
-  const [daily, p20, p90] = await Promise.all([
+  const [daily, p20, p90, drawdown] = await Promise.all([
     safeFetch('/api/pnl/daily'),
     safeFetch('/api/pnl/summary?days=20'),
     safeFetch('/api/pnl/summary?days=90'),
+    safeFetch('/api/pnl/drawdown?days=90'),
   ]);
-  S.pnlDaily = daily; S.pnl20 = p20; S.pnl90 = p90;
+  S.pnlDaily = daily; S.pnl20 = p20; S.pnl90 = p90; S.drawdown = drawdown;
 }
 async function fetchDecisionsTab(){
   const [hist, hourly, monitor] = await Promise.all([
@@ -852,8 +872,12 @@ Views.pnl = async () => {
     {label:'已實現 (90 日)', value: S.pnl90?.totalRealizedPnl!=null?fmt(S.pnl90.totalRealizedPnl,0):'—',
      cls: (S.pnl90?.totalRealizedPnl||0)>=0?'up':'dn',
      sub: `${S.pnl90?.days||0} 個交易日`},
-    {label:'最大回撤', value: '未提供',
-     sub: 'follow-up'},
+    {label:'最大回撤 (90 日)',
+     value: S.drawdown?.maxDrawdownPct!=null ? Number(S.drawdown.maxDrawdownPct).toFixed(2)+'%' : '未提供',
+     cls: (S.drawdown?.maxDrawdownPct!=null && Number(S.drawdown.maxDrawdownPct)<0) ? 'dn' : '',
+     sub: S.drawdown?.peakAt && S.drawdown?.troughAt
+        ? `${S.drawdown.peakAt} → ${S.drawdown.troughAt}`
+        : (S.drawdown?.sampleDays!=null ? `${S.drawdown.sampleDays} 個交易日` : 'fallback')},
   ]));
 
   // 今日交易紀錄折疊
@@ -1206,6 +1230,16 @@ let _pollTimer = setInterval(() => {
 /* boot: ensure default route */
 if (!location.hash) location.hash = '#/overview';
 else navigate();
+
+/* ─── PWA service worker registration ───────────────────────── */
+if ('serviceWorker' in navigator && location.protocol !== 'file:'){
+  // 使用 load 事件避免影響首頁繪製
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(err => {
+      console.warn('[sw] register failed', err);
+    });
+  });
+}
 </script>
 </body>
 </html>

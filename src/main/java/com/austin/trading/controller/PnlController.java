@@ -2,14 +2,18 @@ package com.austin.trading.controller;
 
 import com.austin.trading.dto.request.DailyPnlCreateRequest;
 import com.austin.trading.dto.request.DailyPnlUpdateRequest;
+import com.austin.trading.dto.response.CapitalSummaryResponse;
 import com.austin.trading.dto.response.DailyPnlResponse;
+import com.austin.trading.dto.response.DrawdownResponse;
 import com.austin.trading.dto.response.PnlSummaryResponse;
+import com.austin.trading.service.CapitalService;
 import com.austin.trading.service.PnlService;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -18,9 +22,11 @@ import java.util.List;
 public class PnlController {
 
     private final PnlService pnlService;
+    private final CapitalService capitalService;
 
-    public PnlController(PnlService pnlService) {
+    public PnlController(PnlService pnlService, CapitalService capitalService) {
         this.pnlService = pnlService;
+        this.capitalService = capitalService;
     }
 
     @GetMapping("/daily")
@@ -33,6 +39,25 @@ public class PnlController {
     @GetMapping("/summary")
     public PnlSummaryResponse getSummary(@RequestParam(defaultValue = "20") int days) {
         return pnlService.getSummary(days);
+    }
+
+    /**
+     * v2.14：rolling 最大回撤。預設 90 天視窗；baseline 取 capital.totalAssets。
+     * 回傳 maxDrawdownPct / peakAt / troughAt / currentDrawdownPct（皆為負值或 0）。
+     */
+    @GetMapping("/drawdown")
+    public DrawdownResponse getDrawdown(@RequestParam(defaultValue = "90") int days) {
+        BigDecimal baseline = null;
+        try {
+            CapitalSummaryResponse cap = capitalService.getSummary();
+            if (cap != null) {
+                if (cap.totalAssets() != null) baseline = cap.totalAssets();
+                else if (cap.totalEquity() != null) baseline = cap.totalEquity();
+            }
+        } catch (RuntimeException ignored) {
+            // baseline 無資料時 service 內部會 fallback 到 max(peak,1)
+        }
+        return pnlService.computeDrawdown(days, baseline);
     }
 
     /**

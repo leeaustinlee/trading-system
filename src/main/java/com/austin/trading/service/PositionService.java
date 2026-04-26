@@ -8,7 +8,9 @@ import com.austin.trading.dto.request.StopLossTakeProfitEvaluateRequest;
 import com.austin.trading.dto.response.PositionResponse;
 import com.austin.trading.engine.StopLossTakeProfitEngine;
 import com.austin.trading.entity.PositionEntity;
+import com.austin.trading.entity.PositionReviewLogEntity;
 import com.austin.trading.repository.PositionRepository;
+import com.austin.trading.repository.PositionReviewLogRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
@@ -34,12 +36,15 @@ public class PositionService {
     // v3：所有現金變動透過 ledger service 記帳
     private final CapitalLedgerService ledgerService;
     private final CapitalService capitalService;
+    /** v2.14：讀取最近一次 position_review_log 給 mobile 持倉風險顯示。 */
+    private final PositionReviewLogRepository positionReviewLogRepository;
 
     public PositionService(PositionRepository positionRepository, PnlService pnlService,
                             TradeReviewService tradeReviewService, ScoreConfigService scoreConfigService,
                             StopLossTakeProfitEngine stopLossTakeProfitEngine,
                             CapitalLedgerService ledgerService,
-                            CapitalService capitalService) {
+                            CapitalService capitalService,
+                            PositionReviewLogRepository positionReviewLogRepository) {
         this.positionRepository = positionRepository;
         this.pnlService = pnlService;
         this.tradeReviewService = tradeReviewService;
@@ -47,6 +52,7 @@ public class PositionService {
         this.stopLossTakeProfitEngine = stopLossTakeProfitEngine;
         this.ledgerService = ledgerService;
         this.capitalService = capitalService;
+        this.positionReviewLogRepository = positionReviewLogRepository;
     }
 
     public List<PositionResponse> getOpenPositions(int limit) {
@@ -393,6 +399,31 @@ public class PositionService {
     }
 
     private PositionResponse toResponse(PositionEntity entity) {
+        // v2.14：附帶最近一次 review_log 結果（STRONG / WEAKEN / EXIT），供 mobile 直接顯示。
+        String reviewStatus = null;
+        java.time.LocalDateTime reviewedAt = null;
+        String reviewReason = null;
+        if (entity.getId() != null && positionReviewLogRepository != null) {
+            try {
+                PositionReviewLogEntity rev = positionReviewLogRepository
+                        .findTopByPositionIdOrderByCreatedAtDesc(entity.getId())
+                        .orElse(null);
+                if (rev != null) {
+                    reviewStatus = rev.getDecisionStatus();
+                    reviewReason = rev.getReason();
+                    if (rev.getReviewDate() != null) {
+                        java.time.LocalTime t = rev.getReviewTime() != null
+                                ? rev.getReviewTime() : java.time.LocalTime.MIDNIGHT;
+                        reviewedAt = java.time.LocalDateTime.of(rev.getReviewDate(), t);
+                    } else if (rev.getCreatedAt() != null) {
+                        reviewedAt = rev.getCreatedAt();
+                    }
+                }
+            } catch (RuntimeException ignored) {
+                // 讀 review_log 失敗不影響 position 主資料；保持 null。
+            }
+        }
+
         return new PositionResponse(
                 entity.getId(),
                 entity.getSymbol(),
@@ -412,7 +443,10 @@ public class PositionService {
                 entity.getNote(),
                 entity.getPayloadJson(),
                 entity.getCreatedAt(),
-                entity.getStrategyType()
+                entity.getStrategyType(),
+                reviewStatus,
+                reviewedAt,
+                reviewReason
         );
     }
 }
