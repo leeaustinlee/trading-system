@@ -8,7 +8,7 @@
  *
  * 升版：改 CACHE_VERSION，舊 cache 自動清空。
  */
-const CACHE_VERSION = 'tt-v1-2026-04-26';
+const CACHE_VERSION = 'tt-v2-2026-04-26-style';
 const STATIC_CACHE  = `static-${CACHE_VERSION}`;
 const PRECACHE_URLS = [
   '/mobile.html',
