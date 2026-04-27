@@ -62,6 +62,13 @@ public class IntradayDecisionWorkflowService {
             log.warn("[IntradayDecisionWorkflow] 無市場快照，以預設 B 級執行");
         }
 
+        // v2.8: Grace Period — 09:30 cron 觸發時 Claude/Codex 可能還沒完成，給一個等待窗口
+        // 避免發出 AI_NOT_READY 假警報，與隨後 catch-up 的真實決策互相打架。
+        boolean ready = finalDecisionService.awaitAiReadiness(tradingDate, "OPENING");
+        if (!ready) {
+            log.warn("[IntradayDecisionWorkflow] grace period 後仍 AI_NOT_READY，evaluateAndPersist 將走 REST 路徑");
+        }
+
         // Step 2~4: 分層管線 — Regime → Theme → Ranking → Setup → Timing → Risk → Execution
         log.info("[IntradayDecisionWorkflow] 啟動分層管線：Regime → Theme → Ranking → Setup → Timing → Risk → Execution");
         var result = finalDecisionService.evaluateAndPersist(tradingDate);

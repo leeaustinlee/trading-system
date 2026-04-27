@@ -83,6 +83,9 @@ trading:
     daily-health-check:
       enabled: true
     daily-health-check-cron: "0 0 8 * * MON-FRI"
+    premarket-health-alert:
+      enabled: true
+    premarket-health-alert-cron: "0 15 8 * * MON-FRI"
     weekly-trade-review:
       enabled: true
     weekly-trade-review-cron: "0 0 19 * * FRI"

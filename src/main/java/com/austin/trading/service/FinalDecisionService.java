@@ -52,6 +52,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.austin.trading.event.FinalDecisionPersistedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -130,6 +131,13 @@ public class FinalDecisionService {
     private final ThemeLiveDecisionService  themeLiveDecisionService;
     private final ThemeLineSummaryService   themeLineSummaryService;
     private final ApplicationEventPublisher events;
+
+    // v2.8 Grace Period：cron 觸發後，給 Claude/Codex 一個等待窗口完成研究，
+    // 避免 09:30/15:30 立即判 AI_NOT_READY 發出假警報。
+    @Value("${trading.ai.grace-period-seconds:300}")
+    private long aiGracePeriodSeconds;
+    @Value("${trading.ai.grace-poll-interval-seconds:30}")
+    private long aiGracePollIntervalSeconds;
 
     public FinalDecisionService(
             ConsensusScoringEngine consensusScoringEngine,
@@ -1009,6 +1017,52 @@ public class FinalDecisionService {
      */
     private AiReadiness resolveAiReadiness(LocalDate tradingDate) {
         return resolveAiReadiness(tradingDate, null);
+    }
+
+    /**
+     * v2.8: 給 cron 觸發路徑用的 grace period。允許 cron 在 9:30/15:30 觸發時，
+     * 等 Claude/Codex 在 grace period 內完成，再進入正式評估。
+     *
+     * <p>不在 @Transactional 內呼叫，避免 sleep 持有 DB 連線。</p>
+     *
+     * @param tradingDate    交易日
+     * @param preferTaskType OPENING / POSTMARKET / T86_TOMORROW 等
+     * @return true 表示 ready (FULL_AI_READY 或 PARTIAL_AI_READY)，false 表示已超時仍 AI_NOT_READY
+     */
+    public boolean awaitAiReadiness(LocalDate tradingDate, String preferTaskType) {
+        long graceSec = Math.max(0, aiGracePeriodSeconds);
+        long pollSec  = Math.max(5, aiGracePollIntervalSeconds);
+        // 先做一次 fast check
+        AiReadinessMode first = resolveAiReadiness(tradingDate, preferTaskType).mode();
+        if (first != AiReadinessMode.AI_NOT_READY) {
+            return true;
+        }
+        if (graceSec == 0) {
+            return false;
+        }
+        long deadlineMs = System.currentTimeMillis() + graceSec * 1000L;
+        int attempt = 1;
+        log.info("[FinalDecision] AI_NOT_READY → 進入 grace period（最多等 {}s, 每 {}s 重檢） preferTaskType={}",
+                graceSec, pollSec, preferTaskType);
+        while (System.currentTimeMillis() < deadlineMs) {
+            try {
+                Thread.sleep(pollSec * 1000L);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                log.warn("[FinalDecision] grace period 被中斷");
+                return false;
+            }
+            AiReadinessMode mode = resolveAiReadiness(tradingDate, preferTaskType).mode();
+            attempt++;
+            if (mode != AiReadinessMode.AI_NOT_READY) {
+                long waitedMs = System.currentTimeMillis() - (deadlineMs - graceSec * 1000L);
+                log.info("[FinalDecision] grace period 結束 ready：mode={} 等待 {}ms 共 {} 次重檢",
+                        mode, waitedMs, attempt);
+                return true;
+            }
+        }
+        log.warn("[FinalDecision] grace period 超時 ({}s) 仍 AI_NOT_READY，本輪走 REST 路徑", graceSec);
+        return false;
     }
 
     /**

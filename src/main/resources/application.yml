@@ -86,6 +86,9 @@ trading:
     daily-health-check:
       enabled: false
     daily-health-check-cron: "0 0 8 * * MON-FRI"
+    premarket-health-alert:
+      enabled: ${PREMARKET_HEALTH_ALERT_ENABLED:true}
+    premarket-health-alert-cron: "0 15 8 * * MON-FRI"
     paper-trade-mtm:
       enabled: ${PAPER_TRADE_MTM_ENABLED:true}
     paper-trade-mtm-cron: "0 35 13 * * MON-FRI"
@@ -96,6 +99,10 @@ trading:
     base-url: ${TAIFEX_BASE_URL:https://openapi.taifex.com.tw}
 
   ai:
+    # v2.8: cron 觸發 (09:30 / 15:30 等) 後，給 Claude/Codex 完成研究的等待窗口。
+    # 避免立即判 AI_NOT_READY 發出假警報，與隨後 catch-up 的真實決策互打。
+    grace-period-seconds: ${AI_GRACE_PERIOD_SECONDS:300}        # 預設 5 分鐘
+    grace-poll-interval-seconds: ${AI_GRACE_POLL_INTERVAL_SECONDS:30}
     claude:
       research-output-path: ${CLAUDE_RESEARCH_OUTPUT_PATH:/mnt/d/ai/stock/claude-research-latest.md}
       request-output-path: ${CLAUDE_REQUEST_OUTPUT_PATH:/mnt/d/ai/stock/claude-research-request.json}
