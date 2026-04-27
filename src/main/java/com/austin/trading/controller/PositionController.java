@@ -7,6 +7,7 @@ import com.austin.trading.dto.request.PositionUpdateRequest;
 import com.austin.trading.dto.response.LiveQuoteResponse;
 import com.austin.trading.dto.response.PositionResponse;
 import com.austin.trading.service.CandidateScanService;
+import com.austin.trading.service.PositionReviewService;
 import com.austin.trading.service.PositionService;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/positions")
@@ -22,10 +24,14 @@ public class PositionController {
 
     private final PositionService positionService;
     private final CandidateScanService candidateScanService;
+    private final PositionReviewService positionReviewService;
 
-    public PositionController(PositionService positionService, CandidateScanService candidateScanService) {
+    public PositionController(PositionService positionService,
+                              CandidateScanService candidateScanService,
+                              PositionReviewService positionReviewService) {
         this.positionService = positionService;
         this.candidateScanService = candidateScanService;
+        this.positionReviewService = positionReviewService;
     }
 
     @GetMapping("/open")
@@ -100,5 +106,18 @@ public class PositionController {
             @Valid @RequestBody PositionPartialCloseRequest request
     ) {
         return positionService.partialClose(id, request);
+    }
+
+    /**
+     * P0.2:仍 OPEN 但最新一筆 review 為 EXIT 的持倉清單。
+     * <p>用來在 dashboard / mobile 顯示一個未處理 EXIT 訊號的徽章,讓 Austin 看到並決定是否手動平倉。</p>
+     */
+    @GetMapping("/review/pending-exits")
+    public Map<String, Object> getPendingExits() {
+        List<PositionReviewService.PendingExitItem> items = positionReviewService.findPendingExits();
+        return Map.of(
+                "count", items.size(),
+                "items", items
+        );
     }
 }

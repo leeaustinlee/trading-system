@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,18 +61,39 @@ public class PaperTradeService {
     private final FixedRuleExitEvaluator exitEvaluator;
     private final ObjectMapper objectMapper;
 
-    private final boolean enabled;
+    /**
+     * Static fallback gate driven by application.properties (legacy key).
+     * 主要 runtime gate 走 {@link #isPaperModeEnabled()} → 透過 ScoreConfigService 讀
+     * {@code trading.paper_mode.enabled}（DB-side flag,預設 TRUE）。
+     */
+    private final boolean staticEnabled;
+
+    /** 用 ObjectProvider 解循環:ScoreConfigService 是後加的依賴,允許 null/缺席。 */
+    private final ObjectProvider<ScoreConfigService> scoreConfigProvider;
 
     public PaperTradeService(PaperTradeRepository repository,
                               TwseMisClient twseMisClient,
                               FixedRuleExitEvaluator exitEvaluator,
                               ObjectMapper objectMapper,
-                              @Value("${trading.paper-trade.enabled:true}") boolean enabled) {
+                              ObjectProvider<ScoreConfigService> scoreConfigProvider,
+                              @Value("${trading.paper-trade.enabled:true}") boolean staticEnabled) {
         this.repository = repository;
         this.twseMisClient = twseMisClient;
         this.exitEvaluator = exitEvaluator;
         this.objectMapper = objectMapper;
-        this.enabled = enabled;
+        this.scoreConfigProvider = scoreConfigProvider;
+        this.staticEnabled = staticEnabled;
+    }
+
+    /**
+     * 是否啟用 paper trade。
+     * <p>順序: ScoreConfigService("trading.paper_mode.enabled", true) AND application.properties flag。</p>
+     */
+    boolean isPaperModeEnabled() {
+        if (!staticEnabled) return false;
+        ScoreConfigService cfg = scoreConfigProvider != null ? scoreConfigProvider.getIfAvailable() : null;
+        if (cfg == null) return true; // 沒有 DB config 時 default true
+        return cfg.getBoolean("trading.paper_mode.enabled", true);
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -81,8 +103,9 @@ public class PaperTradeService {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onFinalDecisionPersisted(FinalDecisionPersistedEvent event) {
-        if (!enabled) {
-            log.debug("[PaperTrade] disabled, skip event finalDecisionId={}", event.finalDecisionId());
+        if (!isPaperModeEnabled()) {
+            log.debug("[PaperTrade] paper_mode disabled, skip event finalDecisionId={}",
+                    event != null ? event.finalDecisionId() : null);
             return;
         }
         if (event == null || !"ENTER".equalsIgnoreCase(event.decisionCode())) return;
@@ -153,6 +176,112 @@ public class PaperTradeService {
                 e.getId(), symbol, entryPrice, stop, tp1, tp2, e.getStrategyType());
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    // P0.2 公開 API:由 FinalDecisionService 或測試直接呼叫
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * 為一檔股票直接寫入一筆 OPEN 虛擬倉。
+     *
+     * <p>由 ENTER 流程在 {@code trading.paper_mode.enabled=true}(預設 TRUE)時呼叫,
+     * 不依賴 FinalDecisionPersistedEvent 訊號,讓上游可在任何 ENTER 路徑強制紀錄。</p>
+     *
+     * <p>Idempotency:同一交易日同 symbol 已存在 OPEN 狀態的 paper trade 時直接略過(不丟錯)。</p>
+     *
+     * @param symbol     股票代碼(必填)
+     * @param entryPrice 進場價(必填,>0)
+     * @param stopLoss   停損價(可 null,缺則用 -5%)
+     * @param tp1        第一停利(可 null,缺則用 +8%)
+     * @param tp2        第二停利(可 null,缺則用 +15%)
+     * @param qty        計畫持股數(可 null,只是當 metadata 用)
+     * @param reason     進場原因/備註(會寫入 payload_json)
+     * @return 寫入的 entity;若被 idempotency 跳過或 paper_mode 關閉則回 null
+     */
+    @Transactional
+    public PaperTradeEntity recordEntry(String symbol,
+                                        BigDecimal entryPrice,
+                                        BigDecimal stopLoss,
+                                        BigDecimal tp1,
+                                        BigDecimal tp2,
+                                        Integer qty,
+                                        String reason) {
+        if (!isPaperModeEnabled()) {
+            log.debug("[PaperTrade] recordEntry paper_mode disabled symbol={}", symbol);
+            return null;
+        }
+        if (symbol == null || symbol.isBlank()) {
+            throw new IllegalArgumentException("symbol must not be blank");
+        }
+        if (entryPrice == null || entryPrice.signum() <= 0) {
+            throw new IllegalArgumentException("entryPrice must be > 0");
+        }
+
+        LocalDate today = LocalDate.now();
+
+        // Idempotency:同 entry_date + symbol 已 OPEN 直接 return
+        List<PaperTradeEntity> existing = repository.findByEntryDateAndSymbol(today, symbol);
+        for (PaperTradeEntity p : existing) {
+            if ("OPEN".equals(p.getStatus())) {
+                log.info("[PaperTrade] recordEntry idempotent skip symbol={} entry_date={} existingId={}",
+                        symbol, today, p.getId());
+                return p;
+            }
+        }
+
+        BigDecimal stop = stopLoss != null ? stopLoss
+                : entryPrice.multiply(BigDecimal.ONE.subtract(DEFAULT_STOP_LOSS_PCT))
+                        .setScale(4, RoundingMode.HALF_UP);
+        BigDecimal t1 = tp1 != null ? tp1
+                : entryPrice.multiply(BigDecimal.ONE.add(DEFAULT_TARGET1_PCT))
+                        .setScale(4, RoundingMode.HALF_UP);
+        BigDecimal t2 = tp2 != null ? tp2
+                : entryPrice.multiply(BigDecimal.ONE.add(DEFAULT_TARGET2_PCT))
+                        .setScale(4, RoundingMode.HALF_UP);
+
+        PaperTradeEntity e = new PaperTradeEntity();
+        e.setTradeId(UUID.randomUUID().toString().replace("-", "").substring(0, 32));
+        e.setEntryDate(today);
+        e.setEntryTime(LocalTime.now());
+        e.setSymbol(symbol);
+        e.setEntryPrice(entryPrice.setScale(4, RoundingMode.HALF_UP));
+        e.setPositionShares(qty);
+        if (qty != null && qty > 0) {
+            e.setPositionAmount(entryPrice.multiply(BigDecimal.valueOf(qty))
+                    .setScale(2, RoundingMode.HALF_UP));
+        }
+        e.setStopLossPrice(stop);
+        e.setTarget1Price(t1);
+        e.setTarget2Price(t2);
+        e.setMaxHoldingDays(DEFAULT_MAX_HOLD_DAYS);
+        e.setSource("MANUAL");
+        e.setStrategyType("SETUP");
+        e.setStatus("OPEN");
+        e.setPayloadJson(buildManualEntryPayload(symbol, entryPrice, stop, t1, t2, qty, reason));
+        repository.save(e);
+        log.info("[PaperTrade] recordEntry OPEN id={} symbol={} entry={} stop={} tp1={} tp2={} qty={} reason={}",
+                e.getId(), symbol, entryPrice, stop, t1, t2, qty, reason);
+        return e;
+    }
+
+    private String buildManualEntryPayload(String symbol, BigDecimal entryPrice,
+                                            BigDecimal stop, BigDecimal tp1, BigDecimal tp2,
+                                            Integer qty, String reason) {
+        try {
+            ObjectNode n = objectMapper.createObjectNode();
+            n.put("source", "recordEntry");
+            n.put("symbol", symbol);
+            n.put("entryPrice", entryPrice.toPlainString());
+            if (stop != null) n.put("stopLoss", stop.toPlainString());
+            if (tp1  != null) n.put("tp1", tp1.toPlainString());
+            if (tp2  != null) n.put("tp2", tp2.toPlainString());
+            if (qty  != null) n.put("qty", qty);
+            if (reason != null) n.put("reason", reason);
+            return objectMapper.writeValueAsString(n);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
     private BigDecimal resolveEntryPrice(String symbol, String entryPriceZone) {
         BigDecimal parsed = parsePriceZone(entryPriceZone);
         if (parsed != null) return parsed;
@@ -217,7 +346,7 @@ public class PaperTradeService {
 
     @Transactional
     public MtmSummary markToMarketAll(LocalDate barDate) {
-        if (!enabled) return new MtmSummary(0, 0, 0);
+        if (!isPaperModeEnabled()) return new MtmSummary(0, 0, 0);
         List<PaperTradeEntity> open = repository.findByStatusOrderByEntryDateAscIdAsc("OPEN");
         int updated = 0, closed = 0, errors = 0;
         for (PaperTradeEntity p : open) {
