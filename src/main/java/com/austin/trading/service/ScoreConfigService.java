@@ -46,9 +46,9 @@ public class ScoreConfigService {
         DEFAULTS.put("scoring.java_weight",             new String[]{"0.40",  "DECIMAL", "Java 結構評分權重（v2.0）"});
         DEFAULTS.put("scoring.claude_weight",           new String[]{"0.35",  "DECIMAL", "Claude 研究評分權重（v2.0）"});
         DEFAULTS.put("scoring.codex_weight",            new String[]{"0.25",  "DECIMAL", "Codex 審核評分權重（v2.0）"});
-        DEFAULTS.put("scoring.rr_min_grade_a",          new String[]{"2.2",   "DECIMAL", "A 級市場最低風報比（v2.0）"});
-        DEFAULTS.put("scoring.rr_min_grade_b",          new String[]{"2.5",   "DECIMAL", "B 級市場最低風報比（v2.0）"});
-        DEFAULTS.put("scoring.rr_min_ap",               new String[]{"2.5",   "DECIMAL", "A+ 等級最低風報比"});
+        DEFAULTS.put("scoring.rr_min_grade_a",          new String[]{"2.0",   "DECIMAL", "A 級市場最低風報比（P0.1：2.2→2.0）"});
+        DEFAULTS.put("scoring.rr_min_grade_b",          new String[]{"1.8",   "DECIMAL", "B 級市場最低風報比（P0.1：2.5→1.8）"});
+        DEFAULTS.put("scoring.rr_min_ap",               new String[]{"2.2",   "DECIMAL", "A+ 等級最低風報比（P0.1：2.5→2.2）"});
         DEFAULTS.put("scoring.enable_codex_review",     new String[]{"true",  "BOOLEAN", "是否啟用 Codex review 層（v2.0 預設 true）"});
         DEFAULTS.put("scoring.late_stop_market_grade",  new String[]{"A",     "STRING",  "10:30 後允許進場的最低市場等級"});
         DEFAULTS.put("scoring.java_rr_multiplier",       new String[]{"1.3",   "DECIMAL", "RR 換算為 Java 結構分的乘數（v2.0：1.3）"});
@@ -57,9 +57,9 @@ public class ScoreConfigService {
         DEFAULTS.put("scoring.cooldown_minutes",        new String[]{"45",    "INTEGER", "每筆交易後的冷卻期（v2.0：45 分鐘）"});
         DEFAULTS.put("scoring.version",                 new String[]{"v2.0-bc-sniper", "STRING", "目前評分規則版本號"});
         // ── 分級門檻（A+/A/B/C）────────────────────────────────────────────────
-        DEFAULTS.put("scoring.grade_ap_min",            new String[]{"8.8",   "DECIMAL", "A+ 等級 final_rank_score 門檻（可交易的唯一等級）"});
-        DEFAULTS.put("scoring.grade_a_min",             new String[]{"8.2",   "DECIMAL", "A 等級 final_rank_score 門檻"});
-        DEFAULTS.put("scoring.grade_b_min",             new String[]{"7.4",   "DECIMAL", "B 等級 final_rank_score 門檻"});
+        DEFAULTS.put("scoring.grade_ap_min",            new String[]{"8.2",   "DECIMAL", "A+ 等級 final_rank_score 門檻（P0.1：8.8→8.2）"});
+        DEFAULTS.put("scoring.grade_a_min",             new String[]{"7.5",   "DECIMAL", "A 等級 final_rank_score 門檻（P0.1：8.2→7.5）"});
+        DEFAULTS.put("scoring.grade_b_min",             new String[]{"6.5",   "DECIMAL", "B 等級 final_rank_score 門檻（P0.1：7.4→6.5）"});
         // ── Veto 門檻 ─────────────────────────────────────────────────────────
         DEFAULTS.put("veto.theme_rank_max",             new String[]{"2",     "INTEGER", "題材排名超過此值則 veto（v2.0：2）"});
         DEFAULTS.put("veto.final_theme_score_min",      new String[]{"7.5",   "DECIMAL", "題材分低於此值則 veto（v2.0）"});
