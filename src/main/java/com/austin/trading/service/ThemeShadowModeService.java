@@ -28,20 +28,23 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * v2 Theme Engine PR5：Shadow Mode 差異分類器。
+ * v2 Theme Engine：Shadow Mode 差異分類器。
  *
- * <p>輸入 legacy 決策 + PR4 {@link ThemeGateTraceResultDto}，逐檔產出 6 種
- * {@link DecisionDiffType} 並寫入 {@code theme_shadow_decision_log}。</p>
+ * <p>輸入 legacy 決策 + PR4 {@link ThemeGateTraceResultDto}，逐檔產出 {@link DecisionDiffType}
+ * 並寫入 {@code theme_shadow_decision_log}。</p>
  *
- * <h3>分類規則（legacy 正規化為 ENTER / 非ENTER；theme 由 overallOutcome 映射 PASS/WAIT/BLOCK）</h3>
+ * <h3>P0.2 修正：write-on-every-comparison（不只在差異時寫）</h3>
+ * <p>當 {@code theme.shadow_mode.enabled=true} 時，每一筆 candidate × theme 比對<strong>都會落 log</strong>，
+ * {@code decision_diff_type} 標記為下列五類之一以供盤後分析：</p>
  * <table>
- *   <tr><th>legacy</th><th>theme</th><th>diffType</th></tr>
- *   <tr><td>ENTER</td><td>PASS</td><td>SAME_BUY</td></tr>
- *   <tr><td>ENTER</td><td>BLOCK</td><td>LEGACY_BUY_THEME_BLOCK</td></tr>
- *   <tr><td>ENTER</td><td>WAIT</td><td>CONFLICT_REVIEW_REQUIRED</td></tr>
- *   <tr><td>非ENTER</td><td>PASS</td><td>LEGACY_WAIT_THEME_BUY</td></tr>
- *   <tr><td>非ENTER</td><td>BLOCK</td><td>BOTH_BLOCK</td></tr>
- *   <tr><td>非ENTER</td><td>WAIT</td><td>SAME_WAIT</td></tr>
+ *   <tr><th>legacy</th><th>theme</th><th>條件</th><th>diffType</th></tr>
+ *   <tr><td>ENTER</td><td>PASS</td><td>|scoreDiff| &lt;= 0.1</td><td>SAME_DECISION_SAME_SCORE</td></tr>
+ *   <tr><td>ENTER</td><td>PASS</td><td>|scoreDiff| &gt; 0.1</td><td>SAME_DECISION_SCORE_DIFF</td></tr>
+ *   <tr><td>非ENTER</td><td>BLOCK/WAIT</td><td>|scoreDiff| &lt;= 0.1</td><td>SAME_DECISION_SAME_SCORE</td></tr>
+ *   <tr><td>非ENTER</td><td>BLOCK/WAIT</td><td>|scoreDiff| &gt; 0.1</td><td>SAME_DECISION_SCORE_DIFF</td></tr>
+ *   <tr><td>ENTER</td><td>BLOCK</td><td>—</td><td>V2_VETO_LEGACY_PASS</td></tr>
+ *   <tr><td>非ENTER</td><td>PASS</td><td>—</td><td>LEGACY_VETO_V2_PASS</td></tr>
+ *   <tr><td>ENTER</td><td>WAIT</td><td>—</td><td>DIFF_DECISION</td></tr>
  * </table>
  *
  * <p>Trace-only：即使 flag 開啟，也<strong>不</strong>回寫任何 live decision 欄位；
@@ -61,6 +64,9 @@ public class ThemeShadowModeService {
 
     /** {@code theme_veto_reason} 欄位長度上限（對齊 Entity {@code length=80}）。 */
     private static final int VETO_REASON_MAX_LEN = 80;
+
+    /** P0.2：score 視為 "相同" 的容差。 */
+    static final BigDecimal SAME_SCORE_TOLERANCE = new BigDecimal("0.1");
 
     private final ThemeSnapshotProperties properties;
     private final ThemeShadowDecisionLogRepository logRepo;
@@ -82,7 +88,7 @@ public class ThemeShadowModeService {
      * @param tradingDate    交易日
      * @param marketRegime   市場狀態（落 log 用；nullable）
      * @param inputs         每筆 candidate 的 legacy 結果 + PR4 gate trace
-     * @return               聚合統計 + 6 分類 count
+     * @return               聚合統計 + 分類 count
      */
     public RunResult record(LocalDate tradingDate, String marketRegime, List<Input> inputs) {
         if (!properties.shadowModeEnabled()) {
@@ -105,13 +111,14 @@ public class ThemeShadowModeService {
 
             String legacyDecision = normalizeLegacy(in.legacyDecision());
             String themeDecision = mapTheme(in.themeGateTrace().overallOutcome());
-            DecisionDiffType diffType = classify(legacyDecision, themeDecision);
-            counters.merge(diffType, 1, Integer::sum);
-
             BigDecimal legacyScore = in.legacyFinalScore();
             BigDecimal themeScore = in.themeGateTrace().themeFinalScore();
             BigDecimal scoreDiff = (legacyScore != null && themeScore != null)
                     ? themeScore.subtract(legacyScore) : null;
+
+            DecisionDiffType diffType = classify(legacyDecision, themeDecision, scoreDiff);
+            counters.merge(diffType, 1, Integer::sum);
+
             String vetoReason = truncate(extractVetoReason(in.themeGateTrace()), VETO_REASON_MAX_LEN);
             String themeTraceJson = serialize(in.themeGateTrace());
 
@@ -146,7 +153,7 @@ public class ThemeShadowModeService {
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // 核心分類邏輯
+    // 核心分類邏輯（P0.2）
     // ══════════════════════════════════════════════════════════════════════
 
     static String normalizeLegacy(String raw) {
@@ -164,17 +171,39 @@ public class ThemeShadowModeService {
         };
     }
 
-    static DecisionDiffType classify(String legacyDecision, String themeDecision) {
+    /**
+     * P0.2：write-on-every-comparison 分類器。
+     * <ul>
+     *   <li>同決策（legacy ENTER ↔ theme PASS、legacy 非ENTER ↔ theme 非PASS）→ 比 score：
+     *       |diff| &lt;= 0.1 ⇒ {@code SAME_DECISION_SAME_SCORE}；否則 {@code SAME_DECISION_SCORE_DIFF}</li>
+     *   <li>恰一邊 veto：
+     *       legacy ENTER + theme BLOCK ⇒ {@code V2_VETO_LEGACY_PASS}；
+     *       legacy 非ENTER + theme PASS ⇒ {@code LEGACY_VETO_V2_PASS}</li>
+     *   <li>其他不一致（legacy ENTER + theme WAIT）⇒ {@code DIFF_DECISION}</li>
+     * </ul>
+     */
+    static DecisionDiffType classify(String legacyDecision, String themeDecision, BigDecimal scoreDiff) {
         boolean legacyEnter = "ENTER".equals(legacyDecision);
-        return switch (themeDecision) {
-            case "PASS"  -> legacyEnter ? DecisionDiffType.SAME_BUY
-                                        : DecisionDiffType.LEGACY_WAIT_THEME_BUY;
-            case "BLOCK" -> legacyEnter ? DecisionDiffType.LEGACY_BUY_THEME_BLOCK
-                                        : DecisionDiffType.BOTH_BLOCK;
-            case "WAIT"  -> legacyEnter ? DecisionDiffType.CONFLICT_REVIEW_REQUIRED
-                                        : DecisionDiffType.SAME_WAIT;
-            default -> DecisionDiffType.CONFLICT_REVIEW_REQUIRED;
-        };
+        boolean themePass   = "PASS".equals(themeDecision);
+        boolean themeBlock  = "BLOCK".equals(themeDecision);
+
+        // 同方向（legacy ENTER ↔ theme PASS、或 legacy 非ENTER ↔ theme 非PASS）→ 比 score
+        if (legacyEnter == themePass) {
+            BigDecimal absDiff = scoreDiff == null ? BigDecimal.ZERO : scoreDiff.abs();
+            return absDiff.compareTo(SAME_SCORE_TOLERANCE) <= 0
+                    ? DecisionDiffType.SAME_DECISION_SAME_SCORE
+                    : DecisionDiffType.SAME_DECISION_SCORE_DIFF;
+        }
+        // legacy ENTER + theme BLOCK：v2 單邊 veto
+        if (legacyEnter && themeBlock) {
+            return DecisionDiffType.V2_VETO_LEGACY_PASS;
+        }
+        // legacy 非ENTER + theme PASS：legacy 單邊 veto
+        if (!legacyEnter && themePass) {
+            return DecisionDiffType.LEGACY_VETO_V2_PASS;
+        }
+        // 其餘（legacy ENTER + theme WAIT）⇒ DIFF_DECISION
+        return DecisionDiffType.DIFF_DECISION;
     }
 
     /** 找第一個 BLOCK gate 的 reason；無則找第一個 WAIT（data missing 之類）；都無則 null。 */
