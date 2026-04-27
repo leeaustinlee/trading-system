@@ -86,5 +86,6 @@ trading:
 
   ai:
     claude:
-      research-output-path: ${CLAUDE_RESEARCH_OUTPUT_PATH:}
-      request-output-path: ${CLAUDE_REQUEST_OUTPUT_PATH:}
+      # 預設指向 WSL mount 的 Windows 路徑；可被環境變數 CLAUDE_*_PATH 覆寫
+      research-output-path: ${CLAUDE_RESEARCH_OUTPUT_PATH:/mnt/d/ai/stock/claude-research-latest.md}
+      request-output-path: ${CLAUDE_REQUEST_OUTPUT_PATH:/mnt/d/ai/stock/claude-research-request.json}

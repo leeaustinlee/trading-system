@@ -3,9 +3,11 @@ package com.austin.trading.notify;
 import com.austin.trading.config.LineNotifyConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.util.List;
 import java.util.Map;
@@ -19,6 +21,11 @@ import java.util.Map;
 public class LineSender {
 
     private static final Logger log = LoggerFactory.getLogger(LineSender.class);
+
+    /** 429 後等待多久重試一次。沒有 Retry-After 時用此值。<b>package-private、非 final，方便 test 改快。</b> */
+    static long RETRY_DELAY_MS = 5_000L;
+    /** 收到 429 後最多再試幾次（=1 表示總共最多送 2 次）。 */
+    private static final int MAX_RETRY_ON_429 = 1;
 
     private final LineNotifyConfig config;
     private final WebClient webClient;
@@ -59,17 +66,43 @@ public class LineSender {
                 "messages", List.of(Map.of("type", "text", "text", truncated))
         );
 
+        return doSendWithRetry(pushUrl.trim(), token, payload, message, 0);
+    }
+
+    /**
+     * 實際送出，遇 429 最多再試 {@link #MAX_RETRY_ON_429} 次（5 秒間隔），其他錯誤直接 graceful fail。
+     */
+    private boolean doSendWithRetry(String pushUrl, String token, Map<String, Object> payload,
+                                    String originalMessage, int attempt) {
         try {
             webClient.post()
-                    .uri(pushUrl.trim())
+                    .uri(pushUrl)
                     .header("Authorization", "Bearer " + token)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(payload)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
-            log.info("[LineSender] Sent: {}", abbreviate(message));
+            if (attempt > 0) {
+                log.info("[LineSender] Sent after {} retry: {}", attempt, abbreviate(originalMessage));
+            } else {
+                log.info("[LineSender] Sent: {}", abbreviate(originalMessage));
+            }
             return true;
+        } catch (WebClientResponseException e) {
+            HttpStatusCode status = e.getStatusCode();
+            if (status.value() == 429 && attempt < MAX_RETRY_ON_429) {
+                log.warn("[LineSender] 429 Too Many Requests (attempt {}), backoff {}ms then retry once.",
+                        attempt + 1, RETRY_DELAY_MS);
+                try { Thread.sleep(RETRY_DELAY_MS); } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+                return doSendWithRetry(pushUrl, token, payload, originalMessage, attempt + 1);
+            }
+            log.error("[LineSender] Failed to send LINE message: {} (giving up after {} attempt(s))",
+                    e.getMessage(), attempt + 1);
+            return false;
         } catch (Exception e) {
             log.error("[LineSender] Failed to send LINE message: {}", e.getMessage());
             return false;
