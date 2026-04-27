@@ -14,4 +14,7 @@ public interface PositionReviewLogRepository extends JpaRepository<PositionRevie
     Optional<PositionReviewLogEntity> findTopByPositionIdOrderByCreatedAtDesc(Long positionId);
 
     List<PositionReviewLogEntity> findByPositionIdOrderByCreatedAtDesc(Long positionId);
+
+    /** Latest review log row for a given symbol (paper_trade rows aren't keyed to position_id). */
+    Optional<PositionReviewLogEntity> findTopBySymbolOrderByCreatedAtDesc(String symbol);
 }

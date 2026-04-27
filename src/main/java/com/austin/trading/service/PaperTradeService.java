@@ -5,9 +5,15 @@ import com.austin.trading.client.dto.StockQuote;
 import com.austin.trading.dto.response.FinalDecisionSelectedStockResponse;
 import com.austin.trading.engine.exit.ExitRuleEvaluator;
 import com.austin.trading.engine.exit.FixedRuleExitEvaluator;
+import com.austin.trading.entity.FinalDecisionEntity;
 import com.austin.trading.entity.PaperTradeEntity;
+import com.austin.trading.entity.PaperTradeExitLogEntity;
+import com.austin.trading.entity.PositionReviewLogEntity;
 import com.austin.trading.event.FinalDecisionPersistedEvent;
+import com.austin.trading.repository.FinalDecisionRepository;
+import com.austin.trading.repository.PaperTradeExitLogRepository;
 import com.austin.trading.repository.PaperTradeRepository;
+import com.austin.trading.repository.PositionReviewLogRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
@@ -71,18 +77,29 @@ public class PaperTradeService {
     /** 用 ObjectProvider 解循環:ScoreConfigService 是後加的依賴,允許 null/缺席。 */
     private final ObjectProvider<ScoreConfigService> scoreConfigProvider;
 
+    /** Auto-exit pipeline collaborators — optional for tests / legacy bootstraps. */
+    private final ObjectProvider<PositionReviewLogRepository> reviewLogRepoProvider;
+    private final ObjectProvider<FinalDecisionRepository> finalDecisionRepoProvider;
+    private final ObjectProvider<PaperTradeExitLogRepository> exitLogRepoProvider;
+
     public PaperTradeService(PaperTradeRepository repository,
                               TwseMisClient twseMisClient,
                               FixedRuleExitEvaluator exitEvaluator,
                               ObjectMapper objectMapper,
                               ObjectProvider<ScoreConfigService> scoreConfigProvider,
-                              @Value("${trading.paper-trade.enabled:true}") boolean staticEnabled) {
+                              @Value("${trading.paper-trade.enabled:true}") boolean staticEnabled,
+                              ObjectProvider<PositionReviewLogRepository> reviewLogRepoProvider,
+                              ObjectProvider<FinalDecisionRepository> finalDecisionRepoProvider,
+                              ObjectProvider<PaperTradeExitLogRepository> exitLogRepoProvider) {
         this.repository = repository;
         this.twseMisClient = twseMisClient;
         this.exitEvaluator = exitEvaluator;
         this.objectMapper = objectMapper;
         this.scoreConfigProvider = scoreConfigProvider;
         this.staticEnabled = staticEnabled;
+        this.reviewLogRepoProvider = reviewLogRepoProvider;
+        this.finalDecisionRepoProvider = finalDecisionRepoProvider;
+        this.exitLogRepoProvider = exitLogRepoProvider;
     }
 
     /**
@@ -94,6 +111,18 @@ public class PaperTradeService {
         ScoreConfigService cfg = scoreConfigProvider != null ? scoreConfigProvider.getIfAvailable() : null;
         if (cfg == null) return true; // 沒有 DB config 時 default true
         return cfg.getBoolean("trading.paper_mode.enabled", true);
+    }
+
+    /**
+     * Auto-exit gate. Only checks `paper.auto_exit.enabled` (default TRUE).
+     * <p>Combined gate (paper_mode AND auto_exit) is checked at job entry; this method
+     * isolates the auto-exit flag so callers can distinguish "paper mode off entirely"
+     * from "auto-exit specifically disabled".</p>
+     */
+    boolean isAutoExitEnabled() {
+        ScoreConfigService cfg = scoreConfigProvider != null ? scoreConfigProvider.getIfAvailable() : null;
+        if (cfg == null) return true;
+        return cfg.getBoolean("paper.auto_exit.enabled", true);
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -474,4 +503,319 @@ public class PaperTradeService {
     }
 
     public record MtmSummary(int total, int closed, int errors) {}
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Auto-exit pipeline (5-min cron driven via PaperTradeExitJob)
+    // ══════════════════════════════════════════════════════════════════════
+
+    private static final BigDecimal SELL_SLIPPAGE_PCT = new BigDecimal("0.001");  // -0.1%
+    private static final int        AUTO_EXIT_DEFAULT_MAX_HOLD_DAYS = 14;
+
+    /** Outcome record for one trade evaluation. */
+    public record ExitResult(String exitReason, BigDecimal exitPrice, int triggerPriority, String detailJson) {}
+
+    /**
+     * Try to fire any of the 7 priority-ordered exit triggers for an OPEN paper trade.
+     *
+     * <p>Returns the first matching trigger (priority 1 = STOP_LOSS wins over priority 3 = TP2_HIT).
+     * Returns {@code Optional.empty()} when:</p>
+     * <ul>
+     *   <li>{@code paper.auto_exit.enabled=false} (caller can choose to log SKIPPED_DISABLED)</li>
+     *   <li>The trade is not in OPEN status</li>
+     *   <li>Live quote unavailable</li>
+     *   <li>No trigger matched</li>
+     * </ul>
+     *
+     * <p>Design choices:</p>
+     * <ul>
+     *   <li>TP1 fires a FULL exit (not partial) — partial-take-profit accounting needs a dedicated
+     *       leg system; for now TP1_HIT closes the entire row.</li>
+     *   <li>TRAILING_STOP reads {@code payload_json.trailing_stop_price} and falls back to
+     *       {@code stop_loss_price} when absent.</li>
+     *   <li>REVIEW_EXIT matches by symbol (not position id) since paper_trade has no position FK,
+     *       and only fires when the latest review's created_at is after the trade's entry_time.</li>
+     *   <li>REVERSE_SIGNAL fires when today's most recent FinalDecision is REST and its summary
+     *       contains "regime_change" or "strong_weakness".</li>
+     * </ul>
+     */
+    @Transactional(readOnly = true)
+    public Optional<ExitResult> attemptExit(PaperTradeEntity trade) {
+        if (trade == null) return Optional.empty();
+        if (!isAutoExitEnabled()) return Optional.empty();
+        if (!"OPEN".equalsIgnoreCase(trade.getStatus())) return Optional.empty();
+
+        BigDecimal currentPrice = fetchLivePrice(trade.getSymbol());
+        if (currentPrice == null || currentPrice.signum() <= 0) {
+            log.warn("[PaperTrade] attemptExit no live quote symbol={} id={}", trade.getSymbol(), trade.getId());
+            return Optional.empty();
+        }
+
+        // Priority 1: STOP_LOSS
+        if (trade.getStopLossPrice() != null && currentPrice.compareTo(trade.getStopLossPrice()) <= 0) {
+            return Optional.of(new ExitResult("STOP_LOSS", currentPrice, 1,
+                    detail("priority", 1, "currentPrice", currentPrice, "stopLoss", trade.getStopLossPrice())));
+        }
+
+        // Priority 2: TRAILING_STOP — payload_json.trailing_stop_price else fallback to stop_loss_price
+        BigDecimal trailing = readTrailingStop(trade);
+        if (trailing != null && currentPrice.compareTo(trailing) <= 0) {
+            return Optional.of(new ExitResult("TRAILING_STOP", currentPrice, 2,
+                    detail("priority", 2, "currentPrice", currentPrice, "trailingStop", trailing)));
+        }
+
+        // Priority 3: TP2_HIT
+        if (trade.getTarget2Price() != null && currentPrice.compareTo(trade.getTarget2Price()) >= 0) {
+            return Optional.of(new ExitResult("TP2_HIT", currentPrice, 3,
+                    detail("priority", 3, "currentPrice", currentPrice, "tp2", trade.getTarget2Price())));
+        }
+
+        // Priority 4: TP1_HIT (full exit by current design)
+        if (trade.getTarget1Price() != null && currentPrice.compareTo(trade.getTarget1Price()) >= 0
+                && !payloadFlag(trade, "tp1_partial_taken")) {
+            return Optional.of(new ExitResult("TP1_HIT", currentPrice, 4,
+                    detail("priority", 4, "currentPrice", currentPrice, "tp1", trade.getTarget1Price(),
+                            "note", "full_exit_on_tp1")));
+        }
+
+        // Priority 5: REVIEW_EXIT — latest position_review_log for this symbol w/ EXIT after entry_time
+        Optional<PositionReviewLogEntity> latestReview = lookupLatestReview(trade.getSymbol());
+        if (latestReview.isPresent()) {
+            PositionReviewLogEntity rv = latestReview.get();
+            if ("EXIT".equalsIgnoreCase(rv.getDecisionStatus()) && reviewIsAfterEntry(rv, trade)) {
+                return Optional.of(new ExitResult("REVIEW_EXIT", currentPrice, 5,
+                        detail("priority", 5, "currentPrice", currentPrice,
+                                "reviewStatus", rv.getDecisionStatus(),
+                                "reviewReason", rv.getReason())));
+            }
+        }
+
+        // Priority 6: TIME_EXIT — holding days >= max_holding_days (default 14 if null)
+        int holdDays = (int) ChronoUnit.DAYS.between(trade.getEntryDate(), LocalDate.now());
+        Integer maxHold = trade.getMaxHoldingDays() != null ? trade.getMaxHoldingDays() : AUTO_EXIT_DEFAULT_MAX_HOLD_DAYS;
+        if (holdDays >= maxHold) {
+            return Optional.of(new ExitResult("TIME_EXIT", currentPrice, 6,
+                    detail("priority", 6, "currentPrice", currentPrice,
+                            "holdDays", holdDays, "maxHoldingDays", maxHold)));
+        }
+
+        // Priority 7: REVERSE_SIGNAL — today's FinalDecision = REST + summary contains regime_change/strong_weakness
+        Optional<FinalDecisionEntity> todayFd = lookupTodayFinalDecision();
+        if (todayFd.isPresent()) {
+            FinalDecisionEntity fd = todayFd.get();
+            if ("REST".equalsIgnoreCase(fd.getDecision()) && hasReverseSignal(fd.getSummary())) {
+                return Optional.of(new ExitResult("REVERSE_SIGNAL", currentPrice, 7,
+                        detail("priority", 7, "currentPrice", currentPrice,
+                                "fdDecision", fd.getDecision(), "fdSummary", fd.getSummary())));
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    /**
+     * Run a single auto-exit cycle:
+     * <ol>
+     *   <li>Find every OPEN paper_trade.</li>
+     *   <li>For each: call {@link #attemptExit} — if FIRED, close the row + write FIRED audit row;
+     *       otherwise write a SKIPPED_NOT_TRIGGERED audit row.</li>
+     * </ol>
+     *
+     * <p>Used by both {@code PaperTradeExitJob} (cron) and the manual
+     * {@code POST /api/paper/exit-check} endpoint.</p>
+     */
+    @Transactional
+    public AutoExitCycleResult runAutoExitCycle() {
+        if (!isPaperModeEnabled() || !isAutoExitEnabled()) {
+            log.debug("[PaperTradeExit] gate closed paperMode={} autoExit={}",
+                    isPaperModeEnabled(), isAutoExitEnabled());
+            return new AutoExitCycleResult(0, 0, 0);
+        }
+
+        List<PaperTradeEntity> openTrades = repository.findByStatusOrderByEntryDateAscIdAsc("OPEN");
+        int checked = 0, exited = 0, errors = 0;
+
+        for (PaperTradeEntity trade : openTrades) {
+            checked++;
+            try {
+                Optional<ExitResult> outcome = attemptExit(trade);
+                if (outcome.isPresent()) {
+                    closeTradeFromAutoExit(trade, outcome.get());
+                    writeExitLog(trade, "FIRED", outcome.get(), null);
+                    exited++;
+                } else {
+                    BigDecimal snapPrice = fetchLivePrice(trade.getSymbol());
+                    writeExitLog(trade, "SKIPPED_NOT_TRIGGERED", null, snapPrice);
+                }
+            } catch (Exception ex) {
+                errors++;
+                log.warn("[PaperTradeExit] error symbol={} id={} : {}",
+                        trade.getSymbol(), trade.getId(), ex.getMessage(), ex);
+            }
+        }
+
+        log.info("[PaperTradeExitJob] checked={}, exited={}, errors={}", checked, exited, errors);
+        return new AutoExitCycleResult(checked, exited, errors);
+    }
+
+    /** Apply an ExitResult to the trade row and persist (status=CLOSED + simulated exit price). */
+    private void closeTradeFromAutoExit(PaperTradeEntity trade, ExitResult result) {
+        BigDecimal grossExit = result.exitPrice();
+        BigDecimal simulatedExit = grossExit
+                .multiply(BigDecimal.ONE.subtract(SELL_SLIPPAGE_PCT))
+                .setScale(4, RoundingMode.HALF_UP);
+
+        LocalDate today = LocalDate.now();
+        int holdDays = (int) ChronoUnit.DAYS.between(trade.getEntryDate(), today);
+
+        trade.setStatus("CLOSED");
+        trade.setExitDate(today);
+        trade.setExitTime(LocalTime.now());
+        trade.setExitPrice(simulatedExit);
+        trade.setExitReason(result.exitReason());
+        trade.setHoldingDays(holdDays);
+
+        BigDecimal pnlPct = pct(simulatedExit, trade.getEntryPrice());
+        trade.setPnlPct(pnlPct);
+
+        if (trade.getPositionShares() != null && trade.getPositionShares() > 0) {
+            BigDecimal pnl = simulatedExit.subtract(trade.getEntryPrice())
+                    .multiply(BigDecimal.valueOf(trade.getPositionShares()))
+                    .setScale(2, RoundingMode.HALF_UP);
+            trade.setPnlAmount(pnl);
+        } else if (trade.getPositionAmount() != null && pnlPct != null) {
+            trade.setPnlAmount(trade.getPositionAmount()
+                    .multiply(pnlPct.divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP))
+                    .setScale(2, RoundingMode.HALF_UP));
+        }
+
+        repository.save(trade);
+        log.info("[PaperTradeExit] CLOSE id={} symbol={} reason={} priority={} grossExit={} simExit={} pnl%={}",
+                trade.getId(), trade.getSymbol(), result.exitReason(), result.triggerPriority(),
+                grossExit, simulatedExit, pnlPct);
+    }
+
+    /** Persist one paper_trade_exit_log row. Silently no-ops if the repo isn't wired. */
+    private void writeExitLog(PaperTradeEntity trade, String outcome,
+                              ExitResult result, BigDecimal snapshotPrice) {
+        PaperTradeExitLogRepository repo = exitLogRepoProvider != null
+                ? exitLogRepoProvider.getIfAvailable() : null;
+        if (repo == null) return;
+
+        PaperTradeExitLogEntity row = new PaperTradeExitLogEntity();
+        row.setPaperTradeId(trade.getId());
+        row.setEvaluatedAt(LocalDateTime.now());
+        row.setTriggerOutcome(outcome);
+        row.setStopLossPrice(trade.getStopLossPrice());
+        row.setTp1Price(trade.getTarget1Price());
+        row.setTp2Price(trade.getTarget2Price());
+        row.setTrailingStopPrice(readTrailingStop(trade));
+        if (trade.getEntryDate() != null) {
+            row.setHoldDays((int) ChronoUnit.DAYS.between(trade.getEntryDate(), LocalDate.now()));
+        }
+        if (result != null) {
+            row.setExitReason(result.exitReason());
+            row.setTriggerPriority(result.triggerPriority());
+            row.setCurrentPrice(result.exitPrice());
+            row.setDetailJson(result.detailJson());
+        } else {
+            row.setCurrentPrice(snapshotPrice);
+            row.setDetailJson(detail("outcome", outcome, "currentPrice", snapshotPrice));
+        }
+
+        // Best-effort enrich review/reverse-signal context for SKIPPED rows too — useful for audit.
+        try {
+            lookupLatestReview(trade.getSymbol()).ifPresent(rv -> row.setReviewStatus(rv.getDecisionStatus()));
+            lookupTodayFinalDecision().ifPresent(fd -> {
+                row.setReverseSignalDecision(fd.getDecision());
+                if (fd.getSummary() != null && fd.getSummary().length() > 250) {
+                    row.setReverseSignalReason(fd.getSummary().substring(0, 250));
+                } else {
+                    row.setReverseSignalReason(fd.getSummary());
+                }
+            });
+        } catch (Exception ignore) {
+            // never let log enrichment break the cycle
+        }
+
+        try {
+            repo.save(row);
+        } catch (Exception ex) {
+            log.warn("[PaperTradeExit] writeExitLog save failed id={} symbol={} : {}",
+                    trade.getId(), trade.getSymbol(), ex.getMessage());
+        }
+    }
+
+    private Optional<PositionReviewLogEntity> lookupLatestReview(String symbol) {
+        PositionReviewLogRepository repo = reviewLogRepoProvider != null
+                ? reviewLogRepoProvider.getIfAvailable() : null;
+        if (repo == null || symbol == null) return Optional.empty();
+        return repo.findTopBySymbolOrderByCreatedAtDesc(symbol);
+    }
+
+    private Optional<FinalDecisionEntity> lookupTodayFinalDecision() {
+        FinalDecisionRepository repo = finalDecisionRepoProvider != null
+                ? finalDecisionRepoProvider.getIfAvailable() : null;
+        if (repo == null) return Optional.empty();
+        return repo.findTopByTradingDateOrderByCreatedAtDesc(LocalDate.now());
+    }
+
+    private static boolean reviewIsAfterEntry(PositionReviewLogEntity rv, PaperTradeEntity trade) {
+        if (rv == null || rv.getCreatedAt() == null) return true; // accept if missing
+        if (trade.getEntryDate() == null) return true;
+        LocalTime entryTime = trade.getEntryTime() != null ? trade.getEntryTime() : LocalTime.MIDNIGHT;
+        LocalDateTime entryDt = LocalDateTime.of(trade.getEntryDate(), entryTime);
+        return rv.getCreatedAt().isAfter(entryDt);
+    }
+
+    private static boolean hasReverseSignal(String summary) {
+        if (summary == null) return false;
+        String s = summary.toLowerCase();
+        return s.contains("regime_change") || s.contains("strong_weakness");
+    }
+
+    private BigDecimal readTrailingStop(PaperTradeEntity trade) {
+        if (trade.getPayloadJson() != null && !trade.getPayloadJson().isBlank()) {
+            try {
+                var node = objectMapper.readTree(trade.getPayloadJson());
+                var ts = node.get("trailing_stop_price");
+                if (ts != null && !ts.isNull()) {
+                    return new BigDecimal(ts.asText()).setScale(4, RoundingMode.HALF_UP);
+                }
+            } catch (Exception ignore) {
+                // fall through to stop_loss fallback
+            }
+        }
+        return trade.getStopLossPrice();
+    }
+
+    private boolean payloadFlag(PaperTradeEntity trade, String key) {
+        if (trade.getPayloadJson() == null || trade.getPayloadJson().isBlank()) return false;
+        try {
+            var node = objectMapper.readTree(trade.getPayloadJson());
+            var v = node.get(key);
+            return v != null && v.asBoolean(false);
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    private String detail(Object... kv) {
+        try {
+            ObjectNode n = objectMapper.createObjectNode();
+            for (int i = 0; i + 1 < kv.length; i += 2) {
+                String k = String.valueOf(kv[i]);
+                Object v = kv[i + 1];
+                if (v == null) n.putNull(k);
+                else if (v instanceof BigDecimal bd) n.put(k, bd.toPlainString());
+                else if (v instanceof Number num) n.put(k, num.doubleValue());
+                else if (v instanceof Boolean b) n.put(k, b);
+                else n.put(k, String.valueOf(v));
+            }
+            return objectMapper.writeValueAsString(n);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    public record AutoExitCycleResult(int checked, int exited, int errors) {}
 }
