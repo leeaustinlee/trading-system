@@ -229,6 +229,11 @@ public class ScoreConfigService {
         DEFAULTS.put("trading.status.allow_trade",                 new String[]{"true",  "BOOLEAN", "整體交易 kill switch；false → FinalDecision 全 REST、Monitor 全 OFF（緊急停止用）"});
         DEFAULTS.put("theme.exposure_limit_pct",                   new String[]{"30",    "DECIMAL", "單一題材曝險上限百分比；超過 → status=OVER_LIMIT"});
         DEFAULTS.put("theme.exposure_warn_pct",                    new String[]{"20",    "DECIMAL", "單一題材曝險預警百分比；介於 warn 與 limit → status=WARN"});
+
+        // ── 2026-04-28 P0.1+P0.2：策略深度審查實作 ─────────────────────────────
+        DEFAULTS.put("final_decision.ai_default_reweight.enabled", new String[]{"true",  "BOOLEAN", "P0.1：claude/codex 分數 = default 3.0 時，把該 weight 重分配給 Java（避免稀釋 final_rank_score）"});
+        DEFAULTS.put("trading.paper_mode.enabled",                 new String[]{"true",  "BOOLEAN", "P0.2：ENTER 寫 paper_trade 而非真實倉位（安全模式；觀察策略勝率累積樣本）"});
+        DEFAULTS.put("position.review.exit_alert.enabled",         new String[]{"true",  "BOOLEAN", "P0.2：position_review_log decision_status=EXIT 時觸發 LineSender alert（即使配額耗盡也照發）"});
     }
 
     public ScoreConfigService(ScoreConfigRepository repository) {
