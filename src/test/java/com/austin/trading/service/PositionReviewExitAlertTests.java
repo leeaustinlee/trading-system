@@ -119,6 +119,49 @@ class PositionReviewExitAlertTests {
         verify(lineSender, times(1)).send(anyString());
     }
 
+    /**
+     * Reviewer C.1 BLOCKER 修正：每 5 分鐘 monitor 都會跑 review，若不 dedupe 同一 EXIT 會被連送 ~54 通。
+     * 規則：只有 prev != EXIT && curr == EXIT 的 transition 才送。
+     */
+    @Test
+    void exitDecision_skipsWhenPositionAlreadyExitFromPreviousReview() {
+        PositionEntity pos = pos("2330");
+        pos.setReviewStatus("EXIT");  // 上一輪已經是 EXIT（5 分鐘前）
+
+        PositionDecisionResult exit = new PositionDecisionResult(
+                PositionStatus.EXIT, "停損觸發 (再次)", null, TrailingAction.NONE);
+
+        service.maybeSendExitAlert(pos, exit);
+
+        verify(lineSender, never()).send(anyString());
+    }
+
+    @Test
+    void exitDecision_sendsOnTransitionFromHoldToExit() {
+        PositionEntity pos = pos("2330");
+        pos.setReviewStatus("HOLD");  // 上一輪是 HOLD，本輪轉 EXIT
+
+        PositionDecisionResult exit = new PositionDecisionResult(
+                PositionStatus.EXIT, "停損觸發", null, TrailingAction.NONE);
+
+        service.maybeSendExitAlert(pos, exit);
+
+        verify(lineSender, times(1)).send(anyString());
+    }
+
+    @Test
+    void exitDecision_sendsWhenPrevReviewStatusNull() {
+        PositionEntity pos = pos("2330");
+        pos.setReviewStatus(null);  // 第一次審查（從未跑過）
+
+        PositionDecisionResult exit = new PositionDecisionResult(
+                PositionStatus.EXIT, "停損觸發", null, TrailingAction.NONE);
+
+        service.maybeSendExitAlert(pos, exit);
+
+        verify(lineSender, times(1)).send(anyString());
+    }
+
     private PositionEntity pos(String symbol) {
         PositionEntity p = new PositionEntity();
         p.setSymbol(symbol);

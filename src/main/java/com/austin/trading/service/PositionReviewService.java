@@ -268,12 +268,25 @@ public class PositionReviewService {
     /**
      * P0.2:Review status = EXIT 時發送 LINE 警示。
      * 透過 {@code position.review.exit_alert.enabled}(預設 TRUE)控制,LineSender 自身對 disabled / 429 已 graceful。
+     *
+     * <p><b>Dedupe 規則（reviewer C.1 BLOCKER 修正）：只在「上一輪非 EXIT、本輪 EXIT」的
+     * transition 才送 LINE。盤中 5-minute monitor 每輪都會跑 reviewAllOpenPositions，若不 dedupe
+     * 一檔停損會被連送 ~54 通；本邏輯確保同一個 EXIT 只送一次，使用者人工處理（出場或重置 reviewStatus）
+     * 後若再次 EXIT 才會再送。</b></p>
      */
     void maybeSendExitAlert(PositionEntity pos, PositionDecisionResult decision) {
         if (decision == null || decision.status() != PositionStatus.EXIT) return;
         boolean alertEnabled = scoreConfigService == null
                 || scoreConfigService.getBoolean("position.review.exit_alert.enabled", true);
         if (!alertEnabled) return;
+
+        // Dedupe：只在 prev != EXIT && curr == EXIT 的 transition 才送（避免每 5 分鐘重複 spam）
+        String prevStatus = pos.getReviewStatus();
+        if ("EXIT".equalsIgnoreCase(prevStatus)) {
+            log.debug("[PositionReview] EXIT alert skipped (already EXIT) symbol={}", pos.getSymbol());
+            return;
+        }
+
         LineSender sender = lineSenderProvider != null ? lineSenderProvider.getIfAvailable() : null;
         if (sender == null) return;
         String reason = decision.reason() != null ? decision.reason() : "EXIT signal";

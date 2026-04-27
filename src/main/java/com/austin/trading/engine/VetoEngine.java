@@ -160,10 +160,10 @@ public class VetoEngine {
         }
 
         // ─── SOFT PENALTY（扣分但仍進入排序）────────────────────────────
-        // RR_BELOW_MIN
+        // RR_BELOW_MIN（P0.1 reviewer D.1：fallback 與 ScoreConfigService DEFAULTS 對齊）
         BigDecimal rrMin = "A".equalsIgnoreCase(input.marketGrade())
-                ? config.getDecimal("scoring.rr_min_grade_a", new BigDecimal("2.2"))
-                : config.getDecimal("scoring.rr_min_grade_b", new BigDecimal("2.5"));
+                ? config.getDecimal("scoring.rr_min_grade_a", new BigDecimal("2.0"))
+                : config.getDecimal("scoring.rr_min_grade_b", new BigDecimal("1.8"));
         if (input.riskRewardRatio() != null && input.riskRewardRatio().compareTo(rrMin) < 0) {
             penalty = penalty.add(config.getDecimal("penalty.rr_below_min", new BigDecimal("1.5")));
             penaltyReasons.add("PENALTY:RR_BELOW_MIN");

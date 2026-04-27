@@ -135,10 +135,41 @@ public class ThemeShadowReportService {
         Map<DecisionDiffType, Integer> m = new EnumMap<>(DecisionDiffType.class);
         for (DecisionDiffType t : DecisionDiffType.values()) m.put(t, 0);
         for (ThemeShadowDecisionLogEntity e : entries) {
-            DecisionDiffType t = DecisionDiffType.parseOrConflict(e.getDecisionDiffType());
-            m.merge(t, 1, Integer::sum);
+            DecisionDiffType raw = DecisionDiffType.parseOrConflict(e.getDecisionDiffType());
+            DecisionDiffType slot = mapToLegacySlot(raw, e.getLegacyDecision());
+            // 雙計：raw 也保留（new enum 觀察用），mapped 補進舊 enum slot 給 daily report 使用
+            m.merge(raw, 1, Integer::sum);
+            if (slot != raw) m.merge(slot, 1, Integer::sum);
         }
         return m;
+    }
+
+    /**
+     * Reviewer C.2 BLOCKER 修正：把 P0.2 新 5 類 enum 對應回舊 6 類 slot，
+     * 讓 ThemeShadowDailyReportEntity / LineSummary 等只讀舊 slot 的消費者能看到計數。
+     *
+     * <p>對應規則：
+     * <ul>
+     *   <li>SAME_DECISION_SAME_SCORE / SAME_DECISION_SCORE_DIFF
+     *       → legacy=ENTER → {@link DecisionDiffType#SAME_BUY}; 否則 SAME_WAIT</li>
+     *   <li>V2_VETO_LEGACY_PASS  → LEGACY_BUY_THEME_BLOCK（legacy 想買、theme v2 擋下）</li>
+     *   <li>LEGACY_VETO_V2_PASS  → LEGACY_WAIT_THEME_BUY（legacy 不買、theme v2 看好）</li>
+     *   <li>DIFF_DECISION        → CONFLICT_REVIEW_REQUIRED</li>
+     *   <li>舊 6 類 → 不變</li>
+     * </ul>
+     */
+    static DecisionDiffType mapToLegacySlot(DecisionDiffType raw, String legacyDecision) {
+        if (raw == null) return DecisionDiffType.CONFLICT_REVIEW_REQUIRED;
+        return switch (raw) {
+            case SAME_DECISION_SAME_SCORE, SAME_DECISION_SCORE_DIFF ->
+                    "ENTER".equalsIgnoreCase(legacyDecision)
+                            ? DecisionDiffType.SAME_BUY
+                            : DecisionDiffType.SAME_WAIT;
+            case V2_VETO_LEGACY_PASS  -> DecisionDiffType.LEGACY_BUY_THEME_BLOCK;
+            case LEGACY_VETO_V2_PASS  -> DecisionDiffType.LEGACY_WAIT_THEME_BUY;
+            case DIFF_DECISION        -> DecisionDiffType.CONFLICT_REVIEW_REQUIRED;
+            default                   -> raw;
+        };
     }
 
     static BigDecimal avgScoreDiff(List<ThemeShadowDecisionLogEntity> entries) {
@@ -167,16 +198,20 @@ public class ThemeShadowReportService {
         return abs.get(idx).setScale(3, RoundingMode.HALF_UP);
     }
 
-    /** 衝突重點優先排：LEGACY_BUY_THEME_BLOCK / CONFLICT_REVIEW_REQUIRED / LEGACY_WAIT_THEME_BUY；次之 |scoreDiff| 大。 */
+    /** 衝突重點優先排：LEGACY_BUY_THEME_BLOCK / CONFLICT_REVIEW_REQUIRED / LEGACY_WAIT_THEME_BUY；次之 |scoreDiff| 大。
+     *  P0.2 後使用 {@link #mapToLegacySlot} 把新 enum 對應回舊 enum，避免「同決策」誤入衝突列表。 */
     static List<Map<String, Object>> topConflicts(List<ThemeShadowDecisionLogEntity> entries, int limit) {
         return entries.stream()
                 .filter(e -> {
-                    DecisionDiffType t = DecisionDiffType.parseOrConflict(e.getDecisionDiffType());
-                    return t != DecisionDiffType.SAME_BUY && t != DecisionDiffType.SAME_WAIT;
+                    DecisionDiffType raw = DecisionDiffType.parseOrConflict(e.getDecisionDiffType());
+                    DecisionDiffType mapped = mapToLegacySlot(raw, e.getLegacyDecision());
+                    return mapped != DecisionDiffType.SAME_BUY && mapped != DecisionDiffType.SAME_WAIT;
                 })
                 .sorted(Comparator
                         .comparingInt((ThemeShadowDecisionLogEntity e) -> priority(
-                                DecisionDiffType.parseOrConflict(e.getDecisionDiffType())))
+                                mapToLegacySlot(
+                                        DecisionDiffType.parseOrConflict(e.getDecisionDiffType()),
+                                        e.getLegacyDecision())))
                         .thenComparing((ThemeShadowDecisionLogEntity e) -> {
                             BigDecimal s = e.getScoreDiff();
                             return s == null ? BigDecimal.ZERO : s.abs();
