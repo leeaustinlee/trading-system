@@ -49,8 +49,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.austin.trading.event.FinalDecisionPersistedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -127,6 +129,7 @@ public class FinalDecisionService {
     private final ThemeShadowReportService  themeShadowReportService;
     private final ThemeLiveDecisionService  themeLiveDecisionService;
     private final ThemeLineSummaryService   themeLineSummaryService;
+    private final ApplicationEventPublisher events;
 
     public FinalDecisionService(
             ConsensusScoringEngine consensusScoringEngine,
@@ -165,7 +168,8 @@ public class FinalDecisionService {
             ThemeShadowModeService themeShadowModeService,
             ThemeShadowReportService themeShadowReportService,
             ThemeLiveDecisionService themeLiveDecisionService,
-            ThemeLineSummaryService themeLineSummaryService
+            ThemeLineSummaryService themeLineSummaryService,
+            ApplicationEventPublisher events
     ) {
         this.consensusScoringEngine     = consensusScoringEngine;
         this.finalDecisionEngine        = finalDecisionEngine;
@@ -204,6 +208,7 @@ public class FinalDecisionService {
         this.themeShadowReportService   = themeShadowReportService;
         this.themeLiveDecisionService   = themeLiveDecisionService;
         this.themeLineSummaryService    = themeLineSummaryService;
+        this.events                     = events;
     }
 
     @Transactional
@@ -802,6 +807,23 @@ public class FinalDecisionService {
         fillAiContext(entity, readiness);
         finalDecisionRepository.save(entity);
         syncDashboardState(tradingDate, response, readiness);
+
+        // Phase 1 paper trade:final decision 落地後 publish event,
+        // PaperTradeService 透過 @TransactionalEventListener(AFTER_COMMIT) 接手開虛擬倉。
+        try {
+            events.publishEvent(new FinalDecisionPersistedEvent(
+                    entity.getId(),
+                    tradingDate,
+                    response.decision(),
+                    strategyType,
+                    readiness != null ? readiness.aiTaskId() : null,
+                    entity.getAiStatus(),
+                    entity.getSourceTaskType(),
+                    response.selectedStocks()
+            ));
+        } catch (Exception e) {
+            log.warn("[FinalDecisionService] publish FinalDecisionPersistedEvent failed: {}", e.getMessage());
+        }
 
         // v2.1/v2.2: 最終決策產出後，標記來源 AI task 為 FINALIZED（只對 CODEX_DONE 有效）
         if (readiness != null && readiness.aiTaskId() != null

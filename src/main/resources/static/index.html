@@ -386,12 +386,12 @@
     }
     .decision-hero.terminal-enter::before { background: var(--c-buy); }
     .decision-hero.terminal-wait::before, .decision-hero.terminal-watch::before { background: var(--c-wait); }
-    .decision-hero.terminal-rest::before { background:#4a5a76; }
+    .decision-hero.terminal-rest::before, .decision-hero.terminal-pending::before { background:#4a5a76; }
     .decision-hero.terminal-blocked::before { background: var(--c-blocked); }
     .decision-hero.terminal-plan::before { background: var(--c-plan); }
     .decision-hero.terminal-enter { background: linear-gradient(135deg, #0f2a1f 0%, #131c30 100%); border-color:#1d6e4d; }
     .decision-hero.terminal-watch, .decision-hero.terminal-wait { background: linear-gradient(135deg, #2d2106 0%, #131c30 100%); border-color:#846100; }
-    .decision-hero.terminal-rest { background: linear-gradient(135deg, #1a2236 0%, #131c30 100%); border-color: var(--line-dark); }
+    .decision-hero.terminal-rest, .decision-hero.terminal-pending { background: linear-gradient(135deg, #1a2236 0%, #131c30 100%); border-color: var(--line-dark); }
     .decision-hero.terminal-blocked { background: linear-gradient(135deg, #2c0a13 0%, #131c30 100%); border-color:#921931; }
     .decision-hero.terminal-plan { background: linear-gradient(135deg, #1c142f 0%, #131c30 100%); border-color:#4a3290; }
     .hero-signal { font-family: var(--mono); font-size:11px; font-weight:900; letter-spacing:1.4px; color:#98abca; text-transform: uppercase; }
@@ -881,6 +881,7 @@
   <button class="nav-tab" data-page="pageCandidates">候選股</button>
   <button class="nav-tab" data-page="pagePositions">持倉</button>
   <button class="nav-tab" data-page="pagePnl">損益</button>
+  <button class="nav-tab" data-page="pagePapers">紙上交易</button>
   <button class="nav-tab" data-page="pageDecisions">決策歷史</button>
   <button class="nav-tab" data-page="pageAiResearch">AI 研究</button>
   <button class="nav-tab" data-page="pageScheduler">排程</button>
@@ -1141,6 +1142,49 @@
             <th>筆數</th><th>獲利</th><th>虧損</th><th>備註</th><th style="width:80px">操作</th>
           </tr></thead>
           <tbody id="pnl-body"></tbody>
+        </table>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE: Paper Trades ══════════════ -->
+<div class="page" id="pagePapers">
+  <div class="wrap">
+    <div id="errBoxPapers" class="errbox"></div>
+
+    <section class="card span-12">
+      <h2>紙上交易 KPI
+        <button class="btn" id="papers-refresh" style="margin-left:auto;padding:5px 14px;font-size:13px">重新整理</button>
+      </h2>
+      <div class="toolbar">
+        <label>起 <input type="date" id="papers-from" /></label>
+        <label>迄 <input type="date" id="papers-to"   /></label>
+        <button class="btn" id="papers-load">查詢</button>
+      </div>
+      <div class="stat-row" id="papers-kpi"></div>
+    </section>
+
+    <div class="grid">
+      <section class="card span-12">
+        <h2>持有中（OPEN）<span id="papers-openCount" class="muted" style="font-size:12px;margin-left:8px"></span></h2>
+        <table>
+          <thead><tr>
+            <th>進場日</th><th>代號</th><th>名稱</th><th>策略</th><th>進場價</th>
+            <th>停損</th><th>T1</th><th>T2</th><th>MFE%</th><th>MAE%</th><th>來源</th>
+          </tr></thead>
+          <tbody id="papers-openBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-12">
+        <h2>已平倉（CLOSED）<span id="papers-closedCount" class="muted" style="font-size:12px;margin-left:8px"></span></h2>
+        <table>
+          <thead><tr>
+            <th>進場日</th><th>出場日</th><th>代號</th><th>策略</th><th>進場</th><th>出場</th>
+            <th>P&amp;L%</th><th>持倉天數</th><th>出場原因</th><th>MFE%</th><th>MAE%</th>
+          </tr></thead>
+          <tbody id="papers-closedBody"></tbody>
         </table>
       </section>
     </div>
@@ -2167,22 +2211,27 @@ function clearErr(boxId) {
   }
 
   function terminalDecisionKind(decision) {
-    const d = (decision?.finalDecision || decision?.decision || decision || "REST").toString().toUpperCase();
+    // 真正「資料還沒到」：整個 decision 物件不存在,或裡面完全沒有 finalDecision/decision 字串 → pending
+    const raw = decision?.finalDecision ?? decision?.decision ?? (typeof decision === "string" ? decision : null);
+    if (raw == null || String(raw).trim() === "") return "pending";
+    const d = String(raw).toUpperCase();
     if (d === "ENTER" || d === "BUY" || d === "CAN_ENTER") return "enter";
     if (d === "WAIT") return "wait";
     if (d === "WATCH" || d === "ONLY_WATCH") return "watch";
     if (d === "PLAN") return "plan";
     if (d === "BLOCKED") return "blocked";
+    if (d === "REST") return "rest";
     return "rest";
   }
 
   function terminalDecisionText(decision, selectedCount) {
     const kind = terminalDecisionKind(decision);
     if (kind === "enter") return `今日可進場（${selectedCount || 0} 檔）`;
-    if (kind === "wait") return "等待 09:30 確認";
+    if (kind === "wait") return "09:30 結論：暫不進場";
     if (kind === "watch") return "僅觀察，不追價";
     if (kind === "plan") return "明日計畫，今日不追";
     if (kind === "blocked") return "風控阻擋";
+    if (kind === "pending") return "等待 09:30 決策";
     return "建議休息";
   }
 
@@ -2200,10 +2249,11 @@ function clearErr(boxId) {
   function heroActionLabel(kind) {
     switch (kind) {
       case "enter":   return "立即執行";
-      case "wait":    return "等待確認";
+      case "wait":    return "暫不進場";
       case "watch":   return "僅觀察";
       case "blocked": return "風控擋單";
       case "plan":    return "計畫待發";
+      case "pending": return "等待決策";
       default:        return "暫停觀望";
     }
   }
@@ -3310,6 +3360,109 @@ function clearErr(boxId) {
         </tr>`).join("")
       : `<tr class="empty-row"><td colspan="4">無資料</td></tr>`;
   }
+
+  /* ─────────────────────────────────────────────
+     PAGE: Paper Trades(Phase 1)
+  ───────────────────────────────────────────── */
+  async function loadPapers() {
+    clearErr("errBoxPapers");
+    const from = $("papers-from").value;
+    const to   = $("papers-to").value;
+    const qs = new URLSearchParams();
+    if (from) qs.set("from", from);
+    if (to)   qs.set("to", to);
+    try {
+      const [open, closed, kpi] = await Promise.all([
+        api("/api/paper-trades/open"),
+        api(`/api/paper-trades/closed?${qs}`),
+        api(`/api/paper-trades/kpi?${qs}`)
+      ]);
+      renderPapersKpi(kpi);
+      renderPapersOpen(open || []);
+      renderPapersClosed(closed || []);
+    } catch (e) {
+      showErr("errBoxPapers", `載入失敗:${e.message}`);
+    }
+  }
+
+  function renderPapersKpi(k) {
+    if (!k) { $("papers-kpi").innerHTML = ""; return; }
+    const fmtNum = (v, suffix = "") => v == null ? "-" : `${Number(v).toFixed(2)}${suffix}`;
+    const fmtPct = v => v == null ? "-" : `${(Number(v) * 100).toFixed(1)}%`;
+    const stats = [
+      { label: "總筆數",       value: k.total },
+      { label: "勝率",         value: fmtPct(k.winRate),                colored: k.winRate != null && k.winRate >= 0.5 ? "pos" : "neg" },
+      { label: "平均報酬",      value: fmtNum(k.avgReturn, "%"),         colored: (k.avgReturn ?? 0) >= 0 ? "pos" : "neg" },
+      { label: "獲利因子(PF)",  value: fmtNum(k.profitFactor) },
+      { label: "Sharpe",       value: fmtNum(k.sharpe) },
+      { label: "Sortino",      value: fmtNum(k.sortino) },
+      { label: "最大回撤",      value: fmtNum(k.maxDrawdown, "%"),       colored: "neg" },
+      { label: "平均持倉天",     value: fmtNum(k.avgHoldingDays, " 天") }
+    ];
+    $("papers-kpi").innerHTML = stats.map(st => {
+      const cls = st.colored ? (st.colored === "pos" ? "num-pos" : "num-neg") : "";
+      return `<div class="stat-box">
+        <div class="stat-label">${esc(st.label)}</div>
+        <div class="stat-value ${cls}">${esc(st.value ?? "-")}</div>
+      </div>`;
+    }).join("");
+  }
+
+  function renderPapersOpen(list) {
+    $("papers-openCount").textContent = `共 ${list.length} 筆`;
+    $("papers-openBody").innerHTML = list.length
+      ? list.map(p => `<tr>
+          <td class="mono">${fmtDate(p.entryDate)}</td>
+          <td class="mono">${esc(p.symbol)}</td>
+          <td>${esc(p.stockName ?? "")}</td>
+          <td class="small">${esc(p.strategyType ?? "-")}</td>
+          <td class="mono">${numFmt(p.entryPrice)}</td>
+          <td class="mono">${numFmt(p.stopLossPrice)}</td>
+          <td class="mono">${numFmt(p.target1Price)}</td>
+          <td class="mono">${numFmt(p.target2Price)}</td>
+          <td class="mono ${(p.mfePct ?? 0) > 0 ? 'num-pos' : ''}">${numFmt(p.mfePct)}</td>
+          <td class="mono ${(p.maePct ?? 0) < 0 ? 'num-neg' : ''}">${numFmt(p.maePct)}</td>
+          <td class="small">${esc(p.source ?? "-")}</td>
+        </tr>`).join("")
+      : `<tr class="empty-row"><td colspan="11">無持有中虛擬倉</td></tr>`;
+  }
+
+  function renderPapersClosed(list) {
+    $("papers-closedCount").textContent = `共 ${list.length} 筆`;
+    $("papers-closedBody").innerHTML = list.length
+      ? list.map(p => {
+          const pnl = p.pnlPct == null ? null : Number(p.pnlPct);
+          const pnlCls = pnl == null ? "" : (pnl >= 0 ? "num-pos" : "num-neg");
+          return `<tr>
+            <td class="mono">${fmtDate(p.entryDate)}</td>
+            <td class="mono">${fmtDate(p.exitDate)}</td>
+            <td class="mono">${esc(p.symbol)}</td>
+            <td class="small">${esc(p.strategyType ?? "-")}</td>
+            <td class="mono">${numFmt(p.entryPrice)}</td>
+            <td class="mono">${numFmt(p.exitPrice)}</td>
+            <td class="mono ${pnlCls}">${pnl == null ? "-" : pnl.toFixed(2) + "%"}</td>
+            <td class="mono">${esc(p.holdingDays ?? "-")}</td>
+            <td class="small">${esc(p.exitReason ?? "-")}</td>
+            <td class="mono">${numFmt(p.mfePct)}</td>
+            <td class="mono">${numFmt(p.maePct)}</td>
+          </tr>`;
+        }).join("")
+      : `<tr class="empty-row"><td colspan="11">無已平倉紀錄</td></tr>`;
+  }
+
+  function numFmt(v) {
+    if (v == null) return "-";
+    const n = Number(v);
+    return Number.isFinite(n) ? n.toFixed(2) : "-";
+  }
+
+  // 綁查詢按鈕
+  document.addEventListener("DOMContentLoaded", () => {
+    const btn = $("papers-load");
+    if (btn) btn.addEventListener("click", () => loadPapers());
+    const refresh = $("papers-refresh");
+    if (refresh) refresh.addEventListener("click", () => loadPapers());
+  });
 
   async function loadDecisions() {
     clearErr("errBoxDec");
@@ -4827,6 +4980,7 @@ window.finalizeCatchup = async function(taskId) {
       case "pageCandidates": loadCandidates(); break;
       case "pagePositions":  loadOpenPositions(); loadPositionHistory(); break;
       case "pagePnl":        loadPnl(); break;
+      case "pagePapers":     loadPapers(); break;
       case "pageDecisions":  loadDecisions(); break;
       case "pageAiResearch": loadAiResearch(); break;
       case "pageScheduler":  loadScheduler(); break;
