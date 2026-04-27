@@ -47,7 +47,15 @@
     --c-plan:#A78BFA;      --c-plan-bg:rgba(167,139,250,.14);--c-plan-border:rgba(167,139,250,.55);--c-plan-glow:rgba(167,139,250,.40);
     --c-rest:#64748B;      --c-rest-bg:rgba(100,116,139,.16);--c-rest-border:rgba(100,116,139,.45);--c-rest-glow:rgba(100,116,139,.30);
     --c-stop:#F43F5E;      --c-stop-bg:rgba(244,63,94,.16);  --c-stop-border:rgba(244,63,94,.6);   --c-stop-glow:rgba(244,63,94,.50);
-    --c-up:#22DD7A; --c-dn:#F43F5E;
+
+    /* 價格 / 損益方向（台灣股市慣例：漲=紅、跌=綠、平=灰）。
+       --c-buy/--c-stop 是「狀態 / 風險」語意（買進=綠、危險=紅），與此處的 PnL 方向分開。
+       未來若想切換成西方慣例，只需把這 3 個變數改回 buy/stop/rest 即可，UI 其他位置不用動。 */
+    --c-pnl-up:   var(--c-stop);   /* 漲 → 紅 */
+    --c-pnl-down: var(--c-buy);    /* 跌 → 綠 */
+    --c-pnl-flat: var(--c-rest);   /* 平 → 灰 */
+    --c-up: var(--c-pnl-up);
+    --c-dn: var(--c-pnl-down);
 
     /* accent gradient for hero / active tab */
     --grad-hero: linear-gradient(135deg, rgba(99,102,241,.10) 0%, rgba(20,184,166,.06) 50%, rgba(99,102,241,.04) 100%);
