@@ -93,6 +93,88 @@ public class FinalDecisionService {
     private static final double DEFAULT_TP1_PCT = 8.0;
     private static final double DEFAULT_TP2_PCT = 13.0;
 
+    // P0.1 AI default score reweight：當 Claude/Codex 尚未實際研究時，會留下預設的 3.00 分。
+    // 若直接套 0.40/0.35/0.25 加權，會把 Java 的好分數稀釋成 ~4.5 → 全部掉到 C 級。
+    // 這裡的偵測門檻：|score - 3.00| < 0.001 即視為「未研究」預設分。
+    private static final BigDecimal DEFAULT_AI_SCORE = new BigDecimal("3.00");
+    private static final BigDecimal DEFAULT_AI_SCORE_EPSILON = new BigDecimal("0.001");
+
+    private static boolean isDefaultAiScore(BigDecimal score) {
+        if (score == null) return false;
+        return score.subtract(DEFAULT_AI_SCORE).abs().compareTo(DEFAULT_AI_SCORE_EPSILON) < 0;
+    }
+
+    /**
+     * P0.1：AI 權重覆寫結果（含原因 trace）。
+     */
+    record AiWeightOverride(BigDecimal javaW, BigDecimal claudeW, BigDecimal codexW, String reason) { }
+
+    /**
+     * P0.1：當 Claude/Codex 沒有實際研究（分數仍是預設 3.00）時，把它們的權重轉給 Java，
+     * 避免最終分數被預設分稀釋。返回的權重必須與原始權重總和相同（皆為 1.00）。
+     *
+     * @param javaScore   Java 結構評分（可 null）
+     * @param claudeScore Claude 評分（可 null）
+     * @param codexScore  Codex 評分（可 null）
+     * @param javaW       原始 Java 權重
+     * @param claudeW     原始 Claude 權重
+     * @param codexW      原始 Codex 權重
+     * @return            覆寫後的權重 + 原因 string
+     */
+    static AiWeightOverride applyAiDefaultReweight(BigDecimal javaScore,
+                                                   BigDecimal claudeScore,
+                                                   BigDecimal codexScore,
+                                                   BigDecimal javaW,
+                                                   BigDecimal claudeW,
+                                                   BigDecimal codexW) {
+        boolean claudeIsDefault = isDefaultAiScore(claudeScore);
+        boolean codexIsDefault  = isDefaultAiScore(codexScore);
+
+        if (claudeIsDefault && codexIsDefault) {
+            // 全部都是預設分 → 整包丟給 Java
+            return new AiWeightOverride(BigDecimal.ONE, BigDecimal.ZERO, BigDecimal.ZERO,
+                    "BOTH_AI_DEFAULT_JAVA_ONLY");
+        }
+        if (claudeIsDefault) {
+            // 只有 Claude 預設 → Claude 權重給 Java，Codex 不變
+            return new AiWeightOverride(javaW.add(claudeW), BigDecimal.ZERO, codexW,
+                    "CLAUDE_DEFAULT_REWEIGHT_TO_JAVA");
+        }
+        if (codexIsDefault) {
+            // 只有 Codex 預設 → Codex 權重給 Java，Claude 不變
+            return new AiWeightOverride(javaW.add(codexW), claudeW, BigDecimal.ZERO,
+                    "CODEX_DEFAULT_REWEIGHT_TO_JAVA");
+        }
+        return new AiWeightOverride(javaW, claudeW, codexW, "NO_OVERRIDE");
+    }
+
+    /**
+     * P0.1：套用覆寫後的權重計算 ai_weighted_score。
+     * 覆寫後權重 = 0 的軸不參與加權；只跳過 score 為 null 的軸。
+     * 與 WeightedScoringEngine 保持一致：以 totalWeight 做分母正規化。
+     */
+    private static BigDecimal computeWeightedAiScoreWithOverride(BigDecimal javaScore,
+                                                                  BigDecimal claudeScore,
+                                                                  BigDecimal codexScore,
+                                                                  AiWeightOverride override) {
+        BigDecimal totalWeight = BigDecimal.ZERO;
+        BigDecimal sum         = BigDecimal.ZERO;
+        if (javaScore != null && override.javaW().compareTo(BigDecimal.ZERO) > 0) {
+            totalWeight = totalWeight.add(override.javaW());
+            sum         = sum.add(override.javaW().multiply(javaScore));
+        }
+        if (claudeScore != null && override.claudeW().compareTo(BigDecimal.ZERO) > 0) {
+            totalWeight = totalWeight.add(override.claudeW());
+            sum         = sum.add(override.claudeW().multiply(claudeScore));
+        }
+        if (codexScore != null && override.codexW().compareTo(BigDecimal.ZERO) > 0) {
+            totalWeight = totalWeight.add(override.codexW());
+            sum         = sum.add(override.codexW().multiply(codexScore));
+        }
+        if (totalWeight.compareTo(BigDecimal.ZERO) == 0) return BigDecimal.ZERO;
+        return sum.divide(totalWeight, 3, java.math.RoundingMode.HALF_UP);
+    }
+
     private final ConsensusScoringEngine    consensusScoringEngine;
     private final FinalDecisionEngine       finalDecisionEngine;
     private final JavaStructureScoringEngine javaStructureScoringEngine;
@@ -1903,7 +1985,25 @@ public class FinalDecisionService {
             );
 
             // 4. 加權評分與最終排序分（final = min(weighted, consensus) unless vetoed）
-            BigDecimal aiWeighted = weightedScoringEngine.computeAiWeightedScore(javaScore, claudeScore, codexScore);
+            // P0.1：當 Claude/Codex 還是預設 3.00（沒做研究）時，把它們的權重轉給 Java，
+            // 避免 0.40*good + 0.35*3 + 0.25*3 把分數稀釋掉。flag 預設開啟。
+            boolean aiDefaultReweightEnabled = scoreConfigService.getBoolean(
+                    "final_decision.ai_default_reweight.enabled", true);
+            BigDecimal jwBase = scoreConfigService.getDecimal("scoring.java_weight",   new BigDecimal("0.40"));
+            BigDecimal cwBase = scoreConfigService.getDecimal("scoring.claude_weight", new BigDecimal("0.35"));
+            BigDecimal xwBase = scoreConfigService.getDecimal("scoring.codex_weight",  new BigDecimal("0.25"));
+            AiWeightOverride override = aiDefaultReweightEnabled
+                    ? applyAiDefaultReweight(javaScore, claudeScore, codexScore, jwBase, cwBase, xwBase)
+                    : new AiWeightOverride(jwBase, cwBase, xwBase, "FLAG_DISABLED");
+            BigDecimal aiWeighted;
+            if ("NO_OVERRIDE".equals(override.reason()) || "FLAG_DISABLED".equals(override.reason())) {
+                // 走原本的 WeightedScoringEngine（仍會處理 null 分數的情況）
+                aiWeighted = weightedScoringEngine.computeAiWeightedScore(javaScore, claudeScore, codexScore);
+            } else {
+                // 套用覆寫後的權重直接計算（覆寫後的 weight 總和必為 1.00，無需再正規化）
+                aiWeighted = computeWeightedAiScoreWithOverride(
+                        javaScore, claudeScore, codexScore, override);
+            }
             BigDecimal rawRank    = weightedScoringEngine.computeFinalRankScore(aiWeighted, consensusScore, veto.vetoed());
             // v2.6 MVP: 套用 VetoEngine soft penalty 扣分（hard veto 時 rawRank 已為 0，不會再扣）
             // v2.12 Fix4：bucket=SELECT_BUY_NOW（entryTriggered=true）直接 bypass 所有 soft penalty
@@ -1936,7 +2036,8 @@ public class FinalDecisionService {
                     rankingOrder,
                     rawRank, veto.scoringPenalty(),
                     veto.hardReasons(), veto.penaltyReasons(), bucket,
-                    consensusResult.aiConfidenceMode(), missingAiScores);
+                    consensusResult.aiConfidenceMode(), missingAiScores,
+                    override.reason());
 
             // 6. 產生帶完整分數的新 request
             result.add(new FinalDecisionCandidateRequest(
@@ -1972,7 +2073,9 @@ public class FinalDecisionService {
                                String bucket,
                                // v2.8 P0.9 scoring trace
                                String aiConfidenceMode,
-                               List<String> missingAiScores) {
+                               List<String> missingAiScores,
+                               // P0.1 AI default reweight trace
+                               String aiWeightOverrideReason) {
         try {
             stockEvaluationRepository.findByTradingDateAndSymbol(date, symbol).ifPresent(eval -> {
                 eval.setJavaStructureScore(javaScore);
@@ -1990,12 +2093,13 @@ public class FinalDecisionService {
                     eval.setVetoReasonsJson(vetoJson);
                     eval.setJavaVetoFlags(vetoJson);
                 }
-                // v2.6 MVP veto_trace + v2.8 P0.9 scoring_trace
+                // v2.6 MVP veto_trace + v2.8 P0.9 scoring_trace + P0.1 ai_weight_override_reason
                 eval.setPayloadJson(buildVetoTracePayload(
                         rawRankBeforePenalty, scoringPenalty,
                         hardReasons, penaltyReasons, bucket,
                         javaScore, claudeScore, codexScore,
                         aiConfidenceMode, missingAiScores,
+                        aiWeightOverrideReason,
                         eval.getPayloadJson()));
                 stockEvaluationRepository.save(eval);
             });
@@ -2013,6 +2117,7 @@ public class FinalDecisionService {
                                           String bucket,
                                           BigDecimal javaScore, BigDecimal claudeScore, BigDecimal codexScore,
                                           String aiConfidenceMode, List<String> missingAiScores,
+                                          String aiWeightOverrideReason,
                                           String existingPayload) {
         try {
             ObjectNode root = parsePayloadObject(existingPayload);
@@ -2067,7 +2172,19 @@ public class FinalDecisionService {
             scoringTrace.set("weightedScoreWeightsUsed", weights);
 
             scoringTrace.set("missingAiScores", toArrayNode(missingAiScores));
+
+            // P0.1 AI default reweight trace
+            if (aiWeightOverrideReason != null) {
+                scoringTrace.put("ai_weight_override_reason", aiWeightOverrideReason);
+            } else {
+                scoringTrace.putNull("ai_weight_override_reason");
+            }
             root.set("scoring_trace", scoringTrace);
+
+            // P0.1：頂層也存一份方便 SQL 查詢
+            if (aiWeightOverrideReason != null) {
+                root.put("ai_weight_override_reason", aiWeightOverrideReason);
+            }
 
             return objectMapper.writeValueAsString(root);
         } catch (Exception e) {
