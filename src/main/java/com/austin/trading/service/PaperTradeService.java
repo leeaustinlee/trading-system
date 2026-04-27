@@ -2,6 +2,7 @@ package com.austin.trading.service;
 
 import com.austin.trading.client.TwseMisClient;
 import com.austin.trading.client.dto.StockQuote;
+import com.austin.trading.dto.internal.MarketRegimeDecision;
 import com.austin.trading.dto.response.FinalDecisionSelectedStockResponse;
 import com.austin.trading.engine.exit.ExitRuleEvaluator;
 import com.austin.trading.engine.exit.FixedRuleExitEvaluator;
@@ -43,6 +44,11 @@ import java.util.regex.Pattern;
  * </ul>
  *
  * <p>不發任何通知。失敗時 graceful 寫 log,不向上拋出讓主交易流程被影響。</p>
+ *
+ * <p><b>Entry-time snapshot fields</b> (added by Subagent A):
+ * 每筆 OPEN row 都會 capture 當下的 intended / simulated 進場價、entry_grade、
+ * entry_rr_ratio、entry_regime 與 rich entry_payload_json,讓未來回測可以 100%
+ * 重現決策當下系統看到的條件,而不必依賴 stale 的 daily bar。</p>
  */
 @Service
 public class PaperTradeService {
@@ -53,6 +59,15 @@ public class PaperTradeService {
     private static final BigDecimal DEFAULT_TARGET1_PCT   = new BigDecimal("0.08");   // +8%
     private static final BigDecimal DEFAULT_TARGET2_PCT   = new BigDecimal("0.15");   // +15%
     private static final int        DEFAULT_MAX_HOLD_DAYS = 5;
+
+    /**
+     * Buy-side slippage applied to live currentPrice when computing
+     * {@code simulated_entry_price}. 0.001 = 0.1% (≈ 1 tick on a 100 NTD
+     * stock — chosen because it's symbol-agnostic, easy to override per
+     * symbol later, and conservatively above the typical TWSE 0.05 NTD
+     * minimum tick on mid-priced names). Documented in CLAUDE.md.
+     */
+    private static final BigDecimal BUY_SLIPPAGE_FRACTION = new BigDecimal("0.001");
 
     private static final Pattern PRICE_NUM = Pattern.compile("(\\d+(?:\\.\\d+)?)");
 
@@ -71,17 +86,22 @@ public class PaperTradeService {
     /** 用 ObjectProvider 解循環:ScoreConfigService 是後加的依賴,允許 null/缺席。 */
     private final ObjectProvider<ScoreConfigService> scoreConfigProvider;
 
+    /** 同樣用 ObjectProvider 取得 MarketRegimeService,避免測試 / boot order 卡住。 */
+    private final ObjectProvider<MarketRegimeService> marketRegimeProvider;
+
     public PaperTradeService(PaperTradeRepository repository,
                               TwseMisClient twseMisClient,
                               FixedRuleExitEvaluator exitEvaluator,
                               ObjectMapper objectMapper,
                               ObjectProvider<ScoreConfigService> scoreConfigProvider,
+                              ObjectProvider<MarketRegimeService> marketRegimeProvider,
                               @Value("${trading.paper-trade.enabled:true}") boolean staticEnabled) {
         this.repository = repository;
         this.twseMisClient = twseMisClient;
         this.exitEvaluator = exitEvaluator;
         this.objectMapper = objectMapper;
         this.scoreConfigProvider = scoreConfigProvider;
+        this.marketRegimeProvider = marketRegimeProvider;
         this.staticEnabled = staticEnabled;
     }
 
@@ -137,8 +157,8 @@ public class PaperTradeService {
             return;
         }
 
-        BigDecimal entryPrice = resolveEntryPrice(symbol, pick.entryPriceZone());
-        if (entryPrice == null || entryPrice.signum() <= 0) {
+        BigDecimal intendedPrice = resolveEntryPrice(symbol, pick.entryPriceZone());
+        if (intendedPrice == null || intendedPrice.signum() <= 0) {
             log.warn("[PaperTrade] cannot resolve entry price symbol={} zone={}, skip",
                     symbol, pick.entryPriceZone());
             return;
@@ -147,12 +167,19 @@ public class PaperTradeService {
         BigDecimal stop  = bd(pick.stopLossPrice());
         BigDecimal tp1   = bd(pick.takeProfit1());
         BigDecimal tp2   = bd(pick.takeProfit2());
-        if (stop == null) stop = entryPrice.multiply(BigDecimal.ONE.subtract(DEFAULT_STOP_LOSS_PCT))
+        if (stop == null) stop = intendedPrice.multiply(BigDecimal.ONE.subtract(DEFAULT_STOP_LOSS_PCT))
                 .setScale(4, RoundingMode.HALF_UP);
-        if (tp1  == null) tp1  = entryPrice.multiply(BigDecimal.ONE.add(DEFAULT_TARGET1_PCT))
+        if (tp1  == null) tp1  = intendedPrice.multiply(BigDecimal.ONE.add(DEFAULT_TARGET1_PCT))
                 .setScale(4, RoundingMode.HALF_UP);
-        if (tp2  == null) tp2  = entryPrice.multiply(BigDecimal.ONE.add(DEFAULT_TARGET2_PCT))
+        if (tp2  == null) tp2  = intendedPrice.multiply(BigDecimal.ONE.add(DEFAULT_TARGET2_PCT))
                 .setScale(4, RoundingMode.HALF_UP);
+
+        BigDecimal simulatedPrice = simulateBuyFill(symbol, intendedPrice);
+        String regime = currentRegimeType();
+        BigDecimal rr = pick.riskRewardRatio() != null
+                ? BigDecimal.valueOf(pick.riskRewardRatio()).setScale(3, RoundingMode.HALF_UP)
+                : null;
+        String grade = deriveEntryGrade(pick);
 
         PaperTradeEntity e = new PaperTradeEntity();
         e.setTradeId(UUID.randomUUID().toString().replace("-", "").substring(0, 32));
@@ -160,7 +187,9 @@ public class PaperTradeService {
         e.setEntryTime(LocalTime.now());
         e.setSymbol(symbol);
         e.setStockName(pick.stockName());
-        e.setEntryPrice(entryPrice);
+        e.setEntryPrice(intendedPrice);
+        e.setIntendedEntryPrice(intendedPrice);
+        e.setSimulatedEntryPrice(simulatedPrice);
         e.setStopLossPrice(stop);
         e.setTarget1Price(tp1);
         e.setTarget2Price(tp2);
@@ -169,11 +198,15 @@ public class PaperTradeService {
         e.setStrategyType(pick.strategyType() != null ? pick.strategyType() : event.strategyType());
         e.setFinalDecisionId(event.finalDecisionId());
         e.setAiTaskId(event.aiTaskId());
+        e.setEntryGrade(grade);
+        e.setEntryRrRatio(rr);
+        e.setEntryRegime(regime);
         e.setStatus("OPEN");
-        e.setPayloadJson(buildEntryPayload(event, pick, entryPrice));
+        e.setPayloadJson(buildEntryPayload(event, pick, intendedPrice));
+        e.setEntryPayloadJson(buildRichEntryPayload(event, pick, intendedPrice, simulatedPrice, regime, grade, rr));
         repository.save(e);
-        log.info("[PaperTrade] OPEN id={} symbol={} entry={} stop={} tp1={} tp2={} strategy={}",
-                e.getId(), symbol, entryPrice, stop, tp1, tp2, e.getStrategyType());
+        log.info("[PaperTrade] OPEN id={} symbol={} intended={} simulated={} stop={} tp1={} tp2={} regime={} grade={} rr={}",
+                e.getId(), symbol, intendedPrice, simulatedPrice, stop, tp1, tp2, regime, grade, rr);
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -189,7 +222,7 @@ public class PaperTradeService {
      * <p>Idempotency:同一交易日同 symbol 已存在 OPEN 狀態的 paper trade 時直接略過(不丟錯)。</p>
      *
      * @param symbol     股票代碼(必填)
-     * @param entryPrice 進場價(必填,>0)
+     * @param entryPrice 進場價(必填,>0)。視為 intended_entry_price。
      * @param stopLoss   停損價(可 null,缺則用 -5%)
      * @param tp1        第一停利(可 null,缺則用 +8%)
      * @param tp2        第二停利(可 null,缺則用 +15%)
@@ -228,25 +261,34 @@ public class PaperTradeService {
             }
         }
 
+        BigDecimal intended = entryPrice.setScale(4, RoundingMode.HALF_UP);
+
         BigDecimal stop = stopLoss != null ? stopLoss
-                : entryPrice.multiply(BigDecimal.ONE.subtract(DEFAULT_STOP_LOSS_PCT))
+                : intended.multiply(BigDecimal.ONE.subtract(DEFAULT_STOP_LOSS_PCT))
                         .setScale(4, RoundingMode.HALF_UP);
         BigDecimal t1 = tp1 != null ? tp1
-                : entryPrice.multiply(BigDecimal.ONE.add(DEFAULT_TARGET1_PCT))
+                : intended.multiply(BigDecimal.ONE.add(DEFAULT_TARGET1_PCT))
                         .setScale(4, RoundingMode.HALF_UP);
         BigDecimal t2 = tp2 != null ? tp2
-                : entryPrice.multiply(BigDecimal.ONE.add(DEFAULT_TARGET2_PCT))
+                : intended.multiply(BigDecimal.ONE.add(DEFAULT_TARGET2_PCT))
                         .setScale(4, RoundingMode.HALF_UP);
+
+        BigDecimal simulated = simulateBuyFill(symbol, intended);
+        String regime = currentRegimeType();
+        BigDecimal rr = computeRrRatio(intended, stop, t1);
+        String grade = "B_TRIAL"; // manual entries default to TRIAL grade
 
         PaperTradeEntity e = new PaperTradeEntity();
         e.setTradeId(UUID.randomUUID().toString().replace("-", "").substring(0, 32));
         e.setEntryDate(today);
         e.setEntryTime(LocalTime.now());
         e.setSymbol(symbol);
-        e.setEntryPrice(entryPrice.setScale(4, RoundingMode.HALF_UP));
+        e.setEntryPrice(intended);
+        e.setIntendedEntryPrice(intended);
+        e.setSimulatedEntryPrice(simulated);
         e.setPositionShares(qty);
         if (qty != null && qty > 0) {
-            e.setPositionAmount(entryPrice.multiply(BigDecimal.valueOf(qty))
+            e.setPositionAmount(intended.multiply(BigDecimal.valueOf(qty))
                     .setScale(2, RoundingMode.HALF_UP));
         }
         e.setStopLossPrice(stop);
@@ -255,11 +297,16 @@ public class PaperTradeService {
         e.setMaxHoldingDays(DEFAULT_MAX_HOLD_DAYS);
         e.setSource("MANUAL");
         e.setStrategyType("SETUP");
+        e.setEntryGrade(grade);
+        e.setEntryRrRatio(rr);
+        e.setEntryRegime(regime);
         e.setStatus("OPEN");
-        e.setPayloadJson(buildManualEntryPayload(symbol, entryPrice, stop, t1, t2, qty, reason));
+        e.setPayloadJson(buildManualEntryPayload(symbol, intended, stop, t1, t2, qty, reason));
+        e.setEntryPayloadJson(buildRichManualEntryPayload(
+                symbol, intended, simulated, stop, t1, t2, qty, reason, regime, grade, rr));
         repository.save(e);
-        log.info("[PaperTrade] recordEntry OPEN id={} symbol={} entry={} stop={} tp1={} tp2={} qty={} reason={}",
-                e.getId(), symbol, entryPrice, stop, t1, t2, qty, reason);
+        log.info("[PaperTrade] recordEntry OPEN id={} symbol={} intended={} simulated={} stop={} tp1={} tp2={} qty={} regime={} grade={}",
+                e.getId(), symbol, intended, simulated, stop, t1, t2, qty, regime, grade);
         return e;
     }
 
@@ -278,6 +325,175 @@ public class PaperTradeService {
             if (reason != null) n.put("reason", reason);
             return objectMapper.writeValueAsString(n);
         } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Entry-time snapshot helpers (Subagent A)
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Simulate a buy-side fill: live currentPrice * (1 + slippage). When
+     * the live quote is missing or unavailable, return the intended price
+     * unchanged (so 回測 sees no slippage rather than a misleading number).
+     */
+    BigDecimal simulateBuyFill(String symbol, BigDecimal intended) {
+        if (intended == null) return null;
+        BigDecimal live = fetchLivePrice(symbol);
+        if (live == null || live.signum() <= 0) {
+            return intended.setScale(4, RoundingMode.HALF_UP);
+        }
+        return live.multiply(BigDecimal.ONE.add(BUY_SLIPPAGE_FRACTION))
+                .setScale(4, RoundingMode.HALF_UP);
+    }
+
+    /** Read current regime from MarketRegimeService — null if unavailable. */
+    String currentRegimeType() {
+        MarketRegimeService svc = marketRegimeProvider != null ? marketRegimeProvider.getIfAvailable() : null;
+        if (svc == null) return null;
+        try {
+            Optional<MarketRegimeDecision> latest = svc.getLatestForToday();
+            if (latest.isEmpty()) latest = svc.getLatest();
+            return latest.map(MarketRegimeDecision::regimeType).orElse(null);
+        } catch (Exception ex) {
+            log.debug("[PaperTrade] regime lookup failed: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Map FinalDecision pick → entry grade. v1 heuristic:
+     * <ul>
+     *   <li>{@code MOMENTUM_CHASE} + momentumScore >= 8 → A_PLUS</li>
+     *   <li>otherwise SETUP                               → A_NORMAL</li>
+     *   <li>positionMultiplier &lt; 1                     → B_TRIAL</li>
+     * </ul>
+     * Conservative default = A_NORMAL so a missing momentum score never
+     * promotes a row.
+     */
+    static String deriveEntryGrade(FinalDecisionSelectedStockResponse pick) {
+        if (pick == null) return null;
+        Double mult = pick.positionMultiplier();
+        if (mult != null && mult < 1.0) return "B_TRIAL";
+        if ("MOMENTUM_CHASE".equalsIgnoreCase(pick.strategyType())) {
+            Double m = pick.momentumScore();
+            if (m != null && m >= 8.0) return "A_PLUS";
+        }
+        return "A_NORMAL";
+    }
+
+    /** Fallback RR computation: (tp1 − entry) / (entry − stop). */
+    static BigDecimal computeRrRatio(BigDecimal entry, BigDecimal stop, BigDecimal tp1) {
+        if (entry == null || stop == null || tp1 == null) return null;
+        BigDecimal risk   = entry.subtract(stop);
+        BigDecimal reward = tp1.subtract(entry);
+        if (risk.signum() <= 0) return null;
+        return reward.divide(risk, 3, RoundingMode.HALF_UP);
+    }
+
+    private String buildRichEntryPayload(FinalDecisionPersistedEvent ev,
+                                          FinalDecisionSelectedStockResponse p,
+                                          BigDecimal intended,
+                                          BigDecimal simulated,
+                                          String regime,
+                                          String grade,
+                                          BigDecimal rr) {
+        try {
+            ObjectNode root = objectMapper.createObjectNode();
+            root.put("schemaVersion", 1);
+            root.put("source", "onFinalDecisionPersisted");
+            if (ev.finalDecisionId() != null) root.put("decisionId", ev.finalDecisionId());
+            if (ev.aiTaskId() != null) root.put("aiTaskId", ev.aiTaskId());
+            if (ev.aiStatus() != null) root.put("aiStatus", ev.aiStatus());
+            if (ev.sourceTaskType() != null) root.put("sourceTaskType", ev.sourceTaskType());
+            if (ev.tradingDate() != null) root.put("tradingDate", ev.tradingDate().toString());
+
+            ObjectNode cand = root.putObject("candidate");
+            cand.put("symbol", p.stockCode());
+            if (p.stockName() != null) cand.put("stockName", p.stockName());
+            if (p.entryType() != null) cand.put("entryType", p.entryType());
+            if (p.entryPriceZone() != null) cand.put("entryPriceZone", p.entryPriceZone());
+            if (p.stopLossPrice() != null) cand.put("stopLossPrice", p.stopLossPrice());
+            if (p.takeProfit1() != null) cand.put("takeProfit1", p.takeProfit1());
+            if (p.takeProfit2() != null) cand.put("takeProfit2", p.takeProfit2());
+            if (p.suggestedPositionSize() != null) cand.put("suggestedPositionSize", p.suggestedPositionSize());
+            if (p.positionMultiplier() != null) cand.put("positionMultiplier", p.positionMultiplier());
+            if (p.strategyType() != null) cand.put("strategyType", p.strategyType());
+            if (p.momentumScore() != null) cand.put("momentumScore", p.momentumScore());
+            if (p.rationale() != null) cand.put("rationale", p.rationale());
+            if (p.riskRewardRatio() != null) cand.put("riskRewardRatio", p.riskRewardRatio());
+
+            ObjectNode entry = root.putObject("entry");
+            entry.put("intendedPrice", intended.toPlainString());
+            if (simulated != null) entry.put("simulatedPrice", simulated.toPlainString());
+            if (grade != null) entry.put("grade", grade);
+            if (rr != null) entry.put("rrRatio", rr.toPlainString());
+            entry.put("slippageFraction", BUY_SLIPPAGE_FRACTION.toPlainString());
+
+            if (regime != null) {
+                ObjectNode r = root.putObject("regime");
+                r.put("regimeType", regime);
+            }
+
+            // Theme exposure / capital alloc / scoring trace are not directly
+            // available in the event payload — leave hooks for future enrichment.
+            root.putObject("themeExposure"); // empty placeholder
+            root.putObject("capitalAlloc");  // empty placeholder
+            root.putObject("scoringTrace");  // empty placeholder
+            ObjectNode aiOverride = root.putObject("aiWeightOverride");
+            if (ev.aiStatus() != null) aiOverride.put("aiStatus", ev.aiStatus());
+
+            return objectMapper.writeValueAsString(root);
+        } catch (Exception ex) {
+            log.debug("[PaperTrade] buildRichEntryPayload failed: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private String buildRichManualEntryPayload(String symbol,
+                                                BigDecimal intended,
+                                                BigDecimal simulated,
+                                                BigDecimal stop,
+                                                BigDecimal tp1,
+                                                BigDecimal tp2,
+                                                Integer qty,
+                                                String reason,
+                                                String regime,
+                                                String grade,
+                                                BigDecimal rr) {
+        try {
+            ObjectNode root = objectMapper.createObjectNode();
+            root.put("schemaVersion", 1);
+            root.put("source", "recordEntry");
+
+            ObjectNode cand = root.putObject("candidate");
+            cand.put("symbol", symbol);
+            if (stop != null) cand.put("stopLossPrice", stop.toPlainString());
+            if (tp1  != null) cand.put("takeProfit1", tp1.toPlainString());
+            if (tp2  != null) cand.put("takeProfit2", tp2.toPlainString());
+            if (qty  != null) cand.put("plannedQty", qty);
+            if (reason != null) cand.put("rationale", reason);
+
+            ObjectNode entry = root.putObject("entry");
+            entry.put("intendedPrice", intended.toPlainString());
+            if (simulated != null) entry.put("simulatedPrice", simulated.toPlainString());
+            if (grade != null) entry.put("grade", grade);
+            if (rr != null) entry.put("rrRatio", rr.toPlainString());
+            entry.put("slippageFraction", BUY_SLIPPAGE_FRACTION.toPlainString());
+
+            if (regime != null) {
+                ObjectNode r = root.putObject("regime");
+                r.put("regimeType", regime);
+            }
+            root.putObject("themeExposure");
+            root.putObject("capitalAlloc");
+            root.putObject("scoringTrace");
+            root.putObject("aiWeightOverride");
+
+            return objectMapper.writeValueAsString(root);
+        } catch (Exception ex) {
+            log.debug("[PaperTrade] buildRichManualEntryPayload failed: {}", ex.getMessage());
             return null;
         }
     }

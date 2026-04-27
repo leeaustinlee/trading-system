@@ -46,8 +46,30 @@ public class PaperTradeEntity {
     @Column(name = "stock_name", length = 120)
     private String stockName;
 
+    /**
+     * Intended entry price — derived from candidate {@code entryPriceZone}
+     * mid-point or lower bound. Reused as the canonical {@code entry_price}
+     * column so existing KPI / MTM logic keeps working unchanged.
+     */
     @Column(name = "entry_price", nullable = false, precision = 12, scale = 4)
     private BigDecimal entryPrice;
+
+    /**
+     * Snapshot of the intended entry price at decision time. Equal to
+     * {@code entry_price} on the same row but kept as a separate column
+     * so future回測 comparing intended vs actual fills can join cleanly
+     * without parsing payload JSON.
+     */
+    @Column(name = "intended_entry_price", precision = 12, scale = 4)
+    private BigDecimal intendedEntryPrice;
+
+    /**
+     * Simulated fill price = live currentPrice * (1 + 0.001) for buys
+     * (positive 1‰ slippage). Falls back to intended price when no live
+     * quote is available. Used by future回測 to reproduce realistic fills.
+     */
+    @Column(name = "simulated_entry_price", precision = 12, scale = 4)
+    private BigDecimal simulatedEntryPrice;
 
     @Column(name = "position_shares")
     private Integer positionShares;
@@ -92,6 +114,31 @@ public class PaperTradeEntity {
 
     @Column(name = "expectation_score", precision = 5, scale = 2)
     private BigDecimal expectationScore;
+
+    /** A_PLUS / A_NORMAL / B_TRIAL — entry-time grade snapshot. */
+    @Column(name = "entry_grade", length = 10)
+    private String entryGrade;
+
+    /** Entry-time risk/reward ratio captured at decision time. */
+    @Column(name = "entry_rr_ratio", precision = 6, scale = 3)
+    private BigDecimal entryRrRatio;
+
+    /**
+     * Market regime at entry time, e.g. {@code BULL_TREND},
+     * {@code RANGE_CHOP}, {@code WEAK_DOWNTREND}, {@code PANIC_VOLATILITY}.
+     */
+    @Column(name = "entry_regime", length = 30)
+    private String entryRegime;
+
+    /**
+     * Rich snapshot JSON: final decision payload + scoring trace +
+     * AI weight override reason + theme exposure context. Kept separate
+     * from {@code payload_json} (the legacy decision-level payload) so
+     * 回測 can read entry context without parsing the older blob.
+     */
+    @Lob
+    @Column(name = "entry_payload_json", columnDefinition = "longtext")
+    private String entryPayloadJson;
 
     // ── 出場 ─────────────────────────────────────────────────────────
     @Column(name = "exit_date")
@@ -149,6 +196,10 @@ public class PaperTradeEntity {
     public void setStockName(String v) { this.stockName = v; }
     public BigDecimal getEntryPrice() { return entryPrice; }
     public void setEntryPrice(BigDecimal v) { this.entryPrice = v; }
+    public BigDecimal getIntendedEntryPrice() { return intendedEntryPrice; }
+    public void setIntendedEntryPrice(BigDecimal v) { this.intendedEntryPrice = v; }
+    public BigDecimal getSimulatedEntryPrice() { return simulatedEntryPrice; }
+    public void setSimulatedEntryPrice(BigDecimal v) { this.simulatedEntryPrice = v; }
     public Integer getPositionShares() { return positionShares; }
     public void setPositionShares(Integer v) { this.positionShares = v; }
     public BigDecimal getPositionAmount() { return positionAmount; }
@@ -177,6 +228,14 @@ public class PaperTradeEntity {
     public void setThemeHeatScore(BigDecimal v) { this.themeHeatScore = v; }
     public BigDecimal getExpectationScore() { return expectationScore; }
     public void setExpectationScore(BigDecimal v) { this.expectationScore = v; }
+    public String getEntryGrade() { return entryGrade; }
+    public void setEntryGrade(String v) { this.entryGrade = v; }
+    public BigDecimal getEntryRrRatio() { return entryRrRatio; }
+    public void setEntryRrRatio(BigDecimal v) { this.entryRrRatio = v; }
+    public String getEntryRegime() { return entryRegime; }
+    public void setEntryRegime(String v) { this.entryRegime = v; }
+    public String getEntryPayloadJson() { return entryPayloadJson; }
+    public void setEntryPayloadJson(String v) { this.entryPayloadJson = v; }
     public LocalDate getExitDate() { return exitDate; }
     public void setExitDate(LocalDate v) { this.exitDate = v; }
     public LocalTime getExitTime() { return exitTime; }
