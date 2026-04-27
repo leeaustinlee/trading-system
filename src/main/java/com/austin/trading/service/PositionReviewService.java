@@ -9,10 +9,12 @@ import com.austin.trading.engine.PositionDecisionEngine.*;
 import com.austin.trading.engine.StopLossTakeProfitEngine;
 import com.austin.trading.entity.PositionEntity;
 import com.austin.trading.entity.PositionReviewLogEntity;
+import com.austin.trading.notify.LineSender;
 import com.austin.trading.repository.PositionReviewLogRepository;
 import com.austin.trading.repository.PositionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +46,9 @@ public class PositionReviewService {
     private final MarketRegimeService            marketRegimeService;
     private final ThemeStrengthService           themeStrengthService;
 
+    /** P0.2: review = EXIT 時送 LINE 警示。LineSender 已在 disabled / 429 時自行 graceful。 */
+    private final ObjectProvider<LineSender>     lineSenderProvider;
+
     public PositionReviewService(
             PositionRepository positionRepository,
             PositionReviewLogRepository reviewLogRepository,
@@ -53,7 +58,8 @@ public class PositionReviewService {
             StopLossTakeProfitEngine stopLossTakeProfitEngine,
             ScoreConfigService scoreConfigService,
             MarketRegimeService marketRegimeService,
-            ThemeStrengthService themeStrengthService
+            ThemeStrengthService themeStrengthService,
+            ObjectProvider<LineSender> lineSenderProvider
     ) {
         this.positionRepository   = positionRepository;
         this.reviewLogRepository  = reviewLogRepository;
@@ -64,6 +70,7 @@ public class PositionReviewService {
         this.scoreConfigService   = scoreConfigService;
         this.marketRegimeService  = marketRegimeService;
         this.themeStrengthService = themeStrengthService;
+        this.lineSenderProvider   = lineSenderProvider;
     }
 
     /**
@@ -113,6 +120,9 @@ public class PositionReviewService {
                 }
 
                 PositionReviewLogEntity logEntry = saveReviewLog(pos, quote, decision, reviewType);
+
+                // P0.2 EXIT alert:review = EXIT 時送 LINE,讓使用者察覺持倉訊號
+                maybeSendExitAlert(pos, decision);
 
                 // 更新 position 狀態
                 pos.setReviewStatus(decision.status().name());
@@ -254,6 +264,53 @@ public class PositionReviewService {
 
         return positionDecisionEngine.evaluate(input);
     }
+
+    /**
+     * P0.2:Review status = EXIT 時發送 LINE 警示。
+     * 透過 {@code position.review.exit_alert.enabled}(預設 TRUE)控制,LineSender 自身對 disabled / 429 已 graceful。
+     */
+    void maybeSendExitAlert(PositionEntity pos, PositionDecisionResult decision) {
+        if (decision == null || decision.status() != PositionStatus.EXIT) return;
+        boolean alertEnabled = scoreConfigService == null
+                || scoreConfigService.getBoolean("position.review.exit_alert.enabled", true);
+        if (!alertEnabled) return;
+        LineSender sender = lineSenderProvider != null ? lineSenderProvider.getIfAvailable() : null;
+        if (sender == null) return;
+        String reason = decision.reason() != null ? decision.reason() : "EXIT signal";
+        String msg = "⚠️ 持倉 " + pos.getSymbol() + " review = EXIT, reason: " + reason;
+        try {
+            sender.send(msg);
+        } catch (Exception e) {
+            // Defensive:LineSender 內部已 catch,但這裡仍多一層,絕不讓 LINE 送失敗影響 review 流程
+            log.warn("[PositionReview] EXIT alert send failed symbol={}: {}", pos.getSymbol(), e.getMessage());
+        }
+    }
+
+    /**
+     * P0.2:列出仍在 OPEN、且最新一筆 review 為 EXIT 的持倉。
+     * 由 {@code GET /api/positions/review/pending-exits} 使用。
+     */
+    @Transactional(readOnly = true)
+    public List<PendingExitItem> findPendingExits() {
+        List<PositionEntity> openPositions = positionRepository.findByStatus("OPEN");
+        List<PendingExitItem> items = new ArrayList<>();
+        for (PositionEntity pos : openPositions) {
+            reviewLogRepository.findTopByPositionIdOrderByCreatedAtDesc(pos.getId())
+                    .filter(r -> "EXIT".equalsIgnoreCase(r.getDecisionStatus()))
+                    .ifPresent(r -> items.add(new PendingExitItem(
+                            pos.getSymbol(),
+                            r.getReason(),
+                            r.getCreatedAt() != null ? r.getCreatedAt() : null
+                    )));
+        }
+        return items;
+    }
+
+    public record PendingExitItem(
+            String symbol,
+            String reason,
+            LocalDateTime reviewedAt
+    ) {}
 
     private PositionReviewLogEntity saveReviewLog(
             PositionEntity pos, LiveQuoteResponse quote,
