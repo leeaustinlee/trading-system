@@ -913,11 +913,17 @@ public class PaperTradeService {
         trade.setExitReason(result.exitReason());
         trade.setHoldingDays(holdDays);
 
-        BigDecimal pnlPct = pct(simulatedExit, trade.getEntryPrice());
+        // Reviewer NEEDS_FIX #1：PnL math symmetry — use simulated entry price (post-slippage)
+        // as basis so the +1‰ entry slippage and -1‰ exit slippage cancel cleanly.
+        // Fallback to intended entry_price when simulated_entry_price unset (legacy rows).
+        BigDecimal entryBasis = trade.getSimulatedEntryPrice() != null
+                ? trade.getSimulatedEntryPrice()
+                : trade.getEntryPrice();
+        BigDecimal pnlPct = pct(simulatedExit, entryBasis);
         trade.setPnlPct(pnlPct);
 
         if (trade.getPositionShares() != null && trade.getPositionShares() > 0) {
-            BigDecimal pnl = simulatedExit.subtract(trade.getEntryPrice())
+            BigDecimal pnl = simulatedExit.subtract(entryBasis)
                     .multiply(BigDecimal.valueOf(trade.getPositionShares()))
                     .setScale(2, RoundingMode.HALF_UP);
             trade.setPnlAmount(pnl);
