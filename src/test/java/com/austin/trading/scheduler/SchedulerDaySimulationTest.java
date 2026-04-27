@@ -5,7 +5,7 @@ import com.austin.trading.dto.internal.MarketRegimeDecision;
 import com.austin.trading.dto.internal.ThemeStrengthDecision;
 import com.austin.trading.dto.response.FinalDecisionResponse;
 import com.austin.trading.engine.ThemeSelectionEngine;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.repository.DailyPnlRepository;
 import com.austin.trading.repository.PositionRepository;
 import com.austin.trading.repository.StockThemeMappingRepository;
@@ -84,7 +84,7 @@ class SchedulerDaySimulationTest {
     @Mock DailyPnlRepository             dailyPnlRepository;
     @Mock PnlService                     pnlService;
     @Mock ClaudeCodeRequestWriterService requestWriterService;
-    @Mock LineTemplateService            lineTemplateService;
+    @Mock NotificationFacade            notificationFacade;
     @Mock ScoreConfigService             scoreConfigService;
     @Mock AiTaskService                  aiTaskService;
 
@@ -116,12 +116,12 @@ class SchedulerDaySimulationTest {
                 themeStrengthService, marketRegimeService, tradeReviewService,
                 stockThemeMappingRepository, positionRepository,
                 dailyPnlRepository, pnlService,
-                requestWriterService, lineTemplateService, scoreConfigService, aiTaskService
+                requestWriterService, notificationFacade, scoreConfigService, aiTaskService
         );
 
         intradayWorkflow = new IntradayDecisionWorkflowService(
                 marketDataService, finalDecisionService,
-                lineTemplateService, scoreConfigService, aiTaskService
+                notificationFacade, scoreConfigService, aiTaskService
         );
 
         weeklyJob = new WeeklyTradeReviewJob(

@@ -21,7 +21,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * v2.10 PositionManagementEngine 8 cases。
- * Case 8（通知節流）在 integration / LineTemplateService 層驗，此處不涵蓋。
+ * Case 8（通知節流）在 integration / NotificationFacade 層驗，此處不涵蓋。
  */
 class PositionManagementEngineTests {
 

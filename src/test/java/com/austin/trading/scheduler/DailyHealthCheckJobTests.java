@@ -2,7 +2,7 @@ package com.austin.trading.scheduler;
 
 import com.austin.trading.entity.AiTaskEntity;
 import com.austin.trading.entity.FinalDecisionEntity;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.repository.AiTaskRepository;
 import com.austin.trading.repository.FinalDecisionRepository;
 import com.austin.trading.service.DailyOrchestrationService;
@@ -107,7 +107,7 @@ class DailyHealthCheckJobTests {
         when(cfg.getBoolean(eq("scheduling.line_notify_enabled"), anyBoolean())).thenReturn(true);
         when(cfg.getBoolean(eq("final_decision.require_codex"), anyBoolean())).thenReturn(true);
 
-        LineTemplateService line = mock(LineTemplateService.class);
+        NotificationFacade line = mock(NotificationFacade.class);
         SchedulerLogService logSvc = mock(SchedulerLogService.class);
 
         DailyHealthCheckJob job = new DailyHealthCheckJob(orch, line, logSvc, cfg, ds,
@@ -143,7 +143,7 @@ class DailyHealthCheckJobTests {
         when(cfg.getBoolean(eq("scheduling.line_notify_enabled"), anyBoolean())).thenReturn(true);
         when(cfg.getBoolean(eq("final_decision.require_codex"), anyBoolean())).thenReturn(true);
 
-        LineTemplateService line = mock(LineTemplateService.class);
+        NotificationFacade line = mock(NotificationFacade.class);
         SchedulerLogService logSvc = mock(SchedulerLogService.class);
 
         DailyHealthCheckJob job = new DailyHealthCheckJob(orch, line, logSvc, cfg, ds,
@@ -170,7 +170,7 @@ class DailyHealthCheckJobTests {
         when(orch.sweepStaleRunning(anyInt(), anyInt())).thenReturn(List.of());
         when(orch.listIncompleteSteps(any())).thenReturn(List.of());
         ScoreConfigService cfg = mock(ScoreConfigService.class);
-        LineTemplateService line = mock(LineTemplateService.class);
+        NotificationFacade line = mock(NotificationFacade.class);
         SchedulerLogService logSvc = mock(SchedulerLogService.class);
         return new DailyHealthCheckJob(orch, line, logSvc, cfg, ds,
                 aiTaskRepo, finalRepo, submitDir);

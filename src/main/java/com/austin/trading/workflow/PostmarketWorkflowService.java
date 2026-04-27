@@ -9,7 +9,7 @@ import com.austin.trading.dto.internal.ThemeStrengthDecision;
 import com.austin.trading.engine.ThemeSelectionEngine;
 import com.austin.trading.entity.StockThemeMappingEntity;
 import com.austin.trading.entity.ThemeSnapshotEntity;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.repository.DailyPnlRepository;
 import com.austin.trading.repository.PositionRepository;
 import com.austin.trading.repository.StockThemeMappingRepository;
@@ -61,7 +61,7 @@ public class PostmarketWorkflowService {
     private final DailyPnlRepository             dailyPnlRepository;
     private final PnlService                     pnlService;
     private final ClaudeCodeRequestWriterService requestWriterService;
-    private final LineTemplateService            lineTemplateService;
+    private final NotificationFacade            notificationFacade;
     private final ScoreConfigService             config;
     private final AiTaskService                  aiTaskService;
 
@@ -76,7 +76,7 @@ public class PostmarketWorkflowService {
             DailyPnlRepository dailyPnlRepository,
             PnlService pnlService,
             ClaudeCodeRequestWriterService requestWriterService,
-            LineTemplateService lineTemplateService,
+            NotificationFacade notificationFacade,
             ScoreConfigService config,
             AiTaskService aiTaskService
     ) {
@@ -90,7 +90,7 @@ public class PostmarketWorkflowService {
         this.dailyPnlRepository          = dailyPnlRepository;
         this.pnlService                  = pnlService;
         this.requestWriterService        = requestWriterService;
-        this.lineTemplateService         = lineTemplateService;
+        this.notificationFacade         = notificationFacade;
         this.config                      = config;
         this.aiTaskService               = aiTaskService;
     }
@@ -132,7 +132,7 @@ public class PostmarketWorkflowService {
             int notifyMax = config.getInt("candidate.notify.maxCount", 5);
             List<CandidateResponse> notifyList = candidateScanService.getCurrentCandidates(notifyMax);
             String candidateText = formatCandidates(notifyList);
-            lineTemplateService.notifyPostmarket(candidateText, tradingDate);
+            notificationFacade.notifyPostmarket(candidateText, tradingDate);
             log.info("[PostmarketWorkflow] LINE 盤後通知已發送，候選股={} 檔", notifyList.size());
 
             // 補發：POSTMARKET / AFTERMARKET / MIDDAY 任一 AI 研究 md
@@ -141,7 +141,7 @@ public class PostmarketWorkflowService {
                 String summary = aiMd.length() > 3500
                         ? aiMd.substring(0, 3500) + "\n...(內容過長已截斷)"
                         : aiMd;
-                lineTemplateService.notifySystemAlert("📎 15:30 AI 研究摘要", summary);
+                notificationFacade.notifySystemAlert("📎 15:30 AI 研究摘要", summary);
             }
         } else {
             log.info("[PostmarketWorkflow] LINE 通知未啟用（scheduling.line_notify_enabled=false）");

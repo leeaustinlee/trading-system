@@ -3,7 +3,7 @@ package com.austin.trading.workflow;
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.entity.ThemeSnapshotEntity;
 import com.austin.trading.engine.ThemeSelectionEngine;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.dto.response.MarketCurrentResponse;
 import com.austin.trading.service.CandidateScanService;
 import com.austin.trading.service.MarketDataService;
@@ -33,7 +33,7 @@ public class WatchlistWorkflowService {
     private final ThemeSelectionEngine themeSelectionEngine;
     private final WatchlistService watchlistService;
     private final MarketDataService marketDataService;
-    private final LineTemplateService lineTemplateService;
+    private final NotificationFacade notificationFacade;
     private final ScoreConfigService config;
 
     public WatchlistWorkflowService(
@@ -41,14 +41,14 @@ public class WatchlistWorkflowService {
             ThemeSelectionEngine themeSelectionEngine,
             WatchlistService watchlistService,
             MarketDataService marketDataService,
-            LineTemplateService lineTemplateService,
+            NotificationFacade notificationFacade,
             ScoreConfigService config
     ) {
         this.candidateScanService = candidateScanService;
         this.themeSelectionEngine = themeSelectionEngine;
         this.watchlistService = watchlistService;
         this.marketDataService = marketDataService;
-        this.lineTemplateService = lineTemplateService;
+        this.notificationFacade = notificationFacade;
         this.config = config;
     }
 
@@ -110,7 +110,7 @@ public class WatchlistWorkflowService {
                         .map(w -> "  " + w.getSymbol() + " " + (w.getStockName() != null ? w.getStockName() : "")
                                 + " (連續" + w.getConsecutiveStrongDays() + "天)")
                         .collect(Collectors.joining("\n"));
-                lineTemplateService.notifySystemAlert("Watchlist READY 更新",
+                notificationFacade.notifySystemAlert("Watchlist READY 更新",
                         "READY 名單：\n" + readyText + "\n來源：Trading System");
             }
         }

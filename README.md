@@ -204,6 +204,54 @@ Important namespaces：
 
 Query/update：`GET/PUT /api/config/score/{key}`。
 
+## Notification（LINE + Telegram）
+
+通知並聯到 **Telegram（主）** 與 **LINE（fallback）**，由 `NotificationFacade` 統一發送。
+任一邊失敗或 disabled 都不影響另一邊，也不會中斷主交易流程。
+
+### 環境變數
+
+WSL / Linux：
+
+```bash
+export TELEGRAM_ENABLED="true"
+export TELEGRAM_BOT_TOKEN="xxxxxxxxxx:yyyy..."
+export TELEGRAM_CHAT_ID="-100xxxxxxxxxx"
+# 可選
+export TELEGRAM_PARSE_MODE="HTML"
+export TELEGRAM_TIMEOUT_SECONDS="10"
+export TELEGRAM_MAX_SEGMENT_LENGTH="3500"
+```
+
+Windows PowerShell（永久）：
+
+```powershell
+setx TELEGRAM_ENABLED "true"
+setx TELEGRAM_BOT_TOKEN "xxxxxxxxxx:yyyy..."
+setx TELEGRAM_CHAT_ID "-100xxxxxxxxxx"
+```
+
+LINE 仍由原本 `LINE_ENABLED / LINE_CHANNEL_ACCESS_TOKEN / LINE_TO` 控制；
+不需要 LINE 時設 `LINE_ENABLED=false` 即可只發 Telegram。
+
+### 手動測試
+
+```bash
+curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+  -d "chat_id=$TELEGRAM_CHAT_ID" \
+  -d "text=Trading System Telegram test"
+```
+
+### 架構
+
+| 層 | 類別 | 責任 |
+|---|---|---|
+| HTTP sender | `LineSender` / `TelegramSender` | 真正打外部 API、HTML escape、長訊切段 |
+| Template | `LineTemplateService` / `TelegramTemplateService` | 8 種業務 notify*、cooldown、訊息格式 |
+| Facade | `NotificationFacade` | 並聯兩邊；caller 只認這個 |
+
+cooldown 共用 `notification_log` 表；Telegram 的 type 加 `TG_` prefix 與 LINE 各自獨立節流。
+
 ## Quick Start
 
 1. Install Java 17 and MySQL 8+.

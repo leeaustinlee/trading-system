@@ -2,7 +2,7 @@ package com.austin.trading.workflow;
 
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.engine.ThemeSelectionEngine;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.repository.DailyPnlRepository;
 import com.austin.trading.repository.PositionRepository;
 import com.austin.trading.repository.StockThemeMappingRepository;
@@ -47,7 +47,7 @@ class PostmarketWorkflowLineGateTests {
     private DailyPnlRepository dailyPnlRepository;
     private PnlService pnlService;
     private ClaudeCodeRequestWriterService requestWriterService;
-    private LineTemplateService lineTemplateService;
+    private NotificationFacade notificationFacade;
     private ScoreConfigService config;
     private AiTaskService aiTaskService;
 
@@ -67,7 +67,7 @@ class PostmarketWorkflowLineGateTests {
         dailyPnlRepository = mock(DailyPnlRepository.class);
         pnlService = mock(PnlService.class);
         requestWriterService = mock(ClaudeCodeRequestWriterService.class);
-        lineTemplateService = mock(LineTemplateService.class);
+        notificationFacade = mock(NotificationFacade.class);
         config = mock(ScoreConfigService.class);
         aiTaskService = mock(AiTaskService.class);
 
@@ -84,7 +84,7 @@ class PostmarketWorkflowLineGateTests {
                 candidateScanService, themeSelectionEngine, themeStrengthService,
                 marketRegimeService, tradeReviewService, stockThemeMappingRepository,
                 positionRepository, dailyPnlRepository, pnlService,
-                requestWriterService, lineTemplateService, config, aiTaskService
+                requestWriterService, notificationFacade, config, aiTaskService
         );
     }
 
@@ -94,7 +94,7 @@ class PostmarketWorkflowLineGateTests {
 
         service.execute(today);
 
-        verify(lineTemplateService, never()).notifyPostmarket(anyString(), any(LocalDate.class));
+        verify(notificationFacade, never()).notifyPostmarket(anyString(), any(LocalDate.class));
     }
 
     @Test
@@ -103,6 +103,6 @@ class PostmarketWorkflowLineGateTests {
 
         service.execute(today);
 
-        verify(lineTemplateService, times(1)).notifyPostmarket(anyString(), eq(today));
+        verify(notificationFacade, times(1)).notifyPostmarket(anyString(), eq(today));
     }
 }

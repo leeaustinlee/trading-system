@@ -3,7 +3,7 @@ package com.austin.trading.workflow;
 import com.austin.trading.dto.internal.MarketRegimeDecision;
 import com.austin.trading.dto.internal.ThemeStrengthDecision;
 import com.austin.trading.engine.ThemeSelectionEngine;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.repository.DailyPnlRepository;
 import com.austin.trading.repository.PositionRepository;
 import com.austin.trading.repository.StockThemeMappingRepository;
@@ -52,7 +52,7 @@ class PostmarketWorkflowPipelineTests {
     @Mock DailyPnlRepository             dailyPnlRepository;
     @Mock PnlService                     pnlService;
     @Mock ClaudeCodeRequestWriterService requestWriterService;
-    @Mock LineTemplateService            lineTemplateService;
+    @Mock NotificationFacade            notificationFacade;
     @Mock ScoreConfigService             config;
     @Mock AiTaskService                  aiTaskService;
 
@@ -66,7 +66,7 @@ class PostmarketWorkflowPipelineTests {
                 themeStrengthService, marketRegimeService, tradeReviewService,
                 stockThemeMappingRepository, positionRepository,
                 dailyPnlRepository, pnlService,
-                requestWriterService, lineTemplateService, config, aiTaskService
+                requestWriterService, notificationFacade, config, aiTaskService
         );
 
         // common stubs
@@ -153,7 +153,7 @@ class PostmarketWorkflowPipelineTests {
 
         workflow.execute(DATE);
 
-        verify(lineTemplateService, never()).notifyPostmarket(any(), any());
+        verify(notificationFacade, never()).notifyPostmarket(any(), any());
     }
 
 }

@@ -10,7 +10,7 @@ import com.austin.trading.dto.internal.PositionManagementResult;
 import com.austin.trading.engine.MonitorDecisionEngine;
 import com.austin.trading.engine.PositionDecisionEngine.PositionDecisionResult;
 import com.austin.trading.engine.PositionDecisionEngine.PositionStatus;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.MarketDataService;
 import com.austin.trading.service.MonitorDecisionService;
@@ -45,7 +45,7 @@ public class FiveMinuteMonitorJob {
     private final MonitorDecisionService monitorDecisionService;
     private final PositionReviewService positionReviewService;
     private final PositionManagementService positionManagementService;
-    private final LineTemplateService lineTemplateService;
+    private final NotificationFacade notificationFacade;
     private final SchedulerLogService schedulerLogService;
     private final ScoreConfigService scoreConfig;
     private final DailyOrchestrationService orchestrationService;
@@ -57,7 +57,7 @@ public class FiveMinuteMonitorJob {
             MonitorDecisionService monitorDecisionService,
             PositionReviewService positionReviewService,
             PositionManagementService positionManagementService,
-            LineTemplateService lineTemplateService,
+            NotificationFacade notificationFacade,
             SchedulerLogService schedulerLogService,
             ScoreConfigService scoreConfig,
             DailyOrchestrationService orchestrationService
@@ -68,7 +68,7 @@ public class FiveMinuteMonitorJob {
         this.monitorDecisionService = monitorDecisionService;
         this.positionReviewService = positionReviewService;
         this.positionManagementService = positionManagementService;
-        this.lineTemplateService = lineTemplateService;
+        this.notificationFacade = notificationFacade;
         this.schedulerLogService = schedulerLogService;
         this.scoreConfig = scoreConfig;
         this.orchestrationService = orchestrationService;
@@ -121,7 +121,7 @@ public class FiveMinuteMonitorJob {
                     toPayload(decision)
             ));
 
-            lineTemplateService.notifyMonitor(decision, LocalTime.now());
+            notificationFacade.notifyMonitor(decision, LocalTime.now());
 
             // ── 持倉監控 ───────────────────────────────────────────────
             // monitorMode=OFF 時只寫 review log，不發 LINE（避免無事件噪音）
@@ -135,10 +135,10 @@ public class FiveMinuteMonitorJob {
                     PositionStatus s = r.decision().status();
                     boolean isActionable =
                             s == PositionStatus.WEAKEN || s == PositionStatus.EXIT || s == PositionStatus.TRAIL_UP;
-                    // 即時報價不可用 → 只記 review log 不發 LINE（由 LineTemplateService 二次把關）
+                    // 即時報價不可用 → 只記 review log 不發 LINE（由 NotificationFacade 二次把關）
                     boolean hasValidQuote = r.currentPrice() != null;
                     if (lineEnabled && monitorActive && isActionable && hasValidQuote) {
-                        lineTemplateService.notifyPositionAlert(
+                        notificationFacade.notifyPositionAlert(
                                 r.position().getSymbol(), s.name(), r.decision().reason(),
                                 r.currentPrice().doubleValue(),
                                 r.position().getAvgCost() != null ? r.position().getAvgCost().doubleValue() : null,
@@ -184,7 +184,7 @@ public class FiveMinuteMonitorJob {
                         Double reducePct = alloc != null && alloc.suggestedReducePct() != null
                                 ? alloc.suggestedReducePct().doubleValue() : null;
 
-                        lineTemplateService.notifyPositionAction(
+                        notificationFacade.notifyPositionAction(
                                 mgmt.symbol(), mgmt.action().name(), mgmt.reason(),
                                 mgmt.currentPrice().doubleValue(),
                                 mgmt.entryPrice() == null ? null : mgmt.entryPrice().doubleValue(),

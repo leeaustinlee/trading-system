@@ -8,7 +8,7 @@ import com.austin.trading.engine.JavaStructureScoringEngine.JavaStructureInput;
 import com.austin.trading.engine.ThemeSelectionEngine;
 import com.austin.trading.entity.StockEvaluationEntity;
 import com.austin.trading.entity.ThemeSnapshotEntity;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.repository.StockEvaluationRepository;
 import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.CandidateScanService;
@@ -48,7 +48,7 @@ public class PremarketWorkflowService {
     private final JavaStructureScoringEngine     javaStructureScoringEngine;
     private final StockEvaluationRepository      stockEvaluationRepository;
     private final ClaudeCodeRequestWriterService requestWriterService;
-    private final LineTemplateService            lineTemplateService;
+    private final NotificationFacade            notificationFacade;
     private final ScoreConfigService             config;
     private final AiTaskService                  aiTaskService;
 
@@ -59,7 +59,7 @@ public class PremarketWorkflowService {
             JavaStructureScoringEngine javaStructureScoringEngine,
             StockEvaluationRepository stockEvaluationRepository,
             ClaudeCodeRequestWriterService requestWriterService,
-            LineTemplateService lineTemplateService,
+            NotificationFacade notificationFacade,
             ScoreConfigService config,
             AiTaskService aiTaskService
     ) {
@@ -69,7 +69,7 @@ public class PremarketWorkflowService {
         this.javaStructureScoringEngine = javaStructureScoringEngine;
         this.stockEvaluationRepository = stockEvaluationRepository;
         this.requestWriterService      = requestWriterService;
-        this.lineTemplateService       = lineTemplateService;
+        this.notificationFacade       = notificationFacade;
         this.config                    = config;
         this.aiTaskService             = aiTaskService;
     }
@@ -123,7 +123,7 @@ public class PremarketWorkflowService {
             String aiStage = aiStageTag(task);
             String body = buildNotifyBody(task, candidates);
 
-            lineTemplateService.notifyPremarket(marketSummary + aiStage, body, tradingDate);
+            notificationFacade.notifyPremarket(marketSummary + aiStage, body, tradingDate);
             log.info("[PremarketWorkflow] LINE 盤前通知已發送 aiStage={}", aiStage);
         } else {
             log.info("[PremarketWorkflow] LINE 通知未啟用（scheduling.line_notify_enabled=false）");

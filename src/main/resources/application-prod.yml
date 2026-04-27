@@ -32,6 +32,14 @@ trading:
     channel-access-token: ${LINE_CHANNEL_ACCESS_TOKEN:${LINE_TOKEN:}}
     to: ${LINE_TO}
     push-url: ${LINE_PUSH_URL:https://api.line.me/v2/bot/message/push}
+  telegram:
+    enabled: ${TELEGRAM_ENABLED:true}
+    bot-token: ${TELEGRAM_BOT_TOKEN:}
+    chat-id: ${TELEGRAM_CHAT_ID:}
+    parse-mode: ${TELEGRAM_PARSE_MODE:HTML}
+    timeout-seconds: ${TELEGRAM_TIMEOUT_SECONDS:10}
+    max-segment-length: ${TELEGRAM_MAX_SEGMENT_LENGTH:3500}
+    api-base: ${TELEGRAM_API_BASE:https://api.telegram.org}
   scheduler:
     hourly-gate:
       enabled: true

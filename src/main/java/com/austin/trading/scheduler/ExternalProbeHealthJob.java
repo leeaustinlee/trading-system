@@ -2,7 +2,7 @@ package com.austin.trading.scheduler;
 
 import com.austin.trading.dto.response.ExternalProbeItemResponse;
 import com.austin.trading.dto.response.ExternalProbeResponse;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.ExternalProbeService;
 import com.austin.trading.service.OrchestrationStep;
@@ -21,18 +21,18 @@ import java.util.List;
 public class ExternalProbeHealthJob {
 
     private final ExternalProbeService externalProbeService;
-    private final LineTemplateService lineTemplateService;
+    private final NotificationFacade notificationFacade;
     private final SchedulerLogService schedulerLogService;
     private final DailyOrchestrationService orchestrationService;
 
     public ExternalProbeHealthJob(
             ExternalProbeService externalProbeService,
-            LineTemplateService lineTemplateService,
+            NotificationFacade notificationFacade,
             SchedulerLogService schedulerLogService,
             DailyOrchestrationService orchestrationService
     ) {
         this.externalProbeService = externalProbeService;
-        this.lineTemplateService = lineTemplateService;
+        this.notificationFacade = notificationFacade;
         this.schedulerLogService = schedulerLogService;
         this.orchestrationService = orchestrationService;
     }
@@ -51,7 +51,7 @@ public class ExternalProbeHealthJob {
 
             if (!failures.isEmpty()) {
                 String alert = "外部服務探針異常：\n- " + String.join("\n- ", failures);
-                lineTemplateService.notifySystemAlert("外部探針異常", alert);
+                notificationFacade.notifySystemAlert("外部探針異常", alert);
             }
 
             String msg = failures.isEmpty() ? "all_ok" : "failures=" + failures.size();

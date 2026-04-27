@@ -5,7 +5,7 @@ import com.austin.trading.dto.request.TradingStateUpsertRequest;
 import com.austin.trading.dto.response.HourlyGateDecisionResponse;
 import com.austin.trading.dto.response.TradingStateResponse;
 import com.austin.trading.engine.HourlyGateEngine;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.service.HourlyGateDecisionService;
 import com.austin.trading.service.MarketDataService;
 import com.austin.trading.service.ScoreConfigService;
@@ -36,7 +36,7 @@ public class HourlyGateWorkflowService {
     private final TradingStateService      tradingStateService;
     private final HourlyGateEngine         hourlyGateEngine;
     private final HourlyGateDecisionService hourlyGateDecisionService;
-    private final LineTemplateService      lineTemplateService;
+    private final NotificationFacade      notificationFacade;
     private final ScoreConfigService       config;
 
     public HourlyGateWorkflowService(
@@ -44,14 +44,14 @@ public class HourlyGateWorkflowService {
             TradingStateService tradingStateService,
             HourlyGateEngine hourlyGateEngine,
             HourlyGateDecisionService hourlyGateDecisionService,
-            LineTemplateService lineTemplateService,
+            NotificationFacade notificationFacade,
             ScoreConfigService config
     ) {
         this.marketDataService       = marketDataService;
         this.tradingStateService     = tradingStateService;
         this.hourlyGateEngine        = hourlyGateEngine;
         this.hourlyGateDecisionService = hourlyGateDecisionService;
-        this.lineTemplateService     = lineTemplateService;
+        this.notificationFacade     = notificationFacade;
         this.config                  = config;
     }
 
@@ -110,7 +110,7 @@ public class HourlyGateWorkflowService {
         // Step 4: LINE 通知（由 scheduling.line_notify_enabled 控制）
         boolean lineEnabled = config.getBoolean("scheduling.line_notify_enabled", false);
         if (lineEnabled && result.shouldNotify()) {
-            lineTemplateService.notifyHourlyGate(result, gateTime);
+            notificationFacade.notifyHourlyGate(result, gateTime);
             log.info("[HourlyGateWorkflow] LINE 通知已發送");
         } else if (!lineEnabled) {
             log.info("[HourlyGateWorkflow] LINE 通知未啟用（scheduling.line_notify_enabled=false）");

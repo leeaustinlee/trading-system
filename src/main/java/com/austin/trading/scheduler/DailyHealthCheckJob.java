@@ -2,7 +2,7 @@ package com.austin.trading.scheduler;
 
 import com.austin.trading.entity.AiTaskEntity;
 import com.austin.trading.entity.FinalDecisionEntity;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.repository.AiTaskRepository;
 import com.austin.trading.repository.FinalDecisionRepository;
 import com.austin.trading.service.DailyOrchestrationService;
@@ -62,7 +62,7 @@ public class DailyHealthCheckJob {
             List.of("CLAUDE_RUNNING", "CODEX_RUNNING", "RUNNING");
 
     private final DailyOrchestrationService orchestrationService;
-    private final LineTemplateService lineTemplateService;
+    private final NotificationFacade notificationFacade;
     private final SchedulerLogService schedulerLogService;
     private final ScoreConfigService scoreConfig;
     private final DataSource dataSource;
@@ -71,7 +71,7 @@ public class DailyHealthCheckJob {
     private final String claudeSubmitWatchDir;
 
     public DailyHealthCheckJob(DailyOrchestrationService orchestrationService,
-                                LineTemplateService lineTemplateService,
+                                NotificationFacade notificationFacade,
                                 SchedulerLogService schedulerLogService,
                                 ScoreConfigService scoreConfig,
                                 DataSource dataSource,
@@ -80,7 +80,7 @@ public class DailyHealthCheckJob {
                                 @Value("${trading.claude-submit.watch-dir:/mnt/d/ai/stock/claude-submit}")
                                 String claudeSubmitWatchDir) {
         this.orchestrationService = orchestrationService;
-        this.lineTemplateService = lineTemplateService;
+        this.notificationFacade = notificationFacade;
         this.schedulerLogService = schedulerLogService;
         this.scoreConfig = scoreConfig;
         this.dataSource = dataSource;
@@ -220,7 +220,7 @@ public class DailyHealthCheckJob {
 
             boolean lineEnabled = scoreConfig.getBoolean("scheduling.line_notify_enabled", false);
             if (lineEnabled) {
-                lineTemplateService.notifySystemAlert("每日健康檢查", summary);
+                notificationFacade.notifySystemAlert("每日健康檢查", summary);
             }
             schedulerLogService.success(jobName, trigger, LocalDateTime.now(),
                     "incomplete=" + incomplete.size()

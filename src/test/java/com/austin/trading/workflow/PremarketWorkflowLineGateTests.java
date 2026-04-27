@@ -4,7 +4,7 @@ import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.dto.response.MarketCurrentResponse;
 import com.austin.trading.engine.JavaStructureScoringEngine;
 import com.austin.trading.engine.ThemeSelectionEngine;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.repository.StockEvaluationRepository;
 import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.CandidateScanService;
@@ -43,7 +43,7 @@ class PremarketWorkflowLineGateTests {
     private JavaStructureScoringEngine scoringEngine;
     private StockEvaluationRepository stockEvaluationRepository;
     private ClaudeCodeRequestWriterService requestWriterService;
-    private LineTemplateService lineTemplateService;
+    private NotificationFacade notificationFacade;
     private ScoreConfigService config;
     private AiTaskService aiTaskService;
 
@@ -59,7 +59,7 @@ class PremarketWorkflowLineGateTests {
         scoringEngine = mock(JavaStructureScoringEngine.class);
         stockEvaluationRepository = mock(StockEvaluationRepository.class);
         requestWriterService = mock(ClaudeCodeRequestWriterService.class);
-        lineTemplateService = mock(LineTemplateService.class);
+        notificationFacade = mock(NotificationFacade.class);
         config = mock(ScoreConfigService.class);
         aiTaskService = mock(AiTaskService.class);
 
@@ -82,7 +82,7 @@ class PremarketWorkflowLineGateTests {
         service = new PremarketWorkflowService(
                 marketDataService, candidateScanService, themeSelectionEngine,
                 scoringEngine, stockEvaluationRepository, requestWriterService,
-                lineTemplateService, config, aiTaskService
+                notificationFacade, config, aiTaskService
         );
     }
 
@@ -92,7 +92,7 @@ class PremarketWorkflowLineGateTests {
 
         service.execute(today);
 
-        verify(lineTemplateService, never())
+        verify(notificationFacade, never())
                 .notifyPremarket(anyString(), anyString(), any(LocalDate.class));
     }
 
@@ -102,7 +102,7 @@ class PremarketWorkflowLineGateTests {
 
         service.execute(today);
 
-        verify(lineTemplateService, times(1))
+        verify(notificationFacade, times(1))
                 .notifyPremarket(anyString(), anyString(), eq(today));
     }
 
@@ -113,7 +113,7 @@ class PremarketWorkflowLineGateTests {
 
         service.execute(today);
 
-        verify(lineTemplateService, never())
+        verify(notificationFacade, never())
                 .notifyPremarket(anyString(), anyString(), any(LocalDate.class));
     }
 

@@ -3,7 +3,7 @@ package com.austin.trading.scheduler;
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.dto.response.MarketCurrentResponse;
 import com.austin.trading.dto.response.PositionResponse;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.CandidateScanService;
 import com.austin.trading.service.DailyOrchestrationService;
@@ -31,7 +31,7 @@ public class TomorrowPlan1800Job {
 
     private final MarketDataService marketDataService;
     private final CandidateScanService candidateScanService;
-    private final LineTemplateService lineTemplateService;
+    private final NotificationFacade notificationFacade;
     private final SchedulerLogService schedulerLogService;
     private final DailyOrchestrationService orchestrationService;
     private final AiTaskService aiTaskService;
@@ -41,7 +41,7 @@ public class TomorrowPlan1800Job {
     public TomorrowPlan1800Job(
             MarketDataService marketDataService,
             CandidateScanService candidateScanService,
-            LineTemplateService lineTemplateService,
+            NotificationFacade notificationFacade,
             SchedulerLogService schedulerLogService,
             DailyOrchestrationService orchestrationService,
             AiTaskService aiTaskService,
@@ -50,7 +50,7 @@ public class TomorrowPlan1800Job {
     ) {
         this.marketDataService = marketDataService;
         this.candidateScanService = candidateScanService;
-        this.lineTemplateService = lineTemplateService;
+        this.notificationFacade = notificationFacade;
         this.schedulerLogService = schedulerLogService;
         this.orchestrationService = orchestrationService;
         this.aiTaskService = aiTaskService;
@@ -88,7 +88,7 @@ public class TomorrowPlan1800Job {
                 String summary = aiMd.length() > 2500
                         ? aiMd.substring(0, 2500) + "\n...(更多內容請查看 AI task 詳細結果)"
                         : aiMd;
-                lineTemplateService.notifySystemAlert("18:00 隔日計畫 AI 摘要", summary);
+                notificationFacade.notifySystemAlert("18:00 隔日計畫 AI 摘要", summary);
             }
 
             log.info("[TomorrowPlan1800Job] candidates={}, reviewedPositions={}", candidates.size(), reviewedCount);

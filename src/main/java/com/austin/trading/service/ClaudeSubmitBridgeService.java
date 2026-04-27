@@ -4,7 +4,7 @@ import com.austin.trading.dto.request.ClaudeSubmitFileRequest;
 import com.austin.trading.dto.request.ClaudeSubmitRequest;
 import com.austin.trading.entity.AiTaskEntity;
 import com.austin.trading.entity.FileBridgeErrorLogEntity;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.repository.FileBridgeErrorLogRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -53,7 +53,7 @@ public class ClaudeSubmitBridgeService {
 
     private final AiTaskService aiTaskService;
     private final FileBridgeErrorLogRepository errorLogRepository;
-    private final LineTemplateService lineTemplateService;
+    private final NotificationFacade notificationFacade;
     private final ObjectMapper objectMapper;
 
     private final boolean allowAutoCreateTask;
@@ -64,7 +64,7 @@ public class ClaudeSubmitBridgeService {
     public ClaudeSubmitBridgeService(
             AiTaskService aiTaskService,
             FileBridgeErrorLogRepository errorLogRepository,
-            LineTemplateService lineTemplateService,
+            NotificationFacade notificationFacade,
             @Value("${ai.file_bridge.allow_auto_create_task:false}") boolean allowAutoCreateTask,
             @Value("${ai.file_bridge.processed_dir:${trading.claude-submit.watch-dir:/mnt/d/ai/stock/claude-submit}/processed}") String processedDir,
             @Value("${ai.file_bridge.failed_dir:${trading.claude-submit.watch-dir:/mnt/d/ai/stock/claude-submit}/failed}") String failedDir,
@@ -72,7 +72,7 @@ public class ClaudeSubmitBridgeService {
     ) {
         this.aiTaskService = aiTaskService;
         this.errorLogRepository = errorLogRepository;
-        this.lineTemplateService = lineTemplateService;
+        this.notificationFacade = notificationFacade;
         this.objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
         this.allowAutoCreateTask = allowAutoCreateTask;
         this.processedDir = Path.of(processedDir);
@@ -318,7 +318,7 @@ public class ClaudeSubmitBridgeService {
         try {
             String body = String.format("File Bridge 事件\n檔案：%s\n代碼：%s\n訊息：%s\n來源：Trading System",
                     fileName, errorCode, message == null ? "-" : message);
-            lineTemplateService.notifySystemAlert("📁 Claude File Bridge 異常", body);
+            notificationFacade.notifySystemAlert("📁 Claude File Bridge 異常", body);
         } catch (Exception e) {
             log.warn("[ClaudeSubmitBridge] 發系統通知失敗: {}", e.getMessage());
         }

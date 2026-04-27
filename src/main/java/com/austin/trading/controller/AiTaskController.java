@@ -4,7 +4,7 @@ import com.austin.trading.dto.request.AiTaskCreateRequest;
 import com.austin.trading.dto.request.ClaudeSubmitRequest;
 import com.austin.trading.dto.request.CodexSubmitRequest;
 import com.austin.trading.entity.AiTaskEntity;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.service.AiTaskInvalidStateException;
 import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.AiTaskService.SubmitResult;
@@ -50,14 +50,14 @@ public class AiTaskController {
 
     private final AiTaskService aiTaskService;
     private final FinalDecisionService finalDecisionService;
-    private final LineTemplateService lineTemplateService;
+    private final NotificationFacade notificationFacade;
 
     public AiTaskController(AiTaskService aiTaskService,
                              FinalDecisionService finalDecisionService,
-                             LineTemplateService lineTemplateService) {
+                             NotificationFacade notificationFacade) {
         this.aiTaskService = aiTaskService;
         this.finalDecisionService = finalDecisionService;
-        this.lineTemplateService = lineTemplateService;
+        this.notificationFacade = notificationFacade;
     }
 
     @GetMapping
@@ -258,7 +258,7 @@ public class AiTaskController {
         }
 
         try {
-            lineTemplateService.notifyAiTaskFinal(taskType.toUpperCase(), req.contentMarkdown(), task.getTradingDate());
+            notificationFacade.notifyAiTaskFinal(taskType.toUpperCase(), req.contentMarkdown(), task.getTradingDate());
             log.info("[AiTaskController] sent final AI LINE for task {} ({})", task.getId(), taskType);
         } catch (Exception ex) {
             log.warn("[AiTaskController] final AI LINE failed for task {} ({}): {}",

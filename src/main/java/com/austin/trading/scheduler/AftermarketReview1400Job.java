@@ -7,7 +7,7 @@ import com.austin.trading.engine.ChasedHighEntryEngine.ChasedEntryInput;
 import com.austin.trading.engine.ReviewScoringEngine;
 import com.austin.trading.engine.ReviewScoringEngine.ReviewRequest;
 import com.austin.trading.engine.ReviewScoringEngine.ReviewResult;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.PositionRepository;
 import com.austin.trading.service.DailyOrchestrationService;
@@ -52,7 +52,7 @@ public class AftermarketReview1400Job {
     private final TradingStateService tradingStateService;
     private final FinalDecisionService finalDecisionService;
     private final ReviewScoringEngine reviewScoringEngine;
-    private final LineTemplateService lineTemplateService;
+    private final NotificationFacade notificationFacade;
     private final SchedulerLogService schedulerLogService;
     private final PositionRepository positionRepository;
     private final CandidateStockRepository candidateStockRepository;
@@ -65,7 +65,7 @@ public class AftermarketReview1400Job {
             TradingStateService tradingStateService,
             FinalDecisionService finalDecisionService,
             ReviewScoringEngine reviewScoringEngine,
-            LineTemplateService lineTemplateService,
+            NotificationFacade notificationFacade,
             SchedulerLogService schedulerLogService,
             PositionRepository positionRepository,
             CandidateStockRepository candidateStockRepository,
@@ -77,7 +77,7 @@ public class AftermarketReview1400Job {
         this.tradingStateService = tradingStateService;
         this.finalDecisionService = finalDecisionService;
         this.reviewScoringEngine = reviewScoringEngine;
-        this.lineTemplateService = lineTemplateService;
+        this.notificationFacade = notificationFacade;
         this.schedulerLogService = schedulerLogService;
         this.positionRepository = positionRepository;
         this.candidateStockRepository = candidateStockRepository;
@@ -126,7 +126,7 @@ public class AftermarketReview1400Job {
             );
 
             ReviewResult result = reviewScoringEngine.evaluate(request);
-            lineTemplateService.notifyReview1400(result.summary(), today);
+            notificationFacade.notifyReview1400(result.summary(), today);
 
             log.info("[AftermarketReview1400Job] score={}, compliance={}", result.score(), result.compliance());
             String logMsg = "score=" + result.score();

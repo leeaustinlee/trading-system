@@ -5,7 +5,7 @@ import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.dto.response.MarketCurrentResponse;
 import com.austin.trading.dto.response.PositionResponse;
 import com.austin.trading.dto.response.TradingStateResponse;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.CandidateScanService;
 import com.austin.trading.service.ClaudeCodeRequestWriterService;
@@ -39,7 +39,7 @@ public class MiddayReviewJob {
     private final MarketDataService marketDataService;
     private final TradingStateService tradingStateService;
     private final PositionService positionService;
-    private final LineTemplateService lineTemplateService;
+    private final NotificationFacade notificationFacade;
     private final SchedulerLogService schedulerLogService;
     private final DailyOrchestrationService orchestrationService;
     private final AiTaskService aiTaskService;
@@ -51,7 +51,7 @@ public class MiddayReviewJob {
             MarketDataService marketDataService,
             TradingStateService tradingStateService,
             PositionService positionService,
-            LineTemplateService lineTemplateService,
+            NotificationFacade notificationFacade,
             SchedulerLogService schedulerLogService,
             DailyOrchestrationService orchestrationService,
             AiTaskService aiTaskService,
@@ -61,7 +61,7 @@ public class MiddayReviewJob {
         this.marketDataService = marketDataService;
         this.tradingStateService = tradingStateService;
         this.positionService = positionService;
-        this.lineTemplateService = lineTemplateService;
+        this.notificationFacade = notificationFacade;
         this.schedulerLogService = schedulerLogService;
         this.orchestrationService = orchestrationService;
         this.aiTaskService = aiTaskService;
@@ -106,7 +106,7 @@ public class MiddayReviewJob {
                 String summary = aiMd.length() > 2500
                         ? aiMd.substring(0, 2500) + "\n...(內容過長已截斷，完整內容請看 AI task)"
                         : aiMd;
-                lineTemplateService.notifySystemAlert("11:00 AI 研究摘要", summary);
+                notificationFacade.notifySystemAlert("11:00 AI 研究摘要", summary);
             }
 
             String logMsg = String.format("grade=%s positions=%d middayTaskId=%s universe=%d",

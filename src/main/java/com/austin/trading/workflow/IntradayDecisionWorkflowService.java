@@ -1,7 +1,7 @@
 package com.austin.trading.workflow;
 
 import com.austin.trading.dto.response.FinalDecisionResponse;
-import com.austin.trading.notify.LineTemplateService;
+import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.FinalDecisionService;
 import com.austin.trading.service.MarketDataService;
@@ -30,20 +30,20 @@ public class IntradayDecisionWorkflowService {
 
     private final MarketDataService    marketDataService;
     private final FinalDecisionService finalDecisionService;
-    private final LineTemplateService  lineTemplateService;
+    private final NotificationFacade  notificationFacade;
     private final ScoreConfigService   config;
     private final AiTaskService        aiTaskService;
 
     public IntradayDecisionWorkflowService(
             MarketDataService marketDataService,
             FinalDecisionService finalDecisionService,
-            LineTemplateService lineTemplateService,
+            NotificationFacade notificationFacade,
             ScoreConfigService config,
             AiTaskService aiTaskService
     ) {
         this.marketDataService    = marketDataService;
         this.finalDecisionService = finalDecisionService;
-        this.lineTemplateService  = lineTemplateService;
+        this.notificationFacade  = notificationFacade;
         this.config               = config;
         this.aiTaskService        = aiTaskService;
     }
@@ -77,7 +77,7 @@ public class IntradayDecisionWorkflowService {
         // Step 5: LINE 通知（由 scheduling.line_notify_enabled 控制）
         boolean lineEnabled = config.getBoolean("scheduling.line_notify_enabled", false);
         if (lineEnabled) {
-            lineTemplateService.notifyFinalDecision(result, tradingDate);
+            notificationFacade.notifyFinalDecision(result, tradingDate);
             log.info("[IntradayDecisionWorkflow] LINE 最終決策已發送");
 
             // 額外：若有 Claude / Codex 研究 markdown，補發一則「AI 研究摘要」LINE
@@ -86,7 +86,7 @@ public class IntradayDecisionWorkflowService {
                 String summary = aiMd.length() > 3500
                         ? aiMd.substring(0, 3500) + "\n...(內容過長已截斷，詳見 claude-research-latest.md)"
                         : aiMd;
-                lineTemplateService.notifySystemAlert("📎 09:30 AI 研究摘要", summary);
+                notificationFacade.notifySystemAlert("📎 09:30 AI 研究摘要", summary);
                 log.info("[IntradayDecisionWorkflow] LINE AI 研究摘要已補發 ({} chars)", aiMd.length());
             } else {
                 log.info("[IntradayDecisionWorkflow] 無可用 AI 研究 md 補發");
