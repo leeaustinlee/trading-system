@@ -234,6 +234,11 @@ public class ScoreConfigService {
         DEFAULTS.put("final_decision.ai_default_reweight.enabled", new String[]{"true",  "BOOLEAN", "P0.1：claude/codex 分數 = default 3.0 時，把該 weight 重分配給 Java（避免稀釋 final_rank_score）"});
         DEFAULTS.put("trading.paper_mode.enabled",                 new String[]{"true",  "BOOLEAN", "P0.2：ENTER 寫 paper_trade 而非真實倉位（安全模式；觀察策略勝率累積樣本）"});
         DEFAULTS.put("position.review.exit_alert.enabled",         new String[]{"true",  "BOOLEAN", "P0.2：position_review_log decision_status=EXIT 時觸發 LineSender alert（即使配額耗盡也照發）"});
+
+        // ── 2026-04-28 Paper Shadow Trading：Subagent A/B/C/D 完整模擬交易系統 ─
+        DEFAULTS.put("paper.auto_exit.enabled",                    new String[]{"true",  "BOOLEAN", "Subagent B：PaperTradeExitJob cron 5 分鐘 7 種 exit trigger（STOP_LOSS/TRAILING/TP1/TP2/REVIEW_EXIT/TIME_EXIT/REVERSE_SIGNAL）"});
+        DEFAULTS.put("paper.entry_slippage_pct",                   new String[]{"0.001","DECIMAL", "Subagent A：模擬進場滑價（1‰ = +0.1% buy）"});
+        DEFAULTS.put("paper.exit_slippage_pct",                    new String[]{"0.001","DECIMAL", "Subagent B：模擬出場滑價（1‰ = -0.1% sell）"});
     }
 
     public ScoreConfigService(ScoreConfigRepository repository) {

@@ -856,13 +856,16 @@ async function fetchPositionsTab(){
   await fetchQuotes();
 }
 async function fetchPnlTab(){
-  const [daily, p20, p90, drawdown] = await Promise.all([
+  const [daily, p20, p90, drawdown, paperStats, paperRecent] = await Promise.all([
     safeFetch('/api/pnl/daily'),
     safeFetch('/api/pnl/summary?days=20'),
     safeFetch('/api/pnl/summary?days=90'),
     safeFetch('/api/pnl/drawdown?days=90'),
+    safeFetch('/api/paper/stats?days=30'),
+    safeFetch('/api/paper/recent?limit=5'),
   ]);
   S.pnlDaily = daily; S.pnl20 = p20; S.pnl90 = p90; S.drawdown = drawdown;
+  S.paperStats = paperStats; S.paperRecent = Array.isArray(paperRecent) ? paperRecent : [];
 }
 async function fetchDecisionsTab(){
   const [hist, hourly, monitor] = await Promise.all([
@@ -1080,6 +1083,72 @@ Views.pnl = async () => {
   if (!S.positions.length) posBody.append(el('div',{class:'empty',text:'無持倉'}));
   else S.positions.forEach(p => posBody.append(PositionCard(p, S.quotes[p.symbol])));
   app.append(CollapsibleSection('持倉未實現損益（'+S.positions.length+' 檔）', posBody));
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 📋 模擬交易績效 (Paper Shadow Trading) — Subagent D
+  // ═══════════════════════════════════════════════════════════════════
+  const ps = S.paperStats;
+  const paperBody = el('div');
+  if (!ps || ps.totalTrades === 0) {
+    paperBody.append(el('div', {class:'empty', text:'尚無已平倉的模擬交易；明早 09:30 後系統開始累積。'}));
+  } else {
+    const wr  = Number(ps.winRate || 0);
+    const wrCls = wr >= 0.55 ? 'up' : (wr >= 0.45 ? '' : 'dn');
+    const avg = Number(ps.totalPnlPct || 0) / Math.max(1, ps.totalTrades);
+    const dd  = Number(ps.maxDrawdownPct || 0);
+    paperBody.append(MetricStrip([
+      {label:'總筆數', value: String(ps.totalTrades),
+       sub: `勝 ${ps.winTrades} · 負 ${ps.lossTrades} · 平 ${ps.breakEvenTrades}`},
+      {label:'勝率',   value: (wr*100).toFixed(1)+'%', cls: wrCls,
+       sub: `近 30 日`},
+      {label:'平均報酬', value: (avg>=0?'+':'')+avg.toFixed(2)+'%',
+       cls: avg>=0?'up':'dn',
+       sub: `總 ${Number(ps.totalPnlPct).toFixed(2)}%`},
+      {label:'最大回撤', value: dd.toFixed(2)+'%',
+       cls: dd>0.01?'dn':'',
+       sub: `Sharpe ${Number(ps.sharpeRatio).toFixed(2)}`},
+    ]));
+
+    // by grade / by exit reason — small chips
+    const groups = el('div', {style:'display:flex;flex-wrap:wrap;gap:6px;margin-top:8px'});
+    function pushGroup(label, map){
+      if (!map) return;
+      Object.keys(map).forEach(k => {
+        const g = map[k];
+        if (!g || !g.n) return;
+        const pct = Number(g.avgPnlPct||0);
+        const colorVar = pct>=0 ? '--c-pnl-up' : '--c-pnl-down';
+        const chip = el('span', {
+          style:`padding:4px 8px;border-radius:8px;background:rgba(148,163,184,.10);font-size:11px;color:var(--ink-2)`,
+          html: `<b>${label}:</b> ${k} (${g.n}) <span style="color:var(${colorVar});font-weight:700">${pct>=0?'+':''}${pct.toFixed(2)}%</span> · 勝率 ${(Number(g.winRate)*100).toFixed(0)}%`
+        });
+        groups.append(chip);
+      });
+    }
+    pushGroup('Grade',  ps.byGrade);
+    pushGroup('Reason', ps.byExitReason);
+    paperBody.append(groups);
+
+    // recent 5 closed trades
+    if (S.paperRecent && S.paperRecent.length) {
+      paperBody.append(el('div', {style:'margin-top:10px;color:var(--dim);font-size:11px',text:'最近 5 筆平倉'}));
+      S.paperRecent.slice(0, 5).forEach(t => {
+        const pnl = Number(t.pnlPct || 0);
+        const pnlCls = pnl>=0 ? 'up' : 'dn';
+        const row = el('div', {
+          style:'border-left:3px solid var(--c-rest);padding:6px 8px;margin-top:4px;border-radius:4px;background:rgba(148,163,184,.06);cursor:pointer',
+          html: `<div style="font-weight:600">${t.symbol||''} ${t.stockName||''} <span style="font-size:10px;color:var(--dim)">${t.entryGrade||'?'}</span></div>` +
+                `<div style="font-size:11px;color:var(--ink-2)">${t.entryDate||'?'} → ${t.exitDate||'?'} (${t.holdingDays||'?'}d) · entry ${t.entryPrice||'?'} → exit ${t.exitPrice||'?'} · ` +
+                `<span class="mono ${pnlCls}" style="color:var(--c-${pnlCls==='up'?'pnl-up':'pnl-down'});font-weight:700">${pnl>=0?'+':''}${pnl.toFixed(2)}%</span> · ${t.exitReason||'?'}</div>`
+        });
+        row.addEventListener('click', () => {
+          window.open('/api/paper/'+t.id+'/full-trace', '_blank');
+        });
+        paperBody.append(row);
+      });
+    }
+  }
+  app.append(CollapsibleSection('📋 模擬交易績效（Paper Shadow Trading）', paperBody, {open:true}));
 };
 
 /* 5. decisions */

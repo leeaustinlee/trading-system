@@ -150,7 +150,11 @@ public class PaperTradeEntity {
     @Column(name = "exit_price", precision = 12, scale = 4)
     private BigDecimal exitPrice;
 
-    /** STOP_LOSS / TARGET_1 / TARGET_2 / TIME_EXIT / MANUAL / VOID */
+    /** Simulated fill price at exit (live-quote * (1 - 0.001) sell-side slippage). */
+    @Column(name = "simulated_exit_price", precision = 12, scale = 4)
+    private BigDecimal simulatedExitPrice;
+
+    /** STOP_LOSS / TRAILING_STOP / TP1_HIT / TP2_HIT / REVIEW_EXIT / TIME_EXIT / REVERSE_SIGNAL / MANUAL / VOID */
     @Column(name = "exit_reason", length = 30)
     private String exitReason;
 
@@ -242,6 +246,8 @@ public class PaperTradeEntity {
     public void setExitTime(LocalTime v) { this.exitTime = v; }
     public BigDecimal getExitPrice() { return exitPrice; }
     public void setExitPrice(BigDecimal v) { this.exitPrice = v; }
+    public BigDecimal getSimulatedExitPrice() { return simulatedExitPrice; }
+    public void setSimulatedExitPrice(BigDecimal v) { this.simulatedExitPrice = v; }
     public String getExitReason() { return exitReason; }
     public void setExitReason(String v) { this.exitReason = v; }
     public BigDecimal getPnlAmount() { return pnlAmount; }

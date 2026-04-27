@@ -100,6 +100,9 @@ public class PaperTradeService {
     private final ObjectProvider<FinalDecisionRepository> finalDecisionRepoProvider;
     private final ObjectProvider<PaperTradeExitLogRepository> exitLogRepoProvider;
 
+    /** Subagent C — full decision-trace snapshots. Optional via ObjectProvider to avoid cycles. */
+    private final ObjectProvider<PaperTradeSnapshotService> snapshotServiceProvider;
+
     public PaperTradeService(PaperTradeRepository repository,
                               TwseMisClient twseMisClient,
                               FixedRuleExitEvaluator exitEvaluator,
@@ -109,6 +112,7 @@ public class PaperTradeService {
                               ObjectProvider<PositionReviewLogRepository> reviewLogRepoProvider,
                               ObjectProvider<FinalDecisionRepository> finalDecisionRepoProvider,
                               ObjectProvider<PaperTradeExitLogRepository> exitLogRepoProvider,
+                              ObjectProvider<PaperTradeSnapshotService> snapshotServiceProvider,
                               @Value("${trading.paper-trade.enabled:true}") boolean staticEnabled) {
         this.repository = repository;
         this.twseMisClient = twseMisClient;
@@ -120,6 +124,12 @@ public class PaperTradeService {
         this.reviewLogRepoProvider = reviewLogRepoProvider;
         this.finalDecisionRepoProvider = finalDecisionRepoProvider;
         this.exitLogRepoProvider = exitLogRepoProvider;
+        this.snapshotServiceProvider = snapshotServiceProvider;
+    }
+
+    /** Helper to safely fetch the snapshot service (may be unavailable during unit tests). */
+    private PaperTradeSnapshotService snapshotService() {
+        return snapshotServiceProvider != null ? snapshotServiceProvider.getIfAvailable() : null;
     }
 
     /**
@@ -236,6 +246,12 @@ public class PaperTradeService {
         repository.save(e);
         log.info("[PaperTrade] OPEN id={} symbol={} intended={} simulated={} stop={} tp1={} tp2={} regime={} grade={} rr={}",
                 e.getId(), symbol, intendedPrice, simulatedPrice, stop, tp1, tp2, regime, grade, rr);
+        // Subagent C — record full decision trace snapshot at entry
+        PaperTradeSnapshotService snap = snapshotService();
+        if (snap != null) {
+            try { snap.recordEntrySnapshot(e); }
+            catch (Exception ex) { log.warn("[PaperTrade] entry snapshot failed id={}: {}", e.getId(), ex.getMessage()); }
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -668,6 +684,12 @@ public class PaperTradeService {
             repository.save(p);
             log.info("[PaperTrade] CLOSE id={} symbol={} reason={} exit={} pnl%={}",
                     p.getId(), p.getSymbol(), ed.reason(), ed.exitPrice(), p.getPnlPct());
+            // Subagent C — record full decision trace snapshot at exit
+            PaperTradeSnapshotService snapSvc = snapshotService();
+            if (snapSvc != null) {
+                try { snapSvc.recordExitSnapshot(p, null, null); }
+                catch (Exception ex) { log.warn("[PaperTrade] exit snapshot failed id={}: {}", p.getId(), ex.getMessage()); }
+            }
             return true;
         }
 
@@ -886,7 +908,8 @@ public class PaperTradeService {
         trade.setStatus("CLOSED");
         trade.setExitDate(today);
         trade.setExitTime(LocalTime.now());
-        trade.setExitPrice(simulatedExit);
+        trade.setExitPrice(grossExit);
+        trade.setSimulatedExitPrice(simulatedExit);
         trade.setExitReason(result.exitReason());
         trade.setHoldingDays(holdDays);
 
@@ -908,6 +931,12 @@ public class PaperTradeService {
         log.info("[PaperTradeExit] CLOSE id={} symbol={} reason={} priority={} grossExit={} simExit={} pnl%={}",
                 trade.getId(), trade.getSymbol(), result.exitReason(), result.triggerPriority(),
                 grossExit, simulatedExit, pnlPct);
+        // Subagent C — record full decision trace snapshot at exit
+        PaperTradeSnapshotService snapSvc = snapshotService();
+        if (snapSvc != null) {
+            try { snapSvc.recordExitSnapshot(trade, null, null); }
+            catch (Exception ex) { log.warn("[PaperTrade] auto-exit snapshot failed id={}: {}", trade.getId(), ex.getMessage()); }
+        }
     }
 
     /** Persist one paper_trade_exit_log row. Silently no-ops if the repo isn't wired. */

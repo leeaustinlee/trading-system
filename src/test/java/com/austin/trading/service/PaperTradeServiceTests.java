@@ -74,8 +74,19 @@ class PaperTradeServiceTests {
         service = new PaperTradeService(
                 repository, twseClient, exitEvaluator, objectMapper,
                 scoreConfigProvider, marketRegimeProvider,
-                /* staticEnabled (application.properties) */ true
+                /* reviewLogRepoProvider     */ stubProvider(null),
+                /* finalDecisionRepoProvider */ stubProvider(null),
+                /* exitLogRepoProvider       */ stubProvider(null),
+                /* snapshotServiceProvider   */ stubProvider(null),
+                /* staticEnabled */ true
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> org.springframework.beans.factory.ObjectProvider<T> stubProvider(T value) {
+        org.springframework.beans.factory.ObjectProvider<T> p = mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(p.getIfAvailable()).thenReturn(value);
+        return p;
     }
 
     @Test
