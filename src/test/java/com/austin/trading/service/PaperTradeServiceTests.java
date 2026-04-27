@@ -37,6 +37,8 @@ class PaperTradeServiceTests {
     private ScoreConfigService scoreConfig;
     @SuppressWarnings("unchecked")
     private ObjectProvider<ScoreConfigService> scoreConfigProvider;
+    @SuppressWarnings("unchecked")
+    private ObjectProvider<MarketRegimeService> marketRegimeProvider;
 
     private PaperTradeService service;
 
@@ -51,6 +53,10 @@ class PaperTradeServiceTests {
         ObjectProvider<ScoreConfigService> p = mock(ObjectProvider.class);
         scoreConfigProvider = p;
         when(scoreConfigProvider.getIfAvailable()).thenReturn(scoreConfig);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MarketRegimeService> rp = mock(ObjectProvider.class);
+        marketRegimeProvider = rp;
+        when(marketRegimeProvider.getIfAvailable()).thenReturn(null); // no regime in tests
 
         // default: feature flag ON
         when(scoreConfig.getBoolean(eq("trading.paper_mode.enabled"), anyBoolean())).thenReturn(true);
@@ -61,10 +67,13 @@ class PaperTradeServiceTests {
         // save returns the input
         when(repository.save(any(PaperTradeEntity.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
+        // default: no live quote (so simulated_entry_price falls back to intended)
+        when(twseClient.getTseQuote(anyString())).thenReturn(java.util.Optional.empty());
+        when(twseClient.getOtcQuote(anyString())).thenReturn(java.util.Optional.empty());
 
         service = new PaperTradeService(
                 repository, twseClient, exitEvaluator, objectMapper,
-                scoreConfigProvider,
+                scoreConfigProvider, marketRegimeProvider,
                 /* staticEnabled (application.properties) */ true
         );
     }
