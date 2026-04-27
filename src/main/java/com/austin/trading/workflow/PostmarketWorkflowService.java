@@ -127,7 +127,7 @@ public class PostmarketWorkflowService {
         }
 
         // Step 4: LINE 盤後通知
-        boolean lineEnabled = false;
+        boolean lineEnabled = config.getBoolean("scheduling.line_notify_enabled", false);
         if (lineEnabled) {
             int notifyMax = config.getInt("candidate.notify.maxCount", 5);
             List<CandidateResponse> notifyList = candidateScanService.getCurrentCandidates(notifyMax);

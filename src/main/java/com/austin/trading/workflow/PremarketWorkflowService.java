@@ -112,7 +112,7 @@ public class PremarketWorkflowService {
 
         // Step 6: LINE 盤前通知 — 優先讀 Codex 最終決策，否則 fallback Claude / 候選股列表
         // Task 已由 PremarketDataPrepJob 於 08:10 建立，此處只讀取不重建
-        boolean lineEnabled = false;
+        boolean lineEnabled = config.getBoolean("scheduling.line_notify_enabled", false);
         if (lineEnabled) {
             MarketCurrentResponse market = marketDataService.getCurrentMarket().orElse(null);
             String marketSummary = market == null
@@ -125,6 +125,8 @@ public class PremarketWorkflowService {
 
             lineTemplateService.notifyPremarket(marketSummary + aiStage, body, tradingDate);
             log.info("[PremarketWorkflow] LINE 盤前通知已發送 aiStage={}", aiStage);
+        } else {
+            log.info("[PremarketWorkflow] LINE 通知未啟用（scheduling.line_notify_enabled=false）");
         }
     }
 
