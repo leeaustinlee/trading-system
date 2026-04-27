@@ -109,11 +109,10 @@ public class TelegramTemplateService {
                     symbol, status);
             return;
         }
-        String body = LineMessageBuilder.buildPositionAlert(
+        String html = TelegramMessageBuilder.buildPositionAlert(
                 symbol, status, reason, currentPrice, entryPrice, pnlPct);
         sendAndLog("POSITION_ALERT", "持倉警報 " + symbol + " " + status,
-                wrapHtml("📌 持倉警報：" + symbol + " · " + status, body),
-                Duration.ofMinutes(120));
+                html, Duration.ofMinutes(120));
     }
 
     public void notifyPositionAction(String symbol, String action, String reason,
@@ -129,13 +128,12 @@ public class TelegramTemplateService {
                                       Double suggestedAmount, Integer suggestedShares,
                                       Double suggestedReducePct) {
         if (currentPrice == null || "HOLD".equalsIgnoreCase(action)) return;
-        String body = LineMessageBuilder.buildPositionAction(
+        String html = TelegramMessageBuilder.buildPositionAction(
                 symbol, action, reason, currentPrice, entryPrice, pnlPct, signals, switchTo, scoreGap,
                 suggestedAmount, suggestedShares, suggestedReducePct);
         sendAndLog("POSITION_ACTION",
                 "持倉 " + action + " " + symbol + " " + reason,
-                wrapHtml("📌 持倉動作：" + symbol + " · " + action, body),
-                Duration.ofMinutes(30));
+                html, Duration.ofMinutes(30));
     }
 
     public void notifyBuyAllocation(String symbol, String mode, String bucket,
@@ -147,13 +145,12 @@ public class TelegramTemplateService {
             log.debug("[TelegramTemplateService] 跳過 buy allocation：amount/shares 缺");
             return;
         }
-        String body = LineMessageBuilder.buildBuyAllocation(
+        String html = TelegramMessageBuilder.buildBuyAllocation(
                 symbol, mode, bucket, score, entryPrice, stopLoss,
                 suggestedAmount, suggestedShares, riskPerShare, maxLossAmount);
         sendAndLog("BUY_ALLOCATION",
                 "進場資金 " + symbol + " " + mode,
-                wrapHtml("💰 進場資金建議：" + symbol, body),
-                Duration.ofMinutes(60));
+                html, Duration.ofMinutes(60));
     }
 
     /**
