@@ -59,7 +59,7 @@ public class ScoreConfigService {
         // ── 分級門檻（A+/A/B/C）────────────────────────────────────────────────
         DEFAULTS.put("scoring.grade_ap_min",            new String[]{"8.2",   "DECIMAL", "A+ 等級 final_rank_score 門檻（P0.1：8.8→8.2）"});
         DEFAULTS.put("scoring.grade_a_min",             new String[]{"7.5",   "DECIMAL", "A 等級 final_rank_score 門檻（P0.1：8.2→7.5）"});
-        DEFAULTS.put("scoring.grade_b_min",             new String[]{"6.5",   "DECIMAL", "B 等級 final_rank_score 門檻（P0.1：7.4→6.5）"});
+        DEFAULTS.put("scoring.grade_b_min",             new String[]{"5.8",   "DECIMAL", "B 等級 final_rank_score 門檻（P0.1 初版 7.4→6.5；2026-04-29 P0.1 trace fix 6.5→5.8 因 BC-Sniper min(weighted, consensus) 對 Pullback RR 1.33 setups 系統性壓低分數）"});
         // ── Veto 門檻 ─────────────────────────────────────────────────────────
         DEFAULTS.put("veto.theme_rank_max",             new String[]{"2",     "INTEGER", "題材排名超過此值則 veto（v2.0：2）"});
         DEFAULTS.put("veto.final_theme_score_min",      new String[]{"7.5",   "DECIMAL", "題材分低於此值則 veto（v2.0）"});
