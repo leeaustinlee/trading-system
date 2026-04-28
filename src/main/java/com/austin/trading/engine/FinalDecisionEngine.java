@@ -168,6 +168,12 @@ public class FinalDecisionEngine {
         BigDecimal chasedThreshold  = config.getDecimal("entry.chased-high-gate.threshold", new BigDecimal("0.02"));
         BigDecimal chasedWarn       = config.getDecimal("entry.chased-high-gate.warn_threshold", new BigDecimal("0.04"));
 
+        // Batch Mom-C：tradabilityTag gate（PowerShell screener 自我標示「不列主進場」/「僅參考」）
+        boolean respectTradabilityTag = config.getBoolean(
+                "final_decision.respect_tradability_tag.enabled", true);
+        BigDecimal tradabilitySoftPenalty = config.getDecimal(
+                "final_decision.tradability_tag.soft_penalty", new BigDecimal("1.0"));
+
         List<FinalDecisionCandidateRequest> candidates =
                 request.candidates() == null ? List.of() : request.candidates();
         List<String> rejected = new ArrayList<>();
@@ -220,6 +226,35 @@ public class FinalDecisionEngine {
             } else if (chasedOutcome == ChasedHighOutcome.WARN) {
                 log.debug("[FinalDecisionEngine] CHASED_HIGH_WARN: {} cur={} entryZone={}",
                         c.stockCode(), c.currentPrice(), c.entryPriceZone());
+            }
+
+            // Batch Mom-C：tradabilityTag block / soft penalty
+            // 「不列主進場」→ hard block；「漲幅過大」/「僅參考」→ -1.0 soft penalty
+            // PowerShell screener 已自我標示為高風險，舊版引擎完全忽略此 tag，現在納入決策。
+            if (respectTradabilityTag) {
+                String tag = c.tradabilityTag();
+                if (tag != null && !tag.isBlank()) {
+                    if (tag.contains("不列主進場")) {
+                        log.info("[FinalDecisionEngine] TRADABILITY_TAG_BLOCK: {} tag={}",
+                                c.stockCode(), tag);
+                        rejected.add(c.stockCode() + " TRADABILITY_TAG_BLOCK：tradabilityTag="
+                                + tag + " 系統已標示不列主進場");
+                        continue;
+                    }
+                    if (tag.contains("漲幅過大") || tag.contains("僅參考")) {
+                        BigDecimal originalScore = c.finalRankScore();
+                        if (originalScore != null) {
+                            BigDecimal penalized = originalScore.subtract(tradabilitySoftPenalty);
+                            log.info("[FinalDecisionEngine] TRADABILITY_TAG_SOFT_PENALTY: {} tag={} "
+                                    + "score {} -> {}",
+                                    c.stockCode(), tag, originalScore, penalized);
+                            c = c.withFinalRankScore(penalized);
+                        } else {
+                            log.debug("[FinalDecisionEngine] TRADABILITY_TAG_SOFT_PENALTY skip: {} "
+                                    + "tag={} but finalRankScore is null", c.stockCode(), tag);
+                        }
+                    }
+                }
             }
 
             BigDecimal rankScore = c.finalRankScore();

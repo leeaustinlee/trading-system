@@ -1458,7 +1458,8 @@ public class FinalDecisionService {
                 dropFromPrevClosePct,
                 c.marketRegime(),         // regime 由主流程透過 applyMarketRegime 補上
                 // v2.16：實際當日最高價（從 Codex live-quote），ChasedHigh evaluator 優先採用
-                dayHigh > 0 ? BigDecimal.valueOf(dayHigh) : null
+                dayHigh > 0 ? BigDecimal.valueOf(dayHigh) : null,
+                c.tradabilityTag()        // Batch Mom-C：保留 PowerShell screener 的 tradabilityTag
         );
     }
 
@@ -1492,7 +1493,7 @@ public class FinalDecisionService {
                 c.priceNotBreakHigh(), c.entryTooExtended(), c.entryTriggered(),
                 c.currentPrice(), c.openPrice(), c.previousClose(), c.vwapPrice(),
                 c.volumeRatio(), c.distanceFromOpenPct(), c.dropFromPrevClosePct(), regimeType,
-                c.dayHigh()
+                c.dayHigh(), c.tradabilityTag()
         );
     }
 
@@ -2040,7 +2041,7 @@ public class FinalDecisionService {
                     override.reason());
 
             // 6. 產生帶完整分數的新 request
-            result.add(new FinalDecisionCandidateRequest(
+            FinalDecisionCandidateRequest scored = new FinalDecisionCandidateRequest(
                     c.stockCode(), c.stockName(), c.valuationMode(), c.entryType(),
                     c.riskRewardRatio(), c.includeInFinalPlan(), c.mainStream(),
                     c.falseBreakout(), c.belowOpen(), c.belowPrevClose(),
@@ -2053,7 +2054,12 @@ public class FinalDecisionService {
                     consensusScore, disagreementPenalty,
                     c.volumeSpike(), c.priceNotBreakHigh(), c.entryTooExtended(),
                     c.entryTriggered()
-            ));
+            );
+            // Batch Mom-C：legacy 32-arg ctor 不帶 tradabilityTag/priceGate，補回 tradabilityTag 以保留 tag 決策資訊
+            if (c.tradabilityTag() != null) {
+                scored = scored.withTradabilityTag(c.tradabilityTag());
+            }
+            result.add(scored);
         }
         return result;
     }

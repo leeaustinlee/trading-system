@@ -38,6 +38,7 @@ import java.util.stream.Collectors;
 public class CandidateScanService {
 
     private static final Logger log = LoggerFactory.getLogger(CandidateScanService.class);
+    private static final ObjectMapper PAYLOAD_MAPPER = new ObjectMapper();
 
     private final CandidateStockRepository candidateStockRepository;
     private final StockEvaluationRepository stockEvaluationRepository;
@@ -63,6 +64,22 @@ public class CandidateScanService {
         this.momentumCandidateEngine = momentumCandidateEngine;
         this.scoreConfigService = scoreConfigService;
         this.objectMapper = objectMapper;
+    }
+
+    /** 從 candidate_stock.payload_json 抽出 tradabilityTag。失敗回 null（被視為主候選）。 */
+    private static String extractTradabilityTag(String payloadJson) {
+        if (payloadJson == null || payloadJson.isBlank()) return null;
+        try {
+            JsonNode root = PAYLOAD_MAPPER.readTree(payloadJson);
+            JsonNode tag = root.get("tradabilityTag");
+            if (tag == null || tag.isNull()) return null;
+            String value = tag.asText();
+            return (value == null || value.isBlank()) ? null : value;
+        } catch (Exception e) {
+            log.debug("[CandidateScanService] failed to parse payload_json for tradabilityTag: {}",
+                    e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -579,7 +596,7 @@ public class CandidateScanService {
         Integer    themeRank       = themeSnapshot != null ? themeSnapshot.getRankingOrder() : null;
         BigDecimal finalThemeScore = themeSnapshot != null ? themeSnapshot.getFinalThemeScore() : null;
 
-        return new FinalDecisionCandidateRequest(
+        FinalDecisionCandidateRequest base = new FinalDecisionCandidateRequest(
                 candidate.getSymbol(),
                 nullSafe(candidate.getStockName(), candidate.getSymbol()),
                 valuationMode,
@@ -613,6 +630,9 @@ public class CandidateScanService {
                 null,                                          // entryTooExtended
                 null                                           // entryTriggered（由外部資料補充）
         );
+        // Batch Mom-C：從 candidate_stock.payload_json 抽出 tradabilityTag（若無則保留 null）
+        String tradabilityTag = extractTradabilityTag(candidate.getPayloadJson());
+        return tradabilityTag == null ? base : base.withTradabilityTag(tradabilityTag);
     }
 
     private String inferEntryType(String reason) {
