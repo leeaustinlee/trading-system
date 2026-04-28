@@ -239,11 +239,6 @@ public class ScoreConfigService {
         DEFAULTS.put("paper.auto_exit.enabled",                    new String[]{"true",  "BOOLEAN", "Subagent B：PaperTradeExitJob cron 5 分鐘 7 種 exit trigger（STOP_LOSS/TRAILING/TP1/TP2/REVIEW_EXIT/TIME_EXIT/REVERSE_SIGNAL）"});
         DEFAULTS.put("paper.entry_slippage_pct",                   new String[]{"0.001","DECIMAL", "Subagent A：模擬進場滑價（1‰ = +0.1% buy）"});
         DEFAULTS.put("paper.exit_slippage_pct",                    new String[]{"0.001","DECIMAL", "Subagent B：模擬出場滑價（1‰ = -0.1% sell）"});
-
-        // ── 2026-04-29 候選股 review P0 落地：momentum gate + tradability tag ──
-        DEFAULTS.put("candidate.momentum_gate.enabled",            new String[]{"true",  "BOOLEAN", "P0.1：候選股寫入前是否經過 MomentumCandidateEngine hard gate（hard veto Codex/Claude/risk_flags + ≥3 of 5 momentum 條件）"});
-        DEFAULTS.put("final_decision.respect_tradability_tag.enabled", new String[]{"true", "BOOLEAN", "P0.3：FinalDecisionEngine 是否套用 candidate.payload_json.tradabilityTag（不列主進場 hard block / 漲幅過大 軟懲罰 -1.0）"});
-        DEFAULTS.put("final_decision.tradability_tag.soft_penalty",new String[]{"1.0",  "DECIMAL", "P0.3：tradability_tag=漲幅過大/僅參考 時 final_rank_score 的扣分幅度"});
     }
 
     public ScoreConfigService(ScoreConfigRepository repository) {

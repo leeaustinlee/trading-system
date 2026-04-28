@@ -51,43 +51,8 @@ public record FinalDecisionCandidateRequest(
         BigDecimal dropFromPrevClosePct, // (previousClose-currentPrice)/previousClose（正值=跌破昨收；可 null）
         String     marketRegime,         // BULL_TREND / RANGE_CHOP / WEAK_DOWNTREND / PANIC_VOLATILITY（可 null）
         // ── v2.16 Batch C：ChasedHigh 真實 dayHigh ───────────────────
-        BigDecimal dayHigh,              // 當日最高價（可 null；fallback entryPriceZone 上緣）
-        // ── Subagent C / Batch Mom-C：tradability tag (源自 candidate_stock.payload_json.tradabilityTag) ───
-        String     tradabilityTag        // 例：「題材指標，不列主進場」、「漲幅過大，僅參考」、null=主候選
+        BigDecimal dayHigh               // 當日最高價（可 null；fallback entryPriceZone 上緣）
 ) {
-
-    /**
-     * 產生分數調整後的新 request（保留其他欄位）。
-     * 用於 FinalDecisionEngine 對 tradabilityTag 軟懲罰時調整 finalRankScore。
-     */
-    public FinalDecisionCandidateRequest withFinalRankScore(BigDecimal newFinalRankScore) {
-        return new FinalDecisionCandidateRequest(
-                stockCode, stockName, valuationMode, entryType, riskRewardRatio,
-                includeInFinalPlan, mainStream, falseBreakout, belowOpen, belowPrevClose,
-                nearDayHigh, stopLossReasonable, rationale, entryPriceZone, stopLossPrice,
-                takeProfit1, takeProfit2, javaStructureScore, claudeScore, codexScore,
-                newFinalRankScore, isVetoed, baseScore, hasTheme, themeRank, finalThemeScore,
-                consensusScore, disagreementPenalty, volumeSpike, priceNotBreakHigh,
-                entryTooExtended, entryTriggered,
-                currentPrice, openPrice, previousClose, vwapPrice, volumeRatio,
-                distanceFromOpenPct, dropFromPrevClosePct, marketRegime,
-                dayHigh, tradabilityTag);
-    }
-
-    /** 設定 tradabilityTag（保留其他欄位）。供 CandidateScanService 從 payload_json 補充用。 */
-    public FinalDecisionCandidateRequest withTradabilityTag(String newTradabilityTag) {
-        return new FinalDecisionCandidateRequest(
-                stockCode, stockName, valuationMode, entryType, riskRewardRatio,
-                includeInFinalPlan, mainStream, falseBreakout, belowOpen, belowPrevClose,
-                nearDayHigh, stopLossReasonable, rationale, entryPriceZone, stopLossPrice,
-                takeProfit1, takeProfit2, javaStructureScore, claudeScore, codexScore,
-                finalRankScore, isVetoed, baseScore, hasTheme, themeRank, finalThemeScore,
-                consensusScore, disagreementPenalty, volumeSpike, priceNotBreakHigh,
-                entryTooExtended, entryTriggered,
-                currentPrice, openPrice, previousClose, vwapPrice, volumeRatio,
-                distanceFromOpenPct, dropFromPrevClosePct, marketRegime,
-                dayHigh, newTradabilityTag);
-    }
     /**
      * Legacy 31-arg constructor（v2.8 之前無 price gate 細節欄位時使用）。
      * 新欄位預設為 null，PriceGateEvaluator 會以保守 fallback 處理。
@@ -134,7 +99,7 @@ public record FinalDecisionCandidateRequest(
                 consensusScore, disagreementPenalty, volumeSpike, priceNotBreakHigh,
                 entryTooExtended, entryTriggered,
                 null, null, null, null, null, null, null, null,
-                null, null);
+                null);
     }
 
     /**
@@ -192,65 +157,6 @@ public record FinalDecisionCandidateRequest(
                 entryTooExtended, entryTriggered,
                 currentPrice, openPrice, previousClose, vwapPrice, volumeRatio,
                 distanceFromOpenPct, dropFromPrevClosePct, marketRegime,
-                null, null);
-    }
-
-    /**
-     * v2.16 ctor (40-arg；含 dayHigh，但無 tradabilityTag)。
-     * 新欄位 tradabilityTag 預設 null（被視為「主候選」，不觸發 tag block）。
-     */
-    public FinalDecisionCandidateRequest(
-            String stockCode,
-            String stockName,
-            String valuationMode,
-            String entryType,
-            Double riskRewardRatio,
-            Boolean includeInFinalPlan,
-            Boolean mainStream,
-            Boolean falseBreakout,
-            Boolean belowOpen,
-            Boolean belowPrevClose,
-            Boolean nearDayHigh,
-            Boolean stopLossReasonable,
-            String rationale,
-            String entryPriceZone,
-            Double stopLossPrice,
-            Double takeProfit1,
-            Double takeProfit2,
-            BigDecimal javaStructureScore,
-            BigDecimal claudeScore,
-            BigDecimal codexScore,
-            BigDecimal finalRankScore,
-            Boolean    isVetoed,
-            BigDecimal baseScore,
-            Boolean    hasTheme,
-            Integer    themeRank,
-            BigDecimal finalThemeScore,
-            BigDecimal consensusScore,
-            BigDecimal disagreementPenalty,
-            Boolean    volumeSpike,
-            Boolean    priceNotBreakHigh,
-            Boolean    entryTooExtended,
-            Boolean    entryTriggered,
-            BigDecimal currentPrice,
-            BigDecimal openPrice,
-            BigDecimal previousClose,
-            BigDecimal vwapPrice,
-            BigDecimal volumeRatio,
-            BigDecimal distanceFromOpenPct,
-            BigDecimal dropFromPrevClosePct,
-            String     marketRegime,
-            BigDecimal dayHigh
-    ) {
-        this(stockCode, stockName, valuationMode, entryType, riskRewardRatio,
-                includeInFinalPlan, mainStream, falseBreakout, belowOpen, belowPrevClose,
-                nearDayHigh, stopLossReasonable, rationale, entryPriceZone, stopLossPrice,
-                takeProfit1, takeProfit2, javaStructureScore, claudeScore, codexScore,
-                finalRankScore, isVetoed, baseScore, hasTheme, themeRank, finalThemeScore,
-                consensusScore, disagreementPenalty, volumeSpike, priceNotBreakHigh,
-                entryTooExtended, entryTriggered,
-                currentPrice, openPrice, previousClose, vwapPrice, volumeRatio,
-                distanceFromOpenPct, dropFromPrevClosePct, marketRegime,
-                dayHigh, null);
+                null);
     }
 }

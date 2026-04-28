@@ -103,34 +103,4 @@ class LineMessageBuilderTests {
         assertThat(picks.get(0)).isEqualTo("CODEX_MISSING");
         assertThat(picks.get(1)).isEqualTo("PRICE_GATE_WAIT");
     }
-
-    // ── Batch Mom-C：tradabilityTag block 進入 Top 2 ───────────────────────────
-
-    @Test
-    void tradabilityTagBlock_appearsInTopTwoReasons_aboveCodex() {
-        // TRADABILITY_TAG_BLOCK priority=12，介於 hard gate (10) 與 CHASED_HIGH (15) 之間，
-        // 必定優於 CODEX_NOT_READY (20) 與 priceGate (40)。
-        FinalDecisionResponse response = new FinalDecisionResponse(
-                "REST",
-                List.of(),
-                List.of(
-                        "PRICE_GATE_WAIT_CONFIRMATION",
-                        "CODEX_NOT_READY",
-                        "8064 TRADABILITY_TAG_BLOCK：tradabilityTag=題材指標，不列主進場 系統已標示不列主進場"
-                ),
-                "PowerShell screener 已標示不列主進場。"
-        );
-
-        String message = LineMessageBuilder.buildFinalDecision(response, LocalDate.of(2026, 4, 28));
-
-        assertThat(message).contains("🚫 主要阻擋原因");
-        // tag block 必須在 top 2 之內
-        assertThat(message).contains("TRADABILITY_TAG_BLOCK");
-        // 同時驗證在 CODEX_NOT_READY 之前 (priority 12 < 20)
-        int tagIdx = message.indexOf("TRADABILITY_TAG_BLOCK");
-        int codexIdx = message.indexOf("CODEX_NOT_READY");
-        assertThat(tagIdx).isGreaterThan(0);
-        assertThat(codexIdx).isGreaterThan(0);
-        assertThat(tagIdx).isLessThan(codexIdx);
-    }
 }
