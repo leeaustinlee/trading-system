@@ -51,7 +51,9 @@ public record FinalDecisionCandidateRequest(
         BigDecimal dropFromPrevClosePct, // (previousClose-currentPrice)/previousClose（正值=跌破昨收；可 null）
         String     marketRegime,         // BULL_TREND / RANGE_CHOP / WEAK_DOWNTREND / PANIC_VOLATILITY（可 null）
         // ── v2.16 Batch C：ChasedHigh 真實 dayHigh ───────────────────
-        BigDecimal dayHigh               // 當日最高價（可 null；fallback entryPriceZone 上緣）
+        BigDecimal dayHigh,              // 當日最高價（可 null；fallback entryPriceZone 上緣）
+        // ── 2026-04-29 P0.3：tradabilityTag（PowerShell screener 自我標示） ──────
+        String     tradabilityTag        // 可回測進場候選 / 漲幅過大,僅參考 / 不列主進場 / 高價研究參考,非主進場（可 null）
 ) {
     /**
      * Legacy 31-arg constructor（v2.8 之前無 price gate 細節欄位時使用）。
@@ -99,12 +101,14 @@ public record FinalDecisionCandidateRequest(
                 consensusScore, disagreementPenalty, volumeSpike, priceNotBreakHigh,
                 entryTooExtended, entryTriggered,
                 null, null, null, null, null, null, null, null,
+                null,
                 null);
     }
 
     /**
      * v2.9 ctor（39-arg；Gate 6/7 完整 priceGate 欄位但無 dayHigh）。
-     * 新欄位 dayHigh 預設 null，ChasedHigh evaluator 將 fallback 到 entryPriceZone 上緣。
+     * 新欄位 dayHigh / tradabilityTag 預設 null，ChasedHigh evaluator fallback 到 entryPriceZone 上緣，
+     * tradabilityTag gate 對 null tag 一律不觸發。
      */
     public FinalDecisionCandidateRequest(
             String stockCode,
@@ -157,6 +161,104 @@ public record FinalDecisionCandidateRequest(
                 entryTooExtended, entryTriggered,
                 currentPrice, openPrice, previousClose, vwapPrice, volumeRatio,
                 distanceFromOpenPct, dropFromPrevClosePct, marketRegime,
+                null,
                 null);
+    }
+
+    /**
+     * v2.16 Batch C ctor（40-arg；無 tradabilityTag）。
+     * 新欄位 tradabilityTag 預設 null。所有 caller 在 P0.3 前都會走這條路徑，
+     * tradabilityTag gate 對 null tag 不觸發。
+     */
+    public FinalDecisionCandidateRequest(
+            String stockCode,
+            String stockName,
+            String valuationMode,
+            String entryType,
+            Double riskRewardRatio,
+            Boolean includeInFinalPlan,
+            Boolean mainStream,
+            Boolean falseBreakout,
+            Boolean belowOpen,
+            Boolean belowPrevClose,
+            Boolean nearDayHigh,
+            Boolean stopLossReasonable,
+            String rationale,
+            String entryPriceZone,
+            Double stopLossPrice,
+            Double takeProfit1,
+            Double takeProfit2,
+            BigDecimal javaStructureScore,
+            BigDecimal claudeScore,
+            BigDecimal codexScore,
+            BigDecimal finalRankScore,
+            Boolean    isVetoed,
+            BigDecimal baseScore,
+            Boolean    hasTheme,
+            Integer    themeRank,
+            BigDecimal finalThemeScore,
+            BigDecimal consensusScore,
+            BigDecimal disagreementPenalty,
+            Boolean    volumeSpike,
+            Boolean    priceNotBreakHigh,
+            Boolean    entryTooExtended,
+            Boolean    entryTriggered,
+            BigDecimal currentPrice,
+            BigDecimal openPrice,
+            BigDecimal previousClose,
+            BigDecimal vwapPrice,
+            BigDecimal volumeRatio,
+            BigDecimal distanceFromOpenPct,
+            BigDecimal dropFromPrevClosePct,
+            String     marketRegime,
+            BigDecimal dayHigh
+    ) {
+        this(stockCode, stockName, valuationMode, entryType, riskRewardRatio,
+                includeInFinalPlan, mainStream, falseBreakout, belowOpen, belowPrevClose,
+                nearDayHigh, stopLossReasonable, rationale, entryPriceZone, stopLossPrice,
+                takeProfit1, takeProfit2, javaStructureScore, claudeScore, codexScore,
+                finalRankScore, isVetoed, baseScore, hasTheme, themeRank, finalThemeScore,
+                consensusScore, disagreementPenalty, volumeSpike, priceNotBreakHigh,
+                entryTooExtended, entryTriggered,
+                currentPrice, openPrice, previousClose, vwapPrice, volumeRatio,
+                distanceFromOpenPct, dropFromPrevClosePct, marketRegime,
+                dayHigh,
+                null);
+    }
+
+    // ── Wither methods（FinalDecisionEngine.tradabilityTag soft penalty / pipeline rebuild） ──
+
+    /** 用於 FinalDecisionEngine soft-penalty path：扣分後重建一份 candidate。 */
+    public FinalDecisionCandidateRequest withFinalRankScore(BigDecimal newScore) {
+        return new FinalDecisionCandidateRequest(
+                stockCode, stockName, valuationMode, entryType, riskRewardRatio,
+                includeInFinalPlan, mainStream, falseBreakout, belowOpen, belowPrevClose,
+                nearDayHigh, stopLossReasonable, rationale, entryPriceZone, stopLossPrice,
+                takeProfit1, takeProfit2, javaStructureScore, claudeScore, codexScore,
+                newScore, isVetoed, baseScore, hasTheme, themeRank, finalThemeScore,
+                consensusScore, disagreementPenalty, volumeSpike, priceNotBreakHigh,
+                entryTooExtended, entryTriggered,
+                currentPrice, openPrice, previousClose, vwapPrice, volumeRatio,
+                distanceFromOpenPct, dropFromPrevClosePct, marketRegime,
+                dayHigh,
+                tradabilityTag
+        );
+    }
+
+    /** 用於 applyScoringPipeline 重建後補回 tradabilityTag。 */
+    public FinalDecisionCandidateRequest withTradabilityTag(String newTag) {
+        return new FinalDecisionCandidateRequest(
+                stockCode, stockName, valuationMode, entryType, riskRewardRatio,
+                includeInFinalPlan, mainStream, falseBreakout, belowOpen, belowPrevClose,
+                nearDayHigh, stopLossReasonable, rationale, entryPriceZone, stopLossPrice,
+                takeProfit1, takeProfit2, javaStructureScore, claudeScore, codexScore,
+                finalRankScore, isVetoed, baseScore, hasTheme, themeRank, finalThemeScore,
+                consensusScore, disagreementPenalty, volumeSpike, priceNotBreakHigh,
+                entryTooExtended, entryTriggered,
+                currentPrice, openPrice, previousClose, vwapPrice, volumeRatio,
+                distanceFromOpenPct, dropFromPrevClosePct, marketRegime,
+                dayHigh,
+                newTag
+        );
     }
 }

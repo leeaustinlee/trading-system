@@ -2,6 +2,7 @@ package com.austin.trading.controller;
 
 import com.austin.trading.dto.request.AiScoreUpdateRequest;
 import com.austin.trading.dto.request.CandidateBatchItemRequest;
+import com.austin.trading.dto.response.CandidateBatchSaveResponse;
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.dto.response.LiveQuoteResponse;
 import com.austin.trading.entity.StockEvaluationEntity;
@@ -109,13 +110,23 @@ public class CandidateController {
         if (items == null || items.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "error", "候選股清單不可為空"));
         }
-        List<CandidateResponse> saved = candidateScanService.saveBatch(items);
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "saved", items.size(),
-                "currentDayCandidates", saved.size(),
-                "candidates", saved
-        ));
+        // 2026-04-29 P0.1：每筆 request 先過 changePct hard gate + MomentumCandidateEngine hard gate；
+        // 通過者寫入並標 is_momentum_candidate=true，未通過者列在 rejections。
+        // 兩個 gate 都吃 ScoreConfigService flag，預設 OFF（pure compatibility）。
+        CandidateBatchSaveResponse result = candidateScanService.saveBatchWithGate(items);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("success",              true);
+        body.put("received",             result.received());
+        body.put("accepted",             result.accepted());
+        body.put("rejected",             result.rejected());
+        body.put("rejections",           result.rejections());
+        body.put("items",                result.items());
+        // ── 舊欄位（保留向後相容）─────────────────────────────────────
+        body.put("saved",                result.accepted());
+        body.put("currentDayCandidates", result.items().size());
+        body.put("candidates",           result.items());
+        return ResponseEntity.ok(body);
     }
 
     /**

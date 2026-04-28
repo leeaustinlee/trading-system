@@ -239,6 +239,15 @@ public class ScoreConfigService {
         DEFAULTS.put("paper.auto_exit.enabled",                    new String[]{"true",  "BOOLEAN", "Subagent B：PaperTradeExitJob cron 5 分鐘 7 種 exit trigger（STOP_LOSS/TRAILING/TP1/TP2/REVIEW_EXIT/TIME_EXIT/REVERSE_SIGNAL）"});
         DEFAULTS.put("paper.entry_slippage_pct",                   new String[]{"0.001","DECIMAL", "Subagent A：模擬進場滑價（1‰ = +0.1% buy）"});
         DEFAULTS.put("paper.exit_slippage_pct",                    new String[]{"0.001","DECIMAL", "Subagent B：模擬出場滑價（1‰ = -0.1% sell）"});
+
+        // ── 2026-04-29 候選股 review P0 落地：momentum gate + tradability tag + changePct hard gate ──
+        // momentum_gate.enabled 預設 false，等 PowerShell payload 把 momentum signal 欄位
+        // (volume_ratio_5ma / consec_up_days / new_high_20 / breakout_volume_spike / above_ma5) 全填齊再開
+        DEFAULTS.put("candidate.momentum_gate.enabled",                new String[]{"false", "BOOLEAN", "P0.1：候選股寫入前是否經過 MomentumCandidateEngine hard gate；要 PS payload momentum signal 欄位齊備再啟用"});
+        DEFAULTS.put("candidate.changepct_hard_gate.enabled",          new String[]{"false", "BOOLEAN", "P0.1b：候選股寫入前用 changePct 直接 hard gate（safety net；不依賴 momentum signal）。預設關閉；要立即擋鎖漲停追價就 UPDATE 為 true"});
+        DEFAULTS.put("candidate.changepct_hard_gate.max_pct",          new String[]{"9.0",   "DECIMAL", "P0.1b：changePct 上限（>= 此值的候選一律拒絕；對應限漲股 + 鎖漲停高追風險）"});
+        DEFAULTS.put("final_decision.respect_tradability_tag.enabled", new String[]{"true",  "BOOLEAN", "P0.3：FinalDecisionEngine 是否套用 candidate.payload_json.tradabilityTag（不列主進場 hard block / 漲幅過大 軟懲罰）"});
+        DEFAULTS.put("final_decision.tradability_tag.soft_penalty",    new String[]{"1.0",   "DECIMAL", "P0.3：tradability_tag=漲幅過大/僅參考 時 final_rank_score 的扣分幅度"});
     }
 
     public ScoreConfigService(ScoreConfigRepository repository) {

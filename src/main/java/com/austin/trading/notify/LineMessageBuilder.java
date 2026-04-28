@@ -448,6 +448,9 @@ public class LineMessageBuilder {
                     || upper.contains("PREMARKET_BIAS_ONLY")
                     || upper.contains("LATE_SESSION_FORCE_REST")) {
                 priority = 10;
+            } else if (upper.contains("TRADABILITY_TAG_BLOCK")) {
+                // 2026-04-29 P0.3：PowerShell screener 自我標示「不列主進場」，hard gate 之後、CHASED_HIGH 之前
+                priority = 12;
             } else if (upper.contains("CHASED_HIGH_BLOCK")
                     || upper.contains("CHASED_HIGH_WARN")) {
                 // v2.15：追高攔截，hard gate 之後、Codex 之前

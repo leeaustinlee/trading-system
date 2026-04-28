@@ -1458,7 +1458,9 @@ public class FinalDecisionService {
                 dropFromPrevClosePct,
                 c.marketRegime(),         // regime 由主流程透過 applyMarketRegime 補上
                 // v2.16：實際當日最高價（從 Codex live-quote），ChasedHigh evaluator 優先採用
-                dayHigh > 0 ? BigDecimal.valueOf(dayHigh) : null
+                dayHigh > 0 ? BigDecimal.valueOf(dayHigh) : null,
+                // 2026-04-29 P0.3：透明保留 tradabilityTag，FinalDecisionEngine 會 hard block / soft penalty
+                c.tradabilityTag()
         );
     }
 
@@ -1481,6 +1483,7 @@ public class FinalDecisionService {
     }
 
     private FinalDecisionCandidateRequest withRegime(FinalDecisionCandidateRequest c, String regimeType) {
+        // 40-arg ctor 帶 tradabilityTag=null；P0.3 要透明保留 tag，故走 41-arg canonical ctor。
         return new FinalDecisionCandidateRequest(
                 c.stockCode(), c.stockName(), c.valuationMode(), c.entryType(), c.riskRewardRatio(),
                 c.includeInFinalPlan(), c.mainStream(), c.falseBreakout(), c.belowOpen(), c.belowPrevClose(),
@@ -1492,7 +1495,8 @@ public class FinalDecisionService {
                 c.priceNotBreakHigh(), c.entryTooExtended(), c.entryTriggered(),
                 c.currentPrice(), c.openPrice(), c.previousClose(), c.vwapPrice(),
                 c.volumeRatio(), c.distanceFromOpenPct(), c.dropFromPrevClosePct(), regimeType,
-                c.dayHigh()
+                c.dayHigh(),
+                c.tradabilityTag()
         );
     }
 
@@ -2040,6 +2044,8 @@ public class FinalDecisionService {
                     override.reason());
 
             // 6. 產生帶完整分數的新 request
+            // 31-arg ctor delegates with tradabilityTag=null；用 withTradabilityTag 補回原 tag
+            // 以免 P0.3 gate 在 pipeline 重建後失效。
             result.add(new FinalDecisionCandidateRequest(
                     c.stockCode(), c.stockName(), c.valuationMode(), c.entryType(),
                     c.riskRewardRatio(), c.includeInFinalPlan(), c.mainStream(),
@@ -2053,7 +2059,7 @@ public class FinalDecisionService {
                     consensusScore, disagreementPenalty,
                     c.volumeSpike(), c.priceNotBreakHigh(), c.entryTooExtended(),
                     c.entryTriggered()
-            ));
+            ).withTradabilityTag(c.tradabilityTag()));
         }
         return result;
     }

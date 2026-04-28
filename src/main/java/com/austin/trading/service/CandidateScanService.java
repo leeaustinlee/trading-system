@@ -4,14 +4,23 @@ import com.austin.trading.client.TwseMisClient;
 import com.austin.trading.client.dto.StockQuote;
 import com.austin.trading.dto.request.CandidateBatchItemRequest;
 import com.austin.trading.dto.request.FinalDecisionCandidateRequest;
+import com.austin.trading.dto.response.CandidateBatchSaveResponse;
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.dto.response.LiveQuoteResponse;
+import com.austin.trading.engine.MomentumCandidateEngine;
+import com.austin.trading.engine.MomentumCandidateEngine.CandidateDecision;
+import com.austin.trading.engine.MomentumCandidateEngine.CandidateInput;
 import com.austin.trading.entity.CandidateStockEntity;
 import com.austin.trading.entity.StockEvaluationEntity;
 import com.austin.trading.entity.ThemeSnapshotEntity;
 import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.StockEvaluationRepository;
 import com.austin.trading.repository.ThemeSnapshotRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,21 +37,49 @@ import java.util.stream.Collectors;
 @Service
 public class CandidateScanService {
 
+    private static final Logger log = LoggerFactory.getLogger(CandidateScanService.class);
+    private static final ObjectMapper PAYLOAD_MAPPER = new ObjectMapper();
+
     private final CandidateStockRepository candidateStockRepository;
     private final StockEvaluationRepository stockEvaluationRepository;
     private final ThemeSnapshotRepository themeSnapshotRepository;
     private final TwseMisClient twseMisClient;
+    private final MomentumCandidateEngine momentumCandidateEngine;
+    private final ScoreConfigService scoreConfigService;
+    private final ObjectMapper objectMapper;
 
     public CandidateScanService(
             CandidateStockRepository candidateStockRepository,
             StockEvaluationRepository stockEvaluationRepository,
             ThemeSnapshotRepository themeSnapshotRepository,
-            TwseMisClient twseMisClient
+            TwseMisClient twseMisClient,
+            MomentumCandidateEngine momentumCandidateEngine,
+            ScoreConfigService scoreConfigService,
+            ObjectMapper objectMapper
     ) {
         this.candidateStockRepository = candidateStockRepository;
         this.stockEvaluationRepository = stockEvaluationRepository;
         this.themeSnapshotRepository = themeSnapshotRepository;
         this.twseMisClient = twseMisClient;
+        this.momentumCandidateEngine = momentumCandidateEngine;
+        this.scoreConfigService = scoreConfigService;
+        this.objectMapper = objectMapper;
+    }
+
+    /** 從 candidate_stock.payload_json 抽出 tradabilityTag。失敗回 null（被視為主候選）。 */
+    private static String extractTradabilityTag(String payloadJson) {
+        if (payloadJson == null || payloadJson.isBlank()) return null;
+        try {
+            JsonNode root = PAYLOAD_MAPPER.readTree(payloadJson);
+            JsonNode tag = root.get("tradabilityTag");
+            if (tag == null || tag.isNull()) return null;
+            String value = tag.asText();
+            return (value == null || value.isBlank()) ? null : value;
+        } catch (Exception e) {
+            log.debug("[CandidateScanService] failed to parse payload_json for tradabilityTag: {}",
+                    e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -118,26 +155,218 @@ public class CandidateScanService {
     }
 
     /**
-     * 批次 upsert 候選股。
-     * <p>
-     * 每筆依 (tradingDate, symbol) 決定新增或更新。
-     * 若請求含評估欄位（valuationMode / stopLossPrice 等），
-     * 同步 upsert stock_evaluation 表。
-     * </p>
+     * 舊路徑相容介面：批次 upsert 候選股（依 (tradingDate, symbol) 新增或更新；
+     * 若請求含評估欄位 valuationMode / stopLossPrice 等，同步 upsert stock_evaluation）。
+     *
+     * <p>內部委派至 {@link #saveBatchWithGate(List)}，僅回傳 accepted 項。
+     * 新代碼請改用 {@link #saveBatchWithGate(List)} 以拿到 rejections 列表。</p>
      *
      * @param items 候選股清單
      * @return 當日最新候選股（最多 200 筆）
      */
     @Transactional
     public List<CandidateResponse> saveBatch(List<CandidateBatchItemRequest> items) {
+        return saveBatchWithGate(items).items();
+    }
+
+    // ── 2026-04-29 P0.1 / P0.1b：MomentumCandidateEngine + changePct hard gate ────
+
+    /**
+     * 批次 upsert 候選股，搭配兩道 hard gate：
+     * <ol>
+     *   <li><b>changePct hard gate</b>（feature flag {@code candidate.changepct_hard_gate.enabled}，
+     *       safety net；不依賴 momentum signal）。漲幅 &gt;= max_pct（預設 9%）的候選一律拒絕。
+     *       預設 false，要立即擋鎖漲停追價就把 flag 改 true 即可。</li>
+     *   <li><b>Momentum gate</b>（feature flag {@code candidate.momentum_gate.enabled}，預設 false）。
+     *       通過 {@link MomentumCandidateEngine#evaluate} 才寫入；標 {@code is_momentum_candidate=true}
+     *       並把 5 條基本條件結果序列化到 {@code momentum_flags_json}。
+     *       預設關閉以避免 PowerShell payload 還沒填齊 momentum signal 時把候選全擋下。
+     *       PowerShell payload 升級完成後改 true 啟用。</li>
+     * </ol>
+     * <p>flag 都關閉時退化為原本的 dumb upsert（全部寫入，{@code is_momentum_candidate=false}）。</p>
+     */
+    @Transactional
+    public CandidateBatchSaveResponse saveBatchWithGate(List<CandidateBatchItemRequest> items) {
+        boolean momentumGateEnabled = scoreConfigService.getBoolean(
+                "candidate.momentum_gate.enabled", false);
+        boolean changePctGateEnabled = scoreConfigService.getBoolean(
+                "candidate.changepct_hard_gate.enabled", false);
+        BigDecimal changePctMax = scoreConfigService.getDecimal(
+                "candidate.changepct_hard_gate.max_pct", new BigDecimal("9.0"));
+
+        List<CandidateBatchItemRequest> accepted = new ArrayList<>();
+        List<CandidateDecision> decisions = new ArrayList<>();
+        List<CandidateBatchSaveResponse.Rejection> rejections = new ArrayList<>();
+
+        for (CandidateBatchItemRequest item : items) {
+            // P0.1b：changePct safety net（在 momentum gate 之前；不需要 momentum signal）
+            if (changePctGateEnabled) {
+                Double changePct = readDouble(parsePayload(item.payloadJson()), "changePct");
+                if (changePct != null && changePct >= changePctMax.doubleValue()) {
+                    rejections.add(new CandidateBatchSaveResponse.Rejection(
+                            item.symbol(),
+                            "CHANGEPCT_HARD_GATE",
+                            "changePct " + changePct + " >= max " + changePctMax
+                                    + "（safety net；可能逼近漲停或鎖漲停）"
+                    ));
+                    continue;
+                }
+            }
+
+            if (!momentumGateEnabled) {
+                accepted.add(item);
+                decisions.add(null);
+                continue;
+            }
+
+            // P0.1：MomentumCandidateEngine hard gate
+            CandidateInput input = buildEngineInput(item);
+            CandidateDecision decision = momentumCandidateEngine.evaluate(input);
+
+            if (decision.isMomentumCandidate()) {
+                accepted.add(item);
+                decisions.add(decision);
+            } else {
+                rejections.add(buildRejection(item, decision, input));
+            }
+        }
+
+        List<CandidateResponse> persisted = persistAccepted(accepted, decisions);
+
+        log.info("[CandidateBatchGate] received={} accepted={} rejected={} momentumGate={} changePctGate={}",
+                items.size(), accepted.size(), rejections.size(), momentumGateEnabled, changePctGateEnabled);
+
+        return new CandidateBatchSaveResponse(
+                items.size(),
+                accepted.size(),
+                rejections.size(),
+                rejections,
+                persisted
+        );
+    }
+
+    /**
+     * 把 {@link CandidateBatchItemRequest} 轉成 {@link CandidateInput}。
+     *
+     * <p><b>Bootstrap fallback 策略：</b>上游 PowerShell 還未把全部訊號（MA、新高、連續上漲等）
+     * 一起填進 payload，因此對未知欄位採寬鬆預設、對已知不利訊號採嚴格：</p>
+     * <ul>
+     *   <li>{@code todayChangePct} ← payload.changePct；無則 null</li>
+     *   <li>{@code volumeRatioTo5MA} ← payload.volumeRatio；若無但 amountYi &gt;= 1 億則給 1.5（剛好過 engine 門檻）</li>
+     *   <li>{@code themeRank / finalThemeScore} ← 同日 theme_snapshot；找不到 → rank=99 / score=5.0（中性，不過 theme 條件）</li>
+     *   <li>{@code claudeScore} ← payload.claudeScore；無則 null（engine 視為中性 PASS）</li>
+     *   <li>{@code codexVetoed} ← payload.codexVetoed；無則 false</li>
+     *   <li>{@code claudeRiskFlags} ← payload.claudeRiskFlags 陣列；無則 empty</li>
+     * </ul>
+     * <p>哲學：gate 的目的是擋掉<b>明顯的爛標的</b>（Codex veto、claudeScore 過低、無量等），
+     * 而不是要求每張單都帶滿訊號。「未知 → 通過」是 bootstrap 期的合理行為。</p>
+     */
+    CandidateInput buildEngineInput(CandidateBatchItemRequest item) {
+        JsonNode payload = parsePayload(item.payloadJson());
+
+        Double changePct = readDouble(payload, "changePct");
+        Double volumeRatio = readDouble(payload, "volumeRatio");
+        if (volumeRatio == null) {
+            Double amountYi = readDouble(payload, "amountYi");
+            if (amountYi != null && amountYi >= 1.0) volumeRatio = 1.5;
+        }
+
+        Boolean newHigh20 = readBoolean(payload, "todayNewHigh20");
+        Integer consecUp = readInt(payload, "consecutiveUpDays");
+        Boolean aboveOpen = readBoolean(payload, "todayAboveOpen");
+
+        Boolean aboveMa5 = readBoolean(payload, "aboveMa5");
+        Boolean ma5OverMa10 = readBoolean(payload, "ma5OverMa10");
+        Boolean ma5Turning = readBoolean(payload, "ma5Turning");
+
+        Boolean breakoutVolume = readBoolean(payload, "breakoutVolumeSpike");
+        Boolean codexVetoed = Boolean.TRUE.equals(readBoolean(payload, "codexVetoed"));
+
+        BigDecimal claudeScore = readDecimal(payload, "claudeScore");
+        List<String> claudeRiskFlags = readStringList(payload, "claudeRiskFlags");
+
+        Integer themeRank = null;
+        BigDecimal finalThemeScore = null;
+        if (item.themeTag() != null && !item.themeTag().isBlank()) {
+            LocalDate date = item.tradingDate() != null ? item.tradingDate() : LocalDate.now();
+            ThemeSnapshotEntity snap = themeSnapshotRepository
+                    .findByTradingDateAndThemeTag(date, item.themeTag())
+                    .orElse(null);
+            if (snap != null) {
+                themeRank = snap.getRankingOrder();
+                finalThemeScore = snap.getFinalThemeScore();
+            }
+        }
+        // 中性 fallback：未填欄位不應讓 gate 把候選殺光
+        if (themeRank == null) themeRank = 99;
+        if (finalThemeScore == null) finalThemeScore = new BigDecimal("5.0");
+
+        return new CandidateInput(
+                item.symbol(),
+                changePct,
+                consecUp,
+                newHigh20,
+                aboveOpen,
+                aboveMa5,
+                ma5OverMa10,
+                ma5Turning,
+                volumeRatio,
+                breakoutVolume,
+                themeRank,
+                finalThemeScore,
+                claudeScore,
+                claudeRiskFlags,
+                codexVetoed
+        );
+    }
+
+    private CandidateBatchSaveResponse.Rejection buildRejection(
+            CandidateBatchItemRequest item,
+            CandidateDecision decision,
+            CandidateInput input
+    ) {
+        if (decision.aiStronglyNegative()) {
+            if (Boolean.TRUE.equals(input.codexVetoed())) {
+                return new CandidateBatchSaveResponse.Rejection(
+                        item.symbol(), "HARD_VETO_CODEX", "Codex 已標 veto");
+            }
+            BigDecimal claude = input.claudeScore();
+            if (claude != null && claude.compareTo(new BigDecimal("4.0")) < 0) {
+                return new CandidateBatchSaveResponse.Rejection(
+                        item.symbol(), "HARD_VETO_CLAUDE_LOW_SCORE",
+                        "claudeScore " + claude + " < 4.0");
+            }
+            List<String> flags = input.claudeRiskFlags();
+            String flagDesc = (flags != null && !flags.isEmpty())
+                    ? String.join(",", flags) : "(unspecified)";
+            return new CandidateBatchSaveResponse.Rejection(
+                    item.symbol(), "HARD_VETO_RISK_FLAG", "命中 hard risk flag: " + flagDesc);
+        }
+        return new CandidateBatchSaveResponse.Rejection(
+                item.symbol(),
+                "INSUFFICIENT_CONDITIONS",
+                "matched=" + decision.matchedConditionsCount() + " flags=" + decision.matchedFlags()
+        );
+    }
+
+    /** 寫入通過 gate 的部分；同時設定 is_momentum_candidate / momentum_flags_json。 */
+    private List<CandidateResponse> persistAccepted(
+            List<CandidateBatchItemRequest> items,
+            List<CandidateDecision> decisions
+    ) {
+        if (items.isEmpty()) {
+            // 沒有通過的 → 仍回傳當日候選（含先前已寫入的）
+            return getCandidatesByDate(LocalDate.now(), 200);
+        }
         LocalDate today = LocalDate.now();
         List<LocalDate> affectedDates = new ArrayList<>();
 
-        for (CandidateBatchItemRequest item : items) {
+        for (int i = 0; i < items.size(); i++) {
+            CandidateBatchItemRequest item = items.get(i);
+            CandidateDecision decision = decisions.get(i);
             LocalDate date = item.tradingDate() != null ? item.tradingDate() : today;
             if (!affectedDates.contains(date)) affectedDates.add(date);
 
-            // upsert candidate_stock
             CandidateStockEntity entity = candidateStockRepository
                     .findByTradingDateAndSymbol(date, item.symbol())
                     .orElseGet(CandidateStockEntity::new);
@@ -149,9 +378,14 @@ public class CandidateScanService {
             if (item.themeTag()    != null) entity.setThemeTag(item.themeTag());
             if (item.sector()      != null) entity.setSector(item.sector());
             if (item.payloadJson() != null) entity.setPayloadJson(item.payloadJson());
+
+            if (decision != null) {
+                entity.setMomentumCandidate(true);
+                entity.setMomentumFlagsJson(serializeFlags(decision));
+            }
+
             candidateStockRepository.save(entity);
 
-            // upsert stock_evaluation（若有任何評估欄位）
             if (hasEvalFields(item)) {
                 StockEvaluationEntity eval = stockEvaluationRepository
                         .findByTradingDateAndSymbol(date, item.symbol())
@@ -169,9 +403,84 @@ public class CandidateScanService {
             }
         }
 
-        // 回傳影響到的日期中最新一天的候選股
         LocalDate latestDate = affectedDates.stream().max(LocalDate::compareTo).orElse(today);
         return getCandidatesByDate(latestDate, 200);
+    }
+
+    private String serializeFlags(CandidateDecision decision) {
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("matched", decision.matchedConditionsCount());
+            payload.put("flags", decision.matchedFlags());
+            payload.put("aiStronglyNegative", decision.aiStronglyNegative());
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException e) {
+            log.warn("[CandidateBatchGate] failed to serialize momentum flags: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    // ── payload JSON 讀值 helper ──────────────────────────────────────────────
+
+    private JsonNode parsePayload(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try {
+            return objectMapper.readTree(raw);
+        } catch (JsonProcessingException e) {
+            log.debug("[CandidateBatchGate] payload parse failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private Double readDouble(JsonNode n, String key) {
+        if (n == null) return null;
+        JsonNode v = n.get(key);
+        if (v == null || v.isNull()) return null;
+        if (v.isNumber()) return v.doubleValue();
+        if (v.isTextual()) {
+            try { return Double.parseDouble(v.asText()); } catch (NumberFormatException ignore) { return null; }
+        }
+        return null;
+    }
+
+    private Integer readInt(JsonNode n, String key) {
+        if (n == null) return null;
+        JsonNode v = n.get(key);
+        if (v == null || v.isNull()) return null;
+        if (v.isNumber()) return v.intValue();
+        if (v.isTextual()) {
+            try { return Integer.parseInt(v.asText()); } catch (NumberFormatException ignore) { return null; }
+        }
+        return null;
+    }
+
+    private Boolean readBoolean(JsonNode n, String key) {
+        if (n == null) return null;
+        JsonNode v = n.get(key);
+        if (v == null || v.isNull()) return null;
+        if (v.isBoolean()) return v.booleanValue();
+        if (v.isTextual()) return Boolean.parseBoolean(v.asText());
+        return null;
+    }
+
+    private BigDecimal readDecimal(JsonNode n, String key) {
+        if (n == null) return null;
+        JsonNode v = n.get(key);
+        if (v == null || v.isNull()) return null;
+        if (v.isNumber()) return v.decimalValue();
+        if (v.isTextual()) {
+            try { return new BigDecimal(v.asText()); } catch (NumberFormatException ignore) { return null; }
+        }
+        return null;
+    }
+
+    private List<String> readStringList(JsonNode n, String key) {
+        if (n == null) return List.of();
+        JsonNode v = n.get(key);
+        if (v == null || !v.isArray()) return List.of();
+        List<String> out = new ArrayList<>();
+        v.forEach(e -> { if (e != null && !e.isNull()) out.add(e.asText()); });
+        return out;
     }
 
     private boolean hasEvalFields(CandidateBatchItemRequest item) {
@@ -316,8 +625,17 @@ public class CandidateScanService {
         Boolean    existingIsVetoed    = eval == null ? null : eval.getIsVetoed();
 
         // 從 theme snapshot 取題材排名與分數（BC Sniper v2.0）
+        // 2026-04-29 ThemeTag sanity check：candidate.themeTag (中文) 應與 theme_snapshot.theme_tag 一致；
+        // miss 時 log WARN，提醒上游 PowerShell stock_theme_mapping 是否同步。
         Integer    themeRank       = themeSnapshot != null ? themeSnapshot.getRankingOrder() : null;
         BigDecimal finalThemeScore = themeSnapshot != null ? themeSnapshot.getFinalThemeScore() : null;
+        if (themeSnapshot == null && candidate.getThemeTag() != null && !candidate.getThemeTag().isBlank()) {
+            log.warn("[CandidateScanService] {} themeTag={} 在 theme_snapshot 找不到對應；確認 stock_theme_mapping 與 theme_snapshot 已同步。",
+                    candidate.getSymbol(), candidate.getThemeTag());
+        }
+
+        // 2026-04-29 P0.3：從 payload_json 抽 tradabilityTag，FinalDecisionEngine 會 hard block / soft penalty
+        String tradabilityTag = extractTradabilityTag(candidate.getPayloadJson());
 
         return new FinalDecisionCandidateRequest(
                 candidate.getSymbol(),
@@ -352,7 +670,7 @@ public class CandidateScanService {
                 null,                                          // priceNotBreakHigh
                 null,                                          // entryTooExtended
                 null                                           // entryTriggered（由外部資料補充）
-        );
+        ).withTradabilityTag(tradabilityTag);
     }
 
     private String inferEntryType(String reason) {
