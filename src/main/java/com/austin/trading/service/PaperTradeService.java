@@ -895,8 +895,13 @@ public class PaperTradeService {
         return new AutoExitCycleResult(checked, exited, errors);
     }
 
-    /** Apply an ExitResult to the trade row and persist (status=CLOSED + simulated exit price). */
-    private void closeTradeFromAutoExit(PaperTradeEntity trade, ExitResult result) {
+    /**
+     * Apply an ExitResult to the trade row and persist (status=CLOSED + simulated exit price).
+     *
+     * <p>Package-private so {@code PositionReviewExitAutoCloseHandler} (same package) can mirror
+     * an EXIT review into paper_trade. Tests in this package can also call directly.</p>
+     */
+    void closeTradeFromAutoExit(PaperTradeEntity trade, ExitResult result) {
         BigDecimal grossExit = result.exitPrice();
         BigDecimal simulatedExit = grossExit
                 .multiply(BigDecimal.ONE.subtract(SELL_SLIPPAGE_PCT))
