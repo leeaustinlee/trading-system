@@ -1,0 +1,199 @@
+trace_one.py — symbol=2337 date=2026-04-27
+
+==============================================================================
+1. candidate_stock
+==============================================================================
+  id                         228
+  score                      15.3300
+  theme_tag                  記憶體/儲存
+  sector                     NULL
+  is_momentum_candidate      False
+  tradabilityTag             可回測進場候選
+  includeInFinalPlan         None
+  payload_keys               ['market', 'source', 'volume', 'day_low', 'gap_pct', 'amountYi', 'day_high', 'nearHigh', 'themeTag', 'changePct', 'dealer_net', 'open_price', 'prev_close', 'close_price', 'foreign_net', 'boardLotCost', 'tradabilityTag', 'invest_trust_net', 'foreign_and_trust_buy', 'total_institutional_net']
+
+==============================================================================
+2. stock_evaluation (final scoring after veto/penalty)
+==============================================================================
+  id                         291
+  java_structure_score       6.795
+  claude_score               7.500
+  codex_score                6.800
+  ai_weighted_score          7.043
+  final_rank_score           6.160
+  score_dispersion           NULL
+  consensus_score            6.660
+  disagreement_penalty       0.140
+  is_vetoed                  False
+  java_veto_flags            ['PENALTY:RR_BELOW_MIN']
+  theme_tag                  None
+  momentum_score             NULL
+  bucket                     C
+  raw_rank                   6.66
+  penalty                    0.5
+  aiConfidenceMode           FULL_AI
+  aiWeightOverrideReason     None
+
+==============================================================================
+3. theme_strength_decision
+==============================================================================
+  found                      True
+  id                         346
+  theme_tag                  記憶體/儲存
+  strength_score             6.5000
+  theme_stage                MID_TREND
+  decay_risk                 0.3000
+  tradable                   False
+  catalyst_type              NULL
+
+==============================================================================
+4. execution_decision_log (lower-layer baseAction)
+==============================================================================
+  (no rows)
+
+==============================================================================
+5. setup_decision_log
+==============================================================================
+  id                         255
+  setup_type                 BREAKOUT_CONTINUATION
+  valid                      True
+  rejection_reason           None
+  ideal_entry_price          133.3200
+  initial_stop_price         127.9872
+  take_profit_1_price        142.6524
+  take_profit_2_price        150.6516
+  entry_zone_low             133.3200
+  entry_zone_high            135.9864
+  holding_window_days        10
+  trailing_mode              MA5_TRAIL
+
+==============================================================================
+6. market_regime_decision (market_grade for the day)
+==============================================================================
+  (no rows)
+
+==============================================================================
+7. monitor_decision
+==============================================================================
+  id=288 time=2026-04-27 09:00:00 mode=WATCH notify=False trigger=NONE
+  id=289 time=2026-04-27 09:05:00 mode=WATCH notify=False trigger=NONE
+  id=290 time=2026-04-27 09:10:00 mode=WATCH notify=False trigger=NONE
+  id=291 time=2026-04-27 09:15:00 mode=WATCH notify=False trigger=NONE
+  id=292 time=2026-04-27 09:20:00 mode=WATCH notify=False trigger=NONE
+  id=293 time=2026-04-27 09:25:00 mode=WATCH notify=False trigger=NONE
+  id=294 time=2026-04-27 09:30:05 mode=WATCH notify=False trigger=NONE
+  id=295 time=2026-04-27 09:35:00 mode=WATCH notify=False trigger=NONE
+  id=296 time=2026-04-27 09:40:00 mode=WATCH notify=False trigger=NONE
+  id=297 time=2026-04-27 09:45:00 mode=WATCH notify=False trigger=NONE
+  id=298 time=2026-04-27 09:50:00 mode=WATCH notify=False trigger=NONE
+  id=299 time=2026-04-27 09:55:00 mode=WATCH notify=False trigger=NONE
+  id=300 time=2026-04-27 10:00:00 mode=WATCH notify=False trigger=NONE
+  id=301 time=2026-04-27 10:05:06 mode=WATCH notify=False trigger=NONE
+  id=302 time=2026-04-27 10:10:00 mode=WATCH notify=False trigger=NONE
+  id=303 time=2026-04-27 10:20:00 mode=WATCH notify=False trigger=NONE
+  id=304 time=2026-04-27 10:25:00 mode=WATCH notify=False trigger=NONE
+  id=305 time=2026-04-27 10:35:00 mode=WATCH notify=False trigger=NONE
+  id=306 time=2026-04-27 10:40:00 mode=WATCH notify=False trigger=NONE
+  id=307 time=2026-04-27 10:45:00 mode=WATCH notify=False trigger=NONE
+  id=308 time=2026-04-27 10:50:00 mode=WATCH notify=False trigger=NONE
+  id=309 time=2026-04-27 10:55:00 mode=WATCH notify=False trigger=NONE
+  id=310 time=2026-04-27 11:00:00 mode=WATCH notify=False trigger=NONE
+  id=311 time=2026-04-27 11:05:06 mode=WATCH notify=False trigger=NONE
+  id=312 time=2026-04-27 11:10:00 mode=WATCH notify=False trigger=NONE
+  id=313 time=2026-04-27 11:15:00 mode=WATCH notify=False trigger=NONE
+  id=314 time=2026-04-27 11:20:00 mode=WATCH notify=False trigger=NONE
+  id=315 time=2026-04-27 11:25:00 mode=WATCH notify=False trigger=NONE
+  id=316 time=2026-04-27 11:30:00 mode=WATCH notify=False trigger=NONE
+  id=317 time=2026-04-27 11:35:00 mode=WATCH notify=False trigger=NONE
+  id=318 time=2026-04-27 11:40:00 mode=WATCH notify=False trigger=NONE
+  id=319 time=2026-04-27 11:45:00 mode=WATCH notify=False trigger=NONE
+  id=320 time=2026-04-27 11:50:00 mode=WATCH notify=False trigger=NONE
+  id=321 time=2026-04-27 11:55:00 mode=WATCH notify=False trigger=NONE
+  id=322 time=2026-04-27 12:00:00 mode=WATCH notify=False trigger=NONE
+  id=323 time=2026-04-27 12:05:00 mode=WATCH notify=False trigger=NONE
+  id=324 time=2026-04-27 12:10:00 mode=WATCH notify=False trigger=NONE
+  id=325 time=2026-04-27 12:15:00 mode=WATCH notify=False trigger=NONE
+  id=326 time=2026-04-27 12:20:00 mode=WATCH notify=False trigger=NONE
+  id=327 time=2026-04-27 12:25:00 mode=WATCH notify=False trigger=NONE
+  id=328 time=2026-04-27 12:30:00 mode=WATCH notify=False trigger=NONE
+  id=329 time=2026-04-27 12:35:00 mode=WATCH notify=False trigger=NONE
+  id=330 time=2026-04-27 12:40:00 mode=WATCH notify=False trigger=NONE
+  id=331 time=2026-04-27 12:45:00 mode=WATCH notify=False trigger=NONE
+  id=332 time=2026-04-27 12:50:00 mode=WATCH notify=False trigger=NONE
+  id=333 time=2026-04-27 12:55:00 mode=WATCH notify=False trigger=NONE
+  id=334 time=2026-04-27 13:00:00 mode=WATCH notify=False trigger=NONE
+  id=335 time=2026-04-27 13:05:06 mode=WATCH notify=False trigger=NONE
+  id=336 time=2026-04-27 13:10:00 mode=WATCH notify=False trigger=NONE
+  id=337 time=2026-04-27 13:15:00 mode=WATCH notify=False trigger=NONE
+  id=338 time=2026-04-27 13:20:00 mode=WATCH notify=False trigger=NONE
+  id=339 time=2026-04-27 13:25:00 mode=WATCH notify=False trigger=NONE
+  id=340 time=2026-04-27 13:30:00 mode=WATCH notify=False trigger=NONE
+  id=341 time=2026-04-27 13:35:00 mode=WATCH notify=False trigger=NONE
+  id=342 time=2026-04-27 13:40:00 mode=WATCH notify=False trigger=NONE
+  id=343 time=2026-04-27 13:45:00 mode=WATCH notify=False trigger=NONE
+  id=344 time=2026-04-27 13:50:00 mode=WATCH notify=False trigger=NONE
+  id=345 time=2026-04-27 13:55:00 mode=WATCH notify=False trigger=NONE
+
+==============================================================================
+8. score_config snapshot (relevant keys)
+==============================================================================
+  scoring.grade_ap_min                                       8.2
+  scoring.grade_a_min                                        7.5
+  scoring.grade_b_min                                        6.5
+  scoring.rr_min_ap                                          2.2
+  scoring.rr_min_grade_a                                     2.0
+  scoring.rr_min_grade_b                                     1.8
+  scoring.java_weight                                        0.50
+  scoring.claude_weight                                      0.35
+  scoring.codex_weight                                       0.15
+  scoring.late_stop_market_grade                             A
+  veto.theme_rank_max                                        4
+  veto.final_theme_score_min                                 6.5
+  veto.codex_score_min                                       5.5
+  veto.score_divergence_max                                  2.5
+  veto.require_theme                                         false
+  consensus.penalty_jc                                       0.25
+  consensus.penalty_jx                                       0.20
+  consensus.penalty_cx                                       0.20
+  penalty.rr_below_min                                       0.5
+  penalty.not_in_final_plan                                  0.1
+  penalty.high_val_weak_market                               0.8
+  penalty.no_theme                                           1.0
+  penalty.codex_low                                          1.0
+  penalty.theme_not_top                                      0.8
+  penalty.theme_score_too_low                                0.8
+  penalty.score_divergence_high                              1.5
+  penalty.entry_too_extended                                 0.0
+  decision.max_pick_aplus                                    2
+  decision.max_pick_a                                        2
+  decision.max_pick_b                                        1
+  decision.position_factor_aplus                             1.0
+  decision.position_factor_a                                 0.7
+  decision.position_factor_b                                 0.5
+  theme.engine.v2.enabled                                    true
+  theme.shadow_mode.enabled                                  true
+  final_decision.ai_default_reweight.enabled                 true
+  final_decision.respect_tradability_tag.enabled             true
+  final_decision.tradability_tag.soft_penalty                1.0
+  final_decision.select_buy_now_bypass_soft_penalty.enabled  true
+  final_decision.require_claude                              true
+  final_decision.require_codex                               true
+  trading.status.allow_trade                                 true
+  ranking.main_stream_boost                                  <missing>
+
+==============================================================================
+9. final_decision rows for the day
+==============================================================================
+  id=47 decision=REST task=OPENING strategy=SETUP ai=AI_NOT_READY fallback=AI_NOT_READY created=2026-04-27 01:30:00
+      summary='AI 未完成，今日保守休息（AI_NOT_READY）'
+  id=48 decision=WAIT task=OPENING strategy=SETUP ai=FULL_AI_READY fallback=None created=2026-04-27 01:35:24
+      summary='Claude 分數 7'
+  id=49 decision=REST task=MIDDAY strategy=SETUP ai=FULL_AI_READY fallback=None created=2026-04-27 03:09:23
+      summary='無 A+/A/B 等級候選股，今日建議休息。'
+  id=50 decision=PLAN task=POSTMARKET strategy=SETUP ai=FULL_AI_READY fallback=None created=2026-04-27 07:37:48
+      summary='明日無主規劃標的（評分全 C）；持倉管理為主。'
+
+==============================================================================
+10. VERDICT — where was the ENTER lost?
+==============================================================================
+Neither execution nor final_decision recommended ENTER. Likely a setup-layer or ranking-layer reject; not the FinalDecisionEngine bottleneck.
