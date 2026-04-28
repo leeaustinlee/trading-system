@@ -81,6 +81,7 @@ public class PositionReviewService {
      * (1) 解 PaperTradeService → ScoreConfigService 等既有 ObjectProvider 鏈的初始化順序；
      * (2) 既有測試可繼續用上面那個短建構子，不需要一口氣補 mock。</p>
      */
+    @org.springframework.beans.factory.annotation.Autowired
     public PositionReviewService(
             PositionRepository positionRepository,
             PositionReviewLogRepository reviewLogRepository,
