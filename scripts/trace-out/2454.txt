@@ -1,0 +1,243 @@
+trace_one.py — symbol=2454 date=2026-04-22
+
+==============================================================================
+1. candidate_stock
+==============================================================================
+  id                         193
+  score                      22.3000
+  theme_tag                  半導體/IC
+  sector                     NULL
+  is_momentum_candidate      False
+  tradabilityTag             題材指標，不列主進場
+  includeInFinalPlan         None
+  payload_keys               ['market', 'source', 'volume', 'day_low', 'gap_pct', 'amountYi', 'day_high', 'nearHigh', 'themeTag', 'changePct', 'dealer_net', 'open_price', 'prev_close', 'close_price', 'foreign_net', 'boardLotCost', 'tradabilityTag', 'invest_trust_net', 'foreign_and_trust_buy', 'total_institutional_net']
+
+==============================================================================
+2. stock_evaluation (final scoring after veto/penalty)
+==============================================================================
+  id                         234
+  java_structure_score       5.195
+  claude_score               8.000
+  codex_score                6.000
+  ai_weighted_score          6.298
+  final_rank_score           5.000
+  score_dispersion           NULL
+  consensus_score            5.600
+  disagreement_penalty       0.400
+  is_vetoed                  False
+  java_veto_flags            ['PENALTY:RR_BELOW_MIN', 'PENALTY:NOT_IN_FINAL_PLAN']
+  theme_tag                  None
+  momentum_score             NULL
+  bucket                     C
+  raw_rank                   5.6
+  penalty                    0.6
+  aiConfidenceMode           FULL_AI
+  aiWeightOverrideReason     None
+
+==============================================================================
+3. theme_strength_decision
+==============================================================================
+  found                      True
+  id                         134
+  theme_tag                  半導體/IC
+  strength_score             6.5000
+  theme_stage                DECAY
+  decay_risk                 0.6500
+  tradable                   False
+  catalyst_type              NULL
+
+==============================================================================
+4. execution_decision_log (lower-layer baseAction)
+==============================================================================
+  id=280 action=SKIP reason=BASE_ACTION_SKIP codex_vetoed=False regime=RANGE_CHOP timing=PULLBACK_BOUNCE risk_ok=true
+  id=283 action=SKIP reason=BASE_ACTION_SKIP codex_vetoed=False regime=RANGE_CHOP timing=PULLBACK_BOUNCE risk_ok=true
+  id=286 action=SKIP reason=BASE_ACTION_SKIP codex_vetoed=False regime=RANGE_CHOP timing=PULLBACK_BOUNCE risk_ok=true
+  id=289 action=SKIP reason=BASE_ACTION_SKIP codex_vetoed=False regime=RANGE_CHOP timing=PULLBACK_BOUNCE risk_ok=true
+  id=292 action=ENTER reason=CONFIRMED codex_vetoed=False regime=RANGE_CHOP timing=PULLBACK_BOUNCE risk_ok=true
+
+==============================================================================
+5. setup_decision_log
+==============================================================================
+  id                         238
+  setup_type                 PULLBACK_CONFIRMATION
+  valid                      True
+  rejection_reason           None
+  ideal_entry_price          2027.3000
+  initial_stop_price         1925.9350
+  take_profit_1_price        2169.2110
+  take_profit_2_price        2290.8490
+  entry_zone_low             1964.6000
+  entry_zone_high            2027.3000
+  holding_window_days        8
+  trailing_mode              MA10_TRAIL
+
+==============================================================================
+6. market_regime_decision (market_grade for the day)
+==============================================================================
+  id=67 grade=B regime=RANGE_CHOP allowed=True mult=0.500 at=2026-04-22 09:58:17.679463
+  id=71 grade=B regime=RANGE_CHOP allowed=True mult=0.500 at=2026-04-22 11:53:05.362729
+  id=75 grade=B regime=RANGE_CHOP allowed=True mult=0.500 at=2026-04-22 11:54:49.864479
+  id=79 grade=B regime=RANGE_CHOP allowed=True mult=0.500 at=2026-04-22 11:59:16.857214
+  id=83 grade=B regime=RANGE_CHOP allowed=True mult=0.500 at=2026-04-22 12:05:05.117045
+  id=87 grade=B regime=RANGE_CHOP allowed=True mult=0.500 at=2026-04-22 12:09:31.262010
+  id=91 grade=B regime=RANGE_CHOP allowed=True mult=0.500 at=2026-04-22 12:15:24.038468
+  id=95 grade=B regime=RANGE_CHOP allowed=True mult=0.500 at=2026-04-22 14:41:55.374774
+
+==============================================================================
+7. monitor_decision
+==============================================================================
+  id=113 time=2026-04-22 09:00:00 mode=WATCH notify=False trigger=NONE
+  id=114 time=2026-04-22 09:05:00 mode=WATCH notify=False trigger=NONE
+  id=115 time=2026-04-22 09:10:00 mode=WATCH notify=False trigger=NONE
+  id=116 time=2026-04-22 09:15:00 mode=WATCH notify=False trigger=NONE
+  id=117 time=2026-04-22 09:20:00 mode=WATCH notify=False trigger=NONE
+  id=118 time=2026-04-22 09:25:00 mode=WATCH notify=False trigger=NONE
+  id=119 time=2026-04-22 09:30:00 mode=WATCH notify=False trigger=NONE
+  id=120 time=2026-04-22 09:35:00 mode=WATCH notify=False trigger=NONE
+  id=121 time=2026-04-22 09:40:00 mode=WATCH notify=False trigger=NONE
+  id=122 time=2026-04-22 09:50:00 mode=OFF notify=False trigger=MARKET_DOWNGRADE
+  id=123 time=2026-04-22 09:55:00 mode=OFF notify=False trigger=NONE
+  id=124 time=2026-04-22 10:00:00 mode=OFF notify=False trigger=NONE
+  id=125 time=2026-04-22 10:05:00 mode=OFF notify=False trigger=NONE
+  id=126 time=2026-04-22 10:10:00 mode=OFF notify=False trigger=NONE
+  id=127 time=2026-04-22 10:15:00 mode=OFF notify=False trigger=NONE
+  id=128 time=2026-04-22 10:20:00 mode=OFF notify=False trigger=NONE
+  id=129 time=2026-04-22 10:25:00 mode=OFF notify=False trigger=NONE
+  id=130 time=2026-04-22 10:30:00 mode=OFF notify=False trigger=NONE
+  id=131 time=2026-04-22 10:35:00 mode=OFF notify=False trigger=NONE
+  id=132 time=2026-04-22 10:40:00 mode=OFF notify=False trigger=NONE
+  id=133 time=2026-04-22 10:45:00 mode=OFF notify=False trigger=NONE
+  id=134 time=2026-04-22 10:50:00 mode=OFF notify=False trigger=NONE
+  id=135 time=2026-04-22 10:55:00 mode=OFF notify=False trigger=NONE
+  id=136 time=2026-04-22 11:00:01 mode=OFF notify=False trigger=NONE
+  id=137 time=2026-04-22 11:05:00 mode=OFF notify=False trigger=NONE
+  id=138 time=2026-04-22 11:10:00 mode=OFF notify=False trigger=NONE
+  id=139 time=2026-04-22 11:15:00 mode=OFF notify=False trigger=NONE
+  id=140 time=2026-04-22 11:20:00 mode=OFF notify=False trigger=NONE
+  id=141 time=2026-04-22 11:25:00 mode=OFF notify=False trigger=NONE
+  id=142 time=2026-04-22 11:30:00 mode=OFF notify=False trigger=NONE
+  id=143 time=2026-04-22 11:35:00 mode=OFF notify=False trigger=NONE
+  id=144 time=2026-04-22 11:40:00 mode=OFF notify=False trigger=NONE
+  id=145 time=2026-04-22 11:45:00 mode=OFF notify=False trigger=NONE
+  id=146 time=2026-04-22 11:50:00 mode=OFF notify=False trigger=NONE
+  id=147 time=2026-04-22 11:55:00 mode=OFF notify=False trigger=NONE
+  id=148 time=2026-04-22 12:00:00 mode=OFF notify=False trigger=NONE
+  id=149 time=2026-04-22 12:05:00 mode=OFF notify=False trigger=NONE
+  id=150 time=2026-04-22 12:10:00 mode=OFF notify=False trigger=NONE
+  id=151 time=2026-04-22 12:15:00 mode=OFF notify=False trigger=NONE
+  id=152 time=2026-04-22 12:20:00 mode=OFF notify=False trigger=NONE
+  id=153 time=2026-04-22 12:25:00 mode=OFF notify=False trigger=NONE
+  id=154 time=2026-04-22 12:30:00 mode=OFF notify=False trigger=NONE
+  id=155 time=2026-04-22 12:35:00 mode=OFF notify=False trigger=NONE
+  id=156 time=2026-04-22 12:40:00 mode=OFF notify=False trigger=NONE
+  id=157 time=2026-04-22 12:45:00 mode=OFF notify=False trigger=NONE
+  id=158 time=2026-04-22 12:50:00 mode=OFF notify=False trigger=NONE
+  id=159 time=2026-04-22 12:55:00 mode=OFF notify=False trigger=NONE
+  id=160 time=2026-04-22 13:00:00 mode=OFF notify=False trigger=NONE
+  id=161 time=2026-04-22 13:05:00 mode=OFF notify=False trigger=NONE
+  id=162 time=2026-04-22 13:10:00 mode=OFF notify=False trigger=NONE
+  id=163 time=2026-04-22 13:15:00 mode=OFF notify=False trigger=NONE
+  id=164 time=2026-04-22 13:20:00 mode=OFF notify=False trigger=NONE
+  id=165 time=2026-04-22 13:25:00 mode=OFF notify=False trigger=NONE
+  id=166 time=2026-04-22 13:30:00 mode=OFF notify=False trigger=NONE
+  id=167 time=2026-04-22 13:35:00 mode=OFF notify=False trigger=NONE
+  id=168 time=2026-04-22 13:40:00 mode=OFF notify=False trigger=NONE
+  id=169 time=2026-04-22 13:45:00 mode=OFF notify=False trigger=NONE
+  id=170 time=2026-04-22 13:50:00 mode=OFF notify=False trigger=NONE
+  id=171 time=2026-04-22 13:55:00 mode=OFF notify=False trigger=NONE
+
+==============================================================================
+8. score_config snapshot (relevant keys)
+==============================================================================
+  scoring.grade_ap_min                                       8.2
+  scoring.grade_a_min                                        7.5
+  scoring.grade_b_min                                        6.5
+  scoring.rr_min_ap                                          2.2
+  scoring.rr_min_grade_a                                     2.0
+  scoring.rr_min_grade_b                                     1.8
+  scoring.java_weight                                        0.50
+  scoring.claude_weight                                      0.35
+  scoring.codex_weight                                       0.15
+  scoring.late_stop_market_grade                             A
+  veto.theme_rank_max                                        4
+  veto.final_theme_score_min                                 6.5
+  veto.codex_score_min                                       5.5
+  veto.score_divergence_max                                  2.5
+  veto.require_theme                                         false
+  consensus.penalty_jc                                       0.25
+  consensus.penalty_jx                                       0.20
+  consensus.penalty_cx                                       0.20
+  penalty.rr_below_min                                       0.5
+  penalty.not_in_final_plan                                  0.1
+  penalty.high_val_weak_market                               0.8
+  penalty.no_theme                                           1.0
+  penalty.codex_low                                          1.0
+  penalty.theme_not_top                                      0.8
+  penalty.theme_score_too_low                                0.8
+  penalty.score_divergence_high                              1.5
+  penalty.entry_too_extended                                 0.0
+  decision.max_pick_aplus                                    2
+  decision.max_pick_a                                        2
+  decision.max_pick_b                                        1
+  decision.position_factor_aplus                             1.0
+  decision.position_factor_a                                 0.7
+  decision.position_factor_b                                 0.5
+  theme.engine.v2.enabled                                    true
+  theme.shadow_mode.enabled                                  true
+  final_decision.ai_default_reweight.enabled                 true
+  final_decision.respect_tradability_tag.enabled             true
+  final_decision.tradability_tag.soft_penalty                1.0
+  final_decision.select_buy_now_bypass_soft_penalty.enabled  true
+  final_decision.require_claude                              true
+  final_decision.require_codex                               true
+  trading.status.allow_trade                                 true
+  ranking.main_stream_boost                                  <missing>
+
+==============================================================================
+9. final_decision rows for the day
+==============================================================================
+  id=21 decision=REST task=PREMARKET strategy=SETUP ai=AI_NOT_READY fallback=AI_NOT_READY created=2026-04-21 16:45:12
+      summary='AI 未完成，今日保守休息（AI_NOT_READY）'
+  id=22 decision=REST task=OPENING strategy=SETUP ai=AI_NOT_READY fallback=AI_NOT_READY created=2026-04-21 16:48:48
+      summary='AI 未完成，今日保守休息（AI_NOT_READY）'
+  id=23 decision=REST task=PREMARKET strategy=SETUP ai=FULL_AI_READY fallback=None created=2026-04-22 01:00:13
+      summary='PORTFOLIO_FULL (3/3)'
+  id=24 decision=REST task=OPENING strategy=SETUP ai=FULL_AI_READY fallback=None created=2026-04-22 01:38:59
+      summary='PORTFOLIO_FULL (3/3)'
+  id=25 decision=REST task=OPENING strategy=SETUP ai=FULL_AI_READY fallback=None created=2026-04-22 01:46:21
+      summary='PORTFOLIO_FULL (3/3)'
+  id=26 decision=REST task=OPENING strategy=SETUP ai=FULL_AI_READY fallback=None created=2026-04-22 02:02:12
+      summary='PORTFOLIO_FULL (3/3)'
+  id=27 decision=REST task=MIDDAY strategy=SETUP ai=FULL_AI_READY fallback=None created=2026-04-22 03:16:00
+      summary='PORTFOLIO_FULL (3/3)'
+  id=29 decision=REST task=OPENING strategy=SETUP ai=FULL_AI_READY fallback=None created=2026-04-22 04:20:25
+      summary='決策鎖啟用，暫不進場。'
+  id=30 decision=REST task=POSTMARKET strategy=SETUP ai=FULL_AI_READY fallback=None created=2026-04-22 09:05:14
+      summary='決策鎖啟用，暫不進場。'
+  id=31 decision=REST task=T86_TOMORROW strategy=SETUP ai=FULL_AI_READY fallback=None created=2026-04-22 11:08:52
+      summary='決策鎖啟用，暫不進場。'
+  id=32 decision=REST task=OPENING strategy=SETUP ai=FULL_AI_READY fallback=None created=2026-04-22 11:14:37
+      summary='無 A+/A/B 等級候選股，今日建議休息。'
+      REJECTED: 2454 等級 C（rank=3.500 +boost=0.3）
+  id=33 decision=PLAN task=T86_TOMORROW strategy=SETUP ai=FULL_AI_READY fallback=None created=2026-04-22 11:32:09
+      summary='明日無主規劃標的（評分全 C）；持倉管理為主。 排除 1 檔。'
+  id=34 decision=PLAN task=T86_TOMORROW strategy=SETUP ai=FULL_AI_READY fallback=None created=2026-04-22 11:34:50
+      summary='明日無主規劃標的（評分全 C）；持倉管理為主。 排除 1 檔。'
+  id=35 decision=PLAN task=T86_TOMORROW strategy=SETUP ai=FULL_AI_READY fallback=None created=2026-04-22 14:24:39
+      summary='明日無主規劃標的（評分全 C）；持倉管理為主。'
+      REJECTED: 2454 中段評分，非主規劃（score=5.000）
+  id=36 decision=PLAN task=T86_TOMORROW strategy=SETUP ai=FULL_AI_READY fallback=None created=2026-04-22 14:31:37
+      summary='明日首選 6770/8028，備援 2454。'
+      SELECTED: zone=2027.3-2110.9 sl=1964.6 tp1=2257.2 tp2=2403.5 rr=1.33
+
+==============================================================================
+10. VERDICT — where was the ENTER lost?
+==============================================================================
+ENTER signal at execution layer; final_decision shows REST/PLAN/WAIT. Investigating downgrade reasons:
+  GATE: stock_evaluation.bucket=C, final_rank=5.000 < grade_b_min=6.5 → FinalDecisionEngine REJECTS as 等級 C.
+  rawRank=5.6, penalty=0.6, finalRank=5.000
+  penalty reasons: ['PENALTY:RR_BELOW_MIN', 'PENALTY:NOT_IN_FINAL_PLAN']
+  Penalty cascade pushes finalRank below B threshold — this is the hidden gate.
+  POSTCLOSE PLAN listed this symbol (PLAN row), but INTRADAY OPENING/MIDDAY did NOT promote to ENTER. This means the postclose pre-rank was strong enough to be a primary/backup candidate, but on the actual trading day the same scoring pipeline produced a lower rank.
+  NOTE: ai_default_reweight=None (not engaged for this candidate). If Java=low / Claude=high, weighted dilution may be acceptable, but min(weighted, consensus) still anchors to the lower of the two. Consensus path can drop scores significantly.
+  COMMON PATTERN: PENALTY:RR_BELOW_MIN — the candidate's RR (e.g. 1.33) is below scoring.rr_min_grade_b (1.8). Setup-generated TP1/TP2 from default 8%/12% targets rarely produce RR>=1.8 with a 5% stop. Every PULLBACK setup is hit by this 0.5 penalty.
