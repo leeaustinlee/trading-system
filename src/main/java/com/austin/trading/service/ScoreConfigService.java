@@ -248,6 +248,11 @@ public class ScoreConfigService {
         DEFAULTS.put("candidate.changepct_hard_gate.max_pct",          new String[]{"9.0",   "DECIMAL", "P0.1b：changePct 上限（>= 此值的候選一律拒絕；對應限漲股 + 鎖漲停高追風險）"});
         DEFAULTS.put("final_decision.respect_tradability_tag.enabled", new String[]{"true",  "BOOLEAN", "P0.3：FinalDecisionEngine 是否套用 candidate.payload_json.tradabilityTag（不列主進場 hard block / 漲幅過大 軟懲罰）"});
         DEFAULTS.put("final_decision.tradability_tag.soft_penalty",    new String[]{"1.0",   "DECIMAL", "P0.3：tradability_tag=漲幅過大/僅參考 時 final_rank_score 的扣分幅度"});
+
+        // ── 2026-04-29 量化審計 P0 落地：regime 降級 + position review 自動平倉 ──
+        DEFAULTS.put("market_regime.real_downgrade.enabled",           new String[]{"true",  "BOOLEAN", "P0.2：啟用 4 個 hard downgrade triggers（CONSEC_DOWN / TAIEX_BELOW_60MA / SEMI_WEAK / DAILY_LOSS_CAP）強制將 market_grade 降為 C；data 缺失時 fail-safe 不降級"});
+        DEFAULTS.put("position.review.auto_close.enabled",             new String[]{"true",  "BOOLEAN", "P0.3：position_review_log decision_status=EXIT 時觸發自動平倉（transition gate prev != EXIT && curr == EXIT）"});
+        DEFAULTS.put("position.review.auto_close.paper_only",          new String[]{"true",  "BOOLEAN", "P0.3：自動平倉 shadow 模式 — 只寫 paper_trade close + LINE shadow alert，不動真倉。5 個交易日 (2026-05-05) 後若勝率 ≥ 50% 樣本 ≥ 5 → SQL UPDATE 切 false 開真倉"});
     }
 
     public ScoreConfigService(ScoreConfigRepository repository) {
