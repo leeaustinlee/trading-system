@@ -7,6 +7,7 @@ import com.austin.trading.entity.MarketRegimeDecisionEntity;
 import com.austin.trading.entity.MarketSnapshotEntity;
 import com.austin.trading.repository.MarketRegimeDecisionRepository;
 import com.austin.trading.repository.MarketSnapshotRepository;
+import com.austin.trading.service.regime.RealDowngradeEvaluator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -51,17 +52,26 @@ public class MarketRegimeService {
     private final MarketRegimeDecisionRepository regimeRepository;
     private final MarketSnapshotRepository      marketSnapshotRepository;
     private final ObjectMapper                  objectMapper;
+    /**
+     * P0.2 — real C-grade downgrade. Inspects the engine result and forces
+     * {@code market_grade='C'} when any of CONSEC_DOWN / TAIEX_BELOW_60MA /
+     * SEMI_WEAK / DAILY_LOSS_CAP fires. Gated by feature flag
+     * {@code market_regime.real_downgrade.enabled} (default true).
+     */
+    private final RealDowngradeEvaluator         realDowngradeEvaluator;
 
     public MarketRegimeService(
             MarketRegimeEngine engine,
             MarketRegimeDecisionRepository regimeRepository,
             MarketSnapshotRepository marketSnapshotRepository,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            RealDowngradeEvaluator realDowngradeEvaluator
     ) {
         this.engine                    = engine;
         this.regimeRepository          = regimeRepository;
         this.marketSnapshotRepository  = marketSnapshotRepository;
         this.objectMapper              = objectMapper;
+        this.realDowngradeEvaluator    = realDowngradeEvaluator;
     }
 
     // ── reads ──────────────────────────────────────────────────────────
@@ -100,6 +110,8 @@ public class MarketRegimeService {
         MarketSnapshotEntity snap = snapshotOpt.get();
         MarketRegimeInput    input = buildInput(snap);
         MarketRegimeDecision decision = engine.evaluate(input);
+        // P0.2: post-process — downgrade to C when any hard trigger fires.
+        decision = realDowngradeEvaluator.applyIfNeeded(decision, input.tradingDate());
         return Optional.of(persist(decision, snap.getId()));
     }
 
@@ -107,6 +119,8 @@ public class MarketRegimeService {
     @Transactional
     public MarketRegimeDecision evaluateAndPersist(MarketRegimeInput input, Long marketSnapshotId) {
         MarketRegimeDecision decision = engine.evaluate(input);
+        // P0.2: post-process — downgrade to C when any hard trigger fires.
+        decision = realDowngradeEvaluator.applyIfNeeded(decision, input.tradingDate());
         return persist(decision, marketSnapshotId);
     }
 
