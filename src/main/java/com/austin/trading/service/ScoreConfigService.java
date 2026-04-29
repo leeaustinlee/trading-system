@@ -142,6 +142,7 @@ public class ScoreConfigService {
         // ── Final Decision AI 研究準備度（PR-2）─────────────────────────────────
         DEFAULTS.put("final_decision.require_claude",              new String[]{"true",  "BOOLEAN", "FinalDecision 前必須等到 Claude PREMARKET 任務完成"});
         DEFAULTS.put("final_decision.require_codex",               new String[]{"true",  "BOOLEAN", "FinalDecision 前必須等到 Codex 審核（Codex 未完成不得輸出正式 ENTER）"});
+        DEFAULTS.put("final_decision.require_codex.session_aware", new String[]{"true",  "BOOLEAN", "P0.4 (2026-04-29): require_codex 在 PREMARKET/POSTMARKET/T86_TOMORROW 自動視為 false，避免結構性 freeze；false=legacy 行為（全 session require）"});
         DEFAULTS.put("final_decision.ai_downgrade_enabled",        new String[]{"true",  "BOOLEAN", "AI 未就緒時是否降級為 REST（false 則忽略準備度）"});
         // v2.12 Fix4 rollback flag：bucket=SELECT_BUY_NOW 是否直接 bypass 所有 soft penalty。
         // 預設 true（採用 v2.12 新行為）；要回退到「需 codexScore>=9.5」舊行為時改為 false。
