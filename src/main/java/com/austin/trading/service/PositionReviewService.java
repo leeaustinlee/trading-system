@@ -348,10 +348,16 @@ public class PositionReviewService {
      * <p>過去 30 天 position_review_log 累積 160+ 筆 EXIT 訊號但都沒有自動平倉動作；
      * 這個 handler 把 EXIT 訊號真的接出去。</p>
      *
-     * <p>Transition gate 沿用 {@link #maybeSendExitAlert} 的 dedupe pattern：只有
-     * {@code prev != EXIT && curr == EXIT} 時才動作。盤中 5-minute monitor 會持續跑
-     * reviewAllOpenPositions，若不 dedupe 同一個 EXIT 會被反覆觸發 → 反覆寫 paper_trade
-     * 與 LINE alert，所以 transition gate 是必須的。</p>
+     * <p>Transition gate 沿用 {@link #maybeSendExitAlert} 的 dedupe pattern，但比 EXIT alert 嚴：
+     * 必須是 {@code prev != null && prev != EXIT && curr == EXIT} 的「真實狀態轉換」才動作。
+     * 盤中 5-minute monitor 會持續跑 reviewAllOpenPositions，若不 dedupe 同一個 EXIT 會被反覆觸發
+     * → 反覆寫 paper_trade 與 LINE alert，所以 transition gate 是必須的。</p>
+     *
+     * <p><b>P0.3 NEEDS_FIX (2026-04-29 reviewer)：當 {@code prev == null}（首次審查、{@code last_reviewed_at IS NULL}）
+     * 時，{@code "EXIT".equalsIgnoreCase(null) == false}，原邏輯會誤把首次審查當成「轉換」並觸發 auto-close。
+     * shadow（{@code paper_only=true}）時無害，但 5/5 切真倉那一刻，所有現存 OPEN position（prev=null）會被
+     * 一次刷掉。這裡明確跳過 {@code prev == null}：首次審查不觸發 auto-close，等下一輪有實際 prev 狀態
+     * 後再決定。EXIT alert 的 prev=null 行為（首次 EXIT 仍送 LINE）不變。</b></p>
      *
      * <p>動作順序（feature flag 預設皆 TRUE）：
      * <ol>
@@ -385,8 +391,15 @@ public class PositionReviewService {
             return;
         }
 
-        // Transition gate（沿用 maybeSendExitAlert 的 dedupe pattern）
+        // Transition gate（嚴格版：prev != null && prev != EXIT && curr == EXIT）
+        // - prev == null（首次審查、last_reviewed_at IS NULL）→ 不觸發；review 主流程仍會把 reviewStatus
+        //   寫進 DB，下一輪審查才有實際 prev 狀態可比對。避免 5/5 切真倉那刻把所有現存 OPEN position 一次刷掉。
+        // - prev == EXIT → 已經 exit 過，避免每 5 分鐘 monitor 反覆觸發。
         String prevStatus = pos.getReviewStatus();
+        if (prevStatus == null) {
+            log.info("[PositionReview] auto-close skipped (first review, prev=null) symbol={}", pos.getSymbol());
+            return;
+        }
         if ("EXIT".equalsIgnoreCase(prevStatus)) {
             log.debug("[PositionReview] auto-close skipped (already EXIT) symbol={}", pos.getSymbol());
             return;

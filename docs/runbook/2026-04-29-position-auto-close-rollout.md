@@ -138,3 +138,41 @@ if ("EXIT".equalsIgnoreCase(prevStatus)) return;
 
 `maybeAutoClosePosition` 必須在 `pos.setReviewStatus(decision.status().name())` **之前**呼叫，
 否則 gate 會誤判（curr 的 reviewStatus 已經是 EXIT，prev 也變 EXIT）。
+
+### NEEDS_FIX (P0.3 reviewer 2026-04-29) — `prev=null` 首次審查誤觸發
+
+**已修復於 commit `0106a30`（branch `fix/p03-auto-close-prev-null`）。**
+
+原 gate 只擋 `prev == "EXIT"`；當 `prev == null`（首次審查、`last_reviewed_at IS NULL`）時，
+`"EXIT".equalsIgnoreCase(null) == false`，gate 會誤判為「狀態轉換」→ 首次審查就觸發 auto-close。
+shadow（`paper_only=true`）期間無害，但 5/5 把 `paper.auto_close.live_mode.enabled` 切真倉那一刻，
+**所有現存 `review_status IS NULL` 的 OPEN position 會被一次刷掉**（race scenario：首次審查若拿到
+盤外 / stale 報價得到 EXIT，下一輪可能就回 HOLD，但持倉已被平掉）。
+
+修法（Option A：明確跳過 prev=null）：
+
+```java
+String prevStatus = pos.getReviewStatus();
+if (prevStatus == null) {
+    log.info("[PositionReview] auto-close skipped (first review, prev=null) symbol={}", pos.getSymbol());
+    return;  // 首次審查不平倉；review 主流程仍會 setReviewStatus，下一輪才有資格觸發
+}
+if ("EXIT".equalsIgnoreCase(prevStatus)) {
+    log.debug("[PositionReview] auto-close skipped (already EXIT) symbol={}", pos.getSymbol());
+    return;
+}
+```
+
+`maybeSendExitAlert` 不動：首次審查就 EXIT 仍要送 LINE alert，使用者要立刻知道。
+`PositionDecisionEngine` 不動，決策邏輯不變，只改 transition gate。
+
+5 個新測試 case 在 `PositionReviewServiceAutoCloseTransitionTests`：
+1. `prev=null + curr=EXIT` → **不**觸發
+2. `prev=HOLD + curr=EXIT` → 觸發
+3. `prev=EXIT + curr=EXIT` → 不觸發（dedupe）
+4. `prev=null + curr=HOLD` → 不觸發
+5. `prev=WEAKEN + curr=EXIT` → 觸發
+
+切真倉 SQL（5/5 之後執行）已可安全執行：所有現存 OPEN position 在切之前至少跑過一輪 review，
+`review_status` 已不再是 NULL，gate 會正常 dedupe；新建的 position 首次審查也只會記錄 review_status，
+不會誤平倉。
