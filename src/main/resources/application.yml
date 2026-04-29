@@ -92,6 +92,12 @@ trading:
     paper-trade-mtm:
       enabled: ${PAPER_TRADE_MTM_ENABLED:true}
     paper-trade-mtm-cron: "0 35 13 * * MON-FRI"
+    # P0.5：盤後抓 TWSE TAIEX + 半導體代理日線到 market_index_daily，
+    # 補 RealDowngradeEvaluator 三個歷史 trigger 的資料來源。
+    # 排在 WatchlistRefresh (15:35) 之後、TomorrowPlan (18:30) 之前。
+    market-index-data-prep:
+      enabled: ${MARKET_INDEX_DATA_PREP_ENABLED:true}
+    market-index-data-prep-cron: "0 40 15 * * MON-FRI"
   paper-trade:
     enabled: ${PAPER_TRADE_ENABLED:true}
 

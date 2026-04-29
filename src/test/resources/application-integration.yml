@@ -13,6 +13,10 @@ trading:
   ai:
     claude:
       enabled: false
+  # 整合測試不撥打 TWSE 歷史 API（避免外網依賴與啟動延遲）
+  market-index:
+    startup-backfill:
+      enabled: false
   scheduler:
     hourly-gate:
       enabled: false

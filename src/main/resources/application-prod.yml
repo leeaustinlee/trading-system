@@ -91,6 +91,10 @@ trading:
     weekly-trade-review-cron: "0 0 19 * * FRI"
     watchlist-refresh:
       enabled: true
+    # P0.5：盤後抓 TWSE TAIEX + 半導體代理日線 → market_index_daily
+    market-index-data-prep:
+      enabled: true
+    market-index-data-prep-cron: "0 40 15 * * MON-FRI"
 
   taifex:
     base-url: ${TAIFEX_BASE_URL:https://openapi.taifex.com.tw}
