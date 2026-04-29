@@ -30,4 +30,7 @@ public interface PaperTradeRepository extends JpaRepository<PaperTradeEntity, Lo
 
     /** 僅依進場日篩選,用於 dashboard /closed?from&to 補單日查詢。 */
     List<PaperTradeEntity> findByEntryDateBetweenOrderByEntryDateDescIdDesc(LocalDate from, LocalDate to);
+
+    /** P0.6：找指定 entry_date 的所有 trade（不論 status / shadow），給 BackfillReturnsJob 用。 */
+    List<PaperTradeEntity> findByEntryDate(LocalDate entryDate);
 }

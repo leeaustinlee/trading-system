@@ -241,6 +241,11 @@ public class ScoreConfigService {
         DEFAULTS.put("paper.entry_slippage_pct",                   new String[]{"0.001","DECIMAL", "Subagent A：模擬進場滑價（1‰ = +0.1% buy）"});
         DEFAULTS.put("paper.exit_slippage_pct",                    new String[]{"0.001","DECIMAL", "Subagent B：模擬出場滑價（1‰ = -0.1% sell）"});
 
+        // ── P0.6 (2026-04-29) Phase 1 forward testing：shadow paper_trade + 報酬回填 ──
+        DEFAULTS.put("paper.shadow.enabled",                       new String[]{"true",  "BOOLEAN", "P0.6：final_score>=門檻的 candidate 即使非真 ENTER 也寫入 paper_trade.is_shadow=true 做 forward test；解 30 天 1 sample 困境"});
+        DEFAULTS.put("paper.shadow.score_min",                     new String[]{"6.0",   "DECIMAL", "P0.6：寫入 shadow paper_trade 的 final_rank_score 最低門檻"});
+        DEFAULTS.put("paper.return_backfill.enabled",              new String[]{"true",  "BOOLEAN", "P0.6：每日 18:30 回填 paper_trade.return_1d/3d/5d/10d（給 forward test 評估用）"});
+
         // ── 2026-04-29 候選股 review P0 落地：momentum gate + tradability tag + changePct hard gate ──
         // momentum_gate.enabled 預設 false，等 PowerShell payload 把 momentum signal 欄位
         // (volume_ratio_5ma / consec_up_days / new_high_20 / breakout_volume_spike / above_ma5) 全填齊再開

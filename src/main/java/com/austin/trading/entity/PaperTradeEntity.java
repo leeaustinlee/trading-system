@@ -180,6 +180,24 @@ public class PaperTradeEntity {
     @Column(name = "payload_json", columnDefinition = "json")
     private String payloadJson;
 
+    // ── P0.6 (2026-04-29) Phase 1 forward testing ───────────────────
+    /** true = shadow trade（未真進場 final ENTER 仍記錄做 forward test）。 */
+    @Column(name = "is_shadow", nullable = false)
+    private boolean shadow = false;
+
+    /** Entry+1 交易日報酬 % (PaperTradeReturnBackfillJob 回填)。 */
+    @Column(name = "return_1d", precision = 8, scale = 4)
+    private BigDecimal return1d;
+
+    @Column(name = "return_3d", precision = 8, scale = 4)
+    private BigDecimal return3d;
+
+    @Column(name = "return_5d", precision = 8, scale = 4)
+    private BigDecimal return5d;
+
+    @Column(name = "return_10d", precision = 8, scale = 4)
+    private BigDecimal return10d;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -264,6 +282,19 @@ public class PaperTradeEntity {
     public void setStatus(String v) { this.status = v; }
     public String getPayloadJson() { return payloadJson; }
     public void setPayloadJson(String v) { this.payloadJson = v; }
+
+    // P0.6 shadow / returns
+    public boolean isShadow() { return shadow; }
+    public void setShadow(boolean v) { this.shadow = v; }
+    public BigDecimal getReturn1d() { return return1d; }
+    public void setReturn1d(BigDecimal v) { this.return1d = v; }
+    public BigDecimal getReturn3d() { return return3d; }
+    public void setReturn3d(BigDecimal v) { this.return3d = v; }
+    public BigDecimal getReturn5d() { return return5d; }
+    public void setReturn5d(BigDecimal v) { this.return5d = v; }
+    public BigDecimal getReturn10d() { return return10d; }
+    public void setReturn10d(BigDecimal v) { this.return10d = v; }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

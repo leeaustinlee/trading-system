@@ -355,6 +355,132 @@ public class PaperTradeService {
         return e;
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    // P0.6 (2026-04-29) Phase 1：shadow paper_trade（forward testing）
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * 寫入一筆 shadow paper_trade（is_shadow=true）。
+     *
+     * <p>用途：final_score 過 {@code paper.shadow.score_min}（預設 6.0）的候選股，
+     * 即使最終 decision 不是 ENTER，也記錄做 forward testing。原 30 天 1 sample
+     * 困境的解方。</p>
+     *
+     * <p>與 {@link #recordEntry} 差異：</p>
+     * <ul>
+     *   <li>{@code is_shadow=true}（不影響真實倉位 / 不觸發 exit alert LINE）</li>
+     *   <li>多帶 {@code finalRankScore}、{@code entryGrade}（A_PLUS/A/B/SHADOW）落 entity</li>
+     *   <li>跳過 {@code trading.paper_mode.enabled} 檢查；只看 {@code paper.shadow.enabled}</li>
+     *   <li>{@code source=SHADOW}</li>
+     * </ul>
+     *
+     * <p>Idempotency：同 (entry_date, symbol, is_shadow=true) 已存在 OPEN 直接 return existing。</p>
+     *
+     * @return 寫入的 entity；shadow disabled / 重複 / 參數無效時 return null
+     */
+    @Transactional
+    public PaperTradeEntity recordShadowEntry(String symbol,
+                                              String stockName,
+                                              BigDecimal entryPrice,
+                                              BigDecimal stopLoss,
+                                              BigDecimal tp1,
+                                              BigDecimal tp2,
+                                              BigDecimal finalRankScore,
+                                              String entryGrade,
+                                              String strategyType,
+                                              String themeTag,
+                                              String reason) {
+        ScoreConfigService cfg = scoreConfigProvider != null ? scoreConfigProvider.getIfAvailable() : null;
+        if (cfg == null || !cfg.getBoolean("paper.shadow.enabled", true)) {
+            log.debug("[PaperShadow] disabled, skip symbol={}", symbol);
+            return null;
+        }
+        if (symbol == null || symbol.isBlank()) return null;
+        if (entryPrice == null || entryPrice.signum() <= 0) {
+            log.debug("[PaperShadow] invalid entryPrice symbol={} price={}", symbol, entryPrice);
+            return null;
+        }
+        BigDecimal scoreMin = cfg.getDecimal("paper.shadow.score_min", new BigDecimal("6.0"));
+        if (finalRankScore == null || finalRankScore.compareTo(scoreMin) < 0) {
+            log.debug("[PaperShadow] score below floor symbol={} score={} min={}",
+                    symbol, finalRankScore, scoreMin);
+            return null;
+        }
+
+        LocalDate today = LocalDate.now();
+        // Idempotency：同 entry_date + symbol + is_shadow=true 已 OPEN → 直接 return
+        List<PaperTradeEntity> existing = repository.findByEntryDateAndSymbol(today, symbol);
+        for (PaperTradeEntity p : existing) {
+            if (p.isShadow() && "OPEN".equals(p.getStatus())) {
+                log.info("[PaperShadow] idempotent skip symbol={} existingId={}", symbol, p.getId());
+                return p;
+            }
+        }
+
+        BigDecimal intended = entryPrice.setScale(4, RoundingMode.HALF_UP);
+        BigDecimal stop = stopLoss != null ? stopLoss
+                : intended.multiply(BigDecimal.ONE.subtract(DEFAULT_STOP_LOSS_PCT))
+                        .setScale(4, RoundingMode.HALF_UP);
+        BigDecimal t1 = tp1 != null ? tp1
+                : intended.multiply(BigDecimal.ONE.add(DEFAULT_TARGET1_PCT))
+                        .setScale(4, RoundingMode.HALF_UP);
+        BigDecimal t2 = tp2 != null ? tp2
+                : intended.multiply(BigDecimal.ONE.add(DEFAULT_TARGET2_PCT))
+                        .setScale(4, RoundingMode.HALF_UP);
+
+        BigDecimal simulated = simulateBuyFill(symbol, intended);
+        String regime = currentRegimeType();
+        BigDecimal rr = computeRrRatio(intended, stop, t1);
+        String grade = entryGrade != null ? entryGrade : "SHADOW";
+        String strat = strategyType != null ? strategyType : "SETUP";
+
+        PaperTradeEntity e = new PaperTradeEntity();
+        e.setTradeId(UUID.randomUUID().toString().replace("-", "").substring(0, 32));
+        e.setEntryDate(today);
+        e.setEntryTime(LocalTime.now());
+        e.setSymbol(symbol);
+        e.setStockName(stockName);
+        e.setEntryPrice(intended);
+        e.setIntendedEntryPrice(intended);
+        e.setSimulatedEntryPrice(simulated);
+        e.setStopLossPrice(stop);
+        e.setTarget1Price(t1);
+        e.setTarget2Price(t2);
+        e.setMaxHoldingDays(DEFAULT_MAX_HOLD_DAYS);
+        e.setSource("SHADOW");
+        e.setStrategyType(strat);
+        e.setThemeTag(themeTag);
+        e.setEntryGrade(grade);
+        e.setEntryRrRatio(rr);
+        e.setEntryRegime(regime);
+        e.setFinalRankScore(finalRankScore);
+        e.setStatus("OPEN");
+        e.setShadow(true);
+        e.setPayloadJson(buildShadowEntryPayload(symbol, intended, finalRankScore, grade, reason));
+        repository.save(e);
+        log.info("[PaperShadow] OPEN id={} symbol={} intended={} score={} grade={} regime={}",
+                e.getId(), symbol, intended, finalRankScore, grade, regime);
+        return e;
+    }
+
+    private String buildShadowEntryPayload(String symbol, BigDecimal entryPrice,
+                                            BigDecimal score, String grade, String reason) {
+        try {
+            ObjectNode n = objectMapper.createObjectNode();
+            n.put("source", "recordShadowEntry");
+            n.put("symbol", symbol);
+            n.put("entryPrice", entryPrice.toPlainString());
+            n.put("finalRankScore", score.toPlainString());
+            n.put("entryGrade", grade);
+            n.put("isShadow", true);
+            if (reason != null) n.put("reason", reason);
+            n.put("createdAt", LocalDateTime.now().toString());
+            return objectMapper.writeValueAsString(n);
+        } catch (Exception e) {
+            return "{\"source\":\"recordShadowEntry\",\"symbol\":\"" + symbol + "\"}";
+        }
+    }
+
     private String buildManualEntryPayload(String symbol, BigDecimal entryPrice,
                                             BigDecimal stop, BigDecimal tp1, BigDecimal tp2,
                                             Integer qty, String reason) {
