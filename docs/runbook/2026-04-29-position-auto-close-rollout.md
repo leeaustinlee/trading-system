@@ -141,7 +141,7 @@ if ("EXIT".equalsIgnoreCase(prevStatus)) return;
 
 ### NEEDS_FIX (P0.3 reviewer 2026-04-29) — `prev=null` 首次審查誤觸發
 
-**已修復於 commit `0106a30`（branch `fix/p03-auto-close-prev-null`）。**
+**已修復於 commit `ea27fb9`（branch `fix/p03-auto-close-prev-null`）。**
 
 原 gate 只擋 `prev == "EXIT"`；當 `prev == null`（首次審查、`last_reviewed_at IS NULL`）時，
 `"EXIT".equalsIgnoreCase(null) == false`，gate 會誤判為「狀態轉換」→ 首次審查就觸發 auto-close。
