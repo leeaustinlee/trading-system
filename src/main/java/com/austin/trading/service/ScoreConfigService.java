@@ -252,6 +252,10 @@ public class ScoreConfigService {
 
         // ── 2026-04-29 量化審計 P0 落地：regime 降級 + position review 自動平倉 ──
         DEFAULTS.put("market_regime.real_downgrade.enabled",           new String[]{"true",  "BOOLEAN", "P0.2：啟用 4 個 hard downgrade triggers（CONSEC_DOWN / TAIEX_BELOW_60MA / SEMI_WEAK / DAILY_LOSS_CAP）強制將 market_grade 降為 C；data 缺失時 fail-safe 不降級"});
+        DEFAULTS.put("market_regime.auto_backfill_on_startup",         new String[]{"true",  "BOOLEAN", "P0.5：啟動時若 market_index_daily 筆數 < 30，自動 backfill 過去 60 個交易日 TAIEX + semi_proxy_symbol 歷史；DB 無資料時 RealDowngradeEvaluator 三個 trigger 全部 dead code，所以這個 flag 必須維持 true"});
+        DEFAULTS.put("market_regime.semi_proxy_symbol",                new String[]{"2330", "STRING",  "P0.5：RealDowngradeEvaluator SEMI_WEAK trigger 用的個股代號；MarketIndexDataPrepJob 也會依此抓資料。實際 evaluator 讀的是 market_regime.semi.symbol，本鍵為 prep job / backfill 端使用，兩者預設一致"});
+        DEFAULTS.put("market_regime.backfill_history_days",            new String[]{"90",   "INTEGER", "P0.5：startup backfill / DataPrep job 會抓的回看天數（自然日，會涵蓋 60 個交易日）"});
+        DEFAULTS.put("market_regime.twse_throttle_ms",                 new String[]{"250",  "INTEGER", "P0.5：每次打 TWSE 月度日線 API 後的 sleep 毫秒（避免 rate limit）"});
         DEFAULTS.put("position.review.auto_close.enabled",             new String[]{"true",  "BOOLEAN", "P0.3：position_review_log decision_status=EXIT 時觸發自動平倉（transition gate prev != EXIT && curr == EXIT）"});
         DEFAULTS.put("position.review.auto_close.paper_only",          new String[]{"true",  "BOOLEAN", "P0.3：自動平倉 shadow 模式 — 只寫 paper_trade close + LINE shadow alert，不動真倉。5 個交易日 (2026-05-05) 後若勝率 ≥ 50% 樣本 ≥ 5 → SQL UPDATE 切 false 開真倉"});
     }
