@@ -7,6 +7,7 @@ import com.austin.trading.service.ScoreConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -27,8 +28,11 @@ import java.util.Optional;
  * 因此前 60 天 backfill（{@code MarketIndexBackfillService}）涵蓋的 symbol 才有資料。
  * 沒抓到的 symbol 該 cell 維持 null，下次再試（job 是 idempotent）。</p>
  *
- * <p>cron 18:30（盤後 + WatchlistRefresh + T86 之後）。日期計算用「自然日」做近似（不算交易日，
- * 因為週末沒 trade），實作簡化為 entry_date 後第 N 個自然交易日的 close。</p>
+ * <p>cron 18:30（盤後 + WatchlistRefresh + T86 之後）。</p>
+ *
+ * <p><b>P0.6c：用交易日（不是自然日）算 offset</b>。週五 entry 的 1d return 應該是下週一的 close，
+ * 不是週六。實作走 TAIEX (`t00`) 的歷史 trading_date 當 calendar：找「referenceDate 之前的第 N 個
+ * trading_date」當作 entry_date，再用 referenceDate 的 close 算報酬。</p>
  */
 @Component
 public class PaperTradeReturnBackfillJob {
@@ -71,11 +75,20 @@ public class PaperTradeReturnBackfillJob {
     }
 
     /**
-     * 回填某個 offset：找 entry_date 是 referenceDate - offset 自然日的 trades，
-     * 用 referenceDate 的 close 計算 (close - entry_price) / entry_price。
+     * 回填某個 offset：用 TAIEX 找 referenceDate 之前第 N 個 trading_date 當 entry_date，
+     * 撈該日的 paper_trade，用 referenceDate 的 close 計算 (close - entry_price) / entry_price。
+     *
+     * <p>P0.6c：找不到 N 個 trading_date（例如系統剛上線、TAIEX 歷史 < N 筆）→ 回 0，下次再試。</p>
      */
     private int backfillForOffset(LocalDate referenceDate, int offsetDays) {
-        LocalDate entryDate = referenceDate.minusDays(offsetDays);
+        Optional<LocalDate> entryDateOpt = findTradingDayNBefore(referenceDate, offsetDays);
+        if (entryDateOpt.isEmpty()) {
+            log.debug("[PaperReturnBackfill] no TAIEX trading_date {} days before {}, skip offset",
+                    offsetDays, referenceDate);
+            return 0;
+        }
+        LocalDate entryDate = entryDateOpt.get();
+
         List<PaperTradeEntity> trades = paperTradeRepository.findByEntryDate(entryDate);
         int filled = 0;
         for (PaperTradeEntity t : trades) {
@@ -90,6 +103,17 @@ public class PaperTradeReturnBackfillJob {
             filled++;
         }
         return filled;
+    }
+
+    /**
+     * P0.6c: 用 TAIEX 找 referenceDate 之前第 N 個 trading_date（跳過週末 / 國定假）。
+     * 找不到（系統剛上線、TAIEX 歷史 &lt; N 筆）→ 回 empty。
+     */
+    private Optional<LocalDate> findTradingDayNBefore(LocalDate referenceDate, int n) {
+        if (n <= 0) return Optional.empty();
+        List<LocalDate> dates = marketIndexRepository.findTradingDatesBefore(
+                "t00", referenceDate, PageRequest.of(n - 1, 1));
+        return dates.isEmpty() ? Optional.empty() : Optional.of(dates.get(0));
     }
 
     /**

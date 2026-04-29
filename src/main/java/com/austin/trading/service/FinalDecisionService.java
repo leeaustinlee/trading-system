@@ -50,6 +50,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.austin.trading.event.FinalDecisionPersistedEvent;
+import com.austin.trading.event.FinalDecisionShadowCandidatesEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -124,6 +125,13 @@ public class FinalDecisionService {
      *     </ul>
      *   </li>
      * </ul>
+     *
+     * <p><b>Note (P0 review 2026-04-29)</b>：PREMARKET 分支實際不會在主流程生效，因為
+     * {@link #shouldBlockPremarketTrade(AiReadiness, CodexExecutionContext)}（line 1423）
+     * 在進到 require_codex 判斷之前就已經把 PREMARKET 短路成 WAIT + PREMARKET_BIAS_ONLY 了。
+     * 留 PREMARKET case 在這裡是為了 (1) 保持規則表完整、(2) 防衛 shouldBlockPremarketTrade
+     * 未來改動時，這裡仍能 fail-safe 不阻塞。實際解鎖效益集中在 POSTMARKET 與 T86_TOMORROW
+     * 兩個 session（11:00 後的 MIDDAY、15:30 POSTMARKET、18:30 T86_TOMORROW）。</p>
      *
      * @param sourceTaskType        來自 {@link AiReadiness#sourceTaskType()}（OPENING/PREMARKET/...）
      * @param globalRequireCodex    {@code final_decision.require_codex} 全域 flag
@@ -512,8 +520,12 @@ public class FinalDecisionService {
         }
 
         // ── 評分管線：JavaStructure → Veto → WeightedScore ────────────────────
-        List<FinalDecisionCandidateRequest> scoredCandidates =
+        // P0.6b: 保留 scoring pipeline 完整輸出（含 finalRankScore），給 shadow trade 用。
+        // 後續 scoredCandidates 會經過 ranking / scoreGap 等 filter，會把不合格的去掉，
+        // 但 shadow 應對「全部評過分但未進 final ENTER」的候選都寫入做 forward testing。
+        final List<FinalDecisionCandidateRequest> scoredCandidatesAll =
                 applyScoringPipeline(rawCandidates, tradingDate, marketGrade, decisionLock, timeDecay);
+        List<FinalDecisionCandidateRequest> scoredCandidates = scoredCandidatesAll;
 
         // ── Step 0.55: Theme Strength Layer (P1.1) — tradability / stage / decay ──
         Map<String, ThemeStrengthDecision> themeDecisions =
@@ -922,6 +934,18 @@ public class FinalDecisionService {
                 finalDecisionCode, merged, decision.rejectedReasons(), summary,
                 mergePlanningPayload(decision.planningPayload(), tracePayload));
 
+        // ── P0.6b (2026-04-29): publish shadow candidates event ─────────────
+        // 對 final_rank_score >= paper.shadow.score_min 但**未在 merged**（即未 ENTER）
+        // 的候選股，publish 出來讓 PaperTradeService 寫 is_shadow=true paper_trade。
+        // 與 ENTER 並行：merged 裡的 symbol 會由既有 onFinalDecisionPersisted 寫 live trade。
+        try {
+            publishShadowCandidatesIfEnabled(tradingDate, finalDecisionCode,
+                    readiness != null ? readiness.sourceTaskType() : null,
+                    scoredCandidatesAll, merged, candidateMap);
+        } catch (Exception se) {
+            log.warn("[FinalDecisionService] publish shadow candidates failed: {}", se.getMessage());
+        }
+
         // v2.2: 走 persistAndReturn 確保「產生 FinalDecision → finalize AI task」原子執行
         return persistAndReturnWithStrategy(tradingDate, enrichedDecision, readiness, strategyType);
     }
@@ -937,6 +961,92 @@ public class FinalDecisionService {
     }
 
     // ── 私有方法 ───────────────────────────────────────────────────────────────
+
+    /**
+     * P0.6b: 對 final_rank_score >= paper.shadow.score_min 但未 ENTER 的候選股 publish event，
+     * 由 PaperTradeService 寫 is_shadow=true paper_trade（forward testing pipeline）。
+     *
+     * <p>呼叫端必須處於 evaluate 主流程結尾（merged 已知）。flag 關閉、score 全不過、所有候選
+     * 都 ENTER 等情境一律 no-op（不 publish）。</p>
+     */
+    private void publishShadowCandidatesIfEnabled(
+            LocalDate tradingDate,
+            String triggerDecisionCode,
+            String sourceTaskType,
+            List<FinalDecisionCandidateRequest> scoredCandidatesAll,
+            List<FinalDecisionSelectedStockResponse> mergedSelected,
+            Map<String, FinalDecisionCandidateRequest> candidateMap) {
+        boolean enabled = scoreConfigService.getBoolean("paper.shadow.enabled", true);
+        if (!enabled) return;
+        if (scoredCandidatesAll == null || scoredCandidatesAll.isEmpty()) return;
+
+        BigDecimal scoreMin = scoreConfigService.getDecimal("paper.shadow.score_min", new BigDecimal("6.0"));
+        Set<String> enterSymbols = mergedSelected == null ? Set.of() :
+                mergedSelected.stream()
+                        .map(FinalDecisionSelectedStockResponse::stockCode)
+                        .collect(Collectors.toSet());
+
+        List<FinalDecisionShadowCandidatesEvent.ShadowCandidate> shadowList = new ArrayList<>();
+        for (FinalDecisionCandidateRequest c : scoredCandidatesAll) {
+            if (c == null || c.stockCode() == null) continue;
+            BigDecimal score = c.finalRankScore();
+            if (score == null || score.compareTo(scoreMin) < 0) continue;
+            if (enterSymbols.contains(c.stockCode())) continue; // 已由 ENTER live trade cover
+
+            BigDecimal entryPrice = resolveShadowEntryPrice(c);
+            if (entryPrice == null || entryPrice.signum() <= 0) continue;
+
+            BigDecimal stop  = c.stopLossPrice() == null ? null : BigDecimal.valueOf(c.stopLossPrice());
+            BigDecimal tp1   = c.takeProfit1()  == null ? null : BigDecimal.valueOf(c.takeProfit1());
+            BigDecimal tp2   = c.takeProfit2()  == null ? null : BigDecimal.valueOf(c.takeProfit2());
+
+            String entryGrade = deriveShadowGrade(score);
+            FinalDecisionCandidateRequest mapEntry = candidateMap.get(c.stockCode());
+            String themeTag = (mapEntry != null && mapEntry.themeRank() != null) ? null : null;
+
+            shadowList.add(new FinalDecisionShadowCandidatesEvent.ShadowCandidate(
+                    c.stockCode(), c.stockName(), score,
+                    entryPrice, stop, tp1, tp2,
+                    entryGrade, "SETUP", themeTag));
+        }
+
+        if (shadowList.isEmpty()) {
+            log.debug("[FinalDecision] no shadow candidates above scoreMin={}", scoreMin);
+            return;
+        }
+
+        log.info("[FinalDecision] publish {} shadow candidates trigger={} taskType={} (live ENTER={}, scoreMin={})",
+                shadowList.size(), triggerDecisionCode, sourceTaskType, enterSymbols.size(), scoreMin);
+        events.publishEvent(new FinalDecisionShadowCandidatesEvent(
+                tradingDate, triggerDecisionCode, sourceTaskType, shadowList));
+    }
+
+    /** Shadow entry price priority: currentPrice → entryPriceZone 起點 → null。 */
+    private BigDecimal resolveShadowEntryPrice(FinalDecisionCandidateRequest c) {
+        if (c.currentPrice() != null && c.currentPrice().signum() > 0) {
+            return c.currentPrice();
+        }
+        if (c.entryPriceZone() != null && !c.entryPriceZone().isBlank()) {
+            String[] parts = c.entryPriceZone().split("[-~]");
+            if (parts.length >= 1) {
+                try {
+                    BigDecimal v = new BigDecimal(parts[0].trim());
+                    return v.signum() > 0 ? v : null;
+                } catch (NumberFormatException ignore) { /* fallthrough */ }
+            }
+        }
+        return null;
+    }
+
+    private String deriveShadowGrade(BigDecimal score) {
+        BigDecimal apMin = scoreConfigService.getDecimal("scoring.grade_ap_min", new BigDecimal("8.2"));
+        BigDecimal aMin  = scoreConfigService.getDecimal("scoring.grade_a_min",  new BigDecimal("7.5"));
+        BigDecimal bMin  = scoreConfigService.getDecimal("scoring.grade_b_min",  new BigDecimal("6.5"));
+        if (score.compareTo(apMin) >= 0) return "A_PLUS";
+        if (score.compareTo(aMin)  >= 0) return "A";
+        if (score.compareTo(bMin)  >= 0) return "B";
+        return "SHADOW";
+    }
 
     /** 快速回傳 REST 並持久化（用於滿倉等提前中斷情境） */
     private FinalDecisionResponse persistAndReturn(LocalDate tradingDate, FinalDecisionResponse response,

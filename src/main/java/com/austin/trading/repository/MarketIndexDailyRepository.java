@@ -51,4 +51,20 @@ public interface MarketIndexDailyRepository extends JpaRepository<MarketIndexDai
 
     /** 用於 upsert：先 lookup 再決定是 INSERT 或更新。 */
     Optional<MarketIndexDailyEntity> findBySymbolAndTradingDate(String symbol, LocalDate tradingDate);
+
+    /**
+     * P0.6c: 找 symbol 在 {@code asOf} 之前的 N 個 trading_date，最新到最舊排序。
+     * <p>用 TAIEX (`t00`) 當 calendar，可以把「自然日 N」轉成「交易日 N」（週末 / 休市跳過）。
+     * Caller 通常用 {@code PageRequest.of(N-1, 1)} 取第 N 個 trading_date。</p>
+     */
+    @Query("""
+            SELECT m.tradingDate FROM MarketIndexDailyEntity m
+             WHERE m.symbol = :symbol
+               AND m.tradingDate < :asOf
+             ORDER BY m.tradingDate DESC
+            """)
+    List<LocalDate> findTradingDatesBefore(
+            @Param("symbol") String symbol,
+            @Param("asOf") LocalDate asOf,
+            Pageable pageable);
 }

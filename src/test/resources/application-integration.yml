@@ -42,3 +42,7 @@ trading:
       enabled: false
     open-data-prep:
       enabled: false
+    market-index-data-prep:
+      enabled: false
+    paper-return-backfill:
+      enabled: false

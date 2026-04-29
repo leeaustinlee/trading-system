@@ -11,6 +11,7 @@ import com.austin.trading.entity.PaperTradeEntity;
 import com.austin.trading.entity.PaperTradeExitLogEntity;
 import com.austin.trading.entity.PositionReviewLogEntity;
 import com.austin.trading.event.FinalDecisionPersistedEvent;
+import com.austin.trading.event.FinalDecisionShadowCandidatesEvent;
 import com.austin.trading.repository.FinalDecisionRepository;
 import com.austin.trading.repository.PaperTradeExitLogRepository;
 import com.austin.trading.repository.PaperTradeRepository;
@@ -153,6 +154,38 @@ public class PaperTradeService {
         ScoreConfigService cfg = scoreConfigProvider != null ? scoreConfigProvider.getIfAvailable() : null;
         if (cfg == null) return true;
         return cfg.getBoolean("paper.auto_exit.enabled", true);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // P0.6b：訂閱 FinalDecisionShadowCandidatesEvent → 寫 shadow paper_trade
+    // ══════════════════════════════════════════════════════════════════════
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onShadowCandidates(FinalDecisionShadowCandidatesEvent event) {
+        if (event == null || event.shadowCandidates() == null || event.shadowCandidates().isEmpty()) {
+            return;
+        }
+        int written = 0;
+        for (var c : event.shadowCandidates()) {
+            try {
+                PaperTradeEntity row = recordShadowEntry(
+                        c.symbol(), c.stockName(),
+                        c.entryPrice(), c.stopLossPrice(),
+                        c.takeProfit1(), c.takeProfit2(),
+                        c.finalRankScore(), c.entryGrade(),
+                        c.strategyType(), c.themeTag(),
+                        "shadow:" + event.triggerDecisionCode() + "@" + event.sourceTaskType()
+                );
+                if (row != null) written++;
+            } catch (Exception e) {
+                log.warn("[PaperShadow] event write failed symbol={} reason={}",
+                        c.symbol(), e.getMessage(), e);
+            }
+        }
+        log.info("[PaperShadow] event-written {}/{} shadow trades date={} trigger={}",
+                written, event.shadowCandidates().size(),
+                event.tradingDate(), event.triggerDecisionCode());
     }
 
     // ══════════════════════════════════════════════════════════════════════
