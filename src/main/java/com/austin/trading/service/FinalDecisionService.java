@@ -105,6 +105,55 @@ public class FinalDecisionService {
     }
 
     /**
+     * P0.4 (2026-04-29)：session-aware require_codex 解析。
+     * <p>
+     * 背景：30 天 0 ENTER，部分原因是 {@code final_decision.require_codex=true} 在
+     * PREMARKET / POSTMARKET / T86_TOMORROW 這 3 個觀察 session 也強制等 Codex；
+     * 但這幾個 session 設計上 Codex 一律回 {@code WATCH_ONLY (codexBucket)} +
+     * {@code PREMARKET_BIAS_ONLY}，等於結構性鎖死 60% 決策時點。
+     * </p>
+     *
+     * <p>規則：</p>
+     * <ul>
+     *   <li>{@code sessionAware=false} → 退回 legacy：所有 session 都採用 globalRequireCodex</li>
+     *   <li>{@code sessionAware=true}：
+     *     <ul>
+     *       <li>OPENING / MIDDAY → 採用 globalRequireCodex（這 2 個 session 必須等 Codex）</li>
+     *       <li>PREMARKET / POSTMARKET / T86_TOMORROW → 一律 false（觀察 session 不阻塞）</li>
+     *       <li>其他/未知/null sourceTaskType → 採用 globalRequireCodex（保守 fallback）</li>
+     *     </ul>
+     *   </li>
+     * </ul>
+     *
+     * @param sourceTaskType        來自 {@link AiReadiness#sourceTaskType()}（OPENING/PREMARKET/...）
+     * @param globalRequireCodex    {@code final_decision.require_codex} 全域 flag
+     * @param sessionAware          {@code final_decision.require_codex.session_aware} flag
+     * @return                      該 session 是否必須等 Codex 才能輸出 ENTER
+     */
+    static boolean shouldRequireCodexForSession(String sourceTaskType,
+                                                boolean globalRequireCodex,
+                                                boolean sessionAware) {
+        if (!sessionAware) {
+            return globalRequireCodex;   // legacy 行為
+        }
+        if (sourceTaskType == null || sourceTaskType.isBlank()) {
+            return globalRequireCodex;   // 無 task type 資訊 → 保守
+        }
+        String upper = sourceTaskType.toUpperCase(Locale.ROOT);
+        switch (upper) {
+            case "OPENING":
+            case "MIDDAY":
+                return globalRequireCodex;
+            case "PREMARKET":
+            case "POSTMARKET":
+            case "T86_TOMORROW":
+                return false;            // 觀察 session 不阻塞
+            default:
+                return globalRequireCodex;
+        }
+    }
+
+    /**
      * P0.1：AI 權重覆寫結果（含原因 trace）。
      */
     record AiWeightOverride(BigDecimal javaW, BigDecimal claudeW, BigDecimal codexW, String reason) { }
@@ -333,7 +382,16 @@ public class FinalDecisionService {
                     readiness);
         }
 
-        boolean requireCodex = scoreConfigService.getBoolean("final_decision.require_codex", true);
+        boolean globalRequireCodex = scoreConfigService.getBoolean("final_decision.require_codex", true);
+        boolean sessionAware       = scoreConfigService.getBoolean(
+                "final_decision.require_codex.session_aware", true);
+        boolean requireCodex = shouldRequireCodexForSession(
+                readiness.sourceTaskType(), globalRequireCodex, sessionAware);
+        if (requireCodex != globalRequireCodex) {
+            log.info("[FinalDecision] P0.4 session-aware require_codex override: "
+                            + "sourceTaskType={} globalRequireCodex={} sessionAware={} → effective={}",
+                    readiness.sourceTaskType(), globalRequireCodex, sessionAware, requireCodex);
+        }
         boolean downgradeEnabled = scoreConfigService.getBoolean("final_decision.ai_downgrade_enabled", true);
         if (requireCodex || downgradeEnabled) {
             if (readiness.mode() == AiReadinessMode.AI_NOT_READY) {
@@ -345,7 +403,10 @@ public class FinalDecisionService {
                                 "AI 未完成，今日保守休息（" + reason + "）"),
                         readiness);
             }
-            if (readiness.mode() == AiReadinessMode.PARTIAL_AI_READY) {
+            // P0.4: PARTIAL_AI_READY 降級只在 requireCodex=true 時才觸發。
+            // session-aware 模式下，PREMARKET/POSTMARKET/T86_TOMORROW 的 requireCodex=false，
+            // 即使 Codex 未完成也不再降級為 REST/WATCH（避免結構性 freeze）。
+            if (requireCodex && readiness.mode() == AiReadinessMode.PARTIAL_AI_READY) {
                 String partialMode = scoreConfigService.getString("final_decision.partial_ai_mode", "WATCH");
                 String decisionLabel = "REST".equalsIgnoreCase(partialMode) ? "REST" : "WATCH";
                 String reasonCode = readiness.fallbackReason() == null ? "CODEX_MISSING" : readiness.fallbackReason();
