@@ -14,6 +14,7 @@ import com.austin.trading.service.ScoreConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -68,8 +69,7 @@ class PremarketWorkflowLineGateTests {
                 1L, today, "B", "OPEN_TEST", "WATCH", "{}", LocalDateTime.now());
         when(marketDataService.getCurrentMarket()).thenReturn(Optional.of(market));
 
-        CandidateResponse c = mock(CandidateResponse.class);
-        when(c.symbol()).thenReturn("2330");
+        CandidateResponse c = candidate("2330");
         when(candidateScanService.getCandidatesByDate(eq(today), anyInt()))
                 .thenReturn(List.of(c));
         when(candidateScanService.getCurrentCandidates(anyInt()))
@@ -123,7 +123,17 @@ class PremarketWorkflowLineGateTests {
 
         service.execute(today);
 
-        verify(requestWriterService, never())
-                .writeRequest(eq("PREMARKET"), eq(today), any(), any());
+        verify(requestWriterService, never()).writeRequest(anyString(), any(), any(), any());
+    }
+
+    private CandidateResponse candidate(String symbol) {
+        return new CandidateResponse(
+                today, symbol, "台積電", BigDecimal.valueOf(8), "測試候選",
+                "TEST", "100-102", BigDecimal.valueOf(2), true,
+                BigDecimal.valueOf(95), BigDecimal.valueOf(108), BigDecimal.valueOf(115),
+                "AI", "半導體", BigDecimal.valueOf(8), BigDecimal.valueOf(8),
+                BigDecimal.valueOf(8), BigDecimal.valueOf(8), false,
+                BigDecimal.valueOf(8), BigDecimal.valueOf(8), BigDecimal.ZERO
+        );
     }
 }

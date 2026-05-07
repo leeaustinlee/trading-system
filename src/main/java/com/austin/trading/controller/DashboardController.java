@@ -7,6 +7,7 @@ import com.austin.trading.service.HourlyGateDecisionService;
 import com.austin.trading.service.MarketDataService;
 import com.austin.trading.service.MonitorDecisionService;
 import com.austin.trading.service.NotificationService;
+import com.austin.trading.service.StrategyTuningService;
 import com.austin.trading.service.TradingStateService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +24,7 @@ public class DashboardController {
     private final MonitorDecisionService monitorDecisionService;
     private final NotificationService notificationService;
     private final CandidateScanService candidateScanService;
+    private final StrategyTuningService strategyTuningService;
 
     public DashboardController(
             MarketDataService marketDataService,
@@ -31,7 +33,8 @@ public class DashboardController {
             HourlyGateDecisionService hourlyGateDecisionService,
             MonitorDecisionService monitorDecisionService,
             NotificationService notificationService,
-            CandidateScanService candidateScanService
+            CandidateScanService candidateScanService,
+            StrategyTuningService strategyTuningService
     ) {
         this.marketDataService = marketDataService;
         this.tradingStateService = tradingStateService;
@@ -40,6 +43,7 @@ public class DashboardController {
         this.monitorDecisionService = monitorDecisionService;
         this.notificationService = notificationService;
         this.candidateScanService = candidateScanService;
+        this.strategyTuningService = strategyTuningService;
     }
 
     @GetMapping("/current")
@@ -53,6 +57,11 @@ public class DashboardController {
         String marketState = marketState(market);
         String monitorState = monitorState(tradingState, monitor);
         String tradeDecision = "REST".equalsIgnoreCase(finalCode) ? "REST" : safeDecision(finalCode);
+        var tuningSummary = strategyTuningService.getTuningSummary();
+        String highMessage = tuningSummary.latestHighConfidenceRecommendation() == null
+                ? null
+                : "高信心建議：" + tuningSummary.latestHighConfidenceRecommendation().targetParameter()
+                        + " → " + tuningSummary.latestHighConfidenceRecommendation().suggestedValue();
         return new DashboardCurrentResponse(
                 market,
                 tradingState,
@@ -64,7 +73,10 @@ public class DashboardController {
                 marketState,
                 monitorState,
                 tradeDecision,
-                finalCode
+                finalCode,
+                tuningSummary.pendingCount(),
+                tuningSummary.latestHighConfidenceRecommendation(),
+                highMessage != null ? highMessage : tuningSummary.warningMessage()
         );
     }
 

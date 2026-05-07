@@ -17,6 +17,7 @@ import com.austin.trading.service.TradeReviewService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -71,8 +72,7 @@ class PostmarketWorkflowLineGateTests {
         config = mock(ScoreConfigService.class);
         aiTaskService = mock(AiTaskService.class);
 
-        CandidateResponse c = mock(CandidateResponse.class);
-        when(c.symbol()).thenReturn("2330");
+        CandidateResponse c = candidate("2330");
         when(candidateScanService.getCurrentCandidates(anyInt())).thenReturn(List.of(c));
         when(positionRepository.findByStatus(anyString())).thenReturn(List.of());
 
@@ -104,5 +104,16 @@ class PostmarketWorkflowLineGateTests {
         service.execute(today);
 
         verify(notificationFacade, times(1)).notifyPostmarket(anyString(), eq(today));
+    }
+
+    private CandidateResponse candidate(String symbol) {
+        return new CandidateResponse(
+                today, symbol, "台積電", BigDecimal.valueOf(8), "測試候選",
+                "TEST", "100-102", BigDecimal.valueOf(2), true,
+                BigDecimal.valueOf(95), BigDecimal.valueOf(108), BigDecimal.valueOf(115),
+                "AI", "半導體", BigDecimal.valueOf(8), BigDecimal.valueOf(8),
+                BigDecimal.valueOf(8), BigDecimal.valueOf(8), false,
+                BigDecimal.valueOf(8), BigDecimal.valueOf(8), BigDecimal.ZERO
+        );
     }
 }

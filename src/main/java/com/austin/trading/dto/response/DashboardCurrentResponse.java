@@ -11,7 +11,10 @@ public record DashboardCurrentResponse(
         String marketState,
         String monitorState,
         String tradeDecision,
-        String finalDecisionCode
+        String finalDecisionCode,
+        long pendingTuningRecommendationCount,
+        StrategyTuningRecommendationDto latestHighConfidenceRecommendation,
+        String tuningWarningMessage
 ) {
     public DashboardCurrentResponse(
             MarketCurrentResponse market,
@@ -23,6 +26,6 @@ public record DashboardCurrentResponse(
             java.util.List<CandidateResponse> candidates
     ) {
         this(market, tradingState, finalDecision, hourlyGateDecision, monitorDecision,
-                latestNotification, candidates, null, null, null, null);
+                latestNotification, candidates, null, null, null, null, 0, null, "樣本不足，不建議調參");
     }
 }

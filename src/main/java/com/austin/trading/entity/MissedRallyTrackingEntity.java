@@ -66,6 +66,12 @@ public class MissedRallyTrackingEntity {
     public void setCurrentPriceAtDecision(BigDecimal currentPriceAtDecision) { this.currentPriceAtDecision = currentPriceAtDecision; }
     public BigDecimal getT5High() { return t5High; }
     public void setT5High(BigDecimal t5High) { this.t5High = t5High; }
+    public BigDecimal getCloseReturnPct() { return closeReturnPct; }
+    public void setCloseReturnPct(BigDecimal closeReturnPct) { this.closeReturnPct = closeReturnPct; }
+    public BigDecimal getMfePct() { return mfePct; }
+    public void setMfePct(BigDecimal mfePct) { this.mfePct = mfePct; }
+    public BigDecimal getMaePct() { return maePct; }
+    public void setMaePct(BigDecimal maePct) { this.maePct = maePct; }
     public BigDecimal getMaxReturnPct() { return maxReturnPct; }
     public void setMaxReturnPct(BigDecimal maxReturnPct) { this.maxReturnPct = maxReturnPct; }
     public Boolean getMissedRallyFlag() { return missedRallyFlag; }
