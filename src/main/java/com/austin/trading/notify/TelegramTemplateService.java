@@ -4,6 +4,9 @@ import com.austin.trading.dto.request.NotificationCreateRequest;
 import com.austin.trading.dto.response.FinalDecisionResponse;
 import com.austin.trading.dto.response.HourlyGateDecisionResponse;
 import com.austin.trading.dto.response.MonitorDecisionResponse;
+import com.austin.trading.dto.response.NextDayStrategyDto;
+import com.austin.trading.dto.response.PositionIntelligenceResultDto;
+import com.austin.trading.service.NextDayStrategyBuilder;
 import com.austin.trading.service.NotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,13 +39,16 @@ public class TelegramTemplateService {
     private final TelegramSender telegramSender;
     private final NotificationService notificationService;
     private final TradingNotificationDecisionFormatter decisionFormatter;
+    private final NextDayStrategyBuilder nextDayStrategyBuilder;
 
     public TelegramTemplateService(TelegramSender telegramSender,
                                     NotificationService notificationService,
-                                    TradingNotificationDecisionFormatter decisionFormatter) {
+                                    TradingNotificationDecisionFormatter decisionFormatter,
+                                    NextDayStrategyBuilder nextDayStrategyBuilder) {
         this.telegramSender = telegramSender;
         this.notificationService = notificationService;
         this.decisionFormatter = decisionFormatter;
+        this.nextDayStrategyBuilder = nextDayStrategyBuilder;
     }
 
     public void notifyPremarket(String marketSummary, String topCandidates, LocalDate date) {
@@ -79,13 +85,24 @@ public class TelegramTemplateService {
     }
 
     public void notifyMidday(String message, LocalDate date) {
-        String body = decisionFormatter.format("MIDDAY", ensureSource(message), date);
+        List<PositionIntelligenceResultDto> review = safePortfolioReview();
+        String body = decisionFormatter.formatMidday(ensureSource(message), review, date);
+        sendAndLog("MIDDAY_1100", "盤中更新 " + date,
+                wrapHtml("🕛 盤中更新", body), null);
+    }
+
+    public void notifyMidday(String message, List<PositionIntelligenceResultDto> portfolioReview, LocalDate date) {
+        String body = decisionFormatter.formatMidday(ensureSource(message), portfolioReview, date);
         sendAndLog("MIDDAY_1100", "盤中更新 " + date,
                 wrapHtml("🕛 盤中更新", body), null);
     }
 
     public void notifyTomorrowPlan(String message, LocalDate date) {
-        String body = decisionFormatter.format("NEXT_DAY_STRATEGY", ensureSource(message), date);
+        notifyTomorrowPlan(safeNextDayStrategy(), date);
+    }
+
+    public void notifyTomorrowPlan(NextDayStrategyDto strategy, LocalDate date) {
+        String body = decisionFormatter.formatNextDayStrategy(strategy);
         sendAndLog("TOMORROW_PLAN_1800", "明日策略 " + date,
                 wrapHtml("🧭 明日策略", body), null);
     }
@@ -97,9 +114,17 @@ public class TelegramTemplateService {
     }
 
     public void notifyAiTaskFinal(String taskType, String message, LocalDate date) {
-        String body = decisionFormatter.format(taskType, ensureSource(message), date);
-        sendAndLog("AI_TASK_FINAL_" + taskType, taskType + " final " + date,
-                wrapHtml(notificationTitle(taskType), body), null);
+        String type = taskType == null ? "" : taskType.trim().toUpperCase();
+        if ("T86_TOMORROW".equals(type) || "TOMORROW".equals(type) || "NEXT_DAY_STRATEGY".equals(type)) {
+            log.info("[TelegramTemplateService] skip AI_TASK_FINAL {} official Telegram; TomorrowPlan1800Job is the only formal next-day sender.", type);
+            return;
+        }
+        String body = "MIDDAY".equals(type)
+                ? decisionFormatter.formatMidday(ensureSource(message), safePortfolioReview(), date)
+                : decisionFormatter.format(type, ensureSource(message), date);
+        String sendType = body.contains("🚨 系統警報") ? "SYSTEM_ALERT" : "AI_TASK_FINAL_" + type;
+        sendAndLog(sendType, type + " final " + date,
+                wrapHtml(notificationTitle(type), body), null);
     }
 
     public void notifySystemAlert(String title, String message) {
@@ -200,6 +225,24 @@ public class TelegramTemplateService {
         String esc = TelegramSender.escapeHtml(plainBody == null ? "" : plainBody);
         String head = "<b>" + TelegramSender.escapeHtml(headlineEmojiTitle) + "</b>";
         return head + "\n\n" + esc;
+    }
+
+    private List<PositionIntelligenceResultDto> safePortfolioReview() {
+        try {
+            return nextDayStrategyBuilder.reviewPositions();
+        } catch (Exception e) {
+            log.warn("[TelegramTemplateService] portfolio review unavailable: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    private NextDayStrategyDto safeNextDayStrategy() {
+        try {
+            return nextDayStrategyBuilder.buildStrategy();
+        } catch (Exception e) {
+            log.warn("[TelegramTemplateService] next-day strategy unavailable: {}", e.getMessage());
+            return null;
+        }
     }
 
     private String notificationTitle(String taskType) {

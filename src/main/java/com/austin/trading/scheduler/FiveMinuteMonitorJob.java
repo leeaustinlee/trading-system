@@ -203,8 +203,11 @@ public class FiveMinuteMonitorJob {
             }
 
             log.info("[FiveMinuteMonitorJob] {}", decision.summaryForLog());
-            schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), decision.summaryForLog());
-            orchestrationService.markExecuted(today, step, decision.summaryForLog());
+            String orchestrationNote = shouldWriteMonitorNote(decision)
+                    ? userVisibleMonitorSummary(decision)
+                    : "monitor heartbeat suppressed";
+            schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), orchestrationNote);
+            orchestrationService.markExecuted(today, step, orchestrationNote);
         } catch (Exception e) {
             orchestrationService.markFailed(today, step, e.getMessage());
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());
@@ -223,6 +226,28 @@ public class FiveMinuteMonitorJob {
                 "\"decision_lock\":\"" + decision.decisionLock() + "\"," +
                 "\"time_decay_stage\":\"" + decision.timeDecayStage() + "\"" +
                 "}";
+    }
+
+    private boolean shouldWriteMonitorNote(MonitorDecisionResponse decision) {
+        if (decision == null) return false;
+        String trigger = decision.triggerEvent() == null ? "NONE" : decision.triggerEvent();
+        return decision.shouldNotify() || !"NONE".equalsIgnoreCase(trigger);
+    }
+
+    private String userVisibleMonitorSummary(MonitorDecisionResponse decision) {
+        if (decision == null) return "monitor event";
+        String action = decision.shouldNotify() ? decision.decision() : internalDecisionName(decision.decision());
+        return "grade=" + decision.marketGrade()
+                + " mode=" + decision.monitorMode()
+                + " decision=" + action
+                + " trigger=" + decision.triggerEvent()
+                + " notify=" + decision.shouldNotify();
+    }
+
+    private String internalDecisionName(String decision) {
+        if (decision == null) return "INTERNAL_STATE";
+        if ("ENTER".equalsIgnoreCase(decision)) return "WATCH_ENTER_CONDITION";
+        return decision;
     }
 
     private String safe(String value, String fallback) {

@@ -28,7 +28,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -98,12 +97,12 @@ class PostmarketWorkflowLineGateTests {
     }
 
     @Test
-    void lineEnabled_callsNotifyPostmarketOnce() {
+    void lineEnabled_doesNotCallNotifyPostmarketBecauseAiTaskFinalOwnsFormalPostmarketNotification() {
         when(config.getBoolean(eq("scheduling.line_notify_enabled"), anyBoolean())).thenReturn(true);
 
         service.execute(today);
 
-        verify(notificationFacade, times(1)).notifyPostmarket(anyString(), eq(today));
+        verify(notificationFacade, never()).notifyPostmarket(anyString(), eq(today));
     }
 
     private CandidateResponse candidate(String symbol) {

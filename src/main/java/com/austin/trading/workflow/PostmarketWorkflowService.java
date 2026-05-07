@@ -123,23 +123,13 @@ public class PostmarketWorkflowService {
         log.info("[PostmarketWorkflow] Skip writeRequest at 15:30; POSTMARKET request fully owned by PostmarketDataPrepJob (15:05). symbols(top {})={}",
                 symbols.size(), symbols);
 
-        // Step 4: LINE 盤後通知
+        // Step 4: 15:30 workflow only updates DB / market / theme / pnl.
+        // Formal POSTMARKET Telegram is emitted once by AI_TASK_FINAL_POSTMARKET through NotificationDecisionFormatter.
         boolean lineEnabled = config.getBoolean("scheduling.line_notify_enabled", false);
         if (lineEnabled) {
             int notifyMax = config.getInt("candidate.notify.maxCount", 5);
-            List<CandidateResponse> notifyList = candidateScanService.getCurrentCandidates(notifyMax);
-            String candidateText = formatCandidates(notifyList);
-            notificationFacade.notifyPostmarket(candidateText, tradingDate);
-            log.info("[PostmarketWorkflow] LINE 盤後通知已發送，候選股={} 檔", notifyList.size());
-
-            // 補發：POSTMARKET / AFTERMARKET / MIDDAY 任一 AI 研究 md
-            String aiMd = aiTaskService.findLatestMarkdown(tradingDate, "POSTMARKET", "MIDDAY");
-            if (aiMd != null && aiMd.length() > 100) {
-                String summary = aiMd.length() > 3500
-                        ? aiMd.substring(0, 3500) + "\n...(內容過長已截斷)"
-                        : aiMd;
-                notificationFacade.notifySystemAlert("📎 15:30 AI 研究摘要", summary);
-            }
+            int notifyCount = candidateScanService.getCurrentCandidates(notifyMax).size();
+            log.info("[PostmarketWorkflow] Formal POSTMARKET notification is owned by AI_TASK_FINAL_POSTMARKET; skip duplicate Java workflow send. candidates={} 檔", notifyCount);
         } else {
             log.info("[PostmarketWorkflow] LINE 通知未啟用（scheduling.line_notify_enabled=false）");
         }

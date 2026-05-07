@@ -44,8 +44,8 @@ class TradingNotificationDecisionFormatterTests {
 
         String out = formatter.format("MIDDAY", raw, LocalDate.of(2026, 5, 8));
 
-        assertThat(out).contains("🕛 盤中更新", "📌 持倉", "00631L → HOLD", "2303 → REDUCE", "6770 → EXIT");
-        assertThat(out).contains("🔄 換股", "8039");
+        assertThat(out).contains("🕛 盤中更新", "📌 持倉", "持倉健檢資料不足");
+        assertThat(out).contains("🔄 換股", "暫無更強標的");
         assertThat(out).doesNotContain("candidate table", "score", "rank");
         assertThat(out.lines().count()).isLessThanOrEqualTo(20);
     }
@@ -78,7 +78,7 @@ class TradingNotificationDecisionFormatterTests {
         String out = formatter.format("NEXT_DAY_STRATEGY", raw, LocalDate.of(2026, 5, 8));
 
         assertThat(out).contains("🧭 明日策略", "📊 市場", "🎯 策略", "📌 持倉", "🔄 換股", "💰 明日進場方向");
-        assertThat(out).contains("00631L → HOLD", "2303 → REDUCE", "無");
+        assertThat(out).contains("持倉健檢資料不足", "暫無更強標的");
         assertThat(out).doesNotContain("Codex reasoning", "Claude thesis", "trace");
         assertThat(out.lines().count()).isLessThanOrEqualTo(20);
     }

@@ -3,6 +3,8 @@ package com.austin.trading.notify;
 import com.austin.trading.dto.response.FinalDecisionResponse;
 import com.austin.trading.dto.response.HourlyGateDecisionResponse;
 import com.austin.trading.dto.response.MonitorDecisionResponse;
+import com.austin.trading.dto.response.NextDayStrategyDto;
+import com.austin.trading.dto.response.PositionIntelligenceResultDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -74,10 +76,22 @@ public class NotificationFacade {
                 () -> line.notifyMidday(message, date));
     }
 
+    public void notifyMidday(String message, List<PositionIntelligenceResultDto> portfolioReview, LocalDate date) {
+        dispatch("midday",
+                () -> telegram.notifyMidday(message, portfolioReview, date),
+                () -> line.notifyMidday(message, date));
+    }
+
     public void notifyTomorrowPlan(String message, LocalDate date) {
         dispatch("tomorrowPlan",
                 () -> telegram.notifyTomorrowPlan(message, date),
                 () -> line.notifyTomorrowPlan(message, date));
+    }
+
+    public void notifyTomorrowPlan(NextDayStrategyDto strategy, LocalDate date) {
+        dispatch("tomorrowPlan",
+                () -> telegram.notifyTomorrowPlan(strategy, date),
+                () -> line.notifyTomorrowPlan(strategy == null ? "" : strategy.toString(), date));
     }
 
     public void notifyPostmarket(String candidates, LocalDate date) {
@@ -87,9 +101,10 @@ public class NotificationFacade {
     }
 
     public void notifyAiTaskFinal(String taskType, String message, LocalDate date) {
-        dispatch("aiTaskFinal:" + taskType,
-                () -> telegram.notifyAiTaskFinal(taskType, message, date),
-                () -> line.notifyAiTaskFinal(taskType, message, date));
+        // Formal AI task final notifications must be decision-formatted by TelegramTemplateService.
+        // Do not forward raw Claude/Codex markdown to LINE fallback here; LINE is legacy and can leak raw tables/reasoning.
+        dispatchTelegramOnly("aiTaskFinal:" + taskType,
+                () -> telegram.notifyAiTaskFinal(taskType, message, date));
     }
 
     public void notifySystemAlert(String title, String message) {
@@ -146,6 +161,14 @@ public class NotificationFacade {
             lineAction.run();
         } catch (Exception e) {
             log.warn("[NotificationFacade] line {} failed: {}", label, e.getMessage());
+        }
+    }
+
+    private void dispatchTelegramOnly(String label, Runnable telegramAction) {
+        try {
+            telegramAction.run();
+        } catch (Exception e) {
+            log.warn("[NotificationFacade] telegram {} failed: {}", label, e.getMessage());
         }
     }
 

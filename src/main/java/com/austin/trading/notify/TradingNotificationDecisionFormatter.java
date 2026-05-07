@@ -1,5 +1,11 @@
 package com.austin.trading.notify;
 
+import com.austin.trading.domain.enums.HoldDecision;
+import com.austin.trading.domain.enums.MarketBias;
+import com.austin.trading.domain.enums.SwitchDecision;
+import com.austin.trading.dto.response.NextDayStrategyDto;
+import com.austin.trading.dto.response.PortfolioSwitchSuggestionDto;
+import com.austin.trading.dto.response.PositionIntelligenceResultDto;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -26,15 +32,39 @@ public class TradingNotificationDecisionFormatter {
     public String format(String jobType, String rawMessage, LocalDate date) {
         String type = normalizeType(jobType);
         String clean = sanitize(rawMessage);
+        if (isExpired(clean)) {
+            return systemAlert("AI task 過期，未發交易決策；請檢查 dashboard / ai_task 狀態。");
+        }
         return limitLines(switch (type) {
             case "PREMARKET" -> premarket(clean);
             case "OPENING", "FINAL_DECISION" -> opening(clean);
-            case "MIDDAY" -> midday(clean);
+            case "MIDDAY" -> midday(clean, List.of());
             case "POSTMARKET", "T86_TOMORROW" -> postmarket(clean);
-            case "POSITION_REVIEW" -> positionReview(clean);
-            case "NEXT_DAY_STRATEGY", "TOMORROW_PLAN" -> nextDayStrategy(clean);
+            case "POSITION_REVIEW" -> positionReviewFromRaw(clean);
+            case "NEXT_DAY_STRATEGY", "TOMORROW_PLAN" -> nextDayStrategy(clean, List.of(), List.of(), null);
+            case "SYSTEM_ALERT" -> systemAlert(clean);
             default -> fallback(clean);
         });
+    }
+
+    public String formatMidday(String rawMessage, List<PositionIntelligenceResultDto> portfolioReview, LocalDate date) {
+        String clean = sanitize(rawMessage);
+        if (isExpired(clean)) return systemAlert("AI task 過期，未發交易決策；請檢查 dashboard / ai_task 狀態。");
+        return limitLines(midday(clean, portfolioReview == null ? List.of() : portfolioReview));
+    }
+
+    public String formatNextDayStrategy(NextDayStrategyDto strategy) {
+        if (strategy == null) {
+            return systemAlert("明日策略資料不足，未發交易決策；請檢查 /api/portfolio/next-day-strategy。");
+        }
+        return limitLines(nextDayStrategy("",
+                strategy.positionsSummary() == null ? List.of() : strategy.positionsSummary(),
+                strategy.switchPlan() == null ? List.of() : strategy.switchPlan(),
+                strategy));
+    }
+
+    public String formatSystemAlert(String message) {
+        return limitLines(systemAlert(message));
     }
 
     private String premarket(String clean) {
@@ -78,10 +108,10 @@ public class TradingNotificationDecisionFormatter {
                 "- " + risks(clean, 2));
     }
 
-    private String midday(String clean) {
+    private String midday(String clean, List<PositionIntelligenceResultDto> portfolioReview) {
         String grade = grade(clean);
-        List<String> positions = positionActions(clean, 4, false);
-        String switchLine = switchLine(clean);
+        List<String> positions = portfolioRows(portfolioReview, 4, true);
+        String switchLine = switchLineFromPortfolio(portfolioReview, List.of());
         return String.join("\n",
                 "🕛 盤中更新",
                 "",
@@ -90,7 +120,7 @@ public class TradingNotificationDecisionFormatter {
                 "- 策略：" + strategyMode(clean, grade),
                 "",
                 "📌 持倉",
-                positions.isEmpty() ? "- 無持倉資料" : "- " + String.join("\n- ", positions),
+                positions.isEmpty() ? "- 持倉健檢資料不足，請看 dashboard" : "- " + String.join("\n- ", positions),
                 "",
                 "🔄 換股",
                 "- " + switchLine,
@@ -117,7 +147,7 @@ public class TradingNotificationDecisionFormatter {
                 "- " + risks(clean, 2));
     }
 
-    private String positionReview(String clean) {
+    private String positionReviewFromRaw(String clean) {
         List<String> positions = positionActions(clean, 5, true);
         long strong = positions.stream().filter(s -> s.contains("HOLD") && !s.contains("不確定")).count();
         long weak = positions.stream().filter(s -> s.contains("EXIT") || s.contains("REDUCE")).count();
@@ -131,29 +161,33 @@ public class TradingNotificationDecisionFormatter {
                 "- 強勢股數：" + strong + " / 弱勢股數：" + weak);
     }
 
-    private String nextDayStrategy(String clean) {
+    private String nextDayStrategy(String clean, List<PositionIntelligenceResultDto> positionsDto,
+                                   List<PortfolioSwitchSuggestionDto> switchPlan,
+                                   NextDayStrategyDto strategy) {
         String grade = grade(clean);
-        List<String> positions = positionActions(clean, 4, false);
+        String bias = strategy == null ? grade + " / " + marketTone(clean, grade) : marketBias(strategy.marketBias());
+        List<String> positions = portfolioRows(positionsDto, 4, true);
+        String actionPlan = strategy == null || strategy.actionPlan() == null ? opportunityDirection(clean) : conciseActionPlan(strategy.actionPlan());
         return String.join("\n",
                 "🧭 明日策略",
                 "",
                 "📊 市場",
-                "- " + grade + " / " + marketTone(clean, grade),
+                "- " + bias,
                 "",
                 "🎯 策略",
-                "- " + strategyMode(clean, grade),
+                "- " + (strategy == null ? strategyMode(clean, grade) : marketBias(strategy.marketBias())),
                 "",
                 "📌 持倉",
-                positions.isEmpty() ? "- 無持倉資料" : "- " + String.join("、", positions),
+                positions.isEmpty() ? "- 持倉健檢資料不足，請看 dashboard" : "- " + String.join("、", positions),
                 "",
                 "🔄 換股",
-                "- " + switchLine(clean),
+                "- " + switchLineFromPortfolio(positionsDto, switchPlan),
                 "",
                 "💰 明日進場方向",
-                "- " + opportunityDirection(clean),
+                "- " + actionPlan,
                 "",
                 "📊 結論",
-                "- " + aiSummary(clean, grade));
+                "- 人工確認，不自動下單。" );
     }
 
     private String fallback(String clean) {
@@ -208,7 +242,7 @@ public class TradingNotificationDecisionFormatter {
 
     private String strategyMode(String clean, String grade) {
         if (containsAny(clean, "防守", "REST", "偏空")) return "防守";
-        if (containsAny(clean, "進攻", "可進場", "ENTER", "BUY") || "A".equals(grade)) return "進攻";
+        if ("A".equals(grade) || containsAny(clean, "進攻", "可進場", "ENTER", "BUY")) return "觀察偏進攻";
         return "觀察";
     }
 
@@ -258,6 +292,88 @@ public class TradingNotificationDecisionFormatter {
             case "C" -> "市場偏弱，優先保護持倉。";
             default -> "訊號未完全一致，先觀察。";
         };
+    }
+
+    private List<String> portfolioRows(List<PositionIntelligenceResultDto> review, int limit, boolean withStops) {
+        if (review == null || review.isEmpty()) return List.of();
+        List<String> rows = new ArrayList<>();
+        for (PositionIntelligenceResultDto r : review) {
+            if (r == null || r.stockId() == null || r.stockId().isBlank()) continue;
+            String action = holdAction(r.holdDecision());
+            String stop = withStops && r.suggestedStop() != null ? "（停損 " + r.suggestedStop().stripTrailingZeros().toPlainString() + "）" : "";
+            String reason = r.reason() == null || r.reason().isBlank() ? riskName(r) : r.reason();
+            rows.add(r.stockId() + " → " + action + stop + " → " + reason);
+            if (rows.size() >= limit) break;
+        }
+        return rows;
+    }
+
+    private String holdAction(HoldDecision decision) {
+        if (decision == null) return "HOLD";
+        return switch (decision) {
+            case HIGH_HOLD, HOLD -> "HOLD";
+            case REDUCE -> "REDUCE";
+            case EXIT -> "EXIT";
+        };
+    }
+
+    private String riskName(PositionIntelligenceResultDto r) {
+        if (r == null || r.risk() == null) return "不確定";
+        return switch (r.risk()) {
+            case LOW -> "風險低";
+            case MEDIUM -> "風險中";
+            case HIGH -> "風險高";
+        };
+    }
+
+    private String switchLineFromPortfolio(List<PositionIntelligenceResultDto> review, List<PortfolioSwitchSuggestionDto> switchPlan) {
+        if (switchPlan != null) {
+            for (PortfolioSwitchSuggestionDto s : switchPlan) {
+                if (s != null && s.decision() != null && s.decision() != SwitchDecision.KEEP && s.buyStockId() != null) {
+                    return "建議轉進 " + s.buyStockId();
+                }
+            }
+        }
+        if (review != null) {
+            for (PositionIntelligenceResultDto r : review) {
+                if (r != null && r.switchDecision() != null && r.switchDecision() != SwitchDecision.KEEP) {
+                    return "有換股訊號，需人工確認";
+                }
+            }
+        }
+        return "暫無更強標的";
+    }
+
+    private String marketBias(MarketBias bias) {
+        if (bias == null) return "觀察";
+        return switch (bias) {
+            case OFFENSIVE -> "進攻";
+            case WATCH -> "觀察";
+            case DEFENSIVE -> "防守";
+        };
+    }
+
+    private String conciseActionPlan(String plan) {
+        if (plan == null || plan.isBlank()) return "觀察主流續強，不追無買點標的";
+        String p = plan.replaceAll("[\\r\\n]+", " ").trim();
+        if (p.length() > 60) return p.substring(0, 60) + "…";
+        return p;
+    }
+
+    private String systemAlert(String message) {
+        String clean = message == null || message.isBlank() ? "資料不足，未發交易決策。" : message;
+        return String.join("\n",
+                "🚨 系統警報",
+                "",
+                "📌 狀態",
+                "- " + clean,
+                "",
+                "🛡️ 處置",
+                "- 寧可少發，不發錯誤交易通知。");
+    }
+
+    private boolean isExpired(String clean) {
+        return containsAny(clean, "AI_TASK_EXPIRED", "task expired", "generated_at 過期", "資料過期");
     }
 
     private List<String> positionActions(String clean, int limit, boolean withStops) {

@@ -2,12 +2,14 @@ package com.austin.trading.scheduler;
 
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.dto.response.MarketCurrentResponse;
+import com.austin.trading.dto.response.NextDayStrategyDto;
 import com.austin.trading.dto.response.PositionResponse;
 import com.austin.trading.notify.NotificationFacade;
 import com.austin.trading.service.AiTaskService;
 import com.austin.trading.service.CandidateScanService;
 import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.MarketDataService;
+import com.austin.trading.service.NextDayStrategyBuilder;
 import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.PositionReviewService;
 import com.austin.trading.service.PositionService;
@@ -37,6 +39,7 @@ public class TomorrowPlan1800Job {
     private final AiTaskService aiTaskService;
     private final PositionService positionService;
     private final PositionReviewService positionReviewService;
+    private final NextDayStrategyBuilder nextDayStrategyBuilder;
 
     public TomorrowPlan1800Job(
             MarketDataService marketDataService,
@@ -46,7 +49,8 @@ public class TomorrowPlan1800Job {
             DailyOrchestrationService orchestrationService,
             AiTaskService aiTaskService,
             PositionService positionService,
-            PositionReviewService positionReviewService
+            PositionReviewService positionReviewService,
+            NextDayStrategyBuilder nextDayStrategyBuilder
     ) {
         this.marketDataService = marketDataService;
         this.candidateScanService = candidateScanService;
@@ -56,6 +60,7 @@ public class TomorrowPlan1800Job {
         this.aiTaskService = aiTaskService;
         this.positionService = positionService;
         this.positionReviewService = positionReviewService;
+        this.nextDayStrategyBuilder = nextDayStrategyBuilder;
     }
 
     @Scheduled(cron = "${trading.scheduler.tomorrow-plan-cron:0 30 18 * * MON-FRI}",
@@ -84,15 +89,15 @@ public class TomorrowPlan1800Job {
             log.info("[TomorrowPlan1800Job] TOMORROW_PLAN LINE deferred until final AI result is submitted.");
 
             String aiMd = aiTaskService.findLatestMarkdown(today, "T86_TOMORROW", "POSTMARKET");
-            if (false && aiMd != null && aiMd.length() > 100) {
-                String summary = aiMd.length() > 2500
-                        ? aiMd.substring(0, 2500) + "\n...(更多內容請查看 AI task 詳細結果)"
-                        : aiMd;
-                notificationFacade.notifySystemAlert("18:00 隔日計畫 AI 摘要", summary);
+            if (aiMd == null || aiMd.length() <= 100) {
+                log.info("[TomorrowPlan1800Job] AI 補強資料不足；仍以 NextDayStrategyBuilder structured output 發正式明日策略。");
             }
 
+            NextDayStrategyDto strategy = nextDayStrategyBuilder.buildStrategy();
+            notificationFacade.notifyTomorrowPlan(strategy, today);
             log.info("[TomorrowPlan1800Job] candidates={}, reviewedPositions={}", candidates.size(), reviewedCount);
-            String msg = "candidates=" + candidates.size() + ", reviewedPositions=" + reviewedCount;
+            String msg = "formal next-day strategy sent via NextDayStrategyBuilder; candidates=" + candidates.size()
+                    + ", reviewedPositions=" + reviewedCount;
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), msg);
             orchestrationService.markDone(today, step, msg);
         } catch (Exception e) {

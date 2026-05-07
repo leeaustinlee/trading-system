@@ -56,14 +56,10 @@ class NotificationFacadeTests {
     }
 
     @Test
-    void notifyPositionAction_threeArgsForwardsToBoth() {
-        facade.notifyPositionAction("2330", "ADD", "reason", 100.0, 90.0, 11.0,
-                java.util.List.of("sig"), null, null);
-        verify(telegram).notifyPositionAction(eq("2330"), eq("ADD"), eq("reason"),
-                eq(100.0), eq(90.0), eq(11.0), any(), eq((String) null), eq((Double) null),
-                eq((Double) null), eq((Integer) null), eq((Double) null));
-        verify(line).notifyPositionAction(eq("2330"), eq("ADD"), eq("reason"),
-                eq(100.0), eq(90.0), eq(11.0), any(), eq((String) null), eq((Double) null),
-                eq((Double) null), eq((Integer) null), eq((Double) null));
+    void notifyAiTaskFinal_goesTelegramOnlyToAvoidRawMarkdownFallback() {
+        LocalDate date = LocalDate.of(2026, 5, 8);
+        facade.notifyAiTaskFinal("POSTMARKET", "raw markdown", date);
+        verify(telegram).notifyAiTaskFinal("POSTMARKET", "raw markdown", date);
+        verify(line, never()).notifyAiTaskFinal(any(), any(), any());
     }
 }
