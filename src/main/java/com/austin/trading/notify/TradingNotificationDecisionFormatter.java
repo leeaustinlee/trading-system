@@ -178,7 +178,7 @@ public class TradingNotificationDecisionFormatter {
                 "- " + (strategy == null ? strategyMode(clean, grade) : marketBias(strategy.marketBias())),
                 "",
                 "📌 持倉",
-                positions.isEmpty() ? "- 持倉健檢資料不足，請看 dashboard" : "- " + String.join("、", positions),
+                positions.isEmpty() ? "- 持倉健檢資料不足，請看 dashboard" : "- " + String.join("\n- ", positions),
                 "",
                 "🔄 換股",
                 "- " + switchLineFromPortfolio(positionsDto, switchPlan),
@@ -301,11 +301,33 @@ public class TradingNotificationDecisionFormatter {
             if (r == null || r.stockId() == null || r.stockId().isBlank()) continue;
             String action = holdAction(r.holdDecision());
             String stop = withStops && r.suggestedStop() != null ? "（停損 " + r.suggestedStop().stripTrailingZeros().toPlainString() + "）" : "";
-            String reason = r.reason() == null || r.reason().isBlank() ? riskName(r) : r.reason();
+            String reason = concisePortfolioReason(r);
             rows.add(r.stockId() + " → " + action + stop + " → " + reason);
             if (rows.size() >= limit) break;
         }
         return rows;
+    }
+
+    private String concisePortfolioReason(PositionIntelligenceResultDto r) {
+        if (r == null) return "請人工確認";
+        String reason = r.reason() == null ? "" : r.reason().trim();
+        if (reason.isBlank()) return riskName(r);
+
+        String cleaned = reason
+                .replaceAll("(?i)[,，]?\\s*strength\\s*=\\s*[^,，；;]+", "")
+                .replaceAll("(?i)[,，]?\\s*risk\\s*=\\s*[^,，；;]+", "")
+                .replaceAll("(?i)[,，]?\\s*holddecision\\s*=\\s*[^,，；;]+", "")
+                .replaceAll("(?i)reviewstatus\\s*=\\s*[^,，；;]+", "")
+                .replaceAll("(?i)ma/量能/即時價完整資料", "")
+                .replaceAll("[，,]\\s*[，,]", "，")
+                .replaceAll("[；;]\\s*[；;]", "；")
+                .replaceAll("^[，,；;\\s]+", "")
+                .replaceAll("[，,；;\\s]+$", "")
+                .trim();
+
+        if (cleaned.isBlank()) return riskName(r);
+        if (cleaned.length() > 36) return cleaned.substring(0, 36) + "…";
+        return cleaned;
     }
 
     private String holdAction(HoldDecision decision) {

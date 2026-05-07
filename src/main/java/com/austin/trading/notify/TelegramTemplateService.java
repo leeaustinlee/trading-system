@@ -222,9 +222,14 @@ public class TelegramTemplateService {
 
     /** 把純文字 body 包成 Telegram HTML：標題加 <b>、body escape。 */
     static String wrapHtml(String headlineEmojiTitle, String plainBody) {
-        String esc = TelegramSender.escapeHtml(plainBody == null ? "" : plainBody);
-        String head = "<b>" + TelegramSender.escapeHtml(headlineEmojiTitle) + "</b>";
-        return head + "\n\n" + esc;
+        String normalizedBody = plainBody == null ? "" : plainBody.trim();
+        String normalizedTitle = headlineEmojiTitle == null ? "" : headlineEmojiTitle.trim();
+        if (!normalizedBody.isBlank() && !normalizedTitle.isBlank()) {
+            normalizedBody = normalizedBody.replaceFirst("^" + java.util.regex.Pattern.quote(normalizedTitle) + "\\R+", "").stripLeading();
+        }
+        String esc = TelegramSender.escapeHtml(normalizedBody);
+        String head = "<b>" + TelegramSender.escapeHtml(normalizedTitle) + "</b>";
+        return normalizedBody.isBlank() ? head : head + "\n\n" + esc;
     }
 
     private List<PositionIntelligenceResultDto> safePortfolioReview() {

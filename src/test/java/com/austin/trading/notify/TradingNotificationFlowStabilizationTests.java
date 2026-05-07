@@ -71,8 +71,37 @@ class TradingNotificationFlowStabilizationTests {
         String out = formatter.formatNextDayStrategy(dto);
 
         assertThat(out).contains("🧭 明日策略", "觀察", "6770 → HOLD", "建議轉進 8039", "breakout");
+        assertThat(out).contains("\n- 6770 → HOLD");
         assertThat(out).doesNotContain("raw", "veto", "| 代號 |");
         assertThat(out.lines().count()).isLessThanOrEqualTo(20);
+    }
+
+    @Test
+    void nextDayStrategyCleansMachineStyleReasonAndKeepsOnePositionPerLine() {
+        NextDayStrategyDto dto = new NextDayStrategyDto(
+                LocalDate.of(2026, 5, 8),
+                List.of(
+                        new PositionIntelligenceResultDto("00631L", "元大正二", PositionStrength.STRONG,
+                                PositionRiskLevel.MEDIUM, HoldDecision.HOLD,
+                                new BigDecimal("32.09"), new BigDecimal("35.00"), SwitchDecision.KEEP,
+                                "已有較大漲幅，需注意獲利回吐；strength=STRONG, risk=MEDIUM, holdDecision=HOLD"),
+                        new PositionIntelligenceResultDto("2303", "聯電", PositionStrength.STRONG,
+                                PositionRiskLevel.MEDIUM, HoldDecision.HOLD,
+                                new BigDecimal("92.59"), null, SwitchDecision.KEEP,
+                                "已有較大漲幅，需注意獲利回吐, strength=STRONG, risk=MEDIUM, holdDecision=HOLD")
+                ),
+                List.of(),
+                MarketBias.WATCH,
+                "明日偏觀望；續抱=2，換股建議=0。",
+                "人工確認，不自動下單"
+        );
+
+        String out = formatter.formatNextDayStrategy(dto);
+
+        assertThat(out).contains("00631L → HOLD（停損 32.09） → 已有較大漲幅，需注意獲利回吐");
+        assertThat(out).contains("2303 → HOLD（停損 92.59） → 已有較大漲幅，需注意獲利回吐");
+        assertThat(out).doesNotContain("strength=STRONG", "risk=MEDIUM", "holdDecision=HOLD");
+        assertThat(out).contains("\n- 00631L → HOLD", "\n- 2303 → HOLD");
     }
 
     @Test
