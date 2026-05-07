@@ -1,5 +1,6 @@
 package com.austin.trading.service;
 
+import com.austin.trading.client.TwseMisClient;
 import com.austin.trading.domain.enums.HoldDecision;
 import com.austin.trading.domain.enums.MarketBias;
 import com.austin.trading.dto.response.CandidateResponse;
@@ -9,6 +10,7 @@ import com.austin.trading.dto.response.PositionIntelligenceResultDto;
 import com.austin.trading.engine.PositionIntelligenceEngine;
 import com.austin.trading.entity.CandidateStockEntity;
 import com.austin.trading.entity.PositionDailyReviewEntity;
+import com.austin.trading.entity.PositionEntity;
 import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.PositionDailyReviewRepository;
 import com.austin.trading.repository.PositionRepository;
@@ -17,6 +19,8 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.List;
 
 @Service
@@ -24,24 +28,29 @@ public class NextDayStrategyBuilder {
     private final PositionRepository positionRepository;
     private final CandidateStockRepository candidateStockRepository;
     private final PositionDailyReviewRepository reviewRepository;
+    private final TwseMisClient twseMisClient;
     private final PositionIntelligenceEngine positionIntelligenceEngine;
     private final PortfolioSwitchAnalyzer switchAnalyzer;
 
     public NextDayStrategyBuilder(PositionRepository positionRepository,
                                   CandidateStockRepository candidateStockRepository,
                                   PositionDailyReviewRepository reviewRepository,
+                                  TwseMisClient twseMisClient,
                                   PositionIntelligenceEngine positionIntelligenceEngine,
                                   PortfolioSwitchAnalyzer switchAnalyzer) {
         this.positionRepository = positionRepository;
         this.candidateStockRepository = candidateStockRepository;
         this.reviewRepository = reviewRepository;
+        this.twseMisClient = twseMisClient;
         this.positionIntelligenceEngine = positionIntelligenceEngine;
         this.switchAnalyzer = switchAnalyzer;
     }
 
     public List<PositionIntelligenceResultDto> reviewPositions() {
-        List<PositionIntelligenceResultDto> rows = positionRepository.findByStatus("OPEN").stream()
-                .map(positionIntelligenceEngine::evaluatePosition)
+        var openPositions = positionRepository.findByStatus("OPEN");
+        Map<String, BigDecimal> livePrices = fetchLivePrices(openPositions.stream().map(PositionEntity::getSymbol).toList());
+        List<PositionIntelligenceResultDto> rows = openPositions.stream()
+                .map(p -> positionIntelligenceEngine.evaluatePosition(p, livePrices.get(p.getSymbol())))
                 .toList();
         persistDailyReview(rows, LocalDate.now());
         return rows;
@@ -63,6 +72,21 @@ public class NextDayStrategyBuilder {
                 actionPlan(positions, switches, bias),
                 "所有內容僅供 Austin 人工決策；系統不會自動下單、賣出或回滾持倉。"
         );
+    }
+
+    private Map<String, BigDecimal> fetchLivePrices(List<String> symbols) {
+        if (symbols == null || symbols.isEmpty()) return Map.of();
+        try {
+            return twseMisClient.getQuotesWithOtcFallback(symbols).stream()
+                    .filter(q -> q.symbol() != null)
+                    .collect(Collectors.toMap(
+                            q -> q.symbol(),
+                            q -> q.currentPrice() != null ? BigDecimal.valueOf(q.currentPrice()) :
+                                    (q.prevClose() != null ? BigDecimal.valueOf(q.prevClose()) : BigDecimal.ZERO),
+                            (a, b) -> a));
+        } catch (Exception e) {
+            return Map.of();
+        }
     }
 
     private List<CandidateResponse> loadCandidates(LocalDate tradingDate) {

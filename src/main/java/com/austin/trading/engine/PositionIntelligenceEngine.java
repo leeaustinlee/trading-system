@@ -23,8 +23,12 @@ public class PositionIntelligenceEngine {
     private static final BigDecimal DEFAULT_TP_RATIO = new BigDecimal("1.12");
 
     public PositionIntelligenceResultDto evaluatePosition(PositionEntity position) {
+        return evaluatePosition(position, null);
+    }
+
+    public PositionIntelligenceResultDto evaluatePosition(PositionEntity position, BigDecimal marketPrice) {
         BigDecimal avgCost = positive(position.getAvgCost()) ? position.getAvgCost() : ONE;
-        BigDecimal referencePrice = resolveReferencePrice(position, avgCost);
+        BigDecimal referencePrice = resolveReferencePrice(position, avgCost, marketPrice);
         BigDecimal returnPct = referencePrice.subtract(avgCost).divide(avgCost, 6, RoundingMode.HALF_UP);
         BigDecimal effectiveStop = max(position.getStopLossPrice(), position.getTrailingStopPrice());
         boolean stopBroken = positive(effectiveStop) && referencePrice.compareTo(effectiveStop) < 0;
@@ -100,9 +104,11 @@ public class PositionIntelligenceEngine {
         return candidate;
     }
 
-    private BigDecimal resolveReferencePrice(PositionEntity position, BigDecimal avgCost) {
+    private BigDecimal resolveReferencePrice(PositionEntity position, BigDecimal avgCost, BigDecimal marketPrice) {
+        if (positive(marketPrice)) return marketPrice;
         if (positive(position.getClosePrice())) return position.getClosePrice();
-        if (positive(position.getTakeProfit1())) return position.getTakeProfit1();
+        // For open positions, never infer current price from take-profit. If no market price is available,
+        // use cost as a neutral fallback and explicitly mark data limitations in the reason.
         return avgCost;
     }
 

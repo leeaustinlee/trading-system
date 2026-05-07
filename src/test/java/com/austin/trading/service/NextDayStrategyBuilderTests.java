@@ -1,5 +1,6 @@
 package com.austin.trading.service;
 
+import com.austin.trading.client.TwseMisClient;
 import com.austin.trading.domain.enums.MarketBias;
 import com.austin.trading.engine.PositionIntelligenceEngine;
 import com.austin.trading.entity.CandidateStockEntity;
@@ -26,13 +27,14 @@ class NextDayStrategyBuilderTests {
         PositionRepository positionRepo = mock(PositionRepository.class);
         CandidateStockRepository candidateRepo = mock(CandidateStockRepository.class);
         PositionDailyReviewRepository reviewRepo = mock(PositionDailyReviewRepository.class);
+        TwseMisClient twseMisClient = mock(TwseMisClient.class);
         when(reviewRepo.save(any(PositionDailyReviewEntity.class))).thenAnswer(i -> i.getArgument(0));
         when(positionRepo.findByStatus("OPEN")).thenReturn(List.of(position("6770", "57.7", "54", "56")));
         CandidateStockEntity top = candidate("8039", "台虹", "78");
         when(candidateRepo.findTopByOrderByTradingDateDesc()).thenReturn(Optional.of(top));
         when(candidateRepo.findByTradingDateOrderByScoreDesc(any(LocalDate.class), any(Pageable.class))).thenReturn(List.of(top));
 
-        NextDayStrategyBuilder builder = new NextDayStrategyBuilder(positionRepo, candidateRepo, reviewRepo,
+        NextDayStrategyBuilder builder = new NextDayStrategyBuilder(positionRepo, candidateRepo, reviewRepo, twseMisClient,
                 new PositionIntelligenceEngine(), new PortfolioSwitchAnalyzer());
 
         var result = builder.buildStrategy();
