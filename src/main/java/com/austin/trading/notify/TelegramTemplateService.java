@@ -35,23 +35,26 @@ public class TelegramTemplateService {
 
     private final TelegramSender telegramSender;
     private final NotificationService notificationService;
+    private final TradingNotificationDecisionFormatter decisionFormatter;
 
     public TelegramTemplateService(TelegramSender telegramSender,
-                                    NotificationService notificationService) {
+                                    NotificationService notificationService,
+                                    TradingNotificationDecisionFormatter decisionFormatter) {
         this.telegramSender = telegramSender;
         this.notificationService = notificationService;
+        this.decisionFormatter = decisionFormatter;
     }
 
     public void notifyPremarket(String marketSummary, String topCandidates, LocalDate date) {
-        String body = LineMessageBuilder.buildPremarket(marketSummary, topCandidates, date);
-        sendAndLog("PREMARKET_0830", "盤前分析 " + date,
-                wrapHtml("📊 盤前分析", body), null);
+        String body = decisionFormatter.format("PREMARKET", marketSummary + "\n" + topCandidates, date);
+        sendAndLog("PREMARKET_0830", "盤前策略 " + date,
+                wrapHtml("🌅 盤前策略", body), null);
     }
 
     public void notifyFinalDecision(FinalDecisionResponse decision, LocalDate date) {
-        String body = LineMessageBuilder.buildFinalDecision(decision, date);
-        sendAndLog("FINAL_DECISION_0930", "09:30 今日操作 " + date,
-                wrapHtml("🎯 09:30 今日操作", body), null);
+        String body = decisionFormatter.format("OPENING", LineMessageBuilder.buildFinalDecision(decision, date), date);
+        sendAndLog("FINAL_DECISION_0930", "09:30 開盤決策 " + date,
+                wrapHtml("🕘 開盤決策", body), null);
     }
 
     public void notifyHourlyGate(HourlyGateDecisionResponse decision, LocalTime time) {
@@ -76,24 +79,27 @@ public class TelegramTemplateService {
     }
 
     public void notifyMidday(String message, LocalDate date) {
-        sendAndLog("MIDDAY_1100", "盤中分析 " + date,
-                wrapHtml("📊 盤中分析", ensureSource(message)), null);
+        String body = decisionFormatter.format("MIDDAY", ensureSource(message), date);
+        sendAndLog("MIDDAY_1100", "盤中更新 " + date,
+                wrapHtml("🕛 盤中更新", body), null);
     }
 
     public void notifyTomorrowPlan(String message, LocalDate date) {
-        sendAndLog("TOMORROW_PLAN_1800", "明日計畫 " + date,
-                wrapHtml("📅 明日計畫", ensureSource(message)), null);
+        String body = decisionFormatter.format("NEXT_DAY_STRATEGY", ensureSource(message), date);
+        sendAndLog("TOMORROW_PLAN_1800", "明日策略 " + date,
+                wrapHtml("🧭 明日策略", body), null);
     }
 
     public void notifyPostmarket(String candidates, LocalDate date) {
-        String body = LineMessageBuilder.buildPostmarket(candidates, date);
-        sendAndLog("POSTMARKET_1530", "盤後選股 " + date,
-                wrapHtml("📊 盤後選股", body), null);
+        String body = decisionFormatter.format("POSTMARKET", candidates, date);
+        sendAndLog("POSTMARKET_1530", "盤後分析 " + date,
+                wrapHtml("🌙 盤後分析", body), null);
     }
 
     public void notifyAiTaskFinal(String taskType, String message, LocalDate date) {
+        String body = decisionFormatter.format(taskType, ensureSource(message), date);
         sendAndLog("AI_TASK_FINAL_" + taskType, taskType + " final " + date,
-                wrapHtml("🤖 AI 研究：" + taskType, ensureSource(message)), null);
+                wrapHtml(notificationTitle(taskType), body), null);
     }
 
     public void notifySystemAlert(String title, String message) {
@@ -194,6 +200,19 @@ public class TelegramTemplateService {
         String esc = TelegramSender.escapeHtml(plainBody == null ? "" : plainBody);
         String head = "<b>" + TelegramSender.escapeHtml(headlineEmojiTitle) + "</b>";
         return head + "\n\n" + esc;
+    }
+
+    private String notificationTitle(String taskType) {
+        String type = taskType == null ? "" : taskType.trim().toUpperCase();
+        return switch (type) {
+            case "PREMARKET" -> "🌅 盤前策略";
+            case "OPENING", "FINAL_DECISION" -> "🕘 開盤決策";
+            case "MIDDAY" -> "🕛 盤中更新";
+            case "POSTMARKET", "T86_TOMORROW" -> "🌙 盤後分析";
+            case "POSITION_REVIEW" -> "🩺 持倉健檢";
+            case "NEXT_DAY_STRATEGY", "TOMORROW_PLAN" -> "🧭 明日策略";
+            default -> "🧭 交易通知";
+        };
     }
 
     private String ensureSource(String message) {
