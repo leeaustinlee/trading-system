@@ -3,11 +3,9 @@ set SCRIPT_DIR=%~dp0
 set PROJECT_DIR=%SCRIPT_DIR%..
 
 if exist "%PROJECT_DIR%\.env" (
-  for /f "usebackq tokens=1,* delims==" %%A in ("%PROJECT_DIR%\.env") do (
-    if not "%%A"=="" (
-      if /i not "%%A:~0,1%"=="#" (
-        set "%%A=%%B"
-      )
+  for /f "usebackq eol=# tokens=1,* delims==" %%A in ("%PROJECT_DIR%\.env") do (
+    if not "%%~A"=="" (
+      set "%%~A=%%~B"
     )
   )
 )

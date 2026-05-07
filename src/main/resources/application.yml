@@ -11,6 +11,7 @@ spring:
     open-in-view: false
 
 server:
+  port: ${SERVER_PORT:8888}          # 2026-04-29: 從預設 8080 改為 8888，避開 Windows iphlpsvc 占用
   error:
     include-message: always         # 讓 409/400 response body 帶 message（含 INSUFFICIENT_CASH 等）
     include-binding-errors: always
@@ -49,7 +50,7 @@ trading:
     five-minute-monitor-cron: "0 */5 9-13 * * MON-FRI"
     premarket-notify:
       enabled: false
-    premarket-notify-cron: "0 30 8 * * MON-FRI"
+    premarket-notify-cron: "0 32 8 * * MON-FRI"
     aftermarket-review:
       enabled: false
     aftermarket-review-cron: "0 0 14 * * MON-FRI"

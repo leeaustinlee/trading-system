@@ -5,6 +5,7 @@ import com.austin.trading.dto.request.PositionCreateRequest;
 import com.austin.trading.dto.request.PositionPartialCloseRequest;
 import com.austin.trading.dto.request.PositionUpdateRequest;
 import com.austin.trading.dto.request.StopLossTakeProfitEvaluateRequest;
+import com.austin.trading.dto.response.LiveQuoteResponse;
 import com.austin.trading.dto.response.PositionResponse;
 import com.austin.trading.engine.StopLossTakeProfitEngine;
 import com.austin.trading.entity.PositionEntity;
@@ -24,6 +25,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class PositionService {
@@ -38,13 +42,16 @@ public class PositionService {
     private final CapitalService capitalService;
     /** v2.14：讀取最近一次 position_review_log 給 mobile 持倉風險顯示。 */
     private final PositionReviewLogRepository positionReviewLogRepository;
+    /** v2.18：讓 /api/positions/open 直接帶目前現價，避免 mobile 還要自行合併 /live-quotes。 */
+    private final CandidateScanService candidateScanService;
 
     public PositionService(PositionRepository positionRepository, PnlService pnlService,
                             TradeReviewService tradeReviewService, ScoreConfigService scoreConfigService,
                             StopLossTakeProfitEngine stopLossTakeProfitEngine,
                             CapitalLedgerService ledgerService,
                             CapitalService capitalService,
-                            PositionReviewLogRepository positionReviewLogRepository) {
+                            PositionReviewLogRepository positionReviewLogRepository,
+                            CandidateScanService candidateScanService) {
         this.positionRepository = positionRepository;
         this.pnlService = pnlService;
         this.tradeReviewService = tradeReviewService;
@@ -53,21 +60,22 @@ public class PositionService {
         this.ledgerService = ledgerService;
         this.capitalService = capitalService;
         this.positionReviewLogRepository = positionReviewLogRepository;
+        this.candidateScanService = candidateScanService;
     }
 
     public List<PositionResponse> getOpenPositions(int limit) {
         int safeLimit = Math.max(1, Math.min(limit, 200));
-        return positionRepository.findByStatusOrderByCreatedAtDesc("OPEN", PageRequest.of(0, safeLimit))
-                .stream().map(this::toResponse).toList();
+        List<PositionEntity> rows = positionRepository.findByStatusOrderByCreatedAtDesc("OPEN", PageRequest.of(0, safeLimit));
+        return toResponsesWithLiveQuotes(rows);
     }
 
     public List<PositionResponse> getOpenPositionsFiltered(String symbol, int page, int size) {
         int safePage = Math.max(0, page);
         int safeSize = Math.max(1, Math.min(size, 200));
         String sym = (symbol == null || symbol.isBlank()) ? null : symbol.trim();
-        return positionRepository.findOpenByFilter("OPEN", sym,
-                        PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt")))
-                .stream().map(this::toResponse).toList();
+        List<PositionEntity> rows = positionRepository.findOpenByFilter("OPEN", sym,
+                PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt")));
+        return toResponsesWithLiveQuotes(rows);
     }
 
     public List<PositionResponse> getHistory(int limit) {
@@ -399,6 +407,36 @@ public class PositionService {
     }
 
     private PositionResponse toResponse(PositionEntity entity) {
+        return toResponse(entity, null);
+    }
+
+    private List<PositionResponse> toResponsesWithLiveQuotes(List<PositionEntity> rows) {
+        if (rows == null || rows.isEmpty()) return List.of();
+        Map<String, LiveQuoteResponse> quoteMap = Map.of();
+        if (candidateScanService != null) {
+            try {
+                List<String> symbols = rows.stream()
+                        .map(PositionEntity::getSymbol)
+                        .filter(s -> s != null && !s.isBlank())
+                        .distinct()
+                        .toList();
+                List<LiveQuoteResponse> quotes = candidateScanService.getLiveQuotesBySymbols(symbols);
+                if (quotes != null && !quotes.isEmpty()) {
+                    quoteMap = quotes.stream()
+                            .filter(q -> q != null && q.symbol() != null)
+                            .collect(Collectors.toMap(LiveQuoteResponse::symbol, Function.identity(), (a, b) -> a));
+                }
+            } catch (RuntimeException ignored) {
+                // 報價失敗不影響持倉主資料；currentPrice 保持 null。
+            }
+        }
+        Map<String, LiveQuoteResponse> finalQuoteMap = quoteMap;
+        return rows.stream()
+                .map(p -> toResponse(p, finalQuoteMap.get(p.getSymbol())))
+                .toList();
+    }
+
+    private PositionResponse toResponse(PositionEntity entity, LiveQuoteResponse quote) {
         // v2.14：附帶最近一次 review_log 結果（STRONG / WEAKEN / EXIT），供 mobile 直接顯示。
         String reviewStatus = null;
         java.time.LocalDateTime reviewedAt = null;
@@ -406,7 +444,7 @@ public class PositionService {
         if (entity.getId() != null && positionReviewLogRepository != null) {
             try {
                 PositionReviewLogEntity rev = positionReviewLogRepository
-                        .findTopByPositionIdOrderByCreatedAtDesc(entity.getId())
+                        .findTopByPositionIdOrderByIdDesc(entity.getId())
                         .orElse(null);
                 if (rev != null) {
                     reviewStatus = rev.getDecisionStatus();
@@ -421,6 +459,25 @@ public class PositionService {
                 }
             } catch (RuntimeException ignored) {
                 // 讀 review_log 失敗不影響 position 主資料；保持 null。
+            }
+        }
+
+        BigDecimal currentPrice = quote != null && quote.currentPrice() != null
+                ? BigDecimal.valueOf(quote.currentPrice()) : null;
+        BigDecimal marketValue = null;
+        BigDecimal unrealizedPnl = null;
+        BigDecimal unrealizedPnlPct = null;
+        if (currentPrice != null && entity.getQty() != null) {
+            marketValue = currentPrice.multiply(entity.getQty()).setScale(0, RoundingMode.HALF_UP);
+        }
+        if (currentPrice != null && entity.getAvgCost() != null && entity.getQty() != null) {
+            unrealizedPnl = currentPrice.subtract(entity.getAvgCost())
+                    .multiply(entity.getQty()).setScale(0, RoundingMode.HALF_UP);
+            if (entity.getAvgCost().signum() > 0) {
+                unrealizedPnlPct = currentPrice.subtract(entity.getAvgCost())
+                        .divide(entity.getAvgCost(), 4, RoundingMode.HALF_UP)
+                        .multiply(new BigDecimal("100"))
+                        .setScale(2, RoundingMode.HALF_UP);
             }
         }
 
@@ -446,7 +503,13 @@ public class PositionService {
                 entity.getStrategyType(),
                 reviewStatus,
                 reviewedAt,
-                reviewReason
+                reviewReason,
+                currentPrice,
+                marketValue,
+                unrealizedPnl,
+                unrealizedPnlPct,
+                quote != null ? quote.available() : null,
+                quote != null ? quote.tradeTime() : null
         );
     }
 }

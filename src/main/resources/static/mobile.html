@@ -841,7 +841,8 @@ async function fetchQuotes(){
   S.positions?.forEach(p => p.symbol && syms.add(p.symbol));
   if (!syms.size){ S.quotes = {}; return; }
   const csv = [...syms].join(',');
-  const quotes = await safeFetch('/api/candidates/live-quotes?symbols='+encodeURIComponent(csv));
+  // mobile 持倉頁需要查任意 symbol；candidate endpoint 只回今日候選股，像 00631L 這類持倉不一定會回。
+  const quotes = await safeFetch('/api/positions/live-quotes?symbols='+encodeURIComponent(csv));
   S.quotes = {};
   if (Array.isArray(quotes)) for (const q of quotes) if (q?.symbol) S.quotes[q.symbol] = q;
 }

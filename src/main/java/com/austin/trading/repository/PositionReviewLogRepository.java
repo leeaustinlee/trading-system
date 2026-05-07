@@ -11,10 +11,16 @@ public interface PositionReviewLogRepository extends JpaRepository<PositionRevie
 
     List<PositionReviewLogEntity> findByReviewDateOrderByCreatedAtDesc(LocalDate reviewDate);
 
-    Optional<PositionReviewLogEntity> findTopByPositionIdOrderByCreatedAtDesc(Long positionId);
+    /**
+     * Latest review for a position.
+     *
+     * <p>Use id ordering instead of created_at: existing local DB rows can have created_at=NULL,
+     * which made newer STRONG reviews sort behind an older EXIT row and polluted mobile/AI output.</p>
+     */
+    Optional<PositionReviewLogEntity> findTopByPositionIdOrderByIdDesc(Long positionId);
 
-    List<PositionReviewLogEntity> findByPositionIdOrderByCreatedAtDesc(Long positionId);
+    List<PositionReviewLogEntity> findByPositionIdOrderByIdDesc(Long positionId);
 
     /** Latest review log row for a given symbol (paper_trade rows aren't keyed to position_id). */
-    Optional<PositionReviewLogEntity> findTopBySymbolOrderByCreatedAtDesc(String symbol);
+    Optional<PositionReviewLogEntity> findTopBySymbolOrderByIdDesc(String symbol);
 }

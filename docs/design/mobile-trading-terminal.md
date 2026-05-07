@@ -1,7 +1,7 @@
 # Mobile Trading Terminal — 設計規格
 
 **目標檔**：`trading-system/src/main/resources/static/mobile.html`
-**訪問 URL**：`http://localhost:8080/mobile.html`
+**訪問 URL**：`http://localhost:8888/mobile.html`
 **設計日期**：2026-04-26
 **設計者**：Austin 台股操盤 AI 系統
 
@@ -370,6 +370,6 @@ KPI：
 
 ## 11. 入口
 
-- 直接訪問：`http://localhost:8080/mobile.html`
-- 桌機書籤備援：`http://<你 LAN IP>:8080/mobile.html` 從手機連 WiFi 即可開
+- 直接訪問：`http://localhost:8888/mobile.html`
+- 桌機書籤備援：`http://<你 LAN IP>:8888/mobile.html` 從手機連 WiFi 即可開
 - 之後可 QR code 印在小卡上，掃一下開

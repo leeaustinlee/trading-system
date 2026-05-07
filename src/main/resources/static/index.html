@@ -3712,14 +3712,24 @@ function clearErr(boxId) {
         return;
       }
 
-      // 依 researchType 分組
+      // 依 researchType 分組；群組順序改為「該群組最新一筆」優先，確保最新報告在最上面
       const groups = {};
       (data || []).forEach(r => {
         const k = r.researchType || "OTHER";
         if (!groups[k]) groups[k] = [];
         groups[k].push(r);
       });
+      const itemOrderKey = (r) => {
+        const ts = r?.createdAt ? new Date(r.createdAt).getTime() : 0;
+        if (Number.isFinite(ts) && ts > 0) return ts;
+        return Number(r?.id || 0);
+      };
+      Object.values(groups).forEach(items => {
+        items.sort((a, b) => itemOrderKey(b) - itemOrderKey(a));
+      });
       const orderedKeys = Object.keys(groups).sort((a, b) => {
+        const latestDiff = itemOrderKey(groups[b]?.[0]) - itemOrderKey(groups[a]?.[0]);
+        if (latestDiff !== 0) return latestDiff;
         const ai = _RESEARCH_TYPE_ORDER.indexOf(a), bi = _RESEARCH_TYPE_ORDER.indexOf(b);
         const ao = ai === -1 ? 999 : ai, bo = bi === -1 ? 999 : bi;
         return ao - bo;
@@ -5006,7 +5016,9 @@ window.finalizeCatchup = async function(taskId) {
   ───────────────────────────────────────────── */
   async function refreshCurrent() {
     const activeTab = document.querySelector(".nav-tab.active");
-    if (activeTab) loadPageData(activeTab.dataset.page);
+    const pageId = activeTab?.dataset.page;
+    // AI 研究頁閱讀時避免 15 秒自動重繪，否則展開全文與捲動位置會被重置
+    if (pageId && pageId !== "pageAiResearch") loadPageData(pageId);
     $("navMeta").textContent = `更新：${new Date().toLocaleTimeString("zh-TW")}`;
   }
 

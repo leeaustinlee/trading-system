@@ -1,13 +1,18 @@
 package com.austin.trading.service;
 
 import com.austin.trading.config.AiClaudeConfig;
+import com.austin.trading.dto.response.CapitalSummaryResponse;
+import com.austin.trading.dto.response.PositionResponse;
+import com.austin.trading.entity.CapitalConfigEntity;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -71,10 +76,24 @@ public class ClaudeCodeRequestWriterService {
 
     private final AiClaudeConfig config;
     private final ObjectMapper   objectMapper;
+    /** v2.6：Live capital + positions context（避免 capital-summary.md 過舊）。可選注入。 */
+    private final CapitalService  capitalService;
+    private final PositionService positionService;
 
+    @Autowired
+    public ClaudeCodeRequestWriterService(AiClaudeConfig config,
+                                          ObjectMapper objectMapper,
+                                          CapitalService capitalService,
+                                          PositionService positionService) {
+        this.config          = config;
+        this.objectMapper    = objectMapper;
+        this.capitalService  = capitalService;
+        this.positionService = positionService;
+    }
+
+    /** 向下相容建構式：未提供 capital/position service，capital_context 會以 warning 標示。 */
     public ClaudeCodeRequestWriterService(AiClaudeConfig config, ObjectMapper objectMapper) {
-        this.config       = config;
-        this.objectMapper = objectMapper;
+        this(config, objectMapper, null, null);
     }
 
     /**
@@ -178,6 +197,12 @@ public class ClaudeCodeRequestWriterService {
             validators.add(VALIDATOR_MJS);
             root.put("contract_reminder", PROMPT_REMINDER);
 
+            // v2.6：附加即時資金 / 持倉 context，避免 Claude 只讀過舊的 capital-summary.md。
+            attachCapitalContext(root);
+            attachOpenPositions(root);
+            root.put("live_context_note",
+                    "capital_context/open_positions 為 Java live context，資金與持倉判讀優先於 rules_files 中可能過期的 capital-summary.md。");
+
             String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
             Path dest = Paths.get(path);
             if (dest.getParent() != null) {
@@ -192,5 +217,89 @@ public class ClaudeCodeRequestWriterService {
             log.warn("[ClaudeCodeRequestWriter] Failed to write request: {}", e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * 寫入即時資金 context。若無法取得（service 未注入或拋例外），改寫 warning，
+     * 不可讓整個 request 寫出失敗。
+     */
+    private void attachCapitalContext(ObjectNode root) {
+        ObjectNode ctx = root.putObject("capital_context");
+        if (capitalService == null) {
+            ctx.put("warning", "CAPITAL_SERVICE_NOT_AVAILABLE：請依 capital-summary.md / capital_config 估算");
+            return;
+        }
+        try {
+            CapitalSummaryResponse s = capitalService.getSummary();
+            putBig(ctx, "availableCash",      s.availableCash());
+            putBig(ctx, "cashBalance",        s.cashBalance());
+            putBig(ctx, "reservedCash",       s.reservedCash());
+            putBig(ctx, "investedCost",       s.investedCost());
+            putBig(ctx, "investedValue",      s.investedValue());
+            putBig(ctx, "unrealizedPnl",      s.unrealizedPnl());
+            putBig(ctx, "realizedPnl",        s.realizedPnl());
+            putBig(ctx, "totalEquity",        s.totalEquity());
+            putBig(ctx, "totalAssets",        s.totalAssets());
+            putBig(ctx, "cashRatio",          s.cashRatio());
+            ctx.put("openPositionCount",      s.openPositionCount());
+            ctx.put("liveQuoteAvailable",     s.liveQuoteAvailable());
+            if (s.configNotes() != null)     ctx.put("configNotes",     s.configNotes());
+            if (s.configUpdatedAt() != null) ctx.put("configUpdatedAt", s.configUpdatedAt());
+
+            try {
+                CapitalConfigEntity cfg = capitalService.getConfig();
+                if (cfg != null && cfg.getUpdatedAt() != null) {
+                    ctx.put("configUpdatedAtIso",
+                            cfg.getUpdatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+                }
+            } catch (Exception ignored) { /* 設定讀取失敗不擋主流程 */ }
+
+            ctx.put("source", "trading-system Java live");
+        } catch (Exception e) {
+            ctx.removeAll();
+            ctx.put("warning", "CAPITAL_CONTEXT_FAILED: " + e.getMessage());
+        }
+    }
+
+    /** 寫入未平倉持倉摘要。任何錯誤都退回成 warning，不影響 request 寫出。 */
+    private void attachOpenPositions(ObjectNode root) {
+        ArrayNode arr = root.putArray("open_positions");
+        if (positionService == null) {
+            ObjectNode warn = arr.addObject();
+            warn.put("warning", "POSITION_SERVICE_NOT_AVAILABLE");
+            return;
+        }
+        try {
+            List<PositionResponse> list = positionService.getOpenPositions(50);
+            if (list == null || list.isEmpty()) {
+                root.put("open_positions_note", "目前無未平倉持倉");
+                return;
+            }
+            for (PositionResponse p : list) {
+                ObjectNode item = arr.addObject();
+                if (p.symbol()    != null) item.put("symbol",    p.symbol());
+                if (p.stockName() != null) item.put("stockName", p.stockName());
+                if (p.side()      != null) item.put("side",      p.side());
+                putBig(item, "qty",           p.qty());
+                putBig(item, "avgCost",       p.avgCost());
+                putBig(item, "stopLossPrice", p.stopLossPrice());
+                putBig(item, "takeProfit1",   p.takeProfit1());
+                putBig(item, "takeProfit2",   p.takeProfit2());
+                if (p.strategyType() != null) item.put("strategyType", p.strategyType());
+                if (p.reviewStatus() != null) item.put("reviewStatus", p.reviewStatus());
+                if (p.reviewedAt()   != null) item.put("reviewedAt",
+                        p.reviewedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+                if (p.reviewReason() != null) item.put("reviewReason", p.reviewReason());
+            }
+        } catch (Exception e) {
+            arr.removeAll();
+            ObjectNode warn = arr.addObject();
+            warn.put("warning", "OPEN_POSITIONS_FAILED: " + e.getMessage());
+        }
+    }
+
+    private static void putBig(ObjectNode node, String key, BigDecimal value) {
+        if (value == null) return;
+        node.put(key, value);
     }
 }

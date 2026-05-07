@@ -40,8 +40,11 @@ public class ExitRegimeIntegrationEngine {
                                                  String regimeType, String themeStage) {
         if (base == null) return null;
 
-        // Already exiting — don't override
-        if (base.status() == PositionStatus.EXIT) return base;
+        // Already exiting or data quality blocked — don't override with lower-fidelity regime logic.
+        if (base.status() == PositionStatus.EXIT
+                || base.status() == PositionStatus.DATA_BLOCKED
+                || base.status() == PositionStatus.QUOTE_STALE
+                || base.status() == PositionStatus.TRAIL_UP) return base;
 
         // Rule 1: PANIC_VOLATILITY → force EXIT
         if ("PANIC_VOLATILITY".equals(regimeType)) {

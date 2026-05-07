@@ -138,13 +138,11 @@ public class PositionReviewService {
                         .filter(q -> q.symbol().equals(pos.getSymbol()))
                         .findFirst().orElse(null);
 
-                // 即時報價不可用（盤外 / TWSE MIS 失敗）→ 只寫 review log，不做任何決策行為
-                boolean quoteAvailable = quote != null && quote.currentPrice() != null;
+                // 即時報價不可用 / stale：不可偽裝成正常 HOLD，也不可用來更新 trailing stop。
+                boolean quoteAvailable = isUsableQuote(quote);
                 PositionDecisionResult decision = quoteAvailable
                         ? evaluatePosition(pos, quote)
-                        : new PositionDecisionResult(PositionStatus.HOLD,
-                                "即時報價不可用，review 停用", null,
-                                com.austin.trading.engine.PositionDecisionEngine.TrailingAction.NONE);
+                        : dataBlockedDecision(pos, quote);
 
                 // P2.3: apply regime/theme decay override
                 ThemeStrengthDecision themeDecision =
@@ -175,7 +173,9 @@ public class PositionReviewService {
 
                 // 只在有即時報價且 TRAIL_UP 時才更新 trailing stop（避免盤外 / stale quote 汙染）
                 if (quoteAvailable && decision.status() == PositionStatus.TRAIL_UP
-                        && decision.suggestedStopLoss() != null) {
+                        && decision.suggestedStopLoss() != null
+                        && (pos.getTrailingStopPrice() == null
+                            || decision.suggestedStopLoss().compareTo(pos.getTrailingStopPrice()) > 0)) {
                     pos.setTrailingStopPrice(decision.suggestedStopLoss());
                 }
 
@@ -252,6 +252,26 @@ public class PositionReviewService {
     ) {}
 
     // ── 私有方法 ──────────────────────────────────────────────────────────
+
+    private boolean isUsableQuote(LiveQuoteResponse quote) {
+        return quote != null && quote.available() && quote.currentPrice() != null && quote.currentPrice() > 0;
+    }
+
+    private PositionDecisionResult dataBlockedDecision(PositionEntity pos, LiveQuoteResponse quote) {
+        if (pos != null && "EXIT".equalsIgnoreCase(pos.getReviewStatus())) {
+            return new PositionDecisionResult(PositionStatus.EXIT,
+                    "即時報價不可用，保留既有 EXIT 狀態", null,
+                    com.austin.trading.engine.PositionDecisionEngine.TrailingAction.NONE);
+        }
+        PositionStatus status = quote != null && quote.currentPrice() != null
+                ? PositionStatus.QUOTE_STALE
+                : PositionStatus.DATA_BLOCKED;
+        String reason = status == PositionStatus.QUOTE_STALE
+                ? "即時報價 stale/unavailable，review 停用，不產生正常 HOLD"
+                : "即時報價缺失/null，review 停用，不產生正常 HOLD";
+        return new PositionDecisionResult(status, reason, null,
+                com.austin.trading.engine.PositionDecisionEngine.TrailingAction.NONE);
+    }
 
     private PositionDecisionResult evaluatePosition(PositionEntity pos, LiveQuoteResponse quote) {
         BigDecimal currentPrice = quote != null && quote.currentPrice() != null
@@ -531,7 +551,7 @@ public class PositionReviewService {
         List<PositionEntity> openPositions = positionRepository.findByStatus("OPEN");
         List<PendingExitItem> items = new ArrayList<>();
         for (PositionEntity pos : openPositions) {
-            reviewLogRepository.findTopByPositionIdOrderByCreatedAtDesc(pos.getId())
+            reviewLogRepository.findTopByPositionIdOrderByIdDesc(pos.getId())
                     .filter(r -> "EXIT".equalsIgnoreCase(r.getDecisionStatus()))
                     .ifPresent(r -> items.add(new PendingExitItem(
                             pos.getSymbol(),

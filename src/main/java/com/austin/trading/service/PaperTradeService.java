@@ -1164,7 +1164,7 @@ public class PaperTradeService {
         PositionReviewLogRepository repo = reviewLogRepoProvider != null
                 ? reviewLogRepoProvider.getIfAvailable() : null;
         if (repo == null || symbol == null) return Optional.empty();
-        return repo.findTopBySymbolOrderByCreatedAtDesc(symbol);
+        return repo.findTopBySymbolOrderByIdDesc(symbol);
     }
 
     private Optional<FinalDecisionEntity> lookupTodayFinalDecision() {

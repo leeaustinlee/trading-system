@@ -1,7 +1,7 @@
 ﻿# BC Sniper v2.0 評分工作流程
 > **共同入口**：Claude、Codex、Java 每次執行評分相關操作前，必須先讀此文件。
 > **系統版本**：`v2.0-bc-sniper`（對應 `score_config.scoring.version`）
-> **Java App**：`http://localhost:8080`
+> **Java App**：`http://localhost:8888`
 
 ---
 
@@ -121,7 +121,7 @@ Claude 必須輸出以下 JSON，寫入 `D:\ai\stock\claude-research-latest.md`�
 ### 3.3 回填 API
 
 ```http
-PUT http://localhost:8080/api/candidates/{symbol}/ai-scores
+PUT http://localhost:8888/api/candidates/{symbol}/ai-scores
 Content-Type: application/json
 
 {
@@ -177,7 +177,7 @@ Codex 對 Claude 研究的標的做「第二層風控審核」，重點在於：
 ### 4.3 回填 API
 
 ```http
-PUT http://localhost:8080/api/candidates/{symbol}/ai-scores
+PUT http://localhost:8888/api/candidates/{symbol}/ai-scores
 Content-Type: application/json
 
 {
@@ -215,7 +215,7 @@ final_theme_score = market_behavior × 0.55
 ### 5.2 回填 API
 
 ```http
-PUT http://localhost:8080/api/themes/snapshots/{themeTag}/claude-scores
+PUT http://localhost:8888/api/themes/snapshots/{themeTag}/claude-scores
 Content-Type: application/json
 
 {
@@ -337,20 +337,20 @@ Content-Type: application/json
 
 ```http
 # 今日候選股（含所有評分欄位）
-GET http://localhost:8080/api/candidates/current
+GET http://localhost:8888/api/candidates/current
 
 # 今日題材快照（含 final_theme_score、rankingOrder）
-GET http://localhost:8080/api/themes/snapshots?date=2026-04-18
+GET http://localhost:8888/api/themes/snapshots?date=2026-04-18
 
 # 觸發完整評分管線
-POST http://localhost:8080/api/decisions/final/evaluate
+POST http://localhost:8888/api/decisions/final/evaluate
 
 # 儀表板（候選股 + 市場 + 決策 + 持倉一次看）
-GET http://localhost:8080/api/dashboard/current
+GET http://localhost:8888/api/dashboard/current
 
 # 查詢 / 調整評分設定
-GET  http://localhost:8080/api/score-config
-PUT  http://localhost:8080/api/score-config/{key}
+GET  http://localhost:8888/api/score-config
+PUT  http://localhost:8888/api/score-config/{key}
 Body: { "value": "8.5" }
 ```
 

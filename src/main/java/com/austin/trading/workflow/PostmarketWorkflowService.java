@@ -117,14 +117,11 @@ public class PostmarketWorkflowService {
         List<CandidateResponse> candidates = candidateScanService.getCurrentCandidates(researchMax);
         List<String> symbols = candidates.stream().map(CandidateResponse::symbol).toList();
 
-        if (!symbols.isEmpty()) {
-            // v2.1：Claude request 仍由 workflow 維護（作為溝通橋樑），
-            // 但 AI task 的建立已移到 PostmarketDataPrepJob (15:05)。
-            // 本 workflow (15:30) 只讀已完成 POSTMARKET task，不再自行 createTask。
-            boolean written = requestWriterService.writeRequest("POSTMARKET", tradingDate, symbols, null);
-            log.info("[PostmarketWorkflow] Claude 研究請求寫出={}, symbols={}（task 由 DataPrep 建立）",
-                    written, symbols);
-        }
+        // v2.7：POSTMARKET request 已由 PostmarketDataPrepJob (15:05) 寫出（帶 taskId + allowed_symbols + capital_context）。
+        // 此處不可再以舊版 writeRequest（無 taskId / 無 capital_context / researchMax=3）覆寫，
+        // 避免覆蓋 15:05 帶 taskId 的契約檔，造成 Claude/Codex 重跑時讀到不一致版本。
+        log.info("[PostmarketWorkflow] Skip writeRequest at 15:30; POSTMARKET request fully owned by PostmarketDataPrepJob (15:05). symbols(top {})={}",
+                symbols.size(), symbols);
 
         // Step 4: LINE 盤後通知
         boolean lineEnabled = config.getBoolean("scheduling.line_notify_enabled", false);

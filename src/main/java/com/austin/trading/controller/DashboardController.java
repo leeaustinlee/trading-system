@@ -44,14 +44,46 @@ public class DashboardController {
 
     @GetMapping("/current")
     public DashboardCurrentResponse getCurrentDashboard() {
+        var market = marketDataService.getMarketPreferToday().orElse(null);
+        var tradingState = tradingStateService.getCurrentState().orElse(null);
+        var finalDecision = finalDecisionService.getCurrent().orElse(null);
+        var hourlyGate = hourlyGateDecisionService.getCurrent().orElse(null);
+        var monitor = monitorDecisionService.getCurrent().orElse(null);
+        String finalCode = finalDecision != null ? finalDecision.decision() : null;
+        String marketState = marketState(market);
+        String monitorState = monitorState(tradingState, monitor);
+        String tradeDecision = "REST".equalsIgnoreCase(finalCode) ? "REST" : safeDecision(finalCode);
         return new DashboardCurrentResponse(
-                marketDataService.getMarketPreferToday().orElse(null),
-                tradingStateService.getCurrentState().orElse(null),
-                finalDecisionService.getCurrent().orElse(null),
-                hourlyGateDecisionService.getCurrent().orElse(null),
-                monitorDecisionService.getCurrent().orElse(null),
+                market,
+                tradingState,
+                finalDecision,
+                hourlyGate,
+                monitor,
                 notificationService.getLatestNotification().orElse(null),
-                candidateScanService.getCurrentCandidates(5)
+                candidateScanService.getCurrentCandidates(5),
+                marketState,
+                monitorState,
+                tradeDecision,
+                finalCode
         );
+    }
+
+    private String marketState(com.austin.trading.dto.response.MarketCurrentResponse market) {
+        if (market == null) return "UNKNOWN";
+        if ("A".equalsIgnoreCase(market.marketGrade()) || "B".equalsIgnoreCase(market.marketGrade())) return "BULLISH";
+        if ("C".equalsIgnoreCase(market.marketGrade())) return "RISK_OFF";
+        return "NEUTRAL";
+    }
+
+    private String monitorState(com.austin.trading.dto.response.TradingStateResponse state,
+                                com.austin.trading.dto.response.MonitorDecisionRecordResponse monitor) {
+        if (monitor != null && monitor.monitorMode() != null) return monitor.monitorMode();
+        if (state != null && state.monitorMode() != null) return state.monitorMode();
+        return "UNKNOWN";
+    }
+
+    private String safeDecision(String finalCode) {
+        if (finalCode == null || finalCode.isBlank()) return "UNKNOWN";
+        return finalCode;
     }
 }

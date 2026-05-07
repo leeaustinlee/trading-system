@@ -9,7 +9,7 @@
 | 執行軌 | 觸發來源 | 優勢 | 限制 |
 |---|---|---|---|
 | **本機軌** | Windows Task Scheduler → `run-claude-research.ps1` → WSL Claude CLI | 能直連 TWSE MIS / TAIFEX / 外部網路 | PC 睡眠或 WSL 掛掉就停；PowerShell arg tokenize bug |
-| **Cowork 軌** | Cowork scheduled task → cloud sandbox Claude | 24/7 可用、不吃本機電力；tool permission 可預核 | sandbox 網路封閉（打不到 localhost:8080、twse MIS）；只能用 `market-snapshot.json` 快照 |
+| **Cowork 軌** | Cowork scheduled task → cloud sandbox Claude | 24/7 可用、不吃本機電力；tool permission 可預核 | sandbox 網路封閉（打不到 localhost:8888、twse MIS）；只能用 `market-snapshot.json` 快照 |
 
 **策略**：兩軌並行，同一份 prompt，任一軌成功 submit 即可（Java `ClaudeSubmitWatcher` + idempotency 處理重複）。本機軌是主力（報價新鮮度好），Cowork 軌是備援（本機掛了會接手）。
 
@@ -57,7 +57,7 @@ Codex / Java Workflow（讀 CLAUDE_DONE task）
 
 **關鍵規則**：
 
-- Claude **不得呼叫** `http://localhost:8080`（本機軌可打但不該；Cowork 軌本就打不到）
+- Claude **不得呼叫** `http://localhost:8888`（本機軌可打但不該；Cowork 軌本就打不到）
 - 檔名由 `claude-research-request.json.submit_filename_hint` 決定，**不要自創**
 - 寫檔**必須**走 `.tmp → rename` 協定，否則 watcher 可能讀到半成品進 `failed/`
 - `scores / thesis` 的 key 必須是 `allowed_symbols` 的子集
@@ -116,7 +116,7 @@ POSTMARKET 15:26 → Java 15:30 job 間隔剩 4 分鐘，Claude 必須在 3 分�
 
 ### Cowork 網路限制
 
-**Cowork sandbox 無法直連外部網路**（至少無法直連 `mis.twse.com.tw`、`localhost:8080`），所以 Cowork 軌的 Claude：
+**Cowork sandbox 無法直連外部網路**（至少無法直連 `mis.twse.com.tw`、`localhost:8888`），所以 Cowork 軌的 Claude：
 
 - ❌ 不能抓 TWSE MIS API 即時報價
 - ❌ 不能打 Java localhost API

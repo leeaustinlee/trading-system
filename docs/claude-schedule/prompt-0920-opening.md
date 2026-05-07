@@ -95,7 +95,7 @@
 
 ## 第六步：寫出研究結果到 File Bridge（v2.1 協定）
 
-Java `OpenDataPrepJob`（09:01）已建立 OPENING 任務並寫出 `claude-research-request.json`。你只需要寫一個檔案到 `claude-submit/`，Java `ClaudeSubmitWatcher` 會在 30 秒內自動 submit 並把 task 狀態推進到 `CLAUDE_DONE` — **不需要、也不可以呼叫 `localhost:8080`**。
+Java `OpenDataPrepJob`（09:01）已建立 OPENING 任務並寫出 `claude-research-request.json`。你只需要寫一個檔案到 `claude-submit/`，Java `ClaudeSubmitWatcher` 會在 30 秒內自動 submit 並把 task 狀態推進到 `CLAUDE_DONE` — **不需要、也不可以呼叫 `localhost:8888`**。
 
 ### 6.1 讀 request 取得 taskId 與建議檔名
 
@@ -161,6 +161,6 @@ mv /mnt/d/ai/stock/claude-submit/claude-OPENING-*-task-119.json.tmp \
 - snapshot 超過 10 分鐘不得給進場建議（僅可標示方向）
 - 跌破開盤、跌破昨收、爆量開高走低的標的，直接排除
 - 不直接給張數
-- **不要呼叫 `localhost:8080`** — 走 file bridge（6.3）
+- **不要呼叫 `localhost:8888`** — 走 file bridge（6.3）
 - **不要跳過 `.tmp` 階段** — watcher 可能讀到半成品
 - **不要自行創造 taskId** — 必須用 `claude-research-request.json` 的值

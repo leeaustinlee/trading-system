@@ -124,7 +124,7 @@ SPRING_PROFILES_ACTIVE=local nohup java -Xms512m -Xmx1536m \
   -jar target/trading-system-0.0.1-SNAPSHOT.jar > /tmp/trading.log 2>&1 & disown
 
 # 驗證
-curl http://localhost:8080/actuator/health
+curl http://localhost:8888/actuator/health
 # {"status":"UP"}
 ```
 
@@ -134,12 +134,12 @@ curl http://localhost:8080/actuator/health
 
 | 檢查 | 指令 | 預期 |
 |---|---|---|
-| Server health | `curl -s http://localhost:8080/actuator/health` | `{"status":"UP"}` |
-| Migration 完整 | `curl -s http://localhost:8080/api/system/migration/health` | 每項 `ok=true` |
-| Dashboard 可開 | 瀏覽器開 `http://localhost:8080/` | 看到操盤主控台 |
-| 排程列表 | `curl -s http://localhost:8080/api/scheduler/jobs` | 16 個 job 列出 |
-| AI 任務狀態 | `curl -s http://localhost:8080/api/orchestration/tasks/today` | 今日 AI 任務（首日可能為空） |
-| TAIFEX probe | `curl -s http://localhost:8080/api/system/external/probe` | taifex.status=OK |
+| Server health | `curl -s http://localhost:8888/actuator/health` | `{"status":"UP"}` |
+| Migration 完整 | `curl -s http://localhost:8888/api/system/migration/health` | 每項 `ok=true` |
+| Dashboard 可開 | 瀏覽器開 `http://localhost:8888/` | 看到操盤主控台 |
+| 排程列表 | `curl -s http://localhost:8888/api/scheduler/jobs` | 16 個 job 列出 |
+| AI 任務狀態 | `curl -s http://localhost:8888/api/orchestration/tasks/today` | 今日 AI 任務（首日可能為空） |
+| TAIFEX probe | `curl -s http://localhost:8888/api/system/external/probe` | taifex.status=OK |
 
 ---
 

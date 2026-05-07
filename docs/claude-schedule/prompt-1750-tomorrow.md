@@ -92,7 +92,7 @@ Java `T86DataPrepJob`（18:10）會建立 T86_TOMORROW 任務 — **但 17:50 �
 - 若 17:40 Codex DataPrep + 17:50 Claude 研究流程跟 Java 對齊，`claude-research-request.json` 的 `taskType` 已經是 `T86_TOMORROW`
 - 若 17:50 時 Java 還沒建 task（例如時序錯位），request.json 可能仍是 POSTMARKET 或其他，此時放棄寫 claude-submit，只寫 `claude-research-latest.md` 給 Codex 18:00 讀
 
-**不需要、也不可以呼叫 `localhost:8080`**。
+**不需要、也不可以呼叫 `localhost:8888`**。
 
 ### 7.1 讀 request 取得 taskId 與建議檔名
 
@@ -156,6 +156,6 @@ mv /mnt/d/ai/stock/claude-submit/claude-T86_TOMORROW-*-task-121.json.tmp \
 - 不發 LINE
 - T86 date 不是今日時，不得提高候選股排序（只能標示，等明日確認）
 - 不直接給 Austin 買賣張數
-- **不要呼叫 `localhost:8080`** — 走 file bridge（7.3）
+- **不要呼叫 `localhost:8888`** — 走 file bridge（7.3）
 - **不要跳過 `.tmp` 階段** — watcher 可能讀到半成品
 - **不要自行創造 taskId** — 必須用 `claude-research-request.json` 的值

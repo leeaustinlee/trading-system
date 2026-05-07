@@ -263,12 +263,12 @@ cooldown 共用 `notification_log` 表；Telegram 的 type 加 `TG_` prefix 與 
 mvn spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-Dashboard：`http://localhost:8080/`
+Dashboard：`http://localhost:8888/`
 
 Health check：
 
 ```bash
-curl -sS http://localhost:8080/actuator/health
+curl -sS http://localhost:8888/actuator/health
 ```
 
 ## Tests

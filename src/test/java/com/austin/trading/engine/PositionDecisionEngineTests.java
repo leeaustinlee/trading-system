@@ -8,9 +8,6 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 class PositionDecisionEngineTests {
 
@@ -19,11 +16,7 @@ class PositionDecisionEngineTests {
 
     @BeforeEach
     void setUp() {
-        config = mock(ScoreConfigService.class);
-        // defaults
-        when(config.getDecimal(anyString(), any(BigDecimal.class))).thenAnswer(i -> i.getArgument(1));
-        when(config.getInt(anyString(), anyInt())).thenAnswer(i -> i.getArgument(1));
-        when(config.getBoolean(anyString(), anyBoolean())).thenAnswer(i -> i.getArgument(1));
+        config = new DefaultScoreConfigService();
         engine = new PositionDecisionEngine(config);
     }
 
@@ -71,8 +64,8 @@ class PositionDecisionEngineTests {
     void profitReachesThreshold_shouldTrailUp() {
         var input = buildInput(b -> {
             b.entryPrice = bd("100");
-            b.currentPrice = bd("106");
-            b.unrealizedPnlPct = bd("6");      // >= 5% first trail
+            b.currentPrice = bd("111");
+            b.unrealizedPnlPct = bd("11");      // >= 10% first locked-profit trail
             b.momentumStrong = true;
             b.themeRank = 1;
             b.finalThemeScore = bd("8.0");
@@ -82,6 +75,43 @@ class PositionDecisionEngineTests {
         assertThat(result.status()).isEqualTo(PositionStatus.TRAIL_UP);
         assertThat(result.trailingAction()).isEqualTo(TrailingAction.MOVE_TO_FIRST);
         assertThat(result.suggestedStopLoss()).isNotNull();
+        assertThat(result.suggestedStopLoss()).isEqualByComparingTo("105.00");
+    }
+
+    @Test
+    void trailingStop_shouldOnlyMoveUpAndUseProfitLockLevels() {
+        var ten = engine.evaluate(buildInput(b -> {
+            b.entryPrice = bd("100");
+            b.currentPrice = bd("110");
+            b.unrealizedPnlPct = bd("10");
+            b.trailingStopPrice = bd("100");
+        }));
+        assertThat(ten.status()).isEqualTo(PositionStatus.TRAIL_UP);
+        assertThat(ten.suggestedStopLoss()).isEqualByComparingTo("105.00");
+
+        var twenty = engine.evaluate(buildInput(b -> {
+            b.entryPrice = bd("100");
+            b.currentPrice = bd("121");
+            b.unrealizedPnlPct = bd("20");
+            b.trailingStopPrice = bd("105");
+        }));
+        assertThat(twenty.suggestedStopLoss()).isEqualByComparingTo("110.00");
+
+        var thirty = engine.evaluate(buildInput(b -> {
+            b.entryPrice = bd("100");
+            b.currentPrice = bd("132");
+            b.unrealizedPnlPct = bd("30");
+            b.trailingStopPrice = bd("110");
+        }));
+        assertThat(thirty.suggestedStopLoss()).isEqualByComparingTo("120.00");
+
+        var highExistingStop = engine.evaluate(buildInput(b -> {
+            b.entryPrice = bd("100");
+            b.currentPrice = bd("111");
+            b.unrealizedPnlPct = bd("10");
+            b.trailingStopPrice = bd("108");
+        }));
+        assertThat(highExistingStop.status()).isNotEqualTo(PositionStatus.TRAIL_UP);
     }
 
     @Test
@@ -248,5 +278,12 @@ class PositionDecisionEngineTests {
         boolean momentumStrong = true;
         boolean nearResistance = false;
         boolean madeNewHighRecently = false;
+    }
+
+    static class DefaultScoreConfigService extends ScoreConfigService {
+        DefaultScoreConfigService() { super(null); }
+        @Override public BigDecimal getDecimal(String key, BigDecimal defaultValue) { return defaultValue; }
+        @Override public int getInt(String key, int defaultValue) { return defaultValue; }
+        @Override public boolean getBoolean(String key, boolean defaultValue) { return defaultValue; }
     }
 }

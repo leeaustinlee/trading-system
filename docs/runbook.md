@@ -1,7 +1,7 @@
 # Trading System Runbook
 
 > 版本：P2 全部 DONE（2026-04-21）  
-> 伺服器：`localhost:8080`，DB：`localhost:3330/trading_system`
+> 伺服器：`localhost:8888`，DB：`localhost:3330/trading_system`
 
 ---
 
@@ -103,26 +103,26 @@
 
 ```bash
 # 查詢當日 orchestration 狀態
-curl http://localhost:8080/api/scheduler/jobs
+curl http://localhost:8888/api/scheduler/jobs
 
 # 手動觸發任意 step（重置 FAILED/DONE 並重跑）
-curl -X POST "http://localhost:8080/api/scheduler/trigger/postmarket-analysis"
-curl -X POST "http://localhost:8080/api/scheduler/trigger/final-decision"
-curl -X POST "http://localhost:8080/api/scheduler/trigger/postmarket-data-prep"
-curl -X POST "http://localhost:8080/api/scheduler/trigger/weekly-review"
-curl -X POST "http://localhost:8080/api/scheduler/trigger/premarket-data-prep"
+curl -X POST "http://localhost:8888/api/scheduler/trigger/postmarket-analysis"
+curl -X POST "http://localhost:8888/api/scheduler/trigger/final-decision"
+curl -X POST "http://localhost:8888/api/scheduler/trigger/postmarket-data-prep"
+curl -X POST "http://localhost:8888/api/scheduler/trigger/weekly-review"
+curl -X POST "http://localhost:8888/api/scheduler/trigger/premarket-data-prep"
 
 # 強制重跑（忽略 DONE 保護）
-curl -X POST "http://localhost:8080/api/scheduler/trigger/postmarket-analysis?force=true"
+curl -X POST "http://localhost:8888/api/scheduler/trigger/postmarket-analysis?force=true"
 ```
 
 ### 5.2 盤後完整補跑序列
 
 ```bash
 # 當日盤後若 15:05 / 15:30 都失敗
-curl -X POST "http://localhost:8080/api/scheduler/trigger/postmarket-data-prep?force=true"
+curl -X POST "http://localhost:8888/api/scheduler/trigger/postmarket-data-prep?force=true"
 sleep 30
-curl -X POST "http://localhost:8080/api/scheduler/trigger/postmarket-analysis?force=true"
+curl -X POST "http://localhost:8888/api/scheduler/trigger/postmarket-analysis?force=true"
 ```
 
 ### 5.3 手動重建乾淨 DB（dry run）
@@ -156,12 +156,12 @@ mysql -u root -p trading_system < sql/V20__benchmark_analytics.sql
 
 ```bash
 # 補填某檔候選股的 AI 評分
-curl -X PUT http://localhost:8080/api/candidates/2330/ai-scores \
+curl -X PUT http://localhost:8888/api/candidates/2330/ai-scores \
   -H "Content-Type: application/json" \
   -d '{"claudeScore":8.5,"claudeResearchNote":"手動補填"}'
 
 # 補填題材評分
-curl -X PUT "http://localhost:8080/api/themes/snapshots/AI散熱/claude-scores" \
+curl -X PUT "http://localhost:8888/api/themes/snapshots/AI散熱/claude-scores" \
   -H "Content-Type: application/json" \
   -d '{"claudeThemeScore":7.0,"claudeResearchNote":"手動補填"}'
 ```
@@ -170,7 +170,7 @@ curl -X PUT "http://localhost:8080/api/themes/snapshots/AI散熱/claude-scores" 
 
 ```bash
 # 若週五 WeeklyTradeReviewJob 失敗
-curl -X POST "http://localhost:8080/api/scheduler/trigger/weekly-review?force=true"
+curl -X POST "http://localhost:8888/api/scheduler/trigger/weekly-review?force=true"
 ```
 
 ---
@@ -179,19 +179,19 @@ curl -X POST "http://localhost:8080/api/scheduler/trigger/weekly-review?force=tr
 
 ```bash
 # 應用是否存活
-curl http://localhost:8080/actuator/health
+curl http://localhost:8888/actuator/health
 
 # 近期 scheduler 執行記錄
-curl "http://localhost:8080/api/scheduler/logs?limit=20"
+curl "http://localhost:8888/api/scheduler/logs?limit=20"
 
 # 當日 orchestration step 狀態
-curl http://localhost:8080/api/scheduler/jobs | jq '.[] | {name,status,lastRun}'
+curl http://localhost:8888/api/scheduler/jobs | jq '.[] | {name,status,lastRun}'
 
 # 持倉狀態
-curl http://localhost:8080/api/positions/open
+curl http://localhost:8888/api/positions/open
 
 # 儀表板
-curl http://localhost:8080/api/dashboard/current
+curl http://localhost:8888/api/dashboard/current
 ```
 
 ---

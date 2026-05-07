@@ -53,8 +53,75 @@ public record FinalDecisionCandidateRequest(
         // ── v2.16 Batch C：ChasedHigh 真實 dayHigh ───────────────────
         BigDecimal dayHigh,              // 當日最高價（可 null；fallback entryPriceZone 上緣）
         // ── 2026-04-29 P0.3：tradabilityTag（PowerShell screener 自我標示） ──────
-        String     tradabilityTag        // 可回測進場候選 / 漲幅過大,僅參考 / 不列主進場 / 高價研究參考,非主進場（可 null）
+        String     tradabilityTag,       // 可回測進場候選 / 漲幅過大,僅參考 / 不列主進場 / 高價研究參考,非主進場（可 null）
+        // ── 2026-05 實戰化升級：三策略 trace 欄位 ─────────────────────
+        String     strategyType,
+        String     primaryStrategy,
+        BigDecimal breakoutScore,
+        BigDecimal pullbackScore,
+        BigDecimal continuationScore,
+        String     strategyReason,
+        String     strategyGateStatus,
+        String     strategyRejectReason,
+        String     entryMode,
+        String     riskMode
 ) {
+    public FinalDecisionCandidateRequest(
+            String stockCode,
+            String stockName,
+            String valuationMode,
+            String entryType,
+            Double riskRewardRatio,
+            Boolean includeInFinalPlan,
+            Boolean mainStream,
+            Boolean falseBreakout,
+            Boolean belowOpen,
+            Boolean belowPrevClose,
+            Boolean nearDayHigh,
+            Boolean stopLossReasonable,
+            String rationale,
+            String entryPriceZone,
+            Double stopLossPrice,
+            Double takeProfit1,
+            Double takeProfit2,
+            BigDecimal javaStructureScore,
+            BigDecimal claudeScore,
+            BigDecimal codexScore,
+            BigDecimal finalRankScore,
+            Boolean    isVetoed,
+            BigDecimal baseScore,
+            Boolean    hasTheme,
+            Integer    themeRank,
+            BigDecimal finalThemeScore,
+            BigDecimal consensusScore,
+            BigDecimal disagreementPenalty,
+            Boolean    volumeSpike,
+            Boolean    priceNotBreakHigh,
+            Boolean    entryTooExtended,
+            Boolean    entryTriggered,
+            BigDecimal currentPrice,
+            BigDecimal openPrice,
+            BigDecimal previousClose,
+            BigDecimal vwapPrice,
+            BigDecimal volumeRatio,
+            BigDecimal distanceFromOpenPct,
+            BigDecimal dropFromPrevClosePct,
+            String     marketRegime,
+            BigDecimal dayHigh,
+            String     tradabilityTag
+    ) {
+        this(stockCode, stockName, valuationMode, entryType, riskRewardRatio,
+                includeInFinalPlan, mainStream, falseBreakout, belowOpen, belowPrevClose,
+                nearDayHigh, stopLossReasonable, rationale, entryPriceZone, stopLossPrice,
+                takeProfit1, takeProfit2, javaStructureScore, claudeScore, codexScore,
+                finalRankScore, isVetoed, baseScore, hasTheme, themeRank, finalThemeScore,
+                consensusScore, disagreementPenalty, volumeSpike, priceNotBreakHigh,
+                entryTooExtended, entryTriggered,
+                currentPrice, openPrice, previousClose, vwapPrice, volumeRatio,
+                distanceFromOpenPct, dropFromPrevClosePct, marketRegime, dayHigh,
+                tradabilityTag, null, null, null, null, null, null, null, null, null, null);
+    }
+
     /**
      * Legacy 31-arg constructor（v2.8 之前無 price gate 細節欄位時使用）。
      * 新欄位預設為 null，PriceGateEvaluator 會以保守 fallback 處理。
@@ -101,8 +168,7 @@ public record FinalDecisionCandidateRequest(
                 consensusScore, disagreementPenalty, volumeSpike, priceNotBreakHigh,
                 entryTooExtended, entryTriggered,
                 null, null, null, null, null, null, null, null,
-                null,
-                null);
+                null, null);
     }
 
     /**
@@ -161,8 +227,7 @@ public record FinalDecisionCandidateRequest(
                 entryTooExtended, entryTriggered,
                 currentPrice, openPrice, previousClose, vwapPrice, volumeRatio,
                 distanceFromOpenPct, dropFromPrevClosePct, marketRegime,
-                null,
-                null);
+                null, null);
     }
 
     /**
@@ -241,7 +306,9 @@ public record FinalDecisionCandidateRequest(
                 currentPrice, openPrice, previousClose, vwapPrice, volumeRatio,
                 distanceFromOpenPct, dropFromPrevClosePct, marketRegime,
                 dayHigh,
-                tradabilityTag
+                tradabilityTag, strategyType, primaryStrategy, breakoutScore, pullbackScore,
+                continuationScore, strategyReason, strategyGateStatus, strategyRejectReason,
+                entryMode, riskMode
         );
     }
 
@@ -258,7 +325,60 @@ public record FinalDecisionCandidateRequest(
                 currentPrice, openPrice, previousClose, vwapPrice, volumeRatio,
                 distanceFromOpenPct, dropFromPrevClosePct, marketRegime,
                 dayHigh,
-                newTag
+                newTag, strategyType, primaryStrategy, breakoutScore, pullbackScore,
+                continuationScore, strategyReason, strategyGateStatus, strategyRejectReason,
+                entryMode, riskMode
+        );
+    }
+
+    public FinalDecisionCandidateRequest copyWithScores(
+            BigDecimal newJavaStructureScore,
+            BigDecimal newClaudeScore,
+            BigDecimal newCodexScore,
+            BigDecimal newFinalRankScore,
+            Boolean newIsVetoed,
+            BigDecimal newConsensusScore,
+            BigDecimal newDisagreementPenalty
+    ) {
+        return new FinalDecisionCandidateRequest(
+                stockCode, stockName, valuationMode, entryType, riskRewardRatio,
+                includeInFinalPlan, mainStream, falseBreakout, belowOpen, belowPrevClose,
+                nearDayHigh, stopLossReasonable, rationale, entryPriceZone, stopLossPrice,
+                takeProfit1, takeProfit2, newJavaStructureScore, newClaudeScore, newCodexScore,
+                newFinalRankScore, newIsVetoed, baseScore, hasTheme, themeRank, finalThemeScore,
+                newConsensusScore, newDisagreementPenalty, volumeSpike, priceNotBreakHigh,
+                entryTooExtended, entryTriggered, currentPrice, openPrice, previousClose,
+                vwapPrice, volumeRatio, distanceFromOpenPct, dropFromPrevClosePct, marketRegime,
+                dayHigh, tradabilityTag, strategyType, primaryStrategy, breakoutScore, pullbackScore,
+                continuationScore, strategyReason, strategyGateStatus, strategyRejectReason,
+                entryMode, riskMode
+        );
+    }
+
+    public FinalDecisionCandidateRequest withStrategyTrace(
+            String newStrategyType,
+            String newPrimaryStrategy,
+            BigDecimal newBreakoutScore,
+            BigDecimal newPullbackScore,
+            BigDecimal newContinuationScore,
+            String newStrategyReason,
+            String newStrategyGateStatus,
+            String newStrategyRejectReason,
+            String newEntryMode,
+            String newRiskMode
+    ) {
+        return new FinalDecisionCandidateRequest(
+                stockCode, stockName, valuationMode, entryType, riskRewardRatio,
+                includeInFinalPlan, mainStream, falseBreakout, belowOpen, belowPrevClose,
+                nearDayHigh, stopLossReasonable, rationale, entryPriceZone, stopLossPrice,
+                takeProfit1, takeProfit2, javaStructureScore, claudeScore, codexScore,
+                finalRankScore, isVetoed, baseScore, hasTheme, themeRank, finalThemeScore,
+                consensusScore, disagreementPenalty, volumeSpike, priceNotBreakHigh,
+                entryTooExtended, entryTriggered, currentPrice, openPrice, previousClose,
+                vwapPrice, volumeRatio, distanceFromOpenPct, dropFromPrevClosePct, marketRegime,
+                dayHigh, tradabilityTag, newStrategyType, newPrimaryStrategy, newBreakoutScore,
+                newPullbackScore, newContinuationScore, newStrategyReason, newStrategyGateStatus,
+                newStrategyRejectReason, newEntryMode, newRiskMode
         );
     }
 }

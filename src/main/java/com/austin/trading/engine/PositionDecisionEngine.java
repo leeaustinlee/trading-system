@@ -9,7 +9,7 @@ import java.math.RoundingMode;
 /**
  * 持股決策引擎（v1.0）。
  *
- * <p>對每一筆 OPEN position 評估，輸出 STRONG / HOLD / WEAKEN / EXIT / TRAIL_UP。</p>
+ * <p>對每一筆 OPEN position 評估，輸出 STRONG / HOLD / WEAKEN / EXIT / TRAIL_UP / DATA_BLOCKED / QUOTE_STALE。</p>
  *
  * <h3>判斷優先序（由高到低）</h3>
  * <ol>
@@ -35,8 +35,8 @@ public class PositionDecisionEngine {
 
     // ── Enums ──────────────────────────────────────────────────────────────
 
-    public enum PositionStatus { STRONG, HOLD, WEAKEN, EXIT, TRAIL_UP }
-    public enum TrailingAction { NONE, MOVE_TO_BREAKEVEN, MOVE_TO_FIRST, MOVE_TO_SECOND }
+    public enum PositionStatus { STRONG, HOLD, WEAKEN, EXIT, TRAIL_UP, DATA_BLOCKED, QUOTE_STALE }
+    public enum TrailingAction { NONE, MOVE_TO_BREAKEVEN, MOVE_TO_FIRST, MOVE_TO_SECOND, MOVE_TO_THIRD }
     public enum ExtendedLevel { NONE, MILD, EXTREME }
 
     // ── Input / Output ─────────────────────────────────────────────────────
@@ -331,10 +331,12 @@ public class PositionDecisionEngine {
     }
 
     private TrailingAction computeTrailingAction(PositionDecisionInput in, BigDecimal pnlPct) {
-        BigDecimal secondPct = config.getDecimal("position.trailing.second_trail_pct", new BigDecimal("8.0"));
-        BigDecimal firstPct = config.getDecimal("position.trailing.first_trail_pct", new BigDecimal("5.0"));
-        BigDecimal breakevenPct = config.getDecimal("position.trailing.breakeven_pct", new BigDecimal("3.0"));
+        BigDecimal thirdPct = config.getDecimal("position.trailing.third_trail_pct", new BigDecimal("30.0"));
+        BigDecimal secondPct = config.getDecimal("position.trailing.second_trail_pct", new BigDecimal("20.0"));
+        BigDecimal firstPct = config.getDecimal("position.trailing.first_trail_pct", new BigDecimal("10.0"));
+        BigDecimal breakevenPct = config.getDecimal("position.trailing.breakeven_pct", new BigDecimal("5.0"));
 
+        if (pnlPct.compareTo(thirdPct) >= 0) return TrailingAction.MOVE_TO_THIRD;
         if (pnlPct.compareTo(secondPct) >= 0) return TrailingAction.MOVE_TO_SECOND;
         if (pnlPct.compareTo(firstPct) >= 0) return TrailingAction.MOVE_TO_FIRST;
         if (pnlPct.compareTo(breakevenPct) >= 0) return TrailingAction.MOVE_TO_BREAKEVEN;
@@ -343,19 +345,12 @@ public class PositionDecisionEngine {
 
     private BigDecimal computeSuggestedStop(PositionDecisionInput in, TrailingAction action) {
         if (in.entryPrice() == null) return null;
-        BigDecimal bufferPct = config.getDecimal("position.trailing.buffer_pct", new BigDecimal("1.5"));
-        BigDecimal bufferMult = BigDecimal.ONE.add(bufferPct.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
-        BigDecimal bufferMultDown = BigDecimal.ONE.subtract(bufferPct.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
 
         return switch (action) {
             case MOVE_TO_BREAKEVEN -> in.entryPrice();
-            case MOVE_TO_FIRST -> in.entryPrice().multiply(bufferMult).setScale(2, RoundingMode.HALF_UP);
-            case MOVE_TO_SECOND -> {
-                if (in.dayLow() != null) {
-                    yield in.dayLow().multiply(bufferMultDown).setScale(2, RoundingMode.HALF_UP);
-                }
-                yield in.entryPrice().multiply(bufferMult).setScale(2, RoundingMode.HALF_UP);
-            }
+            case MOVE_TO_FIRST -> in.entryPrice().multiply(new BigDecimal("1.05")).setScale(2, RoundingMode.HALF_UP);
+            case MOVE_TO_SECOND -> in.entryPrice().multiply(new BigDecimal("1.10")).setScale(2, RoundingMode.HALF_UP);
+            case MOVE_TO_THIRD -> in.entryPrice().multiply(new BigDecimal("1.20")).setScale(2, RoundingMode.HALF_UP);
             case NONE -> null;
         };
     }

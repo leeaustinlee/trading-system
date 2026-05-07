@@ -1,5 +1,5 @@
 ﻿# ============================================================
-#  trading-system: forward Windows :8080 -> WSL Spring Boot
+#  trading-system: forward Windows :8888 -> WSL Spring Boot
 #  Run as Administrator:
 #     PS> Set-ExecutionPolicy -Scope Process Bypass
 #     PS> .\scripts\expose-mobile.ps1
@@ -14,12 +14,12 @@ if (-not $wslIp) {
 Write-Host ("WSL IP: " + $wslIp)
 
 netsh interface portproxy reset | Out-Null
-netsh interface portproxy add v4tov4 listenport=8080 listenaddress=0.0.0.0 connectport=8080 connectaddress=$wslIp | Out-Null
-Write-Host ("OK portproxy added: 0.0.0.0:8080 -> " + $wslIp + ":8080")
+netsh interface portproxy add v4tov4 listenport=8888 listenaddress=0.0.0.0 connectport=8888 connectaddress=$wslIp | Out-Null
+Write-Host ("OK portproxy added: 0.0.0.0:8888 -> " + $wslIp + ":8888")
 
-Get-NetFirewallRule -DisplayName 'TradingSystem 8080' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-New-NetFirewallRule -DisplayName 'TradingSystem 8080' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8080 | Out-Null
-Write-Host "OK firewall inbound 8080 allowed"
+Get-NetFirewallRule -DisplayName 'TradingSystem 8888' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+New-NetFirewallRule -DisplayName 'TradingSystem 8888' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8888 | Out-Null
+Write-Host "OK firewall inbound 8888 allowed"
 
 Write-Host ""
 Write-Host "--- portproxy rules ---"
@@ -29,5 +29,5 @@ Write-Host ""
 Write-Host "--- URLs your phone can use (LAN / Tailscale) ---" -ForegroundColor Cyan
 Get-NetIPAddress -AddressFamily IPv4 |
     Where-Object { $_.PrefixOrigin -ne 'WellKnown' -and $_.IPAddress -notmatch '^(127\.|169\.254\.|172\.)' } |
-    Select-Object @{N='URL';E={"http://" + $_.IPAddress + ":8080/"}}, InterfaceAlias |
+    Select-Object @{N='URL';E={"http://" + $_.IPAddress + ":8888/"}}, InterfaceAlias |
     Format-Table -AutoSize

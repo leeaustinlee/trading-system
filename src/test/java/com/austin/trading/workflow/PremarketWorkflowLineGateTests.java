@@ -118,12 +118,12 @@ class PremarketWorkflowLineGateTests {
     }
 
     @Test
-    void lineEnabled_invokesWriteRequest() {
+    void lineEnabled_doesNotInvokeWriteRequestBecauseDataPrepOwnsRequest() {
         when(config.getBoolean(eq("scheduling.line_notify_enabled"), anyBoolean())).thenReturn(true);
 
         service.execute(today);
 
-        verify(requestWriterService, atLeastOnce())
+        verify(requestWriterService, never())
                 .writeRequest(eq("PREMARKET"), eq(today), any(), any());
     }
 }

@@ -65,11 +65,18 @@ public class AiTaskSweepJob {
             try {
                 String status = t.getStatus();
                 if (AiTaskService.STATUS_PENDING.equals(status)) {
-                    LocalDateTime created = t.getCreatedAt();
+                    LocalDateTime created = firstNonNull(
+                            t.getCreatedAt(),
+                            t.getLastTransitionAt(),
+                            t.getClaudeStartedAt(),
+                            t.getCodexStartedAt());
                     if (created != null && minutesBetween(created, now) >= pendingTimeoutMinutes) {
                         aiTaskService.expireTask(t.getId(),
                                 "AI_TIMEOUT: PENDING > " + pendingTimeoutMinutes + "m");
                         pendingExpired++;
+                    } else if (created == null) {
+                        log.warn("[AiTaskSweep] id={} status=PENDING 缺少 created/transition timestamp，無法判定 timeout",
+                                t.getId());
                     }
                 } else if (AiTaskService.STATUS_CLAUDE_RUNNING.equals(status)) {
                     LocalDateTime start = t.getClaudeStartedAt();
@@ -113,5 +120,14 @@ public class AiTaskSweepJob {
 
     private long minutesBetween(LocalDateTime from, LocalDateTime to) {
         return java.time.Duration.between(from, to).toMinutes();
+    }
+
+    private LocalDateTime firstNonNull(LocalDateTime... values) {
+        for (LocalDateTime value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
     }
 }

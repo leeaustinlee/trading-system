@@ -270,6 +270,7 @@ public class FinalDecisionService {
     private final ThemeLiveDecisionService  themeLiveDecisionService;
     private final ThemeLineSummaryService   themeLineSummaryService;
     private final ApplicationEventPublisher events;
+    private StrategyGateService             strategyGateService;
 
     // v2.8 Grace Period：cron 觸發後，給 Claude/Codex 一個等待窗口完成研究，
     // 避免 09:30/15:30 立即判 AI_NOT_READY 發出假警報。
@@ -356,6 +357,11 @@ public class FinalDecisionService {
         this.themeLiveDecisionService   = themeLiveDecisionService;
         this.themeLineSummaryService    = themeLineSummaryService;
         this.events                     = events;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setStrategyGateService(StrategyGateService strategyGateService) {
+        this.strategyGateService = strategyGateService;
     }
 
     @Transactional
@@ -2214,23 +2220,11 @@ public class FinalDecisionService {
                     consensusResult.aiConfidenceMode(), missingAiScores,
                     override.reason());
 
-            // 6. 產生帶完整分數的新 request
-            // 31-arg ctor delegates with tradabilityTag=null；用 withTradabilityTag 補回原 tag
-            // 以免 P0.3 gate 在 pipeline 重建後失效。
-            result.add(new FinalDecisionCandidateRequest(
-                    c.stockCode(), c.stockName(), c.valuationMode(), c.entryType(),
-                    c.riskRewardRatio(), c.includeInFinalPlan(), c.mainStream(),
-                    c.falseBreakout(), c.belowOpen(), c.belowPrevClose(),
-                    c.nearDayHigh(), c.stopLossReasonable(),
-                    c.rationale(), c.entryPriceZone(),
-                    c.stopLossPrice(), c.takeProfit1(), c.takeProfit2(),
-                    javaScore, claudeScore, codexScore, finalRank, veto.vetoed(),
-                    c.baseScore(), c.hasTheme(),
-                    c.themeRank(), c.finalThemeScore(),
-                    consensusScore, disagreementPenalty,
-                    c.volumeSpike(), c.priceNotBreakHigh(), c.entryTooExtended(),
-                    c.entryTriggered()
-            ).withTradabilityTag(c.tradabilityTag()));
+            // 6. 產生帶完整分數的新 request。
+            // P0：不可再用 legacy ctor 重建，否則 overlay 後的 priceGate / market / execution 欄位會被清空。
+            FinalDecisionCandidateRequest scored = c.copyWithScores(javaScore, claudeScore, codexScore,
+                    finalRank, veto.vetoed(), consensusScore, disagreementPenalty);
+            result.add(strategyGateService == null ? scored : strategyGateService.apply(scored));
         }
         return result;
     }

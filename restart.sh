@@ -46,7 +46,7 @@ echo "[restart] pid=$NEW_PID"
 for i in {1..60}; do
   if grep -q "Started TradingApplication" "$LOG" 2>/dev/null; then
     echo "[restart] UP @ $(grep -m1 'Started TradingApplication' "$LOG" | awk '{print $1}')"
-    echo "[restart] health: $(curl -sf http://localhost:8080/actuator/health 2>/dev/null || echo 'not ready')"
+    echo "[restart] health: $(curl -sf http://localhost:8888/actuator/health 2>/dev/null || echo 'not ready')"
     echo "[restart] tail log: tail -f $LOG"
     exit 0
   fi

@@ -24,8 +24,8 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 JAR="$PROJECT_DIR/target/trading-system-0.0.1-SNAPSHOT.jar"
 LOG="$PROJECT_DIR/logs/app.log"
 PROFILE="${SPRING_PROFILES_ACTIVE:-local}"
-HEALTH_URL="http://localhost:8080/actuator/health"
-TRIGGER_BASE="http://localhost:8080/api/scheduler/trigger"
+HEALTH_URL="http://localhost:8888/actuator/health"
+TRIGGER_BASE="http://localhost:8888/api/scheduler/trigger"
 
 # 要補的 step，按時序排列（早 -> 晚）
 STEPS_TO_RECOVER=(
@@ -151,13 +151,13 @@ echo ""
 echo "================================================================"
 echo "[recover] 今日 orchestration 狀態（GET /api/orchestration/today）"
 echo "================================================================"
-curl -sS "http://localhost:8080/api/orchestration/today" | (jq . 2>/dev/null || cat)
+curl -sS "http://localhost:8888/api/orchestration/today" | (jq . 2>/dev/null || cat)
 
 echo ""
 echo "================================================================"
 echo "[recover] 今日 ai_task 狀態（GET /api/ai/tasks）"
 echo "================================================================"
-curl -sS "http://localhost:8080/api/ai/tasks" | (jq '.[] | {taskType, status, tradingDate, claudeDoneAt, codexDoneAt}' 2>/dev/null || cat)
+curl -sS "http://localhost:8888/api/ai/tasks" | (jq '.[] | {taskType, status, tradingDate, claudeDoneAt, codexDoneAt}' 2>/dev/null || cat)
 
 echo ""
 echo "================================================================"

@@ -59,11 +59,11 @@ Claude 的 `claudeScoresJson` 只對本輪候選 universe 中能匹配到的 sym
 ## API
 
 ```http
-GET  http://localhost:8080/api/ai/tasks
-GET  http://localhost:8080/api/ai/tasks/{id}
-POST http://localhost:8080/api/ai/tasks/{id}/codex-result
-POST http://localhost:8080/api/ai/tasks/{id}/finalize
-POST http://localhost:8080/api/ai/tasks/{id}/fail
+GET  http://localhost:8888/api/ai/tasks
+GET  http://localhost:8888/api/ai/tasks/{id}
+POST http://localhost:8888/api/ai/tasks/{id}/codex-result
+POST http://localhost:8888/api/ai/tasks/{id}/finalize
+POST http://localhost:8888/api/ai/tasks/{id}/fail
 ```
 
 ## Submit Body

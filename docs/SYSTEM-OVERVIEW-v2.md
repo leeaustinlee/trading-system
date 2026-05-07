@@ -14,12 +14,12 @@
  ┌─────────────────────────────────────────────────────────────┐
  │  Windows host                                               │
  │  ├─ MySQL :3330                                             │
- │  ├─ Codex agent (本機，直接 POST localhost:8080)            │
+ │  ├─ Codex agent (本機，直接 POST localhost:8888)            │
  │  └─ Task Scheduler (Codex-xxx × 5 個)                       │
  │                       ↕                                     │
  │  ┌─────────────────────────────────────────────────────────┐│
  │  │  WSL                                                    ││
- │  │  Java App :8080 ← 系統中樞                              ││
+ │  │  Java App :8888 ← 系統中樞                              ││
  │  │  ├─ 16 個 @Scheduled Job（cron MON-FRI）                ││
  │  │  ├─ AiTaskService（PENDING→CLAUDE_DONE→CODEX_DONE→FINALIZED）│
  │  │  ├─ FileBridgeWatcher（每 30 秒掃 claude-submit/）      ││
@@ -237,15 +237,15 @@ mvn package -DskipTests
 ### 檢查當日健康
 
 ```bash
-curl -s http://localhost:8080/api/orchestration/today
-curl -s http://localhost:8080/api/ai/tasks
-curl -s http://localhost:8080/api/dashboard/current | jq '.finalDecision'
+curl -s http://localhost:8888/api/orchestration/today
+curl -s http://localhost:8888/api/ai/tasks
+curl -s http://localhost:8888/api/dashboard/current | jq '.finalDecision'
 ```
 
 ### 補跑某 step（`?force=true` 可覆寫 DONE）
 
 ```bash
-curl -X POST "http://localhost:8080/api/scheduler/trigger/final-decision?force=true"
+curl -X POST "http://localhost:8888/api/scheduler/trigger/final-decision?force=true"
 # 可用 key:
 # premarket-data-prep, premarket, open-data-prep, final-decision,
 # hourly-gate, midday-review, aftermarket-review, postmarket-data-prep,
@@ -257,7 +257,7 @@ curl -X POST "http://localhost:8080/api/scheduler/trigger/final-decision?force=t
 
 ```bash
 # 刪除指定日期的候選 + stock_evaluation（清理 mock 或錯誤資料用）
-curl -X DELETE "http://localhost:8080/api/candidates/by-date/2026-04-17"
+curl -X DELETE "http://localhost:8888/api/candidates/by-date/2026-04-17"
 ```
 
 ---

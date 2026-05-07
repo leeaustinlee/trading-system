@@ -10,7 +10,7 @@ import java.util.Map;
 /**
  * Claude 透過「寫 JSON 檔 + Java 掃檔」方式提交研究結果（File Bridge 方案 A）。
  *
- * <p>Claude Code 若跑在 cloud sandbox 無法連 Windows localhost:8080，
+ * <p>Claude Code 若跑在 cloud sandbox 無法連 Windows localhost:8888，
  * 改為寫 JSON 到 {@code trading.claude-submit.watch-dir}，Java 自動 pick up。</p>
  *
  * <p>對應 {@link ClaudeSubmitRequest} 但多 3 個 routing 欄位用於找 task：</p>

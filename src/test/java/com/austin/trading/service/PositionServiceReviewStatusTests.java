@@ -46,7 +46,8 @@ class PositionServiceReviewStatusTests {
                 mock(StopLossTakeProfitEngine.class),
                 mock(CapitalLedgerService.class),
                 mock(CapitalService.class),
-                reviewLogRepo
+                reviewLogRepo,
+                mock(CandidateScanService.class)
         );
     }
 
@@ -64,7 +65,7 @@ class PositionServiceReviewStatusTests {
         rev.setReviewType("INTRADAY");
         rev.setDecisionStatus("WEAKEN");
         rev.setReason("離 5MA 收斂、量縮、距停損 1.8%");
-        when(reviewLogRepo.findTopByPositionIdOrderByCreatedAtDesc(101L))
+        when(reviewLogRepo.findTopByPositionIdOrderByIdDesc(101L))
                 .thenReturn(Optional.of(rev));
 
         List<PositionResponse> rows = service.getOpenPositions(10);
@@ -81,7 +82,7 @@ class PositionServiceReviewStatusTests {
         PositionEntity p = openPosition(202L, "00631L");
         when(positionRepo.findByStatusOrderByCreatedAtDesc(anyString(), any(PageRequest.class)))
                 .thenReturn(List.of(p));
-        when(reviewLogRepo.findTopByPositionIdOrderByCreatedAtDesc(202L))
+        when(reviewLogRepo.findTopByPositionIdOrderByIdDesc(202L))
                 .thenReturn(Optional.empty());
 
         List<PositionResponse> rows = service.getOpenPositions(10);
@@ -95,7 +96,7 @@ class PositionServiceReviewStatusTests {
         PositionEntity p = openPosition(303L, "2330");
         when(positionRepo.findByStatusOrderByCreatedAtDesc(anyString(), any(PageRequest.class)))
                 .thenReturn(List.of(p));
-        when(reviewLogRepo.findTopByPositionIdOrderByCreatedAtDesc(303L))
+        when(reviewLogRepo.findTopByPositionIdOrderByIdDesc(303L))
                 .thenThrow(new RuntimeException("simulated DB failure"));
 
         // 即使 review_log 讀失敗，主資料仍應回，欄位為 null
@@ -117,7 +118,7 @@ class PositionServiceReviewStatusTests {
         rev.setReviewType("POSTMARKET");
         rev.setDecisionStatus("STRONG");
         rev.setReason("續抱：題材不變、距停損 8%");
-        when(reviewLogRepo.findTopByPositionIdOrderByCreatedAtDesc(404L))
+        when(reviewLogRepo.findTopByPositionIdOrderByIdDesc(404L))
                 .thenReturn(Optional.of(rev));
 
         PositionResponse r = service.getOpenPositions(10).get(0);

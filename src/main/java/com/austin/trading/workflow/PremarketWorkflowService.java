@@ -99,16 +99,16 @@ public class PremarketWorkflowService {
         // Step 4: Java 結構評分 → upsert stock_evaluation
         batchComputeJavaStructureScore(candidates, tradingDate);
 
-        // Step 5: 寫出 Claude 研究請求
+        // v2.7：PREMARKET request 已由 PremarketDataPrepJob (08:10) 寫出（帶 taskId + allowed_symbols + capital_context）。
+        // 此處不可再以舊版 writeRequest（無 taskId / 無 capital_context / researchMax=3）覆寫，
+        // 否則 08:30 後 disk 上的 PREMARKET request 會比 08:20 Claude 已讀的版本退化。
         int researchMax = config.getInt("candidate.research.maxCount", 3);
         List<String> topSymbols = candidates.stream()
                 .limit(researchMax)
                 .map(CandidateResponse::symbol)
                 .toList();
-
-        String contextPayload = themeContext.isBlank() ? null : themeContext;
-        boolean written = requestWriterService.writeRequest("PREMARKET", tradingDate, topSymbols, contextPayload);
-        log.info("[PremarketWorkflow] Claude 研究請求寫出={}, symbols={}", written, topSymbols);
+        log.info("[PremarketWorkflow] Skip writeRequest at 08:30; PREMARKET request fully owned by PremarketDataPrepJob (08:10). topSymbols={}",
+                topSymbols);
 
         // Step 6: LINE 盤前通知 — 優先讀 Codex 最終決策，否則 fallback Claude / 候選股列表
         // Task 已由 PremarketDataPrepJob 於 08:10 建立，此處只讀取不重建

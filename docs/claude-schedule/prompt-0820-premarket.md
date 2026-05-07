@@ -92,7 +92,7 @@ D:/ai/stock/claude-research-YYYYMMDD-0820.md
 
 ## 第六步：寫出研究結果到 File Bridge（v2.1 協定）
 
-Java `PremarketDataPrepJob`（08:10）已建立 PREMARKET 任務並寫出 `claude-research-request.json`。你只需要寫一個檔案到 `claude-submit/`，Java `ClaudeSubmitWatcher` 會在 30 秒內自動 submit 並把 task 狀態推進到 `CLAUDE_DONE` — **不需要、也不可以呼叫 `localhost:8080`**（Cowork 雲端環境打不到；本機走 file bridge 更穩）。
+Java `PremarketDataPrepJob`（08:10）已建立 PREMARKET 任務並寫出 `claude-research-request.json`。你只需要寫一個檔案到 `claude-submit/`，Java `ClaudeSubmitWatcher` 會在 30 秒內自動 submit 並把 task 狀態推進到 `CLAUDE_DONE` — **不需要、也不可以呼叫 `localhost:8888`**（Cowork 雲端環境打不到；本機走 file bridge 更穩）。
 
 ### 6.1 讀 request 取得 taskId 與建議檔名
 
@@ -162,6 +162,6 @@ Scheduled 環境下寫完就可結束。
 - 不寫 `claude-outbox.json`
 - 不直接給 Austin 買賣張數（張數由 Codex 決定）
 - 不用超過 30 分鐘的報價給進場建議
-- **不要呼叫 `localhost:8080`** — 走 file bridge（6.3）
+- **不要呼叫 `localhost:8888`** — 走 file bridge（6.3）
 - **不要跳過 `.tmp` 階段** — watcher 可能讀到半成品
 - **不要自行創造 taskId** — 必須用 `claude-research-request.json` 的值

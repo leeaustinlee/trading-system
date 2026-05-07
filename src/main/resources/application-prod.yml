@@ -52,7 +52,7 @@ trading:
     five-minute-monitor-cron: "0 */5 9-13 * * MON-FRI"
     premarket-notify:
       enabled: true
-    premarket-notify-cron: "0 30 8 * * MON-FRI"
+    premarket-notify-cron: "0 32 8 * * MON-FRI"
     aftermarket-review:
       enabled: true
     aftermarket-review-cron: "0 0 14 * * MON-FRI"

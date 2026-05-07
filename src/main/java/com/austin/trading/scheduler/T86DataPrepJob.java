@@ -85,10 +85,11 @@ public class T86DataPrepJob {
             Map<String, InstitutionalFlow> flowMap = flows.stream()
                     .collect(Collectors.toMap(InstitutionalFlow::symbol, f -> f, (a, b) -> a));
 
-            // 3. 找今日候選股，補入法人資料
+            // 3. 找隔日計畫候選股，優先使用今天；若盤後流程已先把候選寫到下一交易日，則改抓最新日期
+            LocalDate candidateTradingDate = resolveCandidateTradingDate(today);
             List<CandidateStockEntity> candidates =
                     candidateStockRepository.findByTradingDateOrderByScoreDesc(
-                            today, PageRequest.of(0, 20));
+                            candidateTradingDate, PageRequest.of(0, 20));
 
             int updated = 0;
             for (CandidateStockEntity entity : candidates) {
@@ -128,8 +129,8 @@ public class T86DataPrepJob {
                 log.warn("[T86DataPrepJob] writeRequest 失敗: {}", e.getMessage());
             }
 
-            String msg = String.format("t86_rows=%d candidates=%d updated=%d",
-                    flows.size(), candidates.size(), updated);
+            String msg = String.format("t86_rows=%d candidateDate=%s candidates=%d updated=%d",
+                    flows.size(), candidateTradingDate, candidates.size(), updated);
             log.info("[T86DataPrepJob] {}", msg);
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), msg);
             orchestrationService.markDone(today, step, msg);
@@ -142,6 +143,17 @@ public class T86DataPrepJob {
     }
 
     // ── 私有方法 ─────────────────────────────────────────────────────────────────
+
+    private LocalDate resolveCandidateTradingDate(LocalDate today) {
+        boolean hasTodayCandidates = !candidateStockRepository
+                .findByTradingDateOrderByScoreDesc(today, PageRequest.of(0, 1))
+                .isEmpty();
+        if (hasTodayCandidates) return today;
+        return candidateStockRepository
+                .findTopByOrderByTradingDateDesc()
+                .map(CandidateStockEntity::getTradingDate)
+                .orElse(today);
+    }
 
     private String mergeInstitutional(String existingJson, InstitutionalFlow flow) {
         String institutionalData = String.format(

@@ -145,6 +145,7 @@ public class AiTaskService {
         task.setStatus(STATUS_PENDING);
         task.setPromptSummary(truncate(promptSummary, 2000));
         task.setPromptFilePath(promptFilePath);
+        recordTransition(task, "create");
         AiTaskEntity saved = aiTaskRepository.save(task);
         log.info("[AiTaskService] CREATE task id={} type={} date={} symbol={} candidates={}",
                 saved.getId(), taskType, tradingDate, targetSymbol,
@@ -163,6 +164,7 @@ public class AiTaskService {
         AiTaskEntity task = pending.get(0);
         task.setStatus(STATUS_CLAUDE_RUNNING);
         task.setClaudeStartedAt(LocalDateTime.now());
+        recordTransition(task, "claim-next-pending");
         AiTaskEntity saved = aiTaskRepository.save(task);
         log.info("[AiTaskService] CLAIM task id={} type={} → CLAUDE_RUNNING", saved.getId(), saved.getTaskType());
         return Optional.of(saved);

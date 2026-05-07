@@ -92,7 +92,7 @@
 
 ## 第七步：寫出研究結果到 File Bridge（v2.1 協定）
 
-Java 於盤中階段已建立 MIDDAY 任務並寫出 `claude-research-request.json`。你只需要寫一個檔案到 `claude-submit/`，Java `ClaudeSubmitWatcher` 會在 30 秒內自動 submit 並把 task 狀態推進到 `CLAUDE_DONE` — **不需要、也不可以呼叫 `localhost:8080`**。
+Java 於盤中階段已建立 MIDDAY 任務並寫出 `claude-research-request.json`。你只需要寫一個檔案到 `claude-submit/`，Java `ClaudeSubmitWatcher` 會在 30 秒內自動 submit 並把 task 狀態推進到 `CLAUDE_DONE` — **不需要、也不可以呼叫 `localhost:8888`**。
 
 ### 7.1 讀 request 取得 taskId 與建議檔名
 
@@ -157,6 +157,6 @@ mv /mnt/d/ai/stock/claude-submit/claude-MIDDAY-*-task-120.json.tmp \
 - 不發 LINE
 - 不執行盤中監控（監控由 Codex 負責）
 - 不直接給張數
-- **不要呼叫 `localhost:8080`** — 走 file bridge（7.3）
+- **不要呼叫 `localhost:8888`** — 走 file bridge（7.3）
 - **不要跳過 `.tmp` 階段** — watcher 可能讀到半成品
 - **不要自行創造 taskId** — 必須用 `claude-research-request.json` 的值
