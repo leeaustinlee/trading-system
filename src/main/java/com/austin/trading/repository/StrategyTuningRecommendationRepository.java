@@ -13,4 +13,6 @@ public interface StrategyTuningRecommendationRepository extends JpaRepository<St
     List<StrategyTuningRecommendationEntity> findByStatusOrderByCreatedAtDesc(TuningRecommendationStatus status);
     long countByStatus(TuningRecommendationStatus status);
     Optional<StrategyTuningRecommendationEntity> findFirstByConfidenceOrderByCreatedAtDesc(TuningConfidence confidence);
+    long countByRecommendationTypeAndStatus(com.austin.trading.domain.enums.TuningRecommendationType type,
+                                            TuningRecommendationStatus status);
 }

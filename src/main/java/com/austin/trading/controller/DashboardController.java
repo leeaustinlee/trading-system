@@ -8,7 +8,9 @@ import com.austin.trading.service.MarketDataService;
 import com.austin.trading.service.MonitorDecisionService;
 import com.austin.trading.service.NotificationService;
 import com.austin.trading.service.StrategyTuningService;
+import com.austin.trading.service.TuningEvaluationQueryService;
 import com.austin.trading.service.TradingStateService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,6 +27,30 @@ public class DashboardController {
     private final NotificationService notificationService;
     private final CandidateScanService candidateScanService;
     private final StrategyTuningService strategyTuningService;
+    private final TuningEvaluationQueryService tuningEvaluationQueryService;
+
+    @Autowired
+    public DashboardController(
+            MarketDataService marketDataService,
+            TradingStateService tradingStateService,
+            FinalDecisionService finalDecisionService,
+            HourlyGateDecisionService hourlyGateDecisionService,
+            MonitorDecisionService monitorDecisionService,
+            NotificationService notificationService,
+            CandidateScanService candidateScanService,
+            StrategyTuningService strategyTuningService,
+            TuningEvaluationQueryService tuningEvaluationQueryService
+    ) {
+        this.marketDataService = marketDataService;
+        this.tradingStateService = tradingStateService;
+        this.finalDecisionService = finalDecisionService;
+        this.hourlyGateDecisionService = hourlyGateDecisionService;
+        this.monitorDecisionService = monitorDecisionService;
+        this.notificationService = notificationService;
+        this.candidateScanService = candidateScanService;
+        this.strategyTuningService = strategyTuningService;
+        this.tuningEvaluationQueryService = tuningEvaluationQueryService;
+    }
 
     public DashboardController(
             MarketDataService marketDataService,
@@ -36,14 +62,8 @@ public class DashboardController {
             CandidateScanService candidateScanService,
             StrategyTuningService strategyTuningService
     ) {
-        this.marketDataService = marketDataService;
-        this.tradingStateService = tradingStateService;
-        this.finalDecisionService = finalDecisionService;
-        this.hourlyGateDecisionService = hourlyGateDecisionService;
-        this.monitorDecisionService = monitorDecisionService;
-        this.notificationService = notificationService;
-        this.candidateScanService = candidateScanService;
-        this.strategyTuningService = strategyTuningService;
+        this(marketDataService, tradingStateService, finalDecisionService, hourlyGateDecisionService, monitorDecisionService,
+                notificationService, candidateScanService, strategyTuningService, null);
     }
 
     @GetMapping("/current")
@@ -62,6 +82,9 @@ public class DashboardController {
                 ? null
                 : "高信心建議：" + tuningSummary.latestHighConfidenceRecommendation().targetParameter()
                         + " → " + tuningSummary.latestHighConfidenceRecommendation().suggestedValue();
+        var evaluationSummary = tuningEvaluationQueryService == null ? null : tuningEvaluationQueryService.getSummary();
+        var lastTuningResult = evaluationSummary == null ? null
+                : evaluationSummary.latestFail() != null ? evaluationSummary.latestFail() : evaluationSummary.latestSuccess();
         return new DashboardCurrentResponse(
                 market,
                 tradingState,
@@ -76,7 +99,10 @@ public class DashboardController {
                 finalCode,
                 tuningSummary.pendingCount(),
                 tuningSummary.latestHighConfidenceRecommendation(),
-                highMessage != null ? highMessage : tuningSummary.warningMessage()
+                highMessage != null ? highMessage : tuningSummary.warningMessage(),
+                evaluationSummary == null ? java.math.BigDecimal.ZERO : evaluationSummary.successRate(),
+                lastTuningResult,
+                evaluationSummary == null ? 0 : evaluationSummary.rollbackSuggestionCount()
         );
     }
 

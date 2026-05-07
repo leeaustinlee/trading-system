@@ -7,5 +7,6 @@ public enum TuningRecommendationType {
     POSITION_SIZE_REDUCE,
     ENTER_SMALL,
     RISK_CONTROL,
-    OBSERVATION
+    OBSERVATION,
+    ROLLBACK_SUGGESTION
 }

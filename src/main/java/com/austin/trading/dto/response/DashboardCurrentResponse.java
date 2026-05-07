@@ -14,7 +14,10 @@ public record DashboardCurrentResponse(
         String finalDecisionCode,
         long pendingTuningRecommendationCount,
         StrategyTuningRecommendationDto latestHighConfidenceRecommendation,
-        String tuningWarningMessage
+        String tuningWarningMessage,
+        java.math.BigDecimal tuningSuccessRate,
+        TuningEvaluationResultDto lastTuningResult,
+        long rollbackSuggestionCount
 ) {
     public DashboardCurrentResponse(
             MarketCurrentResponse market,
@@ -26,6 +29,7 @@ public record DashboardCurrentResponse(
             java.util.List<CandidateResponse> candidates
     ) {
         this(market, tradingState, finalDecision, hourlyGateDecision, monitorDecision,
-                latestNotification, candidates, null, null, null, null, 0, null, "樣本不足，不建議調參");
+                latestNotification, candidates, null, null, null, null, 0, null, "樣本不足，不建議調參",
+                java.math.BigDecimal.ZERO, null, 0);
     }
 }

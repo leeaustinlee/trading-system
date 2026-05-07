@@ -24,6 +24,7 @@ class StrategyTuningServiceTests {
     private StrategyTuningRecommendationRepository recommendationRepository;
     private StrategyTuningHistoryRepository historyRepository;
     private ScoreConfigService scoreConfigService;
+    private TuningApplySnapshotService tuningApplySnapshotService;
     private StrategyTuningService service;
 
     @BeforeEach
@@ -32,7 +33,9 @@ class StrategyTuningServiceTests {
         recommendationRepository = mock(StrategyTuningRecommendationRepository.class);
         historyRepository = mock(StrategyTuningHistoryRepository.class);
         scoreConfigService = mock(ScoreConfigService.class);
-        service = new StrategyTuningService(engine, recommendationRepository, historyRepository, scoreConfigService);
+        tuningApplySnapshotService = mock(TuningApplySnapshotService.class);
+        service = new StrategyTuningService(engine, recommendationRepository, historyRepository, scoreConfigService,
+                tuningApplySnapshotService);
         when(recommendationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(historyRepository.save(any())).thenAnswer(i -> i.getArgument(0));
     }
@@ -60,6 +63,7 @@ class StrategyTuningServiceTests {
         assertThat(dto.rollbackValue()).isEqualTo("6.5");
         verify(scoreConfigService).update("scoring.enter_min_score", "6.8");
         verify(historyRepository).save(any(StrategyTuningHistoryEntity.class));
+        verify(tuningApplySnapshotService).writeSnapshot(eq(rec), any(LocalDate.class));
     }
 
     @Test

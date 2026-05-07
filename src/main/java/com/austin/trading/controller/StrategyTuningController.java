@@ -2,7 +2,11 @@ package com.austin.trading.controller;
 
 import com.austin.trading.dto.response.StrategyTuningRecommendationDto;
 import com.austin.trading.dto.response.StrategyTuningSummaryDto;
+import com.austin.trading.dto.response.TuningEvaluationDetailDto;
+import com.austin.trading.dto.response.TuningEvaluationResultDto;
+import com.austin.trading.dto.response.TuningEvaluationSummaryDto;
 import com.austin.trading.service.StrategyTuningService;
+import com.austin.trading.service.TuningEvaluationQueryService;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -12,9 +16,12 @@ import java.util.List;
 @RequestMapping("/api/strategy-tuning")
 public class StrategyTuningController {
     private final StrategyTuningService service;
+    private final TuningEvaluationQueryService evaluationQueryService;
 
-    public StrategyTuningController(StrategyTuningService service) {
+    public StrategyTuningController(StrategyTuningService service,
+                                    TuningEvaluationQueryService evaluationQueryService) {
         this.service = service;
+        this.evaluationQueryService = evaluationQueryService;
     }
 
     @PostMapping("/generate")
@@ -55,4 +62,19 @@ public class StrategyTuningController {
 
     @GetMapping("/summary")
     public StrategyTuningSummaryDto summary() { return service.getTuningSummary(); }
+
+    @GetMapping("/evaluation/{id}")
+    public TuningEvaluationDetailDto evaluation(@PathVariable Long id) {
+        return evaluationQueryService.getDetail(id);
+    }
+
+    @PostMapping("/evaluation/{id}/evaluate")
+    public TuningEvaluationResultDto evaluate(@PathVariable Long id) {
+        return evaluationQueryService.evaluate(id);
+    }
+
+    @GetMapping("/evaluation-summary")
+    public TuningEvaluationSummaryDto evaluationSummary() {
+        return evaluationQueryService.getSummary();
+    }
 }

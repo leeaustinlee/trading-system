@@ -10,6 +10,7 @@ import com.austin.trading.entity.StrategyTuningHistoryEntity;
 import com.austin.trading.entity.StrategyTuningRecommendationEntity;
 import com.austin.trading.repository.StrategyTuningHistoryRepository;
 import com.austin.trading.repository.StrategyTuningRecommendationRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,15 +24,26 @@ public class StrategyTuningService {
     private final StrategyTuningRecommendationRepository recommendationRepository;
     private final StrategyTuningHistoryRepository historyRepository;
     private final ScoreConfigService scoreConfigService;
+    private final TuningApplySnapshotService tuningApplySnapshotService;
+
+    @Autowired
+    public StrategyTuningService(StrategyTuningEngine engine,
+                                 StrategyTuningRecommendationRepository recommendationRepository,
+                                 StrategyTuningHistoryRepository historyRepository,
+                                 ScoreConfigService scoreConfigService,
+                                 TuningApplySnapshotService tuningApplySnapshotService) {
+        this.engine = engine;
+        this.recommendationRepository = recommendationRepository;
+        this.historyRepository = historyRepository;
+        this.scoreConfigService = scoreConfigService;
+        this.tuningApplySnapshotService = tuningApplySnapshotService;
+    }
 
     public StrategyTuningService(StrategyTuningEngine engine,
                                  StrategyTuningRecommendationRepository recommendationRepository,
                                  StrategyTuningHistoryRepository historyRepository,
                                  ScoreConfigService scoreConfigService) {
-        this.engine = engine;
-        this.recommendationRepository = recommendationRepository;
-        this.historyRepository = historyRepository;
-        this.scoreConfigService = scoreConfigService;
+        this(engine, recommendationRepository, historyRepository, scoreConfigService, null);
     }
 
     @Transactional
@@ -88,10 +100,11 @@ public class StrategyTuningService {
         requireStatus(e, TuningRecommendationStatus.APPROVED, "只有 APPROVED 建議可 apply");
         ScoreConfigResponse current = scoreConfigService.getByKey(e.getTargetParameter());
         String oldValue = current.configValue();
+        LocalDateTime appliedAt = LocalDateTime.now();
 
         StrategyTuningHistoryEntity history = new StrategyTuningHistoryEntity();
         history.setRecommendationId(e.getId());
-        history.setAppliedDate(LocalDateTime.now());
+        history.setAppliedDate(appliedAt);
         history.setTargetModule(e.getTargetModule());
         history.setTargetParameter(e.getTargetParameter());
         history.setOldValue(oldValue);
@@ -100,10 +113,13 @@ public class StrategyTuningService {
         history.setRollbackValue(oldValue);
         history.setBeforeMetricsJson(e.getEvidenceJson());
         historyRepository.save(history);
+        if (tuningApplySnapshotService != null) {
+            tuningApplySnapshotService.writeSnapshot(e, appliedAt.toLocalDate());
+        }
 
         scoreConfigService.update(e.getTargetParameter(), e.getSuggestedValue());
         e.setRollbackValue(oldValue);
-        e.setAppliedAt(LocalDateTime.now());
+        e.setAppliedAt(appliedAt);
         e.setStatus(TuningRecommendationStatus.APPLIED);
         return toDto(recommendationRepository.save(e));
     }
