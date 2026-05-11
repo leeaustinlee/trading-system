@@ -21,6 +21,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -47,6 +48,14 @@ import java.util.regex.Pattern;
 public class AiTaskController {
 
     private static final Logger log = LoggerFactory.getLogger(AiTaskController.class);
+    private static final Set<String> FORMAL_SCHEDULED_NOTIFICATION_TASK_TYPES = Set.of(
+            "PREMARKET",
+            "OPENING",
+            "MIDDAY",
+            "POSTMARKET",
+            "T86_TOMORROW",
+            "NEXT_DAY_STRATEGY"
+    );
 
     private final AiTaskService aiTaskService;
     private final FinalDecisionService finalDecisionService;
@@ -250,19 +259,17 @@ public class AiTaskController {
         if (req.contentMarkdown() == null || req.contentMarkdown().isBlank()) return;
 
         String taskType = task.getTaskType();
-        if (!"PREMARKET".equalsIgnoreCase(taskType)
-                && !"MIDDAY".equalsIgnoreCase(taskType)
-                && !"POSTMARKET".equalsIgnoreCase(taskType)
-                && !"T86_TOMORROW".equalsIgnoreCase(taskType)) {
+        String normalizedTaskType = taskType == null ? "" : taskType.trim().toUpperCase();
+        if (!FORMAL_SCHEDULED_NOTIFICATION_TASK_TYPES.contains(normalizedTaskType)) {
             return;
         }
 
         try {
-            notificationFacade.notifyAiTaskFinal(taskType.toUpperCase(), req.contentMarkdown(), task.getTradingDate());
-            log.info("[AiTaskController] sent final AI LINE for task {} ({})", task.getId(), taskType);
+            notificationFacade.notifyAiTaskFinal(normalizedTaskType, req.contentMarkdown(), task.getTradingDate());
+            log.info("[AiTaskController] sent final AI Telegram for task {} ({})", task.getId(), normalizedTaskType);
         } catch (Exception ex) {
-            log.warn("[AiTaskController] final AI LINE failed for task {} ({}): {}",
-                    task.getId(), taskType, ex.getMessage());
+            log.warn("[AiTaskController] final AI Telegram failed for task {} ({}): {}",
+                    task.getId(), normalizedTaskType, ex.getMessage());
         }
     }
 
