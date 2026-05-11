@@ -8,9 +8,9 @@
 |---|---:|---:|---:|
 | `PREMARKET` | 08:25 | 08:28 | 08:30 |
 | `OPENING` | 09:25 | 09:28 | 09:30 |
-| `MIDDAY` | 10:55 | 10:58 | 11:00 |
-| `POSTMARKET` | 15:25 | 15:28 | 15:30 |
-| `T86_TOMORROW` | 17:55 | 17:58 | 18:00 |
+| `MIDDAY` | 11:15 | 11:25 | 11:30 |
+| `POSTMARKET` | 15:18 | 15:28 | 15:30 |
+| `T86_TOMORROW` | 18:18 | 18:28 | 18:30 |
 
 ## Codex 執行步驟
 
@@ -30,9 +30,9 @@ v1 PowerShell 通知任務已停用。v2 使用：
 |---|---:|---|
 | `Codex-Premarket-0828` | 08:28 | `PREMARKET` |
 | `Codex-Opening-0928` | 09:28 | `OPENING` |
-| `Codex-Midday-1058` | 10:58 | `MIDDAY` |
+| `Codex-Midday-1125` | 11:25 | `MIDDAY` |
 | `Codex-Postmarket-1528` | 15:28 | `POSTMARKET` |
-| `Codex-TomorrowPlan-1758` | 17:58 | `T86_TOMORROW` |
+| `Codex-TomorrowPlan-1828` | 18:28 | `T86_TOMORROW` |
 
 排程執行：
 

@@ -91,6 +91,9 @@ public class MiddayReviewJob {
             //   universe = 今日候選 10 檔 + 當前 OPEN 持倉（去重，保留順序）
             MiddayUniverse universe = buildMiddayUniverse(today, openPositions);
             Long middayTaskId = createMiddayTask(today, universe);
+            if (!universe.symbols().isEmpty() && middayTaskId == null) {
+                throw new IllegalStateException("MIDDAY task 建立失敗，拒絕寫出無 taskId request");
+            }
             writeMiddayRequest(today, middayTaskId, universe, market, state, openPositions);
 
             String message = buildMessage(
@@ -181,21 +184,46 @@ public class MiddayReviewJob {
                                      MarketCurrentResponse market,
                                      TradingStateResponse state,
                                      List<PositionResponse> openPositions) {
+        if (universe.symbols().isEmpty()) {
+            log.info("[MiddayReviewJob] universe 為空，略過寫 MIDDAY request");
+            return;
+        }
+        if (taskId == null) {
+            throw new IllegalStateException("MIDDAY request 缺少 taskId");
+        }
         try {
             String context = String.format(
-                    "{\"source\":\"midday_review\",\"grade\":\"%s\",\"phase\":\"%s\",\"positions\":%d,\"candidates\":%d}",
-                    market == null ? "N/A" : market.marketGrade(),
-                    market == null ? "N/A" : market.marketPhase(),
+                    "{\"source\":\"midday_review\",\"session\":\"MIDDAY_REVIEW\","
+                            + "\"marketGrade\":\"%s\",\"grade\":\"%s\","
+                            + "\"marketPhase\":\"%s\",\"phase\":\"%s\","
+                            + "\"decisionLock\":\"%s\",\"monitorMode\":\"%s\",\"hourlyGate\":\"%s\","
+                            + "\"positions\":%d,\"candidates\":%d}",
+                    safe(market == null ? null : market.marketGrade()),
+                    safe(market == null ? null : market.marketGrade()),
+                    safe(market == null ? null : market.marketPhase()),
+                    safe(market == null ? null : market.marketPhase()),
+                    safe(state == null ? null : state.decisionLock()),
+                    safe(state == null ? null : state.monitorMode()),
+                    safe(state == null ? null : state.hourlyGate()),
                     openPositions.size(),
                     universe.symbols().size()
             );
-            requestWriterService.writeRequest(taskId, "MIDDAY", today, universe.symbols(), context);
+            boolean requestWritten = requestWriterService.writeRequest(taskId, "MIDDAY", today, universe.symbols(), context);
+            if (!requestWritten) {
+                throw new IllegalStateException("MIDDAY request 寫出失敗");
+            }
         } catch (Exception e) {
             log.warn("[MiddayReviewJob] writeRequest 失敗: {}", e.getMessage());
+            throw new IllegalStateException("MIDDAY request 寫出失敗", e);
         }
     }
 
     private record MiddayUniverse(List<String> symbols, List<AiTaskCandidateRef> refs) {}
+
+    private String safe(String value) {
+        if (value == null || value.isBlank()) return "N/A";
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
 
     // ── 舊 helpers（原 v1 LINE 通知）──────────────────────────────────────
 

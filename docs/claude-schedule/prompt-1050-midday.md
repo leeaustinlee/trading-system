@@ -1,7 +1,7 @@
-# Claude 排程研究 — 10:50 盤中持倉研究
+# Claude 排程研究 — 11:15 盤中持倉研究（沿用 legacy 檔名）
 
-**執行時間**：每週一至週五 10:50（Asia/Taipei）
-**對應 Codex 通知**：11:00 `AustinStockMidday1100`
+**執行時間**：每週一至週五 11:15（Asia/Taipei，Hermes 現行排程）
+**對應 Codex 通知**：11:25 Codex / 11:30 final
 
 ---
 
@@ -22,7 +22,7 @@
 
 1. `D:/ai/stock/AI_RULES_INDEX.md`
 2. `D:/ai/stock/market-snapshot.json` — `generated_at` 必須在 10 分鐘內
-3. `D:/ai/stock/codex-research-latest.md` — Codex 10:40 DataPrep 交接
+3. `D:/ai/stock/codex-research-latest.md` — 盤中背景參考；正式 task universe 以 request 為準
 4. `D:/ai/stock/capital-summary.md` — 確認目前持倉與未實現損益
 5. `D:/ai/stock/claude-research-request.json`（若存在）
 6. `D:/ai/stock/market-gate-self-optimization-engine.md`
@@ -83,16 +83,16 @@
 ## 第六步：寫出研究結果
 
 **主檔**：`D:/ai/stock/claude-research-latest.md`
-**可選備份**：`D:/ai/stock/claude-research-YYYYMMDD-1050.md`
+**可選備份**：`D:/ai/stock/claude-research-YYYYMMDD-1115.md`
 
-標頭：`# 盤中研究 YYYY-MM-DD 10:50`
+標頭：`# 盤中研究 YYYY-MM-DD 11:15`
 最後：`來源：Claude`
 
 ---
 
 ## 第七步：寫出研究結果到 File Bridge（v2.1 協定）
 
-Java 於盤中階段已建立 MIDDAY 任務並寫出 `claude-research-request.json`。你只需要寫一個檔案到 `claude-submit/`，Java `ClaudeSubmitWatcher` 會在 30 秒內自動 submit 並把 task 狀態推進到 `CLAUDE_DONE` — **不需要、也不可以呼叫 `localhost:8888`**。
+Java `MiddayReviewJob`（11:00）已建立 MIDDAY 任務並寫出 `claude-research-request.json`。你只需要寫一個檔案到 `claude-submit/`，Java `ClaudeSubmitWatcher` 會在 30 秒內自動 submit 並把 task 狀態推進到 `CLAUDE_DONE` — **不需要、也不可以呼叫 `localhost:8888`**。
 
 ### 7.1 讀 request 取得 taskId 與建議檔名
 
@@ -105,6 +105,7 @@ Java 於盤中階段已建立 MIDDAY 任務並寫出 `claude-research-request.js
 | `tradingDate` | 例如 `"2026-04-23"` |
 | `submit_filename_hint` | 例如 `claude-MIDDAY-2026-04-23-1105-task-120.json`，**直接沿用** |
 | `allowed_symbols` | `scores` / `thesis` 的 key 必須是子集 |
+| `market_context_payload.marketGrade` / `decisionLock` / `monitorMode` | Java 11:00 live context；盤中判讀優先採用 |
 
 若 `taskType` 不是 `MIDDAY` 或 `taskId` 缺失，不要寫 claude-submit，只在 `claude-research-latest.md` 標註「未取得有效 MIDDAY taskId，本輪不回報」後結束。
 
@@ -125,7 +126,7 @@ Java 於盤中階段已建立 MIDDAY 任務並寫出 `claude-research-request.js
 規則：
 
 - `scores` key 必須 ∈ `allowed_symbols`
-- **10:50 MIDDAY 特殊規則**：若 `decision_lock = LOCKED` 或行情等級 = C，scores 一律保守（≤ 6）或留空
+- **11:15 MIDDAY 特殊規則**：若 `decisionLock = LOCKED` 或行情等級 = C，scores 一律保守（≤ 6）或留空
 - 11:00 後無持倉且無新轉強，`thesis` 可註明「建議 monitor_mode = OFF」
 - `riskFlags` 沒有就空陣列 `[]`
 

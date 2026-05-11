@@ -4,14 +4,14 @@
 
 此目錄存放 Claude 排程 Agent 的 5 個研究 prompt。這些 prompt 同時被**兩種執行環境**使用，提供雙軌可靠性。
 
-## 雙軌執行架構（2026-04-23 更新）
+## 執行架構（2026-05 現況）
 
 | 執行軌 | 觸發來源 | 優勢 | 限制 |
 |---|---|---|---|
-| **本機軌** | Windows Task Scheduler → `run-claude-research.ps1` → WSL Claude CLI | 能直連 TWSE MIS / TAIFEX / 外部網路 | PC 睡眠或 WSL 掛掉就停；PowerShell arg tokenize bug |
-| **Cowork 軌** | Cowork scheduled task → cloud sandbox Claude | 24/7 可用、不吃本機電力；tool permission 可預核 | sandbox 網路封閉（打不到 localhost:8888、twse MIS）；只能用 `market-snapshot.json` 快照 |
+| **Hermes 本機軌（現行）** | Hermes cron → `~/.hermes/scripts/stock_claude_*.py` → `scripts/hermes-run-claude.sh` → WSL Claude CLI | 現行唯一正式排程；可直連本機檔案與 Java / WSL 環境 | 依賴本機與 WSL 可用 |
+| **舊 Windows / Cowork 軌（歷史）** | 舊 Task Scheduler / Cowork recurring task | 僅供歷史對照 | 已不應作為現行排程來源 |
 
-**策略**：兩軌並行，同一份 prompt，任一軌成功 submit 即可（Java `ClaudeSubmitWatcher` + idempotency 處理重複）。本機軌是主力（報價新鮮度好），Cowork 軌是備援（本機掛了會接手）。
+**策略**：目前以 Hermes 本機軌為唯一正式 scheduler。若文件提到舊 Windows / Cowork 時序，只可視為歷史背景，不可覆蓋 Hermes 現行時序。
 
 ## 環境路徑翻譯（所有 prompt 通用）
 
@@ -66,11 +66,11 @@ Codex / Java Workflow（讀 CLAUDE_DONE task）
 
 | 時段 | 本機 cron | Cowork cron | taskType | 對應 Codex 通知 |
 |---|---|---|---|---|
-| 08:20 盤前 | `20 8 * * 1-5` | `20 8 * * 1-5` | `PREMARKET` | 08:30 `AustinStockPremarket0830` |
-| 09:20 開盤 | `20 9 * * 1-5` | `20 9 * * 1-5` | `OPENING` | 09:30 `AustinStockStrategy0930` |
-| 10:50 盤中 | `50 10 * * 1-5` | `50 10 * * 1-5` | `MIDDAY` | 11:00 `AustinStockMidday1100` |
-| 15:20 盤後 | `20 15 * * 1-5` | `20 15 * * 1-5` | `POSTMARKET` | 15:30 `AustinStockAftermarket1530` |
-| 17:50 明日 | `50 17 * * 1-5` | `50 17 * * 1-5` | `T86_TOMORROW` | 18:00 `AustinStockTomorrow1800` |
+| 08:20 盤前 | `20 8 * * 1-5` | legacy 同名 | `PREMARKET` | 08:30 `AustinStockPremarket0830` |
+| 09:20 開盤 | `20 9 * * 1-5` | legacy 同名 | `OPENING` | 09:30 `AustinStockStrategy0930` |
+| 11:15 盤中 | `15 11 * * 1-5` | legacy 舊文件常寫 10:50 | `MIDDAY` | 11:25 Codex / 11:30 final |
+| 15:18 盤後 | `18 15 * * 1-5` | legacy 舊文件常寫 15:20 | `POSTMARKET` | 15:28 Codex / 15:30 `AustinStockAftermarket1530` |
+| 18:18 明日 | `18 18 * * 1-5` | legacy 舊文件常寫 17:50 / 18:20 | `T86_TOMORROW` | 18:28 Codex / 18:30 `TomorrowPlan1800Job` |
 
 ## 5 個 Prompt 檔
 
@@ -78,9 +78,9 @@ Codex / Java Workflow（讀 CLAUDE_DONE task）
 |---|---|---|
 | `prompt-0820-premarket.md` | 08:20 週一至週五 | 盤前候選研究（超強勢 5 + 中短線候選 5） |
 | `prompt-0920-opening.md` | 09:20 週一至週五 | 開盤候選確認（即時報價複核 + 10 分鐘方向） |
-| `prompt-1050-midday.md` | 10:50 週一至週五 | 盤中持倉追蹤 + monitor_mode 建議 |
-| `prompt-1520-postmarket.md` | 15:20 週一至週五 | 盤後候選 5 檔 + 超強勢 5 檔研究 |
-| `prompt-1750-tomorrow.md` | 17:50 週一至週五 | T86 後明日策略（需處理 17:50 早於 Java 18:10 建 task 的時序） |
+| `prompt-1050-midday.md` | 11:15 週一至週五（legacy 檔名） | 盤中持倉追蹤 + monitor_mode 建議；晚於 Java 11:00 建 task |
+| `prompt-1520-postmarket.md` | 15:18 週一至週五（legacy 檔名） | 盤後候選 5 檔 + 超強勢 5 檔研究；晚於 Java 15:05 建 task |
+| `prompt-1750-tomorrow.md` | 18:18 週一至週五（legacy 檔名） | T86 後明日策略；現行 Hermes 時序晚於 Java 18:10 建 task |
 
 ## 本機軌設定（Windows Task Scheduler + WSL）
 
@@ -94,11 +94,11 @@ Codex / Java Workflow（讀 CLAUDE_DONE task）
 
 | Task ID | 用途 | 下次執行觀察位置 |
 |---|---|---|
-| `austin-stock-premarket-0820` | PREMARKET 08:20 | Cowork sidebar → Scheduled |
-| `austin-stock-opening-0920` | OPENING 09:20 | 同上 |
-| `austin-stock-midday-1050` | MIDDAY 10:50 | 同上 |
-| `austin-stock-postmarket-1520` | POSTMARKET 15:20 | 同上 |
-| `austin-stock-tomorrow-1750` | T86_TOMORROW 17:50 | 同上 |
+| `stock-ai-claude-premarket` | PREMARKET 08:20 | Hermes cron |
+| `stock-ai-claude-opening` | OPENING 09:20 | Hermes cron |
+| `stock-ai-claude-midday` | MIDDAY 11:15 | Hermes cron |
+| `stock-ai-claude-postmarket` | POSTMARKET 15:18 | Hermes cron |
+| `stock-ai-claude-tomorrow` | T86_TOMORROW 18:18 | Hermes cron |
 
 ### Cowork Deterministic Jitter
 
@@ -108,11 +108,11 @@ Cowork 對 recurring task 加一個 **per-taskId 固定 jitter**（為了分散�
 |---|---:|---:|---:|
 | PREMARKET | 08:20 | 08:20 | +8s |
 | OPENING | 09:20 | 09:22 | +94s |
-| MIDDAY | 10:50 | 10:52 | +94s |
-| POSTMARKET | 15:20 | **15:26** | +382s |
-| TOMORROW | 17:50 | **17:53** | +174s |
+| MIDDAY | legacy 10:50 | legacy 10:52 | +94s |
+| POSTMARKET | legacy 15:20 | 歷史資料，現行改由 Hermes 15:18 | n/a |
+| TOMORROW | legacy 17:50 | 歷史資料，現行改由 Hermes 18:18 | n/a |
 
-POSTMARKET 15:26 → Java 15:30 job 間隔剩 4 分鐘，Claude 必須在 3 分鐘內完成研究才能被 Java 15:30 讀到；實測通過（2026-04-23 首日）。若未來緊迫可把 cron 前推（例如 `15 15 * * 1-5` 實際會變 15:21）。
+歷史 Cowork POSTMARKET 15:26 → Java 15:30 job 間隔只剩 4 分鐘；現行 Hermes 改為 15:18，保留 Java 15:05 建 task 後的緩衝，也讓 Codex 15:28 有時間接手。
 
 ### Cowork 網路限制
 
@@ -173,7 +173,7 @@ D:/ai/stock/claude-submit/             ← Claude 寫入、Java watcher 處理
 | 症狀 | 可能原因 | 處置 |
 |---|---|---|
 | 本機軌 .failed.json 出現 | PowerShell arg tokenize bug、schema 錯誤 | 開檔看內容；Cowork 軌若有成功則可忽略 |
-| Cowork 軌 `△ 只寫 md 沒寫 submit` | `taskType` 不符（例如 17:50 時 Java 還沒建 T86 task） | 正常的 graceful fallback；可由本機軌之後補 |
+| Cowork/legacy 軌 `△ 只寫 md 沒寫 submit` | `taskType` 不符（例如 10:50 MIDDAY 早於 Java 11:00 建 task，或舊 17:50 早於 T86 18:10 建 task） | 排程漂移；現行 Hermes 應使用 11:15 MIDDAY / 18:18 T86 |
 | 15:30 LINE 沒有 Claude 分數 | POSTMARKET task 還在 PENDING | 檢查 claude-submit/processed/ 有沒有今天的 POSTMARKET；若沒有，看 failed/ |
 | Java 兩邊都沒 submit | Java App 掛掉 → watcher 沒在跑 | 跑 `scripts/recover-and-catchup.sh`；建議裝 `scripts/trading-system.service` systemd unit |
 

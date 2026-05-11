@@ -117,7 +117,8 @@ public class PremarketDataPrepJob {
             String payload = buildPayload(txf.orElse(null), quoteSummary);
             saveOrUpdateSnapshot(today, payload);
 
-            // v2.5：先建 AI task 拿 taskId，再 writeRequest 帶 taskId + allowed_symbols
+            // v2.6：先建 AI task 拿 taskId，再 writeRequest 帶 taskId + allowed_symbols。
+            // 若 task 建立失敗，直接 fail-fast，避免寫出沒有 taskId 的 request 造成 Claude/Codex 脫鉤。
             Long premarketTaskId = null;
             try {
                 List<AiTaskCandidateRef> refs = candidates.stream()
@@ -134,9 +135,16 @@ public class PremarketDataPrepJob {
                 log.warn("[PremarketDataPrepJob] createTask 失敗: {}", e.getMessage());
             }
 
+            if (premarketTaskId == null) {
+                throw new IllegalStateException("PREMARKET task 建立失敗，拒絕寫出無 taskId request");
+            }
+
             // 寫出研究請求給 Claude Code 排程 Agent（08:20 執行）
-            requestWriterService.writeRequest(premarketTaskId, "PREMARKET", today, symbols,
+            boolean requestWritten = requestWriterService.writeRequest(premarketTaskId, "PREMARKET", today, symbols,
                     buildPayload(txf.orElse(null), quoteSummary));
+            if (!requestWritten) {
+                throw new IllegalStateException("PREMARKET request 寫出失敗，拒絕留下只有 task、沒有 file bridge request 的狀態");
+            }
 
             String msg = "txf=" + txfSummary + " candidates=" + candidates.size();
             log.info("[PremarketDataPrepJob] {}", msg);

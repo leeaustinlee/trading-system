@@ -15,6 +15,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,6 +26,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("integration")
 class PortfolioRiskServiceIntegrationTests {
 
+    private static final LocalDate TEST_DATE_BASE = LocalDate.of(2200, 1, 1);
+    private static final AtomicInteger DATE_OFFSET = new AtomicInteger();
+
     @Autowired PortfolioRiskService           service;
     @Autowired PortfolioRiskDecisionRepository riskRepo;
 
@@ -32,7 +36,8 @@ class PortfolioRiskServiceIntegrationTests {
 
     @BeforeEach
     void setUp() {
-        uniqueDate = LocalDate.of(2005, 1, 1).plusDays(System.nanoTime() % 10_000);
+        uniqueDate = TEST_DATE_BASE.plusDays(DATE_OFFSET.getAndIncrement());
+        riskRepo.deleteAll(riskRepo.findByTradingDate(uniqueDate));
     }
 
     private PositionEntity openPosition(String symbol, String reviewStatus,

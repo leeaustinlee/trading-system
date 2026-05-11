@@ -34,34 +34,34 @@ D:\ai\stock\run-claude-research.ps1
 
 ---
 
-### 3. ClaudeResearch-1050（盤中研究）
+### 3. ClaudeResearch-1115（盤中研究）
 
 | 欄位 | 值 |
 |---|---|
-| 名稱 | ClaudeResearch-1050 |
-| 觸發程序 | 每週一至週五 10:50 |
+| 名稱 | ClaudeResearch-1115 |
+| 觸發程序 | 每週一至週五 11:15 |
 | 動作 | PowerShell |
 | 引數 | `-NoProfile -ExecutionPolicy Bypass -File "D:\ai\stock\run-claude-research.ps1" -ResearchType midday` |
 
 ---
 
-### 4. ClaudeResearch-1520（盤後研究）
+### 4. ClaudeResearch-1518（盤後研究）
 
 | 欄位 | 值 |
 |---|---|
-| 名稱 | ClaudeResearch-1520 |
-| 觸發程序 | 每週一至週五 15:20 |
+| 名稱 | ClaudeResearch-1518 |
+| 觸發程序 | 每週一至週五 15:18 |
 | 動作 | PowerShell |
 | 引數 | `-NoProfile -ExecutionPolicy Bypass -File "D:\ai\stock\run-claude-research.ps1" -ResearchType postmarket` |
 
 ---
 
-### 5. ClaudeResearch-1750（明日研究）
+### 5. ClaudeResearch-1818（明日研究）
 
 | 欄位 | 值 |
 |---|---|
-| 名稱 | ClaudeResearch-1750 |
-| 觸發程序 | 每週一至週五 17:50 |
+| 名稱 | ClaudeResearch-1818 |
+| 觸發程序 | 每週一至週五 18:18 |
 | 動作 | PowerShell |
 | 引數 | `-NoProfile -ExecutionPolicy Bypass -File "D:\ai\stock\run-claude-research.ps1" -ResearchType tomorrow` |
 
@@ -73,9 +73,9 @@ D:\ai\stock\run-claude-research.ps1
 $tasks = @(
   @{Name='ClaudeResearch-0820'; Hour=8;  Minute=20; Type='premarket'},
   @{Name='ClaudeResearch-0920'; Hour=9;  Minute=20; Type='opening'},
-  @{Name='ClaudeResearch-1050'; Hour=10; Minute=50; Type='midday'},
-  @{Name='ClaudeResearch-1520'; Hour=15; Minute=20; Type='postmarket'},
-  @{Name='ClaudeResearch-1750'; Hour=17; Minute=50; Type='tomorrow'}
+  @{Name='ClaudeResearch-1115'; Hour=11; Minute=15; Type='midday'},
+  @{Name='ClaudeResearch-1518'; Hour=15; Minute=18; Type='postmarket'},
+  @{Name='ClaudeResearch-1818'; Hour=18; Minute=18; Type='tomorrow'}
 )
 
 foreach ($t in $tasks) {

@@ -151,6 +151,7 @@ public class ClaudeCodeRequestWriterService {
             if (type != null)   root.put("taskType", type);
             root.put("type", type);                           // 舊欄位保留
             root.put("trading_date", tradingDate.toString());
+            root.put("tradingDate", tradingDate.toString()); // v2.7：camelCase 供 prompt / script 直接取用
 
             // 候選股（舊鍵名 + 明確 allowed_symbols 重複一次）
             ArrayNode candidates = root.putArray("candidates");
@@ -170,6 +171,11 @@ public class ClaudeCodeRequestWriterService {
             // 補充 context（由 caller 傳入，如 txf 報價、大盤漲跌家數等）
             if (contextPayload != null && !contextPayload.isBlank()) {
                 root.put("market_context", contextPayload);
+                try {
+                    root.set("market_context_payload", objectMapper.readTree(contextPayload));
+                } catch (Exception ignored) {
+                    root.put("market_context_parse_warning", "market_context is not valid JSON; consumers should fallback to raw string");
+                }
             }
 
             // 規則檔清單（Claude Code Agent 必讀）

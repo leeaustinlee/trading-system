@@ -100,7 +100,8 @@ public class T86DataPrepJob {
                 updated++;
             }
 
-            // v2.1：建 T86_TOMORROW ai_task（供 Claude 17:50 / Codex 17:58 接手，18:30 TomorrowPlan 讀取）
+            // v2.6：建 T86_TOMORROW ai_task（供 Claude / Codex / TomorrowPlan 接手）。
+            // 若 task 建立失敗，直接 fail-fast，避免寫出沒有 taskId 的 request。
             List<String> symbols = candidates.stream()
                     .map(CandidateStockEntity::getSymbol)
                     .collect(Collectors.toList());
@@ -112,7 +113,7 @@ public class T86DataPrepJob {
                         .collect(Collectors.toList());
                 var task = aiTaskService.createTask(
                         today, "T86_TOMORROW", null, refs,
-                        "18:10 T86 確認後候選（共 " + refs.size() + " 檔），等 Claude 17:50 / Codex 17:58 接手",
+                        "18:10 T86 確認後候選（共 " + refs.size() + " 檔），等 Claude/Codex/TomorrowPlan 接手",
                         "D:/ai/stock/claude-research-request.json"
                 );
                 t86TaskId = task.getId();
@@ -120,13 +121,21 @@ public class T86DataPrepJob {
                 log.warn("[T86DataPrepJob] createTask 失敗: {}", e.getMessage());
             }
 
+            if (t86TaskId == null) {
+                throw new IllegalStateException("T86_TOMORROW task 建立失敗，拒絕寫出無 taskId request");
+            }
+
             // v2.5：寫 Claude 研究請求檔帶 taskId + allowed_symbols
             try {
                 String context = String.format("{\"t86_rows\":%d,\"candidates_with_flow\":%d}",
                         flows.size(), updated);
-                requestWriterService.writeRequest(t86TaskId, "T86_TOMORROW", today, symbols, context);
+                boolean requestWritten = requestWriterService.writeRequest(t86TaskId, "T86_TOMORROW", today, symbols, context);
+                if (!requestWritten) {
+                    throw new IllegalStateException("T86_TOMORROW request 寫出失敗");
+                }
             } catch (Exception e) {
                 log.warn("[T86DataPrepJob] writeRequest 失敗: {}", e.getMessage());
+                throw new IllegalStateException("T86_TOMORROW request 寫出失敗，拒絕留下只有 task、沒有 file bridge request 的狀態", e);
             }
 
             String msg = String.format("t86_rows=%d candidateDate=%s candidates=%d updated=%d",

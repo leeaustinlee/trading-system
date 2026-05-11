@@ -110,7 +110,8 @@ public class OpenDataPrepJob {
                 updated++;
             }
 
-            // v2.1：建 OPENING ai_task（供 Claude 09:20 / Codex 09:28 接手，09:30 FinalDecision 讀取）
+            // v2.6：建 OPENING ai_task（供 Claude 09:20 / Codex 09:28 接手，09:30 FinalDecision 讀取）。
+            // 若 task 建立失敗，直接 fail-fast，避免 request.json 保留舊 task 或寫入 null taskId。
             Long openingTaskId = null;
             try {
                 List<AiTaskCandidateRef> refs = candidates.stream()
@@ -127,13 +128,21 @@ public class OpenDataPrepJob {
                 log.warn("[OpenDataPrepJob] createTask 失敗: {}", e.getMessage());
             }
 
+            if (openingTaskId == null) {
+                throw new IllegalStateException("OPENING task 建立失敗，拒絕寫出無 taskId request");
+            }
+
             // v2.5：必寫 request.json 更新為 OPENING 候選，避免 Claude 讀到 08:10 PREMARKET 殘留內容
             try {
                 String context = String.format("{\"source\":\"open_data_prep\",\"quotes\":%d,\"updated\":%d}",
                         quotes.size(), updated);
-                requestWriterService.writeRequest(openingTaskId, "OPENING", today, symbols, context);
+                boolean requestWritten = requestWriterService.writeRequest(openingTaskId, "OPENING", today, symbols, context);
+                if (!requestWritten) {
+                    throw new IllegalStateException("OPENING request 寫出失敗");
+                }
             } catch (Exception e) {
                 log.warn("[OpenDataPrepJob] writeRequest 失敗: {}", e.getMessage());
+                throw new IllegalStateException("OPENING request 寫出失敗，拒絕留下只有 task、沒有 file bridge request 的狀態", e);
             }
 
             String msg = String.format("symbols=%d quotes=%d updated=%d",

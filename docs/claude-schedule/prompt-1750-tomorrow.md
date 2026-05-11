@@ -1,7 +1,7 @@
-# Claude 排程研究 — 17:50 T86 後明日策略研究
+# Claude 排程研究 — 18:18 T86 後明日策略研究（沿用 legacy 檔名）
 
-**執行時間**：每週一至週五 17:50（Asia/Taipei）
-**對應 Codex 通知**：18:00 `AustinStockTomorrow1800`
+**執行時間**：每週一至週五 18:18（Asia/Taipei，Hermes 現行排程）
+**對應 Codex 通知**：18:30 `TomorrowPlan1800Job` / Codex 18:28 finalize
 
 ---
 
@@ -23,10 +23,11 @@
 1. `D:/ai/stock/AI_RULES_INDEX.md`
 2. `D:/ai/stock/dual-ai-workflow.md`
 3. `D:/ai/stock/market-snapshot.json` — 確認 `t86.date` 是否為今日
-4. `D:/ai/stock/codex-research-latest.md` — Codex 17:40 DataPrep 交接（含 T86 個股籌碼）
+4. `D:/ai/stock/codex-research-latest.md` — 盤後/T86 DataPrep 交接（含 T86 個股籌碼）
 5. `D:/ai/stock/capital-summary.md`
-6. `D:/ai/stock/trade-decision-engine.md`
-7. `D:/ai/stock/market-gate-self-optimization-engine.md`
+6. `D:/ai/stock/claude-research-request.json` — Java 18:10 建立的 `T86_TOMORROW` request contract
+7. `D:/ai/stock/trade-decision-engine.md`
+8. `D:/ai/stock/market-gate-self-optimization-engine.md`
 
 ---
 
@@ -78,19 +79,19 @@ T86 自營商：買超 / 賣超
 ## 第六步：寫出研究結果
 
 **主檔**：`D:/ai/stock/claude-research-latest.md`
-**可選備份**：`D:/ai/stock/claude-research-YYYYMMDD-1750.md`
+**可選備份**：`D:/ai/stock/claude-research-YYYYMMDD-1818.md`
 
-標頭：`# 明日策略研究 YYYY-MM-DD 17:50`
+標頭：`# 明日策略研究 YYYY-MM-DD 18:18`
 最後：`來源：Claude`
 
 ---
 
 ## 第七步：寫出研究結果到 File Bridge（v2.1 協定）
 
-Java `T86DataPrepJob`（18:10）會建立 T86_TOMORROW 任務 — **但 17:50 的 Claude 排程可能早於 Java 建 task**，請務必依 request.json 的 taskType 判斷。一般流程：
+Java `T86DataPrepJob`（18:10）會建立 T86_TOMORROW 任務。現行 Hermes Claude 排程為 18:18，理論上應晚於 Java 建 task；但若 request.json 仍殘留舊 task 或 Java job 失敗，仍必須依 request.json 的 taskType 判斷。一般流程：
 
-- 若 17:40 Codex DataPrep + 17:50 Claude 研究流程跟 Java 對齊，`claude-research-request.json` 的 `taskType` 已經是 `T86_TOMORROW`
-- 若 17:50 時 Java 還沒建 task（例如時序錯位），request.json 可能仍是 POSTMARKET 或其他，此時放棄寫 claude-submit，只寫 `claude-research-latest.md` 給 Codex 18:00 讀
+- 若 18:10 T86 DataPrep 與 18:18 Claude 研究流程對齊，`claude-research-request.json` 的 `taskType` 已經是 `T86_TOMORROW`
+- 若 18:18 時 request.json 仍是 POSTMARKET 或其他 taskType，視為 handoff 異常：放棄寫 claude-submit，只寫 `claude-research-latest.md` 並明確標註 contract mismatch
 
 **不需要、也不可以呼叫 `localhost:8888`**。
 
@@ -103,10 +104,10 @@ Java `T86DataPrepJob`（18:10）會建立 T86_TOMORROW 任務 — **但 17:50 �
 | `taskId` | 本輪 ai_task 的 ID。**不得自行創造** |
 | `taskType` | 必須 = `"T86_TOMORROW"` |
 | `tradingDate` | 例如 `"2026-04-23"` |
-| `submit_filename_hint` | 例如 `claude-T86_TOMORROW-2026-04-23-1750-task-121.json`，**直接沿用** |
+| `submit_filename_hint` | 例如 `claude-T86_TOMORROW-2026-04-23-1820-task-121.json`，**直接沿用** |
 | `allowed_symbols` | `scores` / `thesis` 的 key 必須是子集 |
 
-若 `taskType` 不是 `T86_TOMORROW` 或 `taskId` 缺失，不要寫 claude-submit，在 `claude-research-latest.md` 標註「17:50 時 Java T86_TOMORROW task 尚未建立，本輪僅寫 research md 供 Codex 18:00 讀取」後結束。
+若 `taskType` 不是 `T86_TOMORROW` 或 `taskId` 缺失，不要寫 claude-submit，在 `claude-research-latest.md` 標註「18:18 時未取得有效 T86_TOMORROW request contract，本輪僅寫 research md，不提交正式 task result」後結束。
 
 ### 7.2 組成 JSON 內容
 
@@ -125,7 +126,7 @@ Java `T86DataPrepJob`（18:10）會建立 T86_TOMORROW 任務 — **但 17:50 �
 規則：
 
 - `scores` key 必須 ∈ `allowed_symbols`
-- **17:50 T86_TOMORROW 特殊規則**：若 `t86.date` 不是今日（代表 TWSE T86 尚未更新），scores 給低信心（≤ 6）並在 `riskFlags` 標明「T86 尚非今日資料」；不要因 T86 方向直接提高排序
+- **18:18 T86_TOMORROW 特殊規則**：若 `t86.date` 不是今日（代表 TWSE T86 尚未更新），scores 給低信心（≤ 6）並在 `riskFlags` 標明「T86 尚非今日資料」；不要因 T86 方向直接提高排序
 - `riskFlags` 沒有就空陣列 `[]`
 
 ### 7.3 原子寫檔（tmp → rename）

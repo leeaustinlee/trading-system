@@ -70,9 +70,9 @@
 |---|---|---|---|
 | `stock-ai-claude-premarket` | `20 8 * * 1-5` | `PREMARKET` | 執行 Claude prompt，寫 `claude-submit` |
 | `stock-ai-claude-opening` | `20 9 * * 1-5` | `OPENING` | 同上 |
-| `stock-ai-claude-midday` | `50 10 * * 1-5` | `MIDDAY` | 同上 |
-| `stock-ai-claude-postmarket` | `20 15 * * 1-5` | `POSTMARKET` | 同上 |
-| `stock-ai-claude-tomorrow` | `20 18 * * 1-5` | `T86_TOMORROW` | 配合目前 Java `T86DataPrepJob 18:10`，延後至 18:20 |
+| `stock-ai-claude-midday` | `15 11 * * 1-5` | `MIDDAY` | Java `MiddayReviewJob` 11:00 建 request 後才可執行 |
+| `stock-ai-claude-postmarket` | `18 15 * * 1-5` | `POSTMARKET` | 配合目前 Java `PostmarketDataPrepJob 15:05`，保留 13 分鐘緩衝後啟動 |
+| `stock-ai-claude-tomorrow` | `18 18 * * 1-5` | `T86_TOMORROW` | 配合目前 Java `T86DataPrepJob 18:10`，延後至 18:18 |
 
 ### Codex 5 條
 
@@ -80,9 +80,9 @@
 |---|---|---|---|
 | `stock-ai-codex-premarket` | `28 8 * * 1-5` | `PREMARKET` | 等 `CLAUDE_DONE` 後提交 codex-result |
 | `stock-ai-codex-opening` | `28 9 * * 1-5` | `OPENING` | 同上 |
-| `stock-ai-codex-midday` | `58 10 * * 1-5` | `MIDDAY` | 同上 |
+| `stock-ai-codex-midday` | `25 11 * * 1-5` | `MIDDAY` | 等 11:15 Claude 完成後提交 codex-result |
 | `stock-ai-codex-postmarket` | `28 15 * * 1-5` | `POSTMARKET` | 同上 |
-| `stock-ai-codex-tomorrow` | `28 18 * * 1-5` | `T86_TOMORROW` | 配合目前 Java `T86DataPrepJob 18:10`，延後至 18:28 |
+| `stock-ai-codex-tomorrow` | `28 18 * * 1-5` | `T86_TOMORROW` | 等 `CLAUDE_DONE` 後提交 codex-result；配合目前 Java `T86DataPrepJob 18:10` |
 
 ## 實作模式
 
@@ -200,10 +200,10 @@ Codex 成功條件至少要驗：
 ### 規則 4：T86 tomorrow 改成對齊目前 Java 時序
 目前程式實際排程仍是 `T86DataPrepJob 18:10`。
 因此 Hermes 已調整為：
-- Claude tomorrow：`18:20`
+- Claude tomorrow：`18:18`
 - Codex tomorrow：`18:28`
 
-這樣可以避免 17:50/17:58 在 request 或 task 尚未建立前就誤觸發，減少 `not-ready` 與狀態競爭。
+這樣可以避免 legacy 17:50/17:58 在 request 或 task 尚未建立前就誤觸發，減少 `not-ready` 與狀態競爭。
 若後續 Java 時序再調整，Hermes 也要同步改表，不可兩邊各自漂移。
 
 ## 建議的 Hermes job 命名規範
