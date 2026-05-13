@@ -21,6 +21,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -85,7 +86,8 @@ public class T86DataPrepJob {
             Map<String, InstitutionalFlow> flowMap = flows.stream()
                     .collect(Collectors.toMap(InstitutionalFlow::symbol, f -> f, (a, b) -> a));
 
-            // 3. 找隔日計畫候選股，優先使用今天；若盤後流程已先把候選寫到下一交易日，則改抓最新日期
+            // 3. 找隔日計畫候選股。T86_TOMORROW 目的是為「明日」決策補上 T86 籌碼，因此
+            //    優先使用 DB 最新一筆 (next-day universe)；若 DB 沒有任何候選，才退回 today。
             LocalDate candidateTradingDate = resolveCandidateTradingDate(today);
             List<CandidateStockEntity> candidates =
                     candidateStockRepository.findByTradingDateOrderByScoreDesc(
@@ -138,7 +140,7 @@ public class T86DataPrepJob {
                 throw new IllegalStateException("T86_TOMORROW request 寫出失敗，拒絕留下只有 task、沒有 file bridge request 的狀態", e);
             }
 
-            String msg = String.format("t86_rows=%d candidateDate=%s candidates=%d updated=%d",
+            String msg = String.format("t86_rows=%d candidateSourceDate=%s candidates=%d updated=%d",
                     flows.size(), candidateTradingDate, candidates.size(), updated);
             log.info("[T86DataPrepJob] {}", msg);
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), msg);
@@ -153,15 +155,27 @@ public class T86DataPrepJob {
 
     // ── 私有方法 ─────────────────────────────────────────────────────────────────
 
-    private LocalDate resolveCandidateTradingDate(LocalDate today) {
+    /**
+     * 2026-05-13 fix：T86_TOMORROW 是「明日候選 + T86 籌碼補強」流程，因此候選來源優先取
+     * DB 最新一筆 tradingDate（通常已經是 next-day universe），而非 today。
+     * 順序：LATEST → TODAY。Package-private 供測試使用。
+     */
+    LocalDate resolveCandidateTradingDate(LocalDate today) {
+        Optional<LocalDate> latest = candidateStockRepository
+                .findTopByOrderByTradingDateDesc()
+                .map(CandidateStockEntity::getTradingDate);
+        if (latest.isPresent()) {
+            if (!latest.get().equals(today)) {
+                log.info("[T86DataPrepJob] T86_TOMORROW 採用最新候選交易日 {}（非 today={}）",
+                        latest.get(), today);
+            }
+            return latest.get();
+        }
         boolean hasTodayCandidates = !candidateStockRepository
                 .findByTradingDateOrderByScoreDesc(today, PageRequest.of(0, 1))
                 .isEmpty();
         if (hasTodayCandidates) return today;
-        return candidateStockRepository
-                .findTopByOrderByTradingDateDesc()
-                .map(CandidateStockEntity::getTradingDate)
-                .orElse(today);
+        return today;
     }
 
     private String mergeInstitutional(String existingJson, InstitutionalFlow flow) {

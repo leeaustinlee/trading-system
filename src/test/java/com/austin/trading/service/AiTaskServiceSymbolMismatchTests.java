@@ -2,6 +2,9 @@ package com.austin.trading.service;
 
 import com.austin.trading.dto.request.AiTaskCandidateRef;
 import com.austin.trading.dto.request.ClaudeSubmitRequest;
+import com.austin.trading.dto.request.CodexResultPayloadRequest;
+import com.austin.trading.dto.request.CodexReviewedSymbolRequest;
+import com.austin.trading.dto.request.CodexSubmitRequest;
 import com.austin.trading.repository.AiResearchLogRepository;
 import com.austin.trading.repository.AiTaskRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -109,5 +112,108 @@ class AiTaskServiceSymbolMismatchTests {
         assertThatThrownBy(() -> aiTaskService.submitClaudeResult(task.getId(), req))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("9999");
+    }
+
+    /** 場景：Codex scores/veto/payload 含非 candidate symbols → 必須擋在寫入前 */
+    @Test
+    void submitCodex_withSymbolsOutsideCandidates_shouldThrow() {
+        var task = aiTaskService.createTask(TODAY, uniqueType("OPENING_CODEX"), null,
+                List.of(
+                        new AiTaskCandidateRef("3189", "n1", null, null),
+                        new AiTaskCandidateRef("4958", "n2", null, null)
+                ),
+                "test", null);
+        aiTaskService.submitClaudeResult(task.getId(),
+                new ClaudeSubmitRequest("md", Map.of("3189", new BigDecimal("7.0")), Map.of(), List.of()));
+
+        var payload = new CodexResultPayloadRequest(
+                "OPENING", "OPENING", "09:30", "B", "RANGE", false,
+                List.of(new CodexReviewedSymbolRequest("3189", "selected", null, null, null, null, null,
+                        null, null, null, null, null, null, null, true,
+                        List.of("ok"), List.of(), "WATCH", "CASH")),
+                List.of(new CodexReviewedSymbolRequest("9999", "watchlist", null, null, null, null, null,
+                        null, null, null, null, null, null, null, true,
+                        List.of("bad"), List.of(), "WATCH", "CASH")),
+                List.of()
+        );
+        var req = new CodexSubmitRequest(
+                "codex md",
+                Map.of("4958", new BigDecimal("6.0"), "8888", new BigDecimal("5.0")),
+                List.of("7777"),
+                Map.of("9999", "review issue outside candidates"),
+                payload
+        );
+
+        assertThatThrownBy(() -> aiTaskService.submitCodexResult(task.getId(), req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageStartingWith("CODEX_RESULT_SYMBOL_MISMATCH:")
+                .hasMessageContaining("8888")
+                .hasMessageContaining("7777")
+                .hasMessageContaining("9999");
+    }
+
+    /** 場景：Codex 只有 reviewIssues 含非 candidate symbol → 也必須擋 */
+    @Test
+    void submitCodex_withReviewIssueOutsideCandidates_shouldThrow() {
+        var task = aiTaskService.createTask(TODAY, uniqueType("CODEX_REVIEW"), null,
+                List.of(new AiTaskCandidateRef("3189", "n1", null, null)),
+                "test", null);
+        aiTaskService.submitClaudeResult(task.getId(),
+                new ClaudeSubmitRequest("md", Map.of("3189", new BigDecimal("7.0")), Map.of(), List.of()));
+
+        var req = new CodexSubmitRequest(
+                "codex md",
+                Map.of(),
+                List.of(),
+                Map.of("9999", "review issue outside candidates"),
+                null
+        );
+
+        assertThatThrownBy(() -> aiTaskService.submitCodexResult(task.getId(), req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageStartingWith("CODEX_RESULT_SYMBOL_MISMATCH:")
+                .hasMessageContaining("9999");
+    }
+
+    /** 場景：Codex 只有 reviewIssues 但 task universe 為空 → fail closed */
+    @Test
+    void submitCodex_withEmptyTaskCandidatesAndReviewIssuesOnly_shouldThrow() {
+        var task = aiTaskService.createTask(TODAY, uniqueType("CODEX_REV_EMPTY"), null,
+                List.of(), "test", null);
+        aiTaskService.submitClaudeResult(task.getId(),
+                new ClaudeSubmitRequest("md", Map.of(), Map.of(), List.of()));
+
+        var req = new CodexSubmitRequest(
+                "codex md",
+                Map.of(),
+                List.of(),
+                Map.of("8888", "review issue without universe"),
+                null
+        );
+
+        assertThatThrownBy(() -> aiTaskService.submitCodexResult(task.getId(), req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageStartingWith("CODEX_RESULT_SYMBOL_MISMATCH:");
+    }
+
+    /** 場景：Codex 帶 symbol 但 task universe 為空 → fail closed，避免 drift 被寫入 */
+    @Test
+    void submitCodex_withEmptyTaskCandidatesAndSymbols_shouldThrow() {
+        var task = aiTaskService.createTask(TODAY, uniqueType("CODEX_EMPTY"), null,
+                List.of(), "test", null);
+        aiTaskService.submitClaudeResult(task.getId(),
+                new ClaudeSubmitRequest("md", Map.of(), Map.of(), List.of()));
+
+        var req = new CodexSubmitRequest(
+                "codex md",
+                Map.of("8888", new BigDecimal("5.0")),
+                List.of(),
+                Map.of(),
+                null
+        );
+
+        assertThatThrownBy(() -> aiTaskService.submitCodexResult(task.getId(), req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageStartingWith("CODEX_RESULT_SYMBOL_MISMATCH:");
     }
 }

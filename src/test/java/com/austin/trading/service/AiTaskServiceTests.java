@@ -190,7 +190,11 @@ class AiTaskServiceTests {
     @Test
     void submitClaudeResult_shouldMoveToClaudeDoneAndWriteScores() {
         LocalDate date = LocalDate.of(2026, 4, 20);
-        AiTaskEntity t = service.createTask(date, "PREMARKET", null, List.of(), "t", null);
+        AiTaskEntity t = service.createTask(date, "PREMARKET", null,
+                List.of(
+                        new AiTaskCandidateRef("2303", "聯電", null, null),
+                        new AiTaskCandidateRef("3231", "緯創", null, null)
+                ), "t", null);
         service.claim(t.getId());
 
         Map<String, BigDecimal> scores = new HashMap<>();
@@ -224,7 +228,11 @@ class AiTaskServiceTests {
     @Test
     void submitCodexResult_shouldMoveToCodexDoneAndWriteVeto() {
         LocalDate date = LocalDate.of(2026, 4, 20);
-        AiTaskEntity t = service.createTask(date, "PREMARKET", null, List.of(), "t", null);
+        AiTaskEntity t = service.createTask(date, "PREMARKET", null,
+                List.of(
+                        new AiTaskCandidateRef("2303", "聯電", null, null),
+                        new AiTaskCandidateRef("6213", "聯茂", null, null)
+                ), "t", null);
         service.claim(t.getId());
         service.submitClaudeResult(t.getId(),
                 new ClaudeSubmitRequest("md", Map.of("2303", new BigDecimal("8.5")), null, null));
@@ -349,7 +357,8 @@ class AiTaskServiceTests {
     @Test
     void submitClaudeResult_sameHashRepost_shouldBeIdempotent() {
         LocalDate date = LocalDate.of(2026, 4, 20);
-        AiTaskEntity t = service.createTask(date, "PREMARKET", null, List.of(), "t", null);
+        AiTaskEntity t = service.createTask(date, "PREMARKET", null,
+                List.of(new AiTaskCandidateRef("2303", "聯電", null, null)), "t", null);
         service.claim(t.getId());
         ClaudeSubmitRequest req = new ClaudeSubmitRequest("md-v1",
                 java.util.Map.of("2303", new BigDecimal("8.0")), null, null);

@@ -8,6 +8,7 @@ import com.austin.trading.dto.internal.PortfolioRiskDecision;
 import com.austin.trading.dto.internal.RankedCandidate;
 import com.austin.trading.dto.internal.SetupDecision;
 import com.austin.trading.dto.internal.TimingEvaluationInput;
+import com.austin.trading.dto.request.AiTaskCandidateRef;
 import com.austin.trading.dto.request.CodexResultPayloadRequest;
 import com.austin.trading.dto.request.CodexReviewedSymbolRequest;
 import com.austin.trading.dto.request.FinalDecisionCandidateRequest;
@@ -500,6 +501,7 @@ public class FinalDecisionService {
         int maxCount = scoreConfigService.getInt("candidate.scan.maxCount", 8);
         List<FinalDecisionCandidateRequest> rawCandidates =
                 candidateScanService.loadFinalDecisionCandidates(tradingDate, maxCount);
+        observeUniverseMismatch(readiness, rawCandidates);
         // v2.9.1：overlay 期間同步把 VWAP/volume extras 累加到 symbol->map，trace 層合併用。
         Map<String, Map<String, Object>> priceGateExtrasBySymbol = new LinkedHashMap<>();
         rawCandidates = applyCodexExecutionOverlay(rawCandidates, codexContext, priceGateExtrasBySymbol);
@@ -1228,6 +1230,48 @@ public class FinalDecisionService {
         return value
                 .replace("\\", "\\\\")
                 .replace("\"", "\\\"");
+    }
+
+    /**
+     * 防漂移觀測：正式決策仍維持既有 rawCandidates 來源，但若 AI task-scoped universe
+     * 與 final-decision raw candidates 不一致，先用 warning 留證，避免日後 Java/Claude/Codex
+     * 看似一致但跨層候選池其實已漂移。
+     */
+    private void observeUniverseMismatch(AiReadiness readiness, List<FinalDecisionCandidateRequest> rawCandidates) {
+        if (readiness == null || readiness.aiTaskId() == null) return;
+        try {
+            Optional<AiTaskEntity> taskOpt = aiTaskService.getById(readiness.aiTaskId());
+            if (taskOpt.isEmpty()) return;
+            AiTaskEntity task = taskOpt.get();
+            String targetJson = task.getTargetCandidatesJson();
+            if (targetJson == null || targetJson.isBlank()) return;
+            List<AiTaskCandidateRef> refs = objectMapper.readValue(
+                    targetJson,
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, AiTaskCandidateRef.class)
+            );
+            Set<String> taskSymbols = refs == null ? Set.of() : refs.stream()
+                    .map(AiTaskCandidateRef::symbol)
+                    .filter(s -> s != null && !s.isBlank())
+                    .map(String::trim)
+                    .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+            Set<String> rawSymbols = rawCandidates == null ? Set.of() : rawCandidates.stream()
+                    .map(FinalDecisionCandidateRequest::stockCode)
+                    .filter(s -> s != null && !s.isBlank())
+                    .map(String::trim)
+                    .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+            if (!taskSymbols.isEmpty() && !rawSymbols.isEmpty() && !taskSymbols.equals(rawSymbols)) {
+                log.warn("[FinalDecision] universeMismatch taskId={} taskType={} taskSymbols={} rawCandidateSymbols={}",
+                        task.getId(), task.getTaskType(), limitSymbols(taskSymbols), limitSymbols(rawSymbols));
+            }
+        } catch (Exception e) {
+            log.warn("[FinalDecision] universeMismatch observation skipped taskId={} due to: {}",
+                    readiness.aiTaskId(), e.getMessage());
+        }
+    }
+
+    private List<String> limitSymbols(Set<String> symbols) {
+        if (symbols == null || symbols.isEmpty()) return List.of();
+        return symbols.stream().limit(20).toList();
     }
 
     // ── v2.1 AI Readiness ────────────────────────────────────────────────────

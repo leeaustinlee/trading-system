@@ -268,6 +268,7 @@ public class AiTaskService {
         }
 
         requireState(task, Set.of(STATUS_CLAUDE_DONE, STATUS_CODEX_RUNNING), "codex-result");
+        validateCodexResultAgainstTaskCandidates(task, req);
 
         task.setCodexResultMarkdown(req.contentMarkdown());
         task.setCodexPayloadJson(toJson(req.payload()));
@@ -554,56 +555,135 @@ public class AiTaskService {
         }
     }
 
-    private void validateClaudeScoresAgainstTaskCandidates(AiTaskEntity task, ClaudeSubmitRequest req) {
-        if (req == null || req.scores() == null || req.scores().isEmpty()) return;
-        if (task.getTargetCandidatesJson() == null || task.getTargetCandidatesJson().isBlank()) return;
-
+    private Set<String> allowedSymbolsFromTaskCandidates(AiTaskEntity task) {
+        if (task == null || task.getTargetCandidatesJson() == null || task.getTargetCandidatesJson().isBlank()) {
+            return Set.of();
+        }
         try {
             List<AiTaskCandidateRef> refs = objectMapper.readValue(
                     task.getTargetCandidatesJson(),
                     objectMapper.getTypeFactory().constructCollectionType(List.class, AiTaskCandidateRef.class)
             );
-            if (refs == null || refs.isEmpty()) return;
-
+            if (refs == null || refs.isEmpty()) return Set.of();
             Set<String> allowedSymbols = new HashSet<>();
             for (AiTaskCandidateRef ref : refs) {
                 if (ref != null && ref.symbol() != null && !ref.symbol().isBlank()) {
                     allowedSymbols.add(ref.symbol().trim());
                 }
             }
-            if (allowedSymbols.isEmpty()) return;
-
-            List<String> invalidSymbols = new ArrayList<>();
-            if (req.scores() != null) {
-                for (String symbol : req.scores().keySet()) {
-                    if (symbol == null || symbol.isBlank()) continue;
-                    String trimmed = symbol.trim();
-                    if (!allowedSymbols.contains(trimmed)) {
-                        invalidSymbols.add(trimmed);
-                    }
-                }
-            }
-            // v2.5：thesis keys 也必須是 candidates 子集
-            if (req.thesis() != null) {
-                for (String symbol : req.thesis().keySet()) {
-                    if (symbol == null || symbol.isBlank()) continue;
-                    String trimmed = symbol.trim();
-                    if (!allowedSymbols.contains(trimmed) && !invalidSymbols.contains(trimmed)) {
-                        invalidSymbols.add(trimmed);
-                    }
-                }
-            }
-            if (!invalidSymbols.isEmpty()) {
-                throw new IllegalArgumentException(
-                        "CLAUDE_SCORES_SYMBOL_MISMATCH: task candidates=" + allowedSymbols
-                                + ", invalid submitted symbols=" + invalidSymbols
-                );
-            }
-        } catch (IllegalArgumentException e) {
-            throw e;
+            return allowedSymbols;
         } catch (Exception e) {
-            log.warn("[AiTaskService] skip Claude score symbol validation task={} due to parse error: {}",
-                    task.getId(), e.getMessage());
+            log.warn("[AiTaskService] failed to parse task candidates for symbol validation task={} due to: {}",
+                    task == null ? null : task.getId(), e.getMessage());
+            return Set.of();
+        }
+    }
+
+    private void validateClaudeScoresAgainstTaskCandidates(AiTaskEntity task, ClaudeSubmitRequest req) {
+        if (req == null) return;
+        if ((req.scores() == null || req.scores().isEmpty())
+                && (req.thesis() == null || req.thesis().isEmpty())) return;
+
+        Set<String> allowedSymbols = allowedSymbolsFromTaskCandidates(task);
+        if (allowedSymbols.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "CLAUDE_SCORES_SYMBOL_MISMATCH: task candidates are empty or invalid for submitted symbols"
+            );
+        }
+
+        List<String> invalidSymbols = new ArrayList<>();
+        if (req.scores() != null) {
+            for (String symbol : req.scores().keySet()) {
+                collectInvalidSymbol(symbol, allowedSymbols, invalidSymbols);
+            }
+        }
+        // v2.5：thesis keys 也必須是 candidates 子集
+        if (req.thesis() != null) {
+            for (String symbol : req.thesis().keySet()) {
+                collectInvalidSymbol(symbol, allowedSymbols, invalidSymbols);
+            }
+        }
+        if (!invalidSymbols.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "CLAUDE_SCORES_SYMBOL_MISMATCH: task candidates=" + allowedSymbols
+                            + ", invalid submitted symbols=" + invalidSymbols
+            );
+        }
+    }
+
+    private void validateCodexResultAgainstTaskCandidates(AiTaskEntity task, CodexSubmitRequest req) {
+        if (req == null) return;
+        if (!hasCodexSymbolBearingFields(req)) return;
+
+        Set<String> allowedSymbols = allowedSymbolsFromTaskCandidates(task);
+        if (allowedSymbols.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "CODEX_RESULT_SYMBOL_MISMATCH: task candidates are empty or invalid for submitted symbols"
+            );
+        }
+
+        List<String> invalidSymbols = new ArrayList<>();
+        if (req.scores() != null) {
+            for (String symbol : req.scores().keySet()) {
+                collectInvalidSymbol(symbol, allowedSymbols, invalidSymbols);
+            }
+        }
+        if (req.vetoSymbols() != null) {
+            for (String symbol : req.vetoSymbols()) {
+                collectInvalidSymbol(symbol, allowedSymbols, invalidSymbols);
+            }
+        }
+        if (req.reviewIssues() != null) {
+            for (String symbol : req.reviewIssues().keySet()) {
+                collectInvalidSymbol(symbol, allowedSymbols, invalidSymbols);
+            }
+        }
+        if (req.payload() != null) {
+            collectInvalidReviewedSymbols(req.payload().selected(), allowedSymbols, invalidSymbols);
+            collectInvalidReviewedSymbols(req.payload().watchlist(), allowedSymbols, invalidSymbols);
+            collectInvalidReviewedSymbols(req.payload().rejected(), allowedSymbols, invalidSymbols);
+        }
+        if (!invalidSymbols.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "CODEX_RESULT_SYMBOL_MISMATCH: task candidates=" + allowedSymbols
+                            + ", invalid submitted symbols=" + invalidSymbols
+            );
+        }
+    }
+
+    private boolean hasCodexSymbolBearingFields(CodexSubmitRequest req) {
+        if (req == null) return false;
+        if (req.scores() != null && !req.scores().isEmpty()) return true;
+        if (req.vetoSymbols() != null && !req.vetoSymbols().isEmpty()) return true;
+        if (req.reviewIssues() != null && !req.reviewIssues().isEmpty()) return true;
+        if (req.payload() == null) return false;
+        return hasReviewedSymbols(req.payload().selected())
+                || hasReviewedSymbols(req.payload().watchlist())
+                || hasReviewedSymbols(req.payload().rejected());
+    }
+
+    private boolean hasReviewedSymbols(List<com.austin.trading.dto.request.CodexReviewedSymbolRequest> items) {
+        if (items == null || items.isEmpty()) return false;
+        return items.stream().anyMatch(item -> item != null && item.symbol() != null && !item.symbol().isBlank());
+    }
+
+    private void collectInvalidReviewedSymbols(
+            List<com.austin.trading.dto.request.CodexReviewedSymbolRequest> items,
+            Set<String> allowedSymbols,
+            List<String> invalidSymbols
+    ) {
+        if (items == null) return;
+        for (com.austin.trading.dto.request.CodexReviewedSymbolRequest item : items) {
+            if (item == null) continue;
+            collectInvalidSymbol(item.symbol(), allowedSymbols, invalidSymbols);
+        }
+    }
+
+    private void collectInvalidSymbol(String symbol, Set<String> allowedSymbols, List<String> invalidSymbols) {
+        if (symbol == null || symbol.isBlank()) return;
+        String trimmed = symbol.trim();
+        if (!allowedSymbols.contains(trimmed) && !invalidSymbols.contains(trimmed)) {
+            invalidSymbols.add(trimmed);
         }
     }
 

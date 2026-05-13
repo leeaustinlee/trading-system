@@ -91,15 +91,17 @@ public class PremarketDataPrepJob {
                     String.format("TX=%.0f (%+.0f)", q.currentPrice(), q.change() == null ? 0.0 : q.change())
             ).orElse("TX=N/A");
 
-            // 2. 昨日候選股昨收報價；若昨日無（週末 / 假日），fallback 到 DB 最新有候選的交易日
-            List<CandidateResponse> candidates = candidateScanService.getCandidatesByDate(yesterday, 10);
-            if (candidates.isEmpty()) {
-                candidates = candidateScanService.getCurrentCandidates(10);
-                if (!candidates.isEmpty()) {
-                    log.info("[PremarketDataPrepJob] yesterday={} 無候選，fallback 到最新交易日共 {} 檔",
-                            yesterday, candidates.size());
-                }
-            }
+            // 2. 解析候選股來源（fix 2026-05-13 跨日交接 bug）：
+            //    盤後流程已把 next-day universe 以 tradingDate=today 寫入 candidate_stock，
+            //    因此 08:10 必須優先抓 today，再 fallback 到 latest(current)，最後才退回 yesterday。
+            CandidateSourceResolution sourceResolution =
+                    resolveCandidateSource(today, yesterday);
+            List<CandidateResponse> candidates = sourceResolution.candidates();
+            LocalDate candidateSourceDate    = sourceResolution.sourceDate();
+            String candidateSourcePolicy     = sourceResolution.policy();
+            log.info("[PremarketDataPrepJob] candidateSourcePolicy={} candidateSourceDate={} size={}",
+                    candidateSourcePolicy, candidateSourceDate, candidates.size());
+
             List<String> symbols = candidates.stream()
                     .map(CandidateResponse::symbol)
                     .collect(Collectors.toList());
@@ -114,7 +116,8 @@ public class PremarketDataPrepJob {
                     .collect(Collectors.joining(","));
 
             // 3. 建立 PREMARKET 市場快照（grade 留空，等 09:30 決策後再補）
-            String payload = buildPayload(txf.orElse(null), quoteSummary);
+            String payload = buildPayload(txf.orElse(null), quoteSummary,
+                    candidateSourceDate, candidateSourcePolicy);
             saveOrUpdateSnapshot(today, payload);
 
             // v2.6：先建 AI task 拿 taskId，再 writeRequest 帶 taskId + allowed_symbols。
@@ -125,9 +128,12 @@ public class PremarketDataPrepJob {
                         .map(c -> new AiTaskCandidateRef(
                                 c.symbol(), c.stockName(), c.themeTag(), c.javaStructureScore()))
                         .collect(Collectors.toList());
+                String promptSummary = String.format(
+                        "今日盤前研究請求，共 %d 檔（candidateSourceDate=%s, policy=%s）",
+                        refs.size(), candidateSourceDate, candidateSourcePolicy);
                 var task = aiTaskService.createTask(
                         today, "PREMARKET", null, refs,
-                        "今日盤前研究請求，共 " + refs.size() + " 檔",
+                        promptSummary,
                         "D:/ai/stock/claude-research-request.json"
                 );
                 premarketTaskId = task.getId();
@@ -141,12 +147,14 @@ public class PremarketDataPrepJob {
 
             // 寫出研究請求給 Claude Code 排程 Agent（08:20 執行）
             boolean requestWritten = requestWriterService.writeRequest(premarketTaskId, "PREMARKET", today, symbols,
-                    buildPayload(txf.orElse(null), quoteSummary));
+                    buildPayload(txf.orElse(null), quoteSummary, candidateSourceDate, candidateSourcePolicy));
             if (!requestWritten) {
                 throw new IllegalStateException("PREMARKET request 寫出失敗，拒絕留下只有 task、沒有 file bridge request 的狀態");
             }
 
-            String msg = "txf=" + txfSummary + " candidates=" + candidates.size();
+            String msg = String.format(
+                    "txf=%s candidates=%d candidateSourceDate=%s candidateSourcePolicy=%s",
+                    txfSummary, candidates.size(), candidateSourceDate, candidateSourcePolicy);
             log.info("[PremarketDataPrepJob] {}", msg);
             schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), msg);
             orchestrationService.markDone(today, step, msg);
@@ -170,7 +178,8 @@ public class PremarketDataPrepJob {
         marketSnapshotRepository.save(entity);
     }
 
-    private String buildPayload(FuturesQuote txf, String candidateQuotes) {
+    private String buildPayload(FuturesQuote txf, String candidateQuotes,
+                                LocalDate candidateSourceDate, String candidateSourcePolicy) {
         StringBuilder sb = new StringBuilder("{");
         sb.append("\"source\":\"premarket_data_prep\"");
         if (txf != null) {
@@ -183,7 +192,49 @@ public class PremarketDataPrepJob {
         if (candidateQuotes != null && !candidateQuotes.isBlank()) {
             sb.append(",\"candidate_prev_closes\":\"").append(candidateQuotes).append("\"");
         }
+        if (candidateSourceDate != null) {
+            sb.append(",\"candidateSourceDate\":\"").append(candidateSourceDate).append("\"");
+        }
+        if (candidateSourcePolicy != null) {
+            sb.append(",\"candidateSourcePolicy\":\"").append(candidateSourcePolicy).append("\"");
+        }
         sb.append("}");
         return sb.toString();
     }
+
+    /**
+     * 2026-05-13 fix：候選股來源解析（package-private 供測試使用）。
+     * <p>
+     * 盤後流程會把 next-day universe 以 tradingDate=today 寫入 candidate_stock，因此
+     * 08:10 必須優先抓 today；若無，才退回 latest（current）；最後才退回 yesterday。
+     * 順序：TODAY → CURRENT_LATEST → YESTERDAY。
+     * </p>
+     */
+    CandidateSourceResolution resolveCandidateSource(LocalDate today, LocalDate yesterday) {
+        List<CandidateResponse> todayList = candidateScanService.getCandidatesByDate(today, 10);
+        if (!todayList.isEmpty()) {
+            return new CandidateSourceResolution(todayList, today, "TODAY");
+        }
+        List<CandidateResponse> current = candidateScanService.getCurrentCandidates(10);
+        if (!current.isEmpty()) {
+            LocalDate latest = current.get(0).tradingDate();
+            log.info("[PremarketDataPrepJob] today={} 無候選，fallback 到最新交易日 {} 共 {} 檔",
+                    today, latest, current.size());
+            return new CandidateSourceResolution(current, latest, "CURRENT_LATEST");
+        }
+        List<CandidateResponse> yest = candidateScanService.getCandidatesByDate(yesterday, 10);
+        if (!yest.isEmpty()) {
+            log.info("[PremarketDataPrepJob] today={} 與 current 皆無候選，fallback 到 yesterday={} 共 {} 檔",
+                    today, yesterday, yest.size());
+            return new CandidateSourceResolution(yest, yesterday, "YESTERDAY");
+        }
+        return new CandidateSourceResolution(List.of(), null, "EMPTY");
+    }
+
+    /** 候選股來源解析結果（package-private 供測試）。 */
+    record CandidateSourceResolution(
+            List<CandidateResponse> candidates,
+            LocalDate sourceDate,
+            String policy
+    ) {}
 }

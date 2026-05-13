@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,11 +32,14 @@ class ExecutionTimingServiceIntegrationTests {
     @Autowired ExecutionTimingService            service;
     @Autowired ExecutionTimingDecisionRepository timingRepo;
 
+    private static final AtomicInteger DATE_SEQ = new AtomicInteger(0);
+
     private LocalDate uniqueDate;
 
     @BeforeEach
     void setUp() {
-        uniqueDate = LocalDate.of(2003, 1, 1).plusDays(System.nanoTime() % 10_000);
+        uniqueDate = LocalDate.of(2096, 1, 1).plusDays(DATE_SEQ.getAndIncrement());
+        timingRepo.deleteAll(timingRepo.findByTradingDate(uniqueDate));
     }
 
     private RankedCandidate candidate(String symbol) {
