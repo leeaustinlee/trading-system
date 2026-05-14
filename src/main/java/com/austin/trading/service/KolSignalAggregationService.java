@@ -51,6 +51,11 @@ public class KolSignalAggregationService {
     public List<KolThemeSnapshotResponse> rebuildDailySnapshot(LocalDate date) {
         List<ThemeSignalEvidenceEntity> evidence = evidenceRepo.findByTradingDate(date);
         long deletedSnapshotCount = snapshotRepo.deleteByTradingDate(date);
+        // Flush the delete before inserting rebuilt rows with the same
+        // (trading_date, theme_tag, direction) unique key. Without this, Hibernate
+        // may batch INSERTs before the derived delete is executed, causing a
+        // duplicate-key failure on rebuild.
+        snapshotRepo.flush();
         Map<Long, KolThemeSignalEntity> signals = signalRepo.findByTradingDateOrderByCreatedAtDesc(date).stream()
                 .collect(Collectors.toMap(KolThemeSignalEntity::getId, Function.identity(), (a, b) -> a));
         Map<String, BigDecimal> sourceWeights = sourceProfileRepo.findAll().stream()
