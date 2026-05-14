@@ -16,6 +16,8 @@ public interface CandidateStockRepository extends JpaRepository<CandidateStockEn
 
     List<CandidateStockEntity> findByTradingDateBetweenOrderByTradingDateDescScoreDesc(LocalDate from, LocalDate to);
 
+    List<CandidateStockEntity> findByTradingDateBetweenOrderByTradingDateAscSymbolAsc(LocalDate from, LocalDate to);
+
     Optional<CandidateStockEntity> findByTradingDateAndSymbol(LocalDate tradingDate, String symbol);
 
     /** 取得最新一筆（用於推算最後有效交易日） */

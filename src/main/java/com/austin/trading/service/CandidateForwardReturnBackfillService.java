@@ -54,6 +54,7 @@ public class CandidateForwardReturnBackfillService {
         int updated = 0;
         int dataGap = 0;
         List<Map<String, Object>> dataGaps = new ArrayList<>();
+        Map<String, Integer> benchmarkHorizons = new LinkedHashMap<>();
 
         for (CandidateForwardTrackingEntity row : rows) {
             processed++;
@@ -61,7 +62,9 @@ public class CandidateForwardReturnBackfillService {
             if (result.hasDataGap()) {
                 dataGap++;
                 if (dataGaps.size() < 10) dataGaps.add(result.sample(row));
-                continue;
+            }
+            if (result.benchmarkHorizon() != null) {
+                benchmarkHorizons.merge("T" + result.benchmarkHorizon(), 1, Integer::sum);
             }
             if (result.changed()) {
                 candidateRepository.save(row);
@@ -76,6 +79,7 @@ public class CandidateForwardReturnBackfillService {
         out.put("createdFromPaperRows", createdFromPaper);
         out.put("start", start);
         out.put("end", end);
+        out.put("benchmarkHorizon", benchmarkHorizons.isEmpty() ? "DATA_GAP" : benchmarkHorizons);
         out.put("dataGaps", dataGaps);
         return out;
     }
@@ -105,6 +109,7 @@ public class CandidateForwardReturnBackfillService {
             row.setT10CloseReturnPct(t.getReturn10d());
             row.setMfePct(t.getMfePct());
             row.setMaePct(t.getMaePct());
+            row.setThemeTag(t.getThemeTag());
             candidateRepository.save(row);
             created++;
         }
@@ -113,62 +118,72 @@ public class CandidateForwardReturnBackfillService {
 
     private FillResult fillRow(CandidateForwardTrackingEntity row, LocalDate asOf) {
         List<String> gaps = validateBase(row);
-        if (!gaps.isEmpty()) return new FillResult(false, gaps);
+        if (!gaps.isEmpty()) return new FillResult(false, gaps, null);
 
         List<LocalDate> futureDates = marketIndexRepository.findTradingDatesAfter(
                 BENCHMARK_SYMBOL, row.getTradingDate(), PageRequest.of(0, 10));
-        if (futureDates.size() < 10) {
-            gaps.add("DATA_GAP: fewer than 10 future TAIEX trading days after " + row.getTradingDate());
-            return new FillResult(false, gaps);
+        if (futureDates.isEmpty()) {
+            gaps.add("DATA_GAP: no future TAIEX trading days after " + row.getTradingDate());
+            return new FillResult(false, gaps, null);
         }
-        LocalDate horizonEnd = futureDates.get(9);
-        if (horizonEnd.isAfter(asOf)) {
-            gaps.add("DATA_GAP: T10 horizon " + horizonEnd + " is after run date " + asOf);
-            return new FillResult(false, gaps);
+        for (int horizon : HORIZONS) {
+            if (futureDates.size() < horizon) {
+                gaps.add("DATA_GAP: T" + horizon + " missing benchmark calendar after " + row.getTradingDate());
+            } else if (futureDates.get(horizon - 1).isAfter(asOf)) {
+                gaps.add("DATA_GAP: T" + horizon + " horizon " + futureDates.get(horizon - 1)
+                        + " is after run date " + asOf);
+            }
         }
+        int maxCalendarHorizon = maxAvailableHorizon(futureDates, asOf);
+        if (maxCalendarHorizon == 0) {
+            return new FillResult(false, gaps, null);
+        }
+        LocalDate horizonEnd = futureDates.get(maxCalendarHorizon - 1);
 
         List<MarketIndexDailyEntity> stockBars = marketIndexRepository
                 .findBySymbolAndTradingDateBetweenOrderByTradingDateAsc(
                         row.getStockId(), row.getTradingDate(), horizonEnd);
-        if (stockBars.size() < 11) {
-            gaps.add("DATA_GAP: missing stock daily bars for " + row.getStockId() + " through " + horizonEnd);
-            return new FillResult(false, gaps);
-        }
         Map<LocalDate, MarketIndexDailyEntity> byDate = new LinkedHashMap<>();
         for (MarketIndexDailyEntity bar : stockBars) byDate.put(bar.getTradingDate(), bar);
 
-        for (LocalDate d : futureDates) {
-            if (!byDate.containsKey(d)) {
-                gaps.add("DATA_GAP: missing stock daily bar " + row.getStockId() + " " + d);
-                return new FillResult(false, gaps);
-            }
-        }
         if (!byDate.containsKey(row.getTradingDate())) {
             gaps.add("DATA_GAP: missing entry-date stock daily bar " + row.getStockId() + " " + row.getTradingDate());
-            return new FillResult(false, gaps);
+            return new FillResult(false, gaps, null);
         }
 
         boolean changed = false;
+        int maxCompletedHorizon = 0;
         for (int horizon : HORIZONS) {
+            if (futureDates.size() < horizon || futureDates.get(horizon - 1).isAfter(asOf)) continue;
+            LocalDate horizonDate = futureDates.get(horizon - 1);
+            MarketIndexDailyEntity closeBar = byDate.get(horizonDate);
+            if (closeBar == null) {
+                gaps.add("DATA_GAP: T" + horizon + " missing stock daily bar "
+                        + row.getStockId() + " " + horizonDate);
+                continue;
+            }
             BigDecimal pct = returnPct(row.getEntryPriceAtDecision(), byDate.get(futureDates.get(horizon - 1)).getClosePrice());
             changed |= writeReturn(row, horizon, pct);
+            maxCompletedHorizon = horizon;
         }
+        if (maxCompletedHorizon == 0) return new FillResult(changed, gaps, null);
 
         Extremes extremes = extremes(row.getEntryPriceAtDecision(), stockBars);
         changed |= setIfDifferent(row.getMfePct(), extremes.mfe(), row::setMfePct);
         changed |= setIfDifferent(row.getMaePct(), extremes.mae(), row::setMaePct);
         changed |= setIfDifferent(row.getMaxDrawdownPct(), extremes.maxDrawdown(), row::setMaxDrawdownPct);
 
-        BigDecimal benchmark = benchmarkReturn(row.getTradingDate(), futureDates);
+        BigDecimal benchmark = benchmarkReturn(row.getTradingDate(), futureDates, maxCompletedHorizon);
         if (benchmark == null) {
-            gaps.add("DATA_GAP: missing benchmark TAIEX bars for " + row.getTradingDate());
-            return new FillResult(false, gaps);
+            gaps.add("DATA_GAP: T" + maxCompletedHorizon + " missing benchmark TAIEX bars for " + row.getTradingDate());
+            return new FillResult(changed, gaps, null);
         }
         changed |= setIfDifferent(row.getBenchmarkReturnPct(), benchmark, row::setBenchmarkReturnPct);
-        BigDecimal relative = row.getT10CloseReturnPct().subtract(benchmark).setScale(4, RoundingMode.HALF_UP);
+        BigDecimal stockReturn = returnForHorizon(row, maxCompletedHorizon);
+        BigDecimal relative = stockReturn.subtract(benchmark).setScale(4, RoundingMode.HALF_UP);
         changed |= setIfDifferent(row.getRelativeReturnPct(), relative, row::setRelativeReturnPct);
 
-        return new FillResult(changed, List.of());
+        return new FillResult(changed, gaps, maxCompletedHorizon);
     }
 
     private List<String> validateBase(CandidateForwardTrackingEntity row) {
@@ -181,13 +196,31 @@ public class CandidateForwardReturnBackfillService {
         return gaps;
     }
 
-    private BigDecimal benchmarkReturn(LocalDate entryDate, List<LocalDate> futureDates) {
+    private int maxAvailableHorizon(List<LocalDate> futureDates, LocalDate asOf) {
+        int max = 0;
+        for (int horizon : HORIZONS) {
+            if (futureDates.size() >= horizon && !futureDates.get(horizon - 1).isAfter(asOf)) max = horizon;
+        }
+        return max;
+    }
+
+    private BigDecimal benchmarkReturn(LocalDate entryDate, List<LocalDate> futureDates, int horizon) {
         var entry = marketIndexRepository.findBySymbolAndTradingDate(BENCHMARK_SYMBOL, entryDate)
                 .map(MarketIndexDailyEntity::getClosePrice).orElse(null);
-        var close = marketIndexRepository.findBySymbolAndTradingDate(BENCHMARK_SYMBOL, futureDates.get(9))
+        var close = marketIndexRepository.findBySymbolAndTradingDate(BENCHMARK_SYMBOL, futureDates.get(horizon - 1))
                 .map(MarketIndexDailyEntity::getClosePrice).orElse(null);
         if (entry == null || close == null || entry.signum() <= 0) return null;
         return returnPct(entry, close);
+    }
+
+    private BigDecimal returnForHorizon(CandidateForwardTrackingEntity row, int horizon) {
+        return switch (horizon) {
+            case 10 -> row.getT10CloseReturnPct();
+            case 5 -> row.getT5CloseReturnPct();
+            case 3 -> row.getT3CloseReturnPct();
+            case 1 -> row.getT1CloseReturnPct();
+            default -> null;
+        };
     }
 
     private BigDecimal returnPct(BigDecimal entry, BigDecimal close) {
@@ -238,13 +271,14 @@ public class CandidateForwardReturnBackfillService {
 
     private record Extremes(BigDecimal mfe, BigDecimal mae, BigDecimal maxDrawdown) { }
 
-    private record FillResult(boolean changed, List<String> gaps) {
+    private record FillResult(boolean changed, List<String> gaps, Integer benchmarkHorizon) {
         boolean hasDataGap() { return !gaps.isEmpty(); }
         Map<String, Object> sample(CandidateForwardTrackingEntity row) {
             Map<String, Object> sample = new LinkedHashMap<>();
             sample.put("symbol", row.getStockId());
             sample.put("date", row.getTradingDate());
             sample.put("decision", row.getFinalDecision());
+            sample.put("benchmarkHorizon", benchmarkHorizon == null ? "DATA_GAP" : "T" + benchmarkHorizon);
             sample.put("reason", gaps);
             return sample;
         }

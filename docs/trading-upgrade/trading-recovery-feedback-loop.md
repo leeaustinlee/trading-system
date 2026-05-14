@@ -47,6 +47,7 @@ The new diagnosis endpoint compares closed paper trades by:
 - `earlyExitPct`: `STOP_LOSS` or `TRAILING_STOP` exits where `mfePct > 0` or `return5d > pnlPct`.
 - `stopTooTightPct`: entry-to-stop distance below `price_plan.stop_min_loss_pct` or `<= 2%`.
 - `themeMisalignmentPct`: `themeTag` normalizes to `UNKNOWN` or `OTHER`, including `其他強勢股` and unmapped text.
+- `themeLostInTradePct`: paper trade theme is `UNKNOWN`, null, or `OTHER`, while same-day `candidate_stock` or repaired `candidate_forward_tracking` has a normalized mainstream theme. Interpretation: 候選層題材存在，但交易層未繼承題材資訊，導致診斷與選股主流性失真。
 - `regimeMismatchPct`: `entryRegime` is `C`, contains `WEAK`, `UNKNOWN`, or is missing.
 - `aiScoreFailurePct`: `candidate_forward_tracking` rows with high `finalScore` (`scoring.grade_b_min`, default 6.5) but `t5CloseReturnPct <= 0` or missing.
 
@@ -54,9 +55,30 @@ The new diagnosis endpoint compares closed paper trades by:
 
 `CandidateForwardReturnBackfillService` is manual-only through `POST /api/forward-tracking/backfill-returns?days=60`; no scheduler is enabled and production BUY/SELL paths are not changed.
 
-The service reads `candidate_forward_tracking` rows in the requested window. If none exist, it creates fallback rows from `paper_trade` and then computes returns from `market_index_daily`. It fills `t1CloseReturnPct`, `t3CloseReturnPct`, `t5CloseReturnPct`, `t10CloseReturnPct`, `mfePct`, `maePct`, `maxDrawdownPct`, `benchmarkReturnPct` using `t00`, and `relativeReturnPct`. The response includes `processedRows`, `updatedRows`, `dataGapRows`, `createdFromPaperRows`, `start`, `end`, and `dataGaps` samples.
+The service reads `candidate_forward_tracking` rows in the requested window. If none exist, it creates fallback rows from `paper_trade` and then computes returns from `market_index_daily`. It fills `t1CloseReturnPct`, `t3CloseReturnPct`, `t5CloseReturnPct`, `t10CloseReturnPct`, `mfePct`, `maePct`, `maxDrawdownPct`, `benchmarkReturnPct` using `t00`, and `relativeReturnPct`. The response includes `processedRows`, `updatedRows`, `dataGapRows`, `createdFromPaperRows`, `benchmarkHorizon`, `start`, `end`, and `dataGaps` samples.
 
-The service requires a full T+10 trading-day path from the `t00` calendar and matching stock daily bars. If the daily K path is incomplete or entry price is missing, it reports `DATA_GAP` and does not invent a return.
+P1.5 changes the return fill from all-or-nothing to partial horizon. T1/T3/T5 are written when those horizons have completed even if T10 is still missing. `benchmarkReturnPct`, `relativeReturnPct`, MFE, MAE, and max drawdown use the largest completed horizon, preferring T10 then T5/T3/T1. Missing horizons remain explicit `DATA_GAP` samples such as `T10 missing stock daily bar`.
+
+## P1.5 Manual Market Daily Bars Backfill
+
+`POST /api/market-index/backfill-symbols?days=90&symbols=2330,2303` is a manual-only API. It fetches `t00` with `TwseHistoryClient.fetchTaiexMonth` and each requested symbol with `fetchStockMonth`, then idempotently upserts rows into `market_index_daily`.
+
+If `symbols` is blank, the service resolves up to 50 distinct symbols from recent `paper_trade.symbol`, `candidate_forward_tracking.stockId`, and `candidate_stock.symbol`. This prevents a broad candidate universe from flooding TWSE. The response returns `requestedSymbols`, `resolvedSymbols`, `upsertedRows`, `skippedSymbols`, `dataGaps`, `from`, and `to`.
+
+TWSE `STOCK_DAY` may not return OTC symbols. Those rows are reported as `DATA_GAP`; the service does not synthesize prices and does not fail the whole request when one symbol has no data.
+
+## P1.5 Theme Trace Repair
+
+`POST /api/forward-tracking/repair-theme-trace?days=60` repairs missing trace fields by matching same-day `candidate_stock` rows on symbol. It writes nullable `candidate_forward_tracking.themeTag`, `themeReason`, and `sourceCandidateId` when candidate evidence has a normalized mainstream theme.
+
+For `paper_trade`, repair is limited to `is_shadow=true` rows with missing or unknown theme and a clear same-day same-symbol `candidate_stock` match. This keeps the production BUY path unchanged and does not introduce any SELL behavior. The response returns `repairedRows`, `skippedRows`, `dataGaps`, `from`, and `to`.
+
+## P1.5 DATA_GAP Semantics
+
+- Daily bar gaps mean TWSE did not provide usable bars or the local `market_index_daily` path is incomplete.
+- Horizon gaps are per horizon; T10 missing does not invalidate T1/T3/T5.
+- Theme trace gaps mean no same-day candidate match, or the matched candidate still normalizes to `UNKNOWN`/`OTHER`.
+- All P1.5 APIs are manual endpoints. No scheduler, auto-order, production BUY change, or real-position SELL trigger is added.
 
 ## P1 Mainstream Normalization
 

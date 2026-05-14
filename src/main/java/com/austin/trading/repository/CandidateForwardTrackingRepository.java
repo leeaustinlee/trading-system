@@ -12,6 +12,7 @@ import java.time.LocalDate;
 public interface CandidateForwardTrackingRepository extends JpaRepository<CandidateForwardTrackingEntity, Long> {
     List<CandidateForwardTrackingEntity> findByTradingDateBetween(LocalDate start, LocalDate end);
     List<CandidateForwardTrackingEntity> findByTradingDateGreaterThanEqual(LocalDate start);
+    List<CandidateForwardTrackingEntity> findByTradingDateAndStockId(LocalDate tradingDate, String stockId);
     Optional<CandidateForwardTrackingEntity> findByTradingDateAndStockIdAndFinalDecision(
             LocalDate tradingDate, String stockId, String finalDecision);
 

@@ -31,6 +31,12 @@ public class CandidateForwardTrackingEntity {
     private Boolean hitTarget;
     private BigDecimal benchmarkReturnPct;
     private BigDecimal relativeReturnPct;
+    @Column(name = "theme_tag", length = 100)
+    private String themeTag;
+    @Column(name = "theme_reason", length = 1000)
+    private String themeReason;
+    @Column(name = "source_candidate_id")
+    private Long sourceCandidateId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -78,6 +84,12 @@ public class CandidateForwardTrackingEntity {
     public void setBenchmarkReturnPct(BigDecimal benchmarkReturnPct) { this.benchmarkReturnPct = benchmarkReturnPct; }
     public BigDecimal getRelativeReturnPct() { return relativeReturnPct; }
     public void setRelativeReturnPct(BigDecimal relativeReturnPct) { this.relativeReturnPct = relativeReturnPct; }
+    public String getThemeTag() { return themeTag; }
+    public void setThemeTag(String themeTag) { this.themeTag = themeTag; }
+    public String getThemeReason() { return themeReason; }
+    public void setThemeReason(String themeReason) { this.themeReason = themeReason; }
+    public Long getSourceCandidateId() { return sourceCandidateId; }
+    public void setSourceCandidateId(Long sourceCandidateId) { this.sourceCandidateId = sourceCandidateId; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

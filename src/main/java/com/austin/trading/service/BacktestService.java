@@ -5,15 +5,18 @@ import com.austin.trading.engine.BacktestMetricsEngine.*;
 import com.austin.trading.entity.BacktestRunEntity;
 import com.austin.trading.entity.BacktestTradeEntity;
 import com.austin.trading.entity.CandidateForwardTrackingEntity;
+import com.austin.trading.entity.CandidateStockEntity;
 import com.austin.trading.entity.PaperTradeEntity;
 import com.austin.trading.entity.PositionEntity;
 import com.austin.trading.repository.BacktestRunRepository;
 import com.austin.trading.repository.BacktestTradeRepository;
 import com.austin.trading.repository.CandidateForwardTrackingRepository;
+import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.PaperTradeRepository;
 import com.austin.trading.repository.PositionRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -41,7 +44,9 @@ public class BacktestService {
     private final ObjectMapper objectMapper;
     private final PaperTradeRepository paperTradeRepository;
     private final CandidateForwardTrackingRepository candidateForwardTrackingRepository;
+    private final CandidateStockRepository candidateStockRepository;
 
+    @Autowired
     public BacktestService(BacktestRunRepository runRepository,
                             BacktestTradeRepository tradeRepository,
                             PositionRepository positionRepository,
@@ -49,7 +54,8 @@ public class BacktestService {
                             ScoreConfigService configService,
                             ObjectMapper objectMapper,
                             PaperTradeRepository paperTradeRepository,
-                            CandidateForwardTrackingRepository candidateForwardTrackingRepository) {
+                            CandidateForwardTrackingRepository candidateForwardTrackingRepository,
+                            CandidateStockRepository candidateStockRepository) {
         this.runRepository = runRepository;
         this.tradeRepository = tradeRepository;
         this.positionRepository = positionRepository;
@@ -58,6 +64,19 @@ public class BacktestService {
         this.objectMapper = objectMapper;
         this.paperTradeRepository = paperTradeRepository;
         this.candidateForwardTrackingRepository = candidateForwardTrackingRepository;
+        this.candidateStockRepository = candidateStockRepository;
+    }
+
+    public BacktestService(BacktestRunRepository runRepository,
+                           BacktestTradeRepository tradeRepository,
+                           PositionRepository positionRepository,
+                           BacktestMetricsEngine metricsEngine,
+                           ScoreConfigService configService,
+                           ObjectMapper objectMapper,
+                           PaperTradeRepository paperTradeRepository,
+                           CandidateForwardTrackingRepository candidateForwardTrackingRepository) {
+        this(runRepository, tradeRepository, positionRepository, metricsEngine, configService, objectMapper,
+                paperTradeRepository, candidateForwardTrackingRepository, null);
     }
 
     @Transactional
@@ -144,6 +163,9 @@ public class BacktestService {
         List<PaperTradeEntity> trades = paperTradeRepository.findByEntryDateBetweenOrderByEntryDateAscIdAsc(start, end);
         List<CandidateForwardTrackingEntity> candidates =
                 candidateForwardTrackingRepository.findByTradingDateBetween(start, end);
+        List<CandidateStockEntity> candidateStocks = candidateStockRepository == null
+                ? List.of()
+                : candidateStockRepository.findByTradingDateBetweenOrderByTradingDateDescScoreDesc(start, end);
 
         List<BacktestTradeInput> closedInputs = trades.stream()
                 .filter(t -> "CLOSED".equalsIgnoreCase(t.getStatus()))
@@ -176,13 +198,22 @@ public class BacktestService {
                 "scoreReturnCorrelation", correlation(candidates),
                 "dataGaps", aiDataGaps(candidates)
         ));
-        out.put("rootCauseRanking", rootCauseRanking(trades, candidates));
+        out.put("rootCauseRanking", rootCauseRanking(trades, candidates, candidateStocks));
         return out;
     }
 
     private List<Map<String, Object>> rootCauseRanking(List<PaperTradeEntity> trades,
-                                                       List<CandidateForwardTrackingEntity> candidates) {
+                                                       List<CandidateForwardTrackingEntity> candidates,
+                                                       List<CandidateStockEntity> candidateStocks) {
         List<Map<String, Object>> items = new ArrayList<>();
+        Map<String, CandidateForwardTrackingEntity> forwardByTrade = new java.util.HashMap<>();
+        for (CandidateForwardTrackingEntity c : candidates) {
+            forwardByTrade.putIfAbsent(traceKey(c.getTradingDate(), c.getStockId()), c);
+        }
+        Map<String, CandidateStockEntity> stockByTrade = new java.util.HashMap<>();
+        for (CandidateStockEntity c : candidateStocks) {
+            stockByTrade.putIfAbsent(traceKey(c.getTradingDate(), c.getSymbol()), c);
+        }
         items.add(rootCause("invalidPricePlanPct", trades.size(),
                 trades.stream().filter(t -> t.getSanityResult() != null && !"PASS".equalsIgnoreCase(t.getSanityResult())).toList(),
                 "sanityResult != PASS",
@@ -207,11 +238,16 @@ public class BacktestService {
 
         items.add(rootCause("themeMisalignmentPct", trades.size(),
                 trades.stream().filter(t -> {
-                    String theme = MainstreamThemeNormalizer.normalize(t.getThemeTag(), t.getEntryPayloadJson());
+                    String theme = effectiveTradeTheme(t, forwardByTrade, stockByTrade);
                     return "UNKNOWN".equals(theme) || "OTHER".equals(theme);
                 }).toList(),
-                "themeTag UNKNOWN/OTHER/其他強勢股 or unmapped",
-                "Theme evidence is weak or unmapped, so the trade cannot be tied to a mainstream bucket."));
+                "paper_trade + repaired candidate_forward_tracking theme UNKNOWN/OTHER or unmapped",
+                "Theme evidence is weak or unmapped after checking repaired forward-tracking trace, so the trade cannot be tied to a mainstream bucket."));
+
+        items.add(rootCause("themeLostInTradePct", trades.size(),
+                trades.stream().filter(t -> themeLostInTrade(t, forwardByTrade, stockByTrade)).toList(),
+                "paper_trade theme UNKNOWN/null/OTHER but same-day candidate trace has mainstream theme",
+                "候選層題材存在，但交易層未繼承題材資訊，導致診斷與選股主流性失真。"));
 
         items.add(rootCause("regimeMismatchPct", trades.size(),
                 trades.stream().filter(t -> isWeakRegime(t.getEntryRegime())).toList(),
@@ -232,6 +268,47 @@ public class BacktestService {
         return items.stream()
                 .sorted((a, b) -> ((BigDecimal) b.get("pct")).compareTo((BigDecimal) a.get("pct")))
                 .toList();
+    }
+
+    private String effectiveTradeTheme(PaperTradeEntity trade,
+                                       Map<String, CandidateForwardTrackingEntity> forwardByTrade,
+                                       Map<String, CandidateStockEntity> stockByTrade) {
+        String paper = MainstreamThemeNormalizer.normalize(trade.getThemeTag(), trade.getEntryPayloadJson());
+        if (!"UNKNOWN".equals(paper) && !"OTHER".equals(paper)) return paper;
+        CandidateForwardTrackingEntity forward = forwardByTrade.get(traceKey(trade.getEntryDate(), trade.getSymbol()));
+        if (forward != null) {
+            String fromForward = MainstreamThemeNormalizer.normalize(forward.getThemeTag(), forward.getThemeReason());
+            if (!"UNKNOWN".equals(fromForward) && !"OTHER".equals(fromForward)) return fromForward;
+        }
+        CandidateStockEntity stock = stockByTrade.get(traceKey(trade.getEntryDate(), trade.getSymbol()));
+        if (stock != null) {
+            String fromStock = MainstreamThemeNormalizer.normalize(stock.getThemeTag(), stock.getReason());
+            if (!"UNKNOWN".equals(fromStock) && !"OTHER".equals(fromStock)) return fromStock;
+        }
+        return paper;
+    }
+
+    private boolean themeLostInTrade(PaperTradeEntity trade,
+                                     Map<String, CandidateForwardTrackingEntity> forwardByTrade,
+                                     Map<String, CandidateStockEntity> stockByTrade) {
+        String paper = MainstreamThemeNormalizer.normalize(trade.getThemeTag(), trade.getEntryPayloadJson());
+        if (!"UNKNOWN".equals(paper) && !"OTHER".equals(paper)) return false;
+        String key = traceKey(trade.getEntryDate(), trade.getSymbol());
+        CandidateForwardTrackingEntity forward = forwardByTrade.get(key);
+        if (forward != null) {
+            String theme = MainstreamThemeNormalizer.normalize(forward.getThemeTag(), forward.getThemeReason());
+            if (!"UNKNOWN".equals(theme) && !"OTHER".equals(theme)) return true;
+        }
+        CandidateStockEntity stock = stockByTrade.get(key);
+        if (stock != null) {
+            String theme = MainstreamThemeNormalizer.normalize(stock.getThemeTag(), stock.getReason());
+            return !"UNKNOWN".equals(theme) && !"OTHER".equals(theme);
+        }
+        return false;
+    }
+
+    private String traceKey(LocalDate date, String symbol) {
+        return (date == null ? "" : date.toString()) + "|" + (symbol == null ? "" : symbol);
     }
 
     private Map<String, Object> rootCause(String name,

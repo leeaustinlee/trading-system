@@ -11,10 +11,13 @@ import java.util.Map;
 public class CandidateForwardTrackingController {
     private final CandidateForwardTrackingService service;
     private final com.austin.trading.service.CandidateForwardReturnBackfillService returnBackfillService;
+    private final com.austin.trading.service.ThemeTraceRepairService themeTraceRepairService;
     public CandidateForwardTrackingController(CandidateForwardTrackingService service,
-                                              com.austin.trading.service.CandidateForwardReturnBackfillService returnBackfillService) {
+                                              com.austin.trading.service.CandidateForwardReturnBackfillService returnBackfillService,
+                                              com.austin.trading.service.ThemeTraceRepairService themeTraceRepairService) {
         this.service = service;
         this.returnBackfillService = returnBackfillService;
+        this.themeTraceRepairService = themeTraceRepairService;
     }
     @GetMapping("/summary") public Map<String, Object> summary() { return service.summary(); }
     @GetMapping("/by-decision") public List<Map<String, Object>> byDecision() { return service.byDecision(); }
@@ -28,5 +31,9 @@ public class CandidateForwardTrackingController {
     @PostMapping("/backfill-returns")
     public Map<String, Object> backfillReturns(@RequestParam(defaultValue = "60") int days) {
         return returnBackfillService.backfillReturns(days);
+    }
+    @PostMapping("/repair-theme-trace")
+    public Map<String, Object> repairThemeTrace(@RequestParam(defaultValue = "60") int days) {
+        return themeTraceRepairService.repair(days);
     }
 }
