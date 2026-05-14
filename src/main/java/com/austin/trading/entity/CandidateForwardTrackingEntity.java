@@ -26,6 +26,7 @@ public class CandidateForwardTrackingEntity {
     private BigDecimal t10CloseReturnPct;
     private BigDecimal mfePct;
     private BigDecimal maePct;
+    private BigDecimal maxDrawdownPct;
     private Boolean hitStop;
     private Boolean hitTarget;
     private BigDecimal benchmarkReturnPct;
@@ -67,6 +68,8 @@ public class CandidateForwardTrackingEntity {
     public void setMfePct(BigDecimal mfePct) { this.mfePct = mfePct; }
     public BigDecimal getMaePct() { return maePct; }
     public void setMaePct(BigDecimal maePct) { this.maePct = maePct; }
+    public BigDecimal getMaxDrawdownPct() { return maxDrawdownPct; }
+    public void setMaxDrawdownPct(BigDecimal maxDrawdownPct) { this.maxDrawdownPct = maxDrawdownPct; }
     public Boolean getHitStop() { return hitStop; }
     public void setHitStop(Boolean hitStop) { this.hitStop = hitStop; }
     public Boolean getHitTarget() { return hitTarget; }

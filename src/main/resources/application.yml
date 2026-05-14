@@ -119,6 +119,17 @@ trading:
     watch-dir: ${CLAUDE_SUBMIT_WATCH_DIR:/mnt/d/ai/stock/claude-submit}
     scan-interval-ms: 30000
 
+price_plan:
+  sanity:
+    enabled: true
+    shadow_only: true
+  min_rr:
+    setup: 1.8
+    momentum: 2.0
+  tp1_min_gain_pct: 3.0
+  stop_min_loss_pct: 1.5
+  stop_max_loss_pct: 10.0
+
 # v2.1 AI Orchestration 規格（docs/workflow-correctness-ai-orchestration-spec.md）
 ai:
   file_bridge:

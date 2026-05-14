@@ -45,4 +45,9 @@ public class BacktestController {
     public List<BacktestTradeEntity> getTrades(@PathVariable Long id) {
         return backtestService.getTrades(id);
     }
+
+    @GetMapping("/diagnosis/recent")
+    public Map<String, Object> recentDiagnosis(@RequestParam(defaultValue = "30") int days) {
+        return backtestService.recentDiagnosis(days);
+    }
 }

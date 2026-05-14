@@ -7,14 +7,23 @@ import com.austin.trading.dto.response.LiveQuoteResponse;
 import com.austin.trading.engine.ExitRegimeIntegrationEngine;
 import com.austin.trading.engine.PositionDecisionEngine;
 import com.austin.trading.engine.PositionDecisionEngine.*;
+import com.austin.trading.engine.PositionHealthEngine;
+import com.austin.trading.engine.PositionHealthInput;
+import com.austin.trading.engine.PositionHealthResult;
+import com.austin.trading.engine.ShadowExitRuleEngine;
 import com.austin.trading.engine.StopLossTakeProfitEngine;
 import com.austin.trading.entity.PaperTradeEntity;
+import com.austin.trading.entity.PositionHealthLogEntity;
 import com.austin.trading.entity.PositionEntity;
 import com.austin.trading.entity.PositionReviewLogEntity;
+import com.austin.trading.entity.ShadowExitComparisonEntity;
 import com.austin.trading.notify.LineSender;
 import com.austin.trading.repository.PaperTradeRepository;
+import com.austin.trading.repository.PositionHealthLogRepository;
 import com.austin.trading.repository.PositionReviewLogRepository;
 import com.austin.trading.repository.PositionRepository;
+import com.austin.trading.repository.ShadowExitComparisonRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -56,6 +65,13 @@ public class PositionReviewService {
     private final ObjectProvider<PaperTradeService>      paperTradeServiceProvider;
     private final ObjectProvider<PaperTradeRepository>   paperTradeRepositoryProvider;
     private final ObjectProvider<PositionService>        positionServiceProvider;
+
+    private ObjectProvider<PositionHealthLogRepository> positionHealthLogRepositoryProvider;
+    private ObjectProvider<ShadowExitComparisonRepository> shadowExitComparisonRepositoryProvider;
+    private ObjectProvider<DailyTechnicalService> dailyTechnicalServiceProvider;
+    private ObjectProvider<PositionHealthEngine> positionHealthEngineProvider;
+    private ObjectProvider<ShadowExitRuleEngine> shadowExitRuleEngineProvider;
+    private final ObjectMapper shadowObjectMapper = new ObjectMapper();
 
     public PositionReviewService(
             PositionRepository positionRepository,
@@ -112,6 +128,20 @@ public class PositionReviewService {
         this.positionServiceProvider      = positionServiceProvider;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setShadowDiagnosisCollaborators(
+            ObjectProvider<PositionHealthLogRepository> positionHealthLogRepositoryProvider,
+            ObjectProvider<ShadowExitComparisonRepository> shadowExitComparisonRepositoryProvider,
+            ObjectProvider<DailyTechnicalService> dailyTechnicalServiceProvider,
+            ObjectProvider<PositionHealthEngine> positionHealthEngineProvider,
+            ObjectProvider<ShadowExitRuleEngine> shadowExitRuleEngineProvider) {
+        this.positionHealthLogRepositoryProvider = positionHealthLogRepositoryProvider;
+        this.shadowExitComparisonRepositoryProvider = shadowExitComparisonRepositoryProvider;
+        this.dailyTechnicalServiceProvider = dailyTechnicalServiceProvider;
+        this.positionHealthEngineProvider = positionHealthEngineProvider;
+        this.shadowExitRuleEngineProvider = shadowExitRuleEngineProvider;
+    }
+
     /**
      * 審查所有 OPEN positions。
      *
@@ -157,6 +187,7 @@ public class PositionReviewService {
                 }
 
                 PositionReviewLogEntity logEntry = saveReviewLog(pos, quote, decision, reviewType);
+                writeShadowDiagnosis(pos, quote, decision);
 
                 // P0.2 EXIT alert:review = EXIT 時送 LINE,讓使用者察覺持倉訊號
                 maybeSendExitAlert(pos, decision);
@@ -596,5 +627,94 @@ public class PositionReviewService {
         entry.setSuggestedStop(decision.suggestedStopLoss());
         entry.setReason(decision.reason());
         return reviewLogRepository.save(entry);
+    }
+
+    private void writeShadowDiagnosis(PositionEntity pos, LiveQuoteResponse quote, PositionDecisionResult decision) {
+        try {
+            BigDecimal currentPrice = quote != null && quote.currentPrice() != null
+                    ? BigDecimal.valueOf(quote.currentPrice()) : null;
+            DailyTechnicalService techSvc = dailyTechnicalServiceProvider != null
+                    ? dailyTechnicalServiceProvider.getIfAvailable() : null;
+            DailyTechnicalService.TechnicalSnapshot tech = techSvc != null
+                    ? techSvc.snapshot(pos.getSymbol(), LocalDate.now())
+                    : DailyTechnicalService.TechnicalSnapshot.empty(List.of("DATA_GAP: daily technical service unavailable"));
+            DailyTechnicalService.TechnicalSnapshot benchmark = techSvc != null
+                    ? techSvc.snapshot("t00", LocalDate.now())
+                    : DailyTechnicalService.TechnicalSnapshot.empty(List.of("DATA_GAP: benchmark daily data unavailable"));
+
+            PositionHealthEngine healthEngine = positionHealthEngineProvider != null
+                    ? positionHealthEngineProvider.getIfAvailable() : null;
+            if (healthEngine != null) {
+                PositionHealthResult health = healthEngine.evaluate(new PositionHealthInput(
+                        pos.getSymbol(), pos.getAvgCost(), currentPrice,
+                        tech.ma5(), tech.ma10(), tech.ma20(), tech.ma5Previous(),
+                        tech.previousLow(), tech.recentHigh(), tech.atr(), tech.volumeRatio(),
+                        tech.return5d(), benchmark.return5d(), tech.return10d(), benchmark.return10d(),
+                        null, null, "UNKNOWN"));
+                savePositionHealth(pos, currentPrice, health);
+            }
+
+            ShadowExitRuleEngine shadowEngine = shadowExitRuleEngineProvider != null
+                    ? shadowExitRuleEngineProvider.getIfAvailable() : null;
+            if (shadowEngine != null) {
+                var result = shadowEngine.evaluate(new ShadowExitRuleEngine.Input(
+                        pos.getAvgCost(), currentPrice, effectiveStop(pos),
+                        tech.ma5(), tech.ma10(), tech.previousLow(), tech.atr()));
+                saveShadowExit(pos, decision, result);
+            }
+        } catch (Exception e) {
+            log.debug("[PositionReview] shadow diagnosis failed symbol={} reason={}", pos.getSymbol(), e.getMessage());
+        }
+    }
+
+    private BigDecimal effectiveStop(PositionEntity pos) {
+        if (pos.getTrailingStopPrice() == null) return pos.getStopLossPrice();
+        if (pos.getStopLossPrice() == null) return pos.getTrailingStopPrice();
+        return pos.getTrailingStopPrice().max(pos.getStopLossPrice());
+    }
+
+    private void savePositionHealth(PositionEntity pos, BigDecimal currentPrice, PositionHealthResult health) throws Exception {
+        PositionHealthLogRepository repo = positionHealthLogRepositoryProvider != null
+                ? positionHealthLogRepositoryProvider.getIfAvailable() : null;
+        if (repo == null) return;
+        PositionHealthLogEntity row = new PositionHealthLogEntity();
+        row.setPositionId(pos.getId());
+        row.setSymbol(pos.getSymbol());
+        row.setCurrentPrice(currentPrice);
+        row.setHealthScore(health.healthScore());
+        row.setStructureStatus(health.structureStatus());
+        row.setVolumeStatus(health.volumeStatus());
+        row.setRelativeStrengthStatus(health.relativeStrengthStatus());
+        row.setChipStatus(health.chipStatus());
+        row.setExitTier(health.exitTier().name());
+        row.setReasonsJson(shadowObjectMapper.writeValueAsString(health.reasons()));
+        row.setDataGapsJson(shadowObjectMapper.writeValueAsString(health.dataGaps()));
+        repo.save(row);
+    }
+
+    private void saveShadowExit(PositionEntity pos, PositionDecisionResult decision,
+                                ShadowExitRuleEngine.ShadowExitResult result) throws Exception {
+        ShadowExitComparisonRepository repo = shadowExitComparisonRepositoryProvider != null
+                ? shadowExitComparisonRepositoryProvider.getIfAvailable() : null;
+        if (repo == null) return;
+        ShadowExitComparisonEntity row = new ShadowExitComparisonEntity();
+        row.setTradeRefType("POSITION");
+        row.setTradeRefId(pos.getId());
+        row.setSymbol(pos.getSymbol());
+        row.setCurrentRuleAction(decision != null ? decision.status().name() : "DATA_GAP");
+        row.setCurrentRuleExitPrice(decision != null ? decision.suggestedStopLoss() : null);
+        row.setMa5Action(result.ma5().action());
+        row.setMa5Price(result.ma5().price());
+        row.setMa10Action(result.ma10().action());
+        row.setMa10Price(result.ma10().price());
+        row.setPrevLowAction(result.previousLow().action());
+        row.setPrevLowPrice(result.previousLow().price());
+        row.setAtrAction(result.atr().action());
+        row.setAtrPrice(result.atr().price());
+        row.setHybridAction(result.hybrid().action());
+        row.setHybridPrice(result.hybrid().price());
+        row.setDataGaps(shadowObjectMapper.writeValueAsString(result.dataGaps()));
+        row.setHypotheticalReturnJson("{}");
+        repo.save(row);
     }
 }

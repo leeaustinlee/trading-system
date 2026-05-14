@@ -154,6 +154,9 @@ public class PaperTradeEntity {
     @Column(name = "simulated_exit_price", precision = 12, scale = 4)
     private BigDecimal simulatedExitPrice;
 
+    @Column(name = "intended_exit_price", precision = 12, scale = 4)
+    private BigDecimal intendedExitPrice;
+
     /** STOP_LOSS / TRAILING_STOP / TP1_HIT / TP2_HIT / REVIEW_EXIT / TIME_EXIT / REVERSE_SIGNAL / MANUAL / VOID */
     @Column(name = "exit_reason", length = 30)
     private String exitReason;
@@ -179,6 +182,12 @@ public class PaperTradeEntity {
 
     @Column(name = "payload_json", columnDefinition = "json")
     private String payloadJson;
+
+    @Column(name = "sanity_result", length = 30)
+    private String sanityResult;
+
+    @Column(name = "sanity_violations", columnDefinition = "json")
+    private String sanityViolations;
 
     // ── P0.6 (2026-04-29) Phase 1 forward testing ───────────────────
     /** true = shadow trade（未真進場 final ENTER 仍記錄做 forward test）。 */
@@ -266,6 +275,8 @@ public class PaperTradeEntity {
     public void setExitPrice(BigDecimal v) { this.exitPrice = v; }
     public BigDecimal getSimulatedExitPrice() { return simulatedExitPrice; }
     public void setSimulatedExitPrice(BigDecimal v) { this.simulatedExitPrice = v; }
+    public BigDecimal getIntendedExitPrice() { return intendedExitPrice; }
+    public void setIntendedExitPrice(BigDecimal v) { this.intendedExitPrice = v; }
     public String getExitReason() { return exitReason; }
     public void setExitReason(String v) { this.exitReason = v; }
     public BigDecimal getPnlAmount() { return pnlAmount; }
@@ -282,6 +293,10 @@ public class PaperTradeEntity {
     public void setStatus(String v) { this.status = v; }
     public String getPayloadJson() { return payloadJson; }
     public void setPayloadJson(String v) { this.payloadJson = v; }
+    public String getSanityResult() { return sanityResult; }
+    public void setSanityResult(String v) { this.sanityResult = v; }
+    public String getSanityViolations() { return sanityViolations; }
+    public void setSanityViolations(String v) { this.sanityViolations = v; }
 
     // P0.6 shadow / returns
     public boolean isShadow() { return shadow; }

@@ -4,18 +4,23 @@ import com.austin.trading.client.TwseMisClient;
 import com.austin.trading.client.dto.StockQuote;
 import com.austin.trading.dto.internal.MarketRegimeDecision;
 import com.austin.trading.dto.response.FinalDecisionSelectedStockResponse;
+import com.austin.trading.engine.PricePlanSanityEngine;
+import com.austin.trading.engine.PricePlanSanityResult;
+import com.austin.trading.engine.ShadowExitRuleEngine;
 import com.austin.trading.engine.exit.ExitRuleEvaluator;
 import com.austin.trading.engine.exit.FixedRuleExitEvaluator;
 import com.austin.trading.entity.FinalDecisionEntity;
 import com.austin.trading.entity.PaperTradeEntity;
 import com.austin.trading.entity.PaperTradeExitLogEntity;
 import com.austin.trading.entity.PositionReviewLogEntity;
+import com.austin.trading.entity.ShadowExitComparisonEntity;
 import com.austin.trading.event.FinalDecisionPersistedEvent;
 import com.austin.trading.event.FinalDecisionShadowCandidatesEvent;
 import com.austin.trading.repository.FinalDecisionRepository;
 import com.austin.trading.repository.PaperTradeExitLogRepository;
 import com.austin.trading.repository.PaperTradeRepository;
 import com.austin.trading.repository.PositionReviewLogRepository;
+import com.austin.trading.repository.ShadowExitComparisonRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
@@ -103,6 +108,9 @@ public class PaperTradeService {
 
     /** Subagent C — full decision-trace snapshots. Optional via ObjectProvider to avoid cycles. */
     private final ObjectProvider<PaperTradeSnapshotService> snapshotServiceProvider;
+    private ObjectProvider<DailyTechnicalService> dailyTechnicalServiceProvider;
+    private ObjectProvider<ShadowExitRuleEngine> shadowExitRuleEngineProvider;
+    private ObjectProvider<ShadowExitComparisonRepository> shadowExitComparisonRepositoryProvider;
 
     public PaperTradeService(PaperTradeRepository repository,
                               TwseMisClient twseMisClient,
@@ -126,6 +134,15 @@ public class PaperTradeService {
         this.finalDecisionRepoProvider = finalDecisionRepoProvider;
         this.exitLogRepoProvider = exitLogRepoProvider;
         this.snapshotServiceProvider = snapshotServiceProvider;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setShadowExitCollaborators(ObjectProvider<DailyTechnicalService> dailyTechnicalServiceProvider,
+                                    ObjectProvider<ShadowExitRuleEngine> shadowExitRuleEngineProvider,
+                                    ObjectProvider<ShadowExitComparisonRepository> shadowExitComparisonRepositoryProvider) {
+        this.dailyTechnicalServiceProvider = dailyTechnicalServiceProvider;
+        this.shadowExitRuleEngineProvider = shadowExitRuleEngineProvider;
+        this.shadowExitComparisonRepositoryProvider = shadowExitComparisonRepositoryProvider;
     }
 
     /** Helper to safely fetch the snapshot service (may be unavailable during unit tests). */
@@ -273,6 +290,7 @@ public class PaperTradeService {
         e.setEntryGrade(grade);
         e.setEntryRrRatio(rr);
         e.setEntryRegime(regime);
+        applyPricePlanSanity(e);
         e.setStatus("OPEN");
         e.setPayloadJson(buildEntryPayload(event, pick, intendedPrice));
         e.setEntryPayloadJson(buildRichEntryPayload(event, pick, intendedPrice, simulatedPrice, regime, grade, rr));
@@ -378,6 +396,7 @@ public class PaperTradeService {
         e.setEntryGrade(grade);
         e.setEntryRrRatio(rr);
         e.setEntryRegime(regime);
+        applyPricePlanSanity(e);
         e.setStatus("OPEN");
         e.setPayloadJson(buildManualEntryPayload(symbol, intended, stop, t1, t2, qty, reason));
         e.setEntryPayloadJson(buildRichManualEntryPayload(
@@ -487,6 +506,7 @@ public class PaperTradeService {
         e.setEntryRrRatio(rr);
         e.setEntryRegime(regime);
         e.setFinalRankScore(finalRankScore);
+        applyPricePlanSanity(e);
         e.setStatus("OPEN");
         e.setShadow(true);
         e.setPayloadJson(buildShadowEntryPayload(symbol, intended, finalRankScore, grade, reason));
@@ -594,6 +614,29 @@ public class PaperTradeService {
         BigDecimal reward = tp1.subtract(entry);
         if (risk.signum() <= 0) return null;
         return reward.divide(risk, 3, RoundingMode.HALF_UP);
+    }
+
+    private void applyPricePlanSanity(PaperTradeEntity e) {
+        ScoreConfigService cfg = scoreConfigProvider != null ? scoreConfigProvider.getIfAvailable() : null;
+        if (cfg == null || e == null) return;
+        try {
+            PricePlanSanityResult result = new PricePlanSanityEngine(cfg).evaluate(
+                    new PricePlanSanityEngine.Input(
+                            e.getEntryPrice(),
+                            e.getStopLossPrice(),
+                            e.getTarget1Price(),
+                            e.getTarget2Price(),
+                            e.getStrategyType(),
+                            false));
+            e.setSanityResult(result.status());
+            e.setSanityViolations(objectMapper.writeValueAsString(result.violations()));
+            if (e.getEntryRrRatio() == null && result.rrRatio() != null) {
+                e.setEntryRrRatio(result.rrRatio().setScale(3, RoundingMode.HALF_UP));
+            }
+        } catch (Exception ex) {
+            log.debug("[PaperTrade] price-plan sanity failed symbol={} reason={}", e.getSymbol(), ex.getMessage());
+            e.setSanityResult("DATA_GAP");
+        }
     }
 
     private String buildRichEntryPayload(FinalDecisionPersistedEvent ev,
@@ -818,6 +861,7 @@ public class PaperTradeService {
                 p.getMaxHoldingDays() != null ? p.getMaxHoldingDays() : DEFAULT_MAX_HOLD_DAYS);
         ExitRuleEvaluator.DailyBar bar = new ExitRuleEvaluator.DailyBar(barDate, high, low, close, holdingDays);
         ExitRuleEvaluator.ExitDecision ed = exitEvaluator.evaluate(snap, bar);
+        writePaperShadowExitComparison(p, close, ed, barDate);
 
         // 累積 mfe / mae(取最大值)
         if (ed.mfePct() != null && (p.getMfePct() == null || ed.mfePct().compareTo(p.getMfePct()) > 0)) {
@@ -832,6 +876,7 @@ public class PaperTradeService {
             p.setExitDate(barDate);
             p.setExitTime(LocalTime.of(13, 30));
             p.setExitPrice(ed.exitPrice());
+            p.setIntendedExitPrice(ed.exitPrice());
             p.setExitReason(ed.reason().name());
             p.setHoldingDays(holdingDays);
             p.setPnlPct(pct(ed.exitPrice(), p.getEntryPrice()));
@@ -866,6 +911,49 @@ public class PaperTradeService {
                 .divide(entry, 6, RoundingMode.HALF_UP)
                 .multiply(BigDecimal.valueOf(100))
                 .setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private void writePaperShadowExitComparison(PaperTradeEntity trade, BigDecimal currentPrice,
+                                                ExitRuleEvaluator.ExitDecision currentDecision,
+                                                LocalDate asOf) {
+        try {
+            DailyTechnicalService techSvc = dailyTechnicalServiceProvider != null
+                    ? dailyTechnicalServiceProvider.getIfAvailable() : null;
+            ShadowExitRuleEngine engine = shadowExitRuleEngineProvider != null
+                    ? shadowExitRuleEngineProvider.getIfAvailable() : null;
+            ShadowExitComparisonRepository repo = shadowExitComparisonRepositoryProvider != null
+                    ? shadowExitComparisonRepositoryProvider.getIfAvailable() : null;
+            if (engine == null || repo == null) return;
+            DailyTechnicalService.TechnicalSnapshot tech = techSvc != null
+                    ? techSvc.snapshot(trade.getSymbol(), asOf)
+                    : DailyTechnicalService.TechnicalSnapshot.empty(List.of("DATA_GAP: daily technical service unavailable"));
+            var result = engine.evaluate(new ShadowExitRuleEngine.Input(
+                    trade.getEntryPrice(), currentPrice, readTrailingStop(trade),
+                    tech.ma5(), tech.ma10(), tech.previousLow(), tech.atr()));
+            ShadowExitComparisonEntity row = new ShadowExitComparisonEntity();
+            row.setTradeRefType("PAPER");
+            row.setTradeRefId(trade.getId());
+            row.setSymbol(trade.getSymbol());
+            row.setCurrentRuleAction(currentDecision != null && currentDecision.shouldExit()
+                    ? currentDecision.reason().name() : "HOLD");
+            row.setCurrentRuleExitPrice(currentDecision != null ? currentDecision.exitPrice() : null);
+            row.setMa5Action(result.ma5().action());
+            row.setMa5Price(result.ma5().price());
+            row.setMa10Action(result.ma10().action());
+            row.setMa10Price(result.ma10().price());
+            row.setPrevLowAction(result.previousLow().action());
+            row.setPrevLowPrice(result.previousLow().price());
+            row.setAtrAction(result.atr().action());
+            row.setAtrPrice(result.atr().price());
+            row.setHybridAction(result.hybrid().action());
+            row.setHybridPrice(result.hybrid().price());
+            row.setDataGaps(objectMapper.writeValueAsString(result.dataGaps()));
+            row.setHypotheticalReturnJson("{}");
+            repo.save(row);
+        } catch (Exception ex) {
+            log.debug("[PaperTrade] shadow exit comparison failed id={} symbol={} reason={}",
+                    trade.getId(), trade.getSymbol(), ex.getMessage());
+        }
     }
 
     private BigDecimal bd(Double d) {
@@ -1073,6 +1161,7 @@ public class PaperTradeService {
         trade.setExitDate(today);
         trade.setExitTime(LocalTime.now());
         trade.setExitPrice(grossExit);
+        trade.setIntendedExitPrice(grossExit);
         trade.setSimulatedExitPrice(simulatedExit);
         trade.setExitReason(result.exitReason());
         trade.setHoldingDays(holdDays);

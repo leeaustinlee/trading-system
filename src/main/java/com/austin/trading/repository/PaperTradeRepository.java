@@ -33,4 +33,6 @@ public interface PaperTradeRepository extends JpaRepository<PaperTradeEntity, Lo
 
     /** P0.6：找指定 entry_date 的所有 trade（不論 status / shadow），給 BackfillReturnsJob 用。 */
     List<PaperTradeEntity> findByEntryDate(LocalDate entryDate);
+
+    List<PaperTradeEntity> findByEntryDateBetweenOrderByEntryDateAscIdAsc(LocalDate from, LocalDate to);
 }

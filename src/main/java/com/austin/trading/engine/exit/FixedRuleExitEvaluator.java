@@ -32,19 +32,26 @@ public class FixedRuleExitEvaluator implements ExitRuleEvaluator {
 
         BigDecimal mfe = pct(bar.high(), entry.entryPrice());
         BigDecimal mae = pct(bar.low(),  entry.entryPrice());
+        boolean validStop = entry.stopLossPrice() != null
+                && entry.stopLossPrice().compareTo(entry.entryPrice()) < 0;
+        boolean validTarget1 = entry.target1Price() != null
+                && entry.target1Price().compareTo(entry.entryPrice()) > 0;
+        boolean validTarget2 = validTarget1
+                && entry.target2Price() != null
+                && entry.target2Price().compareTo(entry.target1Price()) > 0;
 
         // 1. 停損
-        if (entry.stopLossPrice() != null && bar.low() != null
+        if (validStop && bar.low() != null
                 && bar.low().compareTo(entry.stopLossPrice()) <= 0) {
             return new ExitDecision(true, ExitReason.STOP_LOSS, entry.stopLossPrice(), mfe, mae);
         }
         // 2. T2
-        if (entry.target2Price() != null && bar.high() != null
+        if (validTarget2 && bar.high() != null
                 && bar.high().compareTo(entry.target2Price()) >= 0) {
             return new ExitDecision(true, ExitReason.TARGET_2, entry.target2Price(), mfe, mae);
         }
         // 3. T1
-        if (entry.target1Price() != null && bar.high() != null
+        if (validTarget1 && bar.high() != null
                 && bar.high().compareTo(entry.target1Price()) >= 0) {
             return new ExitDecision(true, ExitReason.TARGET_1, entry.target1Price(), mfe, mae);
         }

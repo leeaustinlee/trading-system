@@ -67,4 +67,15 @@ public interface MarketIndexDailyRepository extends JpaRepository<MarketIndexDai
             @Param("symbol") String symbol,
             @Param("asOf") LocalDate asOf,
             Pageable pageable);
+
+    @Query("""
+            SELECT m.tradingDate FROM MarketIndexDailyEntity m
+             WHERE m.symbol = :symbol
+               AND m.tradingDate > :asOf
+             ORDER BY m.tradingDate ASC
+            """)
+    List<LocalDate> findTradingDatesAfter(
+            @Param("symbol") String symbol,
+            @Param("asOf") LocalDate asOf,
+            Pageable pageable);
 }
