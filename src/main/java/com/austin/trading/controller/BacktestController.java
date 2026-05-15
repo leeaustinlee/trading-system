@@ -6,6 +6,7 @@ import com.austin.trading.dto.response.RrRootCauseDiagnosisResponse;
 import com.austin.trading.service.BacktestService;
 import com.austin.trading.service.RrRootCauseDiagnosisService;
 import com.austin.trading.service.RrShadowValidationService;
+import com.austin.trading.service.RrValidationCoverageRepairService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -22,19 +23,28 @@ public class BacktestController {
     private final BacktestService backtestService;
     private final RrRootCauseDiagnosisService rrRootCauseDiagnosisService;
     private final RrShadowValidationService rrShadowValidationService;
+    private final RrValidationCoverageRepairService rrValidationCoverageRepairService;
 
     @Autowired
     public BacktestController(BacktestService backtestService,
                               RrRootCauseDiagnosisService rrRootCauseDiagnosisService,
-                              RrShadowValidationService rrShadowValidationService) {
+                              RrShadowValidationService rrShadowValidationService,
+                              RrValidationCoverageRepairService rrValidationCoverageRepairService) {
         this.backtestService = backtestService;
         this.rrRootCauseDiagnosisService = rrRootCauseDiagnosisService;
         this.rrShadowValidationService = rrShadowValidationService;
+        this.rrValidationCoverageRepairService = rrValidationCoverageRepairService;
+    }
+
+    public BacktestController(BacktestService backtestService,
+                              RrRootCauseDiagnosisService rrRootCauseDiagnosisService,
+                              RrShadowValidationService rrShadowValidationService) {
+        this(backtestService, rrRootCauseDiagnosisService, rrShadowValidationService, null);
     }
 
     public BacktestController(BacktestService backtestService,
                               RrRootCauseDiagnosisService rrRootCauseDiagnosisService) {
-        this(backtestService, rrRootCauseDiagnosisService, null);
+        this(backtestService, rrRootCauseDiagnosisService, null, null);
     }
 
     @PostMapping("/run")
@@ -86,5 +96,14 @@ public class BacktestController {
             throw new IllegalStateException("RR shadow validation service is not available");
         }
         return rrShadowValidationService.summary(days);
+    }
+
+    @PostMapping("/diagnosis/rr-shadow-validation/repair-coverage")
+    public RrValidationCoverageRepairService.RepairResponse rrShadowValidationRepairCoverage(
+            @RequestParam(defaultValue = "60") int days) {
+        if (rrValidationCoverageRepairService == null) {
+            throw new IllegalStateException("RR validation coverage repair service is not available");
+        }
+        return rrValidationCoverageRepairService.repairCoverage(days);
     }
 }

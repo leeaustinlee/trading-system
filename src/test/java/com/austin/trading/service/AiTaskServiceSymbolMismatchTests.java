@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -35,10 +36,11 @@ class AiTaskServiceSymbolMismatchTests {
     @MockBean AiResearchLogRepository aiResearchLogRepository;
 
     private static final LocalDate TODAY = LocalDate.now();
+    private static final AtomicInteger TYPE_SEQ = new AtomicInteger();
 
-    /** 測試間避免 UPSERT 衝突，每次用不同 taskType */
+    /** 測試間避免 UPSERT 衝突，每次用不同但不超過 DB 欄位長度的 taskType */
     private String uniqueType(String base) {
-        return base + "_" + System.nanoTime();
+        return base + "_" + TYPE_SEQ.incrementAndGet();
     }
 
     /** 場景：OPENING 候選 10 檔，submit 含 4 檔非候選 → 必須丟 IllegalArgumentException */

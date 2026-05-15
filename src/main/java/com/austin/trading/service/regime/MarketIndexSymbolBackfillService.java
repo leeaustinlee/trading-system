@@ -62,6 +62,32 @@ public class MarketIndexSymbolBackfillService {
         int window = days > 0 ? days : 90;
         LocalDate to = LocalDate.now();
         LocalDate from = to.minusDays(window);
+        return backfillSymbols(from, to, symbols, includePaperTrades, includeCandidates, maxSymbols);
+    }
+
+    @Transactional
+    public Map<String, Object> backfillSymbols(LocalDate from,
+                                               LocalDate to,
+                                               String symbols,
+                                               boolean includePaperTrades,
+                                               boolean includeCandidates,
+                                               int maxSymbols) {
+        if (from == null || to == null || from.isAfter(to)) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("requestedSymbols", parseSymbols(symbols));
+            out.put("resolvedSymbols", List.of());
+            out.put("includePaperTrades", includePaperTrades);
+            out.put("includeCandidates", includeCandidates);
+            out.put("maxSymbols", maxSymbols > 0 ? maxSymbols : DEFAULT_SYMBOL_LIMIT);
+            out.put("upsertedRows", 0);
+            out.put("skippedSymbols", List.of());
+            out.put("symbolStats", List.of());
+            out.put("benchmarkDataGap", true);
+            out.put("dataGaps", List.of(Map.of("reason", "DATA_GAP: invalid backfill date range")));
+            out.put("from", from);
+            out.put("to", to);
+            return out;
+        }
         List<String> requestedSymbols = parseSymbols(symbols);
         int limit = maxSymbols > 0 ? maxSymbols : DEFAULT_SYMBOL_LIMIT;
         List<String> resolvedSymbols = requestedSymbols.isEmpty()

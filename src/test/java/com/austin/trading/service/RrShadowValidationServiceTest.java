@@ -1,9 +1,11 @@
 package com.austin.trading.service;
 
 import com.austin.trading.entity.CandidateForwardTrackingEntity;
+import com.austin.trading.entity.MarketIndexDailyEntity;
 import com.austin.trading.entity.PaperTradeEntity;
 import com.austin.trading.entity.RrShadowValidationEntity;
 import com.austin.trading.repository.CandidateForwardTrackingRepository;
+import com.austin.trading.repository.MarketIndexDailyRepository;
 import com.austin.trading.repository.PaperTradeRepository;
 import com.austin.trading.repository.RrShadowValidationRepository;
 import org.junit.jupiter.api.Test;
@@ -76,6 +78,43 @@ class RrShadowValidationServiceTest {
         assertThat(summary.blockedReturnCoveragePct()).isEqualByComparingTo("100.00");
     }
 
+    @Test
+    void backfillUsesMarketIndexDailyPartialHorizonsWithoutCandidateForwardRows() {
+        PaperTradeRepository paperRepo = mock(PaperTradeRepository.class);
+        CandidateForwardTrackingRepository forwardRepo = mock(CandidateForwardTrackingRepository.class);
+        MarketIndexDailyRepository marketRepo = mock(MarketIndexDailyRepository.class);
+        Map<Long, RrShadowValidationEntity> rows = new LinkedHashMap<>();
+        RrShadowValidationRepository validationRepo = validationRepository(rows);
+        PaperTradeEntity trade = trade(3L, "2330", "100", "95", "102");
+        trade.setEntryDate(LocalDate.now().minusDays(20));
+
+        when(paperRepo.findByEntryDateBetweenOrderByEntryDateAscIdAsc(any(), any())).thenReturn(List.of(trade));
+        when(forwardRepo.findByTradingDateBetween(any(), any())).thenReturn(List.of());
+        when(marketRepo.findBySymbolAndTradingDateBetweenOrderByTradingDateAsc(
+                any(), any(), any())).thenReturn(List.of(
+                bar("2330", trade.getEntryDate().plusDays(1), "101"),
+                bar("2330", trade.getEntryDate().plusDays(2), "102"),
+                bar("2330", trade.getEntryDate().plusDays(3), "104")
+        ));
+        when(marketRepo.findTradingDatesAfter(any(), any(), any())).thenReturn(List.of());
+
+        RrShadowValidationService service = new RrShadowValidationService(
+                paperRepo, forwardRepo, validationRepo, new RiskRewardShadowGateService(), marketRepo);
+
+        service.backfill(60);
+        RrShadowValidationService.Summary summary = service.summary(60);
+        RrShadowValidationEntity row = rows.get(3L);
+
+        assertThat(row.getT1ReturnPct()).isEqualByComparingTo("1.0000");
+        assertThat(row.getT3ReturnPct()).isEqualByComparingTo("4.0000");
+        assertThat(row.getT5ReturnPct()).isNull();
+        assertThat(summary.blockedReturnCoveragePct()).isEqualByComparingTo("100.00");
+        assertThat(summary.dataGaps()).containsEntry("T1", 0).containsEntry("T5", 1).containsEntry("T10", 1);
+        assertThat(summary.coverageGaps().missingBenchmark()).contains("t00@" + trade.getEntryDate());
+        assertThat(summary.coverageGaps().missingHorizons().get("2330@" + trade.getEntryDate()))
+                .containsExactly("T5", "T10");
+    }
+
     private PaperTradeEntity trade(Long id, String symbol, String entry, String stop, String target1) {
         PaperTradeEntity trade = new PaperTradeEntity();
         ReflectionTestUtils.setField(trade, "id", id);
@@ -87,6 +126,11 @@ class RrShadowValidationServiceTest {
         trade.setStopLossPrice(new BigDecimal(stop));
         trade.setTarget1Price(new BigDecimal(target1));
         return trade;
+    }
+
+    private MarketIndexDailyEntity bar(String symbol, LocalDate date, String close) {
+        return new MarketIndexDailyEntity(symbol, date, new BigDecimal(close), new BigDecimal(close),
+                new BigDecimal(close), new BigDecimal(close), 1000L);
     }
 
     private RrShadowValidationRepository validationRepository(Map<Long, RrShadowValidationEntity> rows) {

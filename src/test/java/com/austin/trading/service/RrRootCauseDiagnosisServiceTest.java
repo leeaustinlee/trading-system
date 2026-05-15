@@ -121,7 +121,9 @@ class RrRootCauseDiagnosisServiceTest {
                 1,
                 java.util.Map.of("STOP_TOO_WIDE", 4L),
                 List.of("2330"),
-                new BigDecimal("100.00")
+                new BigDecimal("100.00"),
+                new RrShadowValidationService.CoverageGapDetails(
+                        List.of(), List.of(), java.util.Map.of(), LocalDate.now().minusDays(60), LocalDate.now())
         ));
         service = new RrRootCauseDiagnosisService(
                 paperTradeRepository,

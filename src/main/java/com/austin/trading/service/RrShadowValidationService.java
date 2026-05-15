@@ -2,11 +2,15 @@ package com.austin.trading.service;
 
 import com.austin.trading.dto.response.RiskRewardShadowGateResult;
 import com.austin.trading.entity.CandidateForwardTrackingEntity;
+import com.austin.trading.entity.MarketIndexDailyEntity;
 import com.austin.trading.entity.PaperTradeEntity;
 import com.austin.trading.entity.RrShadowValidationEntity;
 import com.austin.trading.repository.CandidateForwardTrackingRepository;
+import com.austin.trading.repository.MarketIndexDailyRepository;
 import com.austin.trading.repository.PaperTradeRepository;
 import com.austin.trading.repository.RrShadowValidationRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,20 +28,33 @@ public class RrShadowValidationService {
     private static final BigDecimal STOP_TOO_WIDE_PCT = new BigDecimal("6.0");
     private static final BigDecimal TARGET_TOO_CLOSE_PCT = new BigDecimal("3.0");
     private static final BigDecimal MISSED_WINNER_PCT = new BigDecimal("3.0");
+    private static final String BENCHMARK_SYMBOL = "t00";
+    private static final int[] HORIZONS = {1, 3, 5, 10};
 
     private final PaperTradeRepository paperTradeRepository;
     private final CandidateForwardTrackingRepository forwardTrackingRepository;
     private final RrShadowValidationRepository validationRepository;
     private final RiskRewardShadowGateService shadowGateService;
+    private final MarketIndexDailyRepository marketIndexRepository;
+
+    @Autowired
+    public RrShadowValidationService(PaperTradeRepository paperTradeRepository,
+                                     CandidateForwardTrackingRepository forwardTrackingRepository,
+                                     RrShadowValidationRepository validationRepository,
+                                     RiskRewardShadowGateService shadowGateService,
+                                     MarketIndexDailyRepository marketIndexRepository) {
+        this.paperTradeRepository = paperTradeRepository;
+        this.forwardTrackingRepository = forwardTrackingRepository;
+        this.validationRepository = validationRepository;
+        this.shadowGateService = shadowGateService;
+        this.marketIndexRepository = marketIndexRepository;
+    }
 
     public RrShadowValidationService(PaperTradeRepository paperTradeRepository,
                                      CandidateForwardTrackingRepository forwardTrackingRepository,
                                      RrShadowValidationRepository validationRepository,
                                      RiskRewardShadowGateService shadowGateService) {
-        this.paperTradeRepository = paperTradeRepository;
-        this.forwardTrackingRepository = forwardTrackingRepository;
-        this.validationRepository = validationRepository;
-        this.shadowGateService = shadowGateService;
+        this(paperTradeRepository, forwardTrackingRepository, validationRepository, shadowGateService, null);
     }
 
     @Transactional
@@ -111,6 +128,7 @@ public class RrShadowValidationService {
         row.setT3ReturnPct(firstNonNull(trade.getReturn3d(), forward == null ? null : forward.getT3CloseReturnPct()));
         row.setT5ReturnPct(firstNonNull(trade.getReturn5d(), forward == null ? null : forward.getT5CloseReturnPct()));
         row.setT10ReturnPct(firstNonNull(trade.getReturn10d(), forward == null ? null : forward.getT10CloseReturnPct()));
+        fillReturnsFromMarketIndex(row, trade);
         BigDecimal bestReturn = bestAvailableReturn(row);
         row.setAvoidedLoserFlag(RiskRewardShadowGateService.FAIL.equals(row.getShadowStatus())
                 && bestReturn != null && bestReturn.compareTo(BigDecimal.ZERO) < 0);
@@ -139,6 +157,35 @@ public class RrShadowValidationService {
         if (row.getT5ReturnPct() == null) gaps.add("DATA_GAP: missing T5 forward return");
         if (row.getT10ReturnPct() == null) gaps.add("DATA_GAP: missing T10 forward return");
         return gaps.isEmpty() ? null : String.join("; ", gaps);
+    }
+
+    private void fillReturnsFromMarketIndex(RrShadowValidationEntity row, PaperTradeEntity trade) {
+        if (marketIndexRepository == null
+                || trade.getEntryDate() == null
+                || trade.getSymbol() == null
+                || trade.getSymbol().isBlank()
+                || trade.getEntryPrice() == null
+                || trade.getEntryPrice().signum() <= 0) {
+            return;
+        }
+        boolean needsAny = row.getT1ReturnPct() == null
+                || row.getT3ReturnPct() == null
+                || row.getT5ReturnPct() == null
+                || row.getT10ReturnPct() == null;
+        if (!needsAny) return;
+
+        List<MarketIndexDailyEntity> futureBars = marketIndexRepository
+                .findBySymbolAndTradingDateBetweenOrderByTradingDateAsc(
+                        trade.getSymbol(), trade.getEntryDate().plusDays(1), trade.getEntryDate().plusDays(30));
+        List<MarketIndexDailyEntity> usableBars = futureBars.stream()
+                .filter(b -> b.getClosePrice() != null)
+                .limit(10)
+                .toList();
+        for (int horizon : HORIZONS) {
+            if (usableBars.size() < horizon || returnAt(row, horizon) != null) continue;
+            BigDecimal pct = returnPct(trade.getEntryPrice(), usableBars.get(horizon - 1).getClosePrice());
+            writeReturn(row, horizon, pct);
+        }
     }
 
     private Summary summarize(Window window, List<RrShadowValidationEntity> rows) {
@@ -171,8 +218,55 @@ public class RrShadowValidationService {
                 (int) blocked.stream().filter(RrShadowValidationEntity::isMissedWinnerFlag).count(),
                 topBuckets(rows),
                 rows.stream().map(RrShadowValidationEntity::getSymbol).filter(s -> s != null && !s.isBlank()).distinct().limit(10).toList(),
-                coveragePct(blocked)
+                coveragePct(blocked),
+                coverageGapDetails(rows, blocked)
         );
+    }
+
+    private CoverageGapDetails coverageGapDetails(List<RrShadowValidationEntity> rows,
+                                                  List<RrShadowValidationEntity> blocked) {
+        LocalDate oldest = rows.stream().map(RrShadowValidationEntity::getTradingDate)
+                .filter(d -> d != null).min(LocalDate::compareTo).orElse(null);
+        LocalDate newest = rows.stream().map(RrShadowValidationEntity::getTradingDate)
+                .filter(d -> d != null).max(LocalDate::compareTo).orElse(null);
+
+        List<String> missingSymbols = blocked.stream()
+                .filter(r -> bestAvailableReturn(r) == null)
+                .map(r -> r.getSymbol() + "@" + r.getTradingDate())
+                .distinct()
+                .limit(30)
+                .toList();
+        Map<String, List<String>> missingHorizons = new LinkedHashMap<>();
+        for (RrShadowValidationEntity row : blocked) {
+            List<String> horizons = new ArrayList<>();
+            for (int horizon : HORIZONS) {
+                if (returnAt(row, horizon) == null) horizons.add("T" + horizon);
+            }
+            if (!horizons.isEmpty()) {
+                missingHorizons.put(row.getSymbol() + "@" + row.getTradingDate(), horizons);
+            }
+            if (missingHorizons.size() >= 30) break;
+        }
+
+        return new CoverageGapDetails(
+                missingSymbols,
+                missingBenchmark(blocked),
+                missingHorizons,
+                oldest,
+                newest
+        );
+    }
+
+    private List<String> missingBenchmark(List<RrShadowValidationEntity> blocked) {
+        if (marketIndexRepository == null) return List.of();
+        return blocked.stream()
+                .filter(r -> r.getTradingDate() != null)
+                .filter(r -> marketIndexRepository.findTradingDatesAfter(
+                        BENCHMARK_SYMBOL, r.getTradingDate(), PageRequest.of(0, 10)).isEmpty())
+                .map(r -> BENCHMARK_SYMBOL + "@" + r.getTradingDate())
+                .distinct()
+                .limit(30)
+                .toList();
     }
 
     private Map<String, Long> topBuckets(List<RrShadowValidationEntity> rows) {
@@ -250,6 +344,25 @@ public class RrShadowValidationService {
                 .divide(BigDecimal.valueOf(total), 2, RoundingMode.HALF_UP);
     }
 
+    private BigDecimal returnPct(BigDecimal entry, BigDecimal close) {
+        if (entry == null || close == null || entry.signum() <= 0) return null;
+        return close.subtract(entry)
+                .divide(entry, 6, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private void writeReturn(RrShadowValidationEntity row, int horizon, BigDecimal value) {
+        if (value == null) return;
+        switch (horizon) {
+            case 1 -> row.setT1ReturnPct(value);
+            case 3 -> row.setT3ReturnPct(value);
+            case 5 -> row.setT5ReturnPct(value);
+            case 10 -> row.setT10ReturnPct(value);
+            default -> { }
+        }
+    }
+
     private Window window(int days) {
         int window = days > 0 ? days : 60;
         LocalDate end = LocalDate.now();
@@ -280,6 +393,15 @@ public class RrShadowValidationService {
             int missedWinnerCount,
             Map<String, Long> topRootCauseBuckets,
             List<String> sampleSymbols,
-            BigDecimal blockedReturnCoveragePct
+            BigDecimal blockedReturnCoveragePct,
+            CoverageGapDetails coverageGaps
+    ) {}
+
+    public record CoverageGapDetails(
+            List<String> missingSymbols,
+            List<String> missingBenchmark,
+            Map<String, List<String>> missingHorizons,
+            LocalDate oldestEntryDate,
+            LocalDate newestEntryDate
     ) {}
 }
