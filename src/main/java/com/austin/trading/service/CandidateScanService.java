@@ -131,20 +131,34 @@ public class CandidateScanService {
     public List<LiveQuoteResponse> getCurrentLiveQuotes() {
         List<CandidateStockEntity> candidates = candidateStockRepository
                 .findByTradingDateOrderByScoreDesc(resolveLatestTradingDate(), PageRequest.of(0, 20));
-        if (candidates.isEmpty()) return List.of();
+        return getLiveQuotesForCandidateEntities(candidates);
+    }
 
+    private List<LiveQuoteResponse> getLiveQuotesForCandidates(List<CandidateResponse> candidates) {
+        if (candidates == null || candidates.isEmpty()) return List.of();
+        List<String> symbols = candidates.stream()
+                .map(CandidateResponse::symbol)
+                .collect(Collectors.toList());
+        Map<String, String> nameMap = candidates.stream()
+                .filter(c -> c.stockName() != null)
+                .collect(Collectors.toMap(CandidateResponse::symbol,
+                        CandidateResponse::stockName, (a, b) -> a));
+        return enrichQuoteNames(getLiveQuotesBySymbols(symbols), nameMap);
+    }
+
+    private List<LiveQuoteResponse> getLiveQuotesForCandidateEntities(List<CandidateStockEntity> candidates) {
+        if (candidates == null || candidates.isEmpty()) return List.of();
         List<String> symbols = candidates.stream()
                 .map(CandidateStockEntity::getSymbol)
                 .collect(Collectors.toList());
-
-        List<LiveQuoteResponse> quotes = getLiveQuotesBySymbols(symbols);
-
-        // 用候選股資料補強 stockName
         Map<String, String> nameMap = candidates.stream()
                 .filter(c -> c.getStockName() != null)
                 .collect(Collectors.toMap(CandidateStockEntity::getSymbol,
                         CandidateStockEntity::getStockName, (a, b) -> a));
+        return enrichQuoteNames(getLiveQuotesBySymbols(symbols), nameMap);
+    }
 
+    private List<LiveQuoteResponse> enrichQuoteNames(List<LiveQuoteResponse> quotes, Map<String, String> nameMap) {
         return quotes.stream()
                 .map(q -> nameMap.containsKey(q.symbol())
                         ? new LiveQuoteResponse(q.symbol(), nameMap.get(q.symbol()), q.market(),
@@ -522,8 +536,36 @@ public class CandidateScanService {
     }
 
     /**
+     * UI freshness 專用：永遠回 DB 最新 candidate_stock.tradingDate。
+     * <p>盤後流程可能已寫入下一交易日候選；此方法不採 today-first，避免 UI 卡在今日舊清單。</p>
+     */
+    public List<CandidateResponse> getLatestCandidates(int limit) {
+        return getCandidatesByDate(resolveDbLatestTradingDate(), limit);
+    }
+
+    /** 明確回今日候選；不做 latest fallback。 */
+    public List<CandidateResponse> getTodayCandidates(int limit) {
+        return getCandidatesByDate(LocalDate.now(), limit);
+    }
+
+    /** 明確回今天之後最近一個 candidate tradingDate；若 DB 尚無下一交易日清單則回空。 */
+    public List<CandidateResponse> getNextCandidates(int limit) {
+        return candidateStockRepository
+                .findTopByTradingDateGreaterThanOrderByTradingDateAsc(LocalDate.now())
+                .map(CandidateStockEntity::getTradingDate)
+                .map(date -> getCandidatesByDate(date, limit))
+                .orElse(List.of());
+    }
+
+    /** 最新候選清單即時報價（給 Dashboard/Candidate UI 使用）。 */
+    public List<LiveQuoteResponse> getLatestLiveQuotes() {
+        return getLiveQuotesForCandidates(getLatestCandidates(20));
+    }
+
+    /**
      * 解析「最新有效交易日」。
      * 優先用今天；若今天無資料（週末/假日），回退至 DB 最後一筆的 tradingDate。
+     * <p>此方法保留舊 /current 相容語意；UI 若要最新可用清單請用 {@link #getLatestCandidates(int)}。</p>
      */
     private LocalDate resolveLatestTradingDate() {
         LocalDate today = LocalDate.now();
@@ -531,6 +573,11 @@ public class CandidateScanService {
                 .findByTradingDateOrderByScoreDesc(today, PageRequest.of(0, 1))
                 .isEmpty() == false;
         if (hasToday) return today;
+        return resolveDbLatestTradingDate();
+    }
+
+    private LocalDate resolveDbLatestTradingDate() {
+        LocalDate today = LocalDate.now();
         return candidateStockRepository
                 .findTopByOrderByTradingDateDesc()
                 .map(CandidateStockEntity::getTradingDate)

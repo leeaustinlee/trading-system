@@ -20,8 +20,11 @@ public interface CandidateStockRepository extends JpaRepository<CandidateStockEn
 
     Optional<CandidateStockEntity> findByTradingDateAndSymbol(LocalDate tradingDate, String symbol);
 
-    /** 取得最新一筆（用於推算最後有效交易日） */
+    /** 取得最新一筆（用於推算最後有效交易日 / 最新可用候選日） */
     Optional<CandidateStockEntity> findTopByOrderByTradingDateDesc();
+
+    /** 取得今天之後最接近的一筆（用於明日/下一交易日候選清單） */
+    Optional<CandidateStockEntity> findTopByTradingDateGreaterThanOrderByTradingDateAsc(LocalDate tradingDate);
 
     /** 取得特定標的最新一筆（用於 ThemeExposureService 回查持倉主題） */
     Optional<CandidateStockEntity> findTopBySymbolOrderByTradingDateDesc(String symbol);

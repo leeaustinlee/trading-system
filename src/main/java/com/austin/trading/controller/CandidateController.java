@@ -26,10 +26,14 @@ import java.util.Map;
  * 候選股 API。
  *
  * <ul>
- *   <li>GET  /api/candidates/current           讀取今日候選股</li>
- *   <li>GET  /api/candidates/live-quotes       今日候選股即時報價（打 TWSE MIS）</li>
+ *   <li>GET  /api/candidates/current           舊相容：今天優先，無今天才回 DB 最新</li>
+ *   <li>GET  /api/candidates/latest            UI 用：永遠讀 DB 最新候選日</li>
+ *   <li>GET  /api/candidates/today             明確讀今日候選股</li>
+ *   <li>GET  /api/candidates/next              明確讀下一個已寫入 DB 的候選日</li>
+ *   <li>GET  /api/candidates/live-quotes       舊相容：current 候選股即時報價（打 TWSE MIS）</li>
+ *   <li>GET  /api/candidates/latest/live-quotes 最新候選股即時報價（打 TWSE MIS）</li>
  *   <li>GET  /api/candidates/history           讀取歷史候選股</li>
- *   <li>POST /api/candidates/batch             批次寫入候選股（Codex 用）</li>
+
  * </ul>
  */
 @RestController
@@ -52,6 +56,21 @@ public class CandidateController {
         return candidateScanService.getCurrentCandidates(limit);
     }
 
+    @GetMapping("/latest")
+    public List<CandidateResponse> getLatest(@RequestParam(defaultValue = "20") int limit) {
+        return candidateScanService.getLatestCandidates(limit);
+    }
+
+    @GetMapping("/today")
+    public List<CandidateResponse> getToday(@RequestParam(defaultValue = "20") int limit) {
+        return candidateScanService.getTodayCandidates(limit);
+    }
+
+    @GetMapping("/next")
+    public List<CandidateResponse> getNext(@RequestParam(defaultValue = "20") int limit) {
+        return candidateScanService.getNextCandidates(limit);
+    }
+
     /**
      * 今日候選股即時報價。
      * <p>打 TWSE MIS API 取得最新成交價，盤外時段回傳昨收與開盤等靜態資料。</p>
@@ -59,6 +78,11 @@ public class CandidateController {
     @GetMapping("/live-quotes")
     public List<LiveQuoteResponse> getLiveQuotes() {
         return candidateScanService.getCurrentLiveQuotes();
+    }
+
+    @GetMapping("/latest/live-quotes")
+    public List<LiveQuoteResponse> getLatestLiveQuotes() {
+        return candidateScanService.getLatestLiveQuotes();
     }
 
     @GetMapping("/history")

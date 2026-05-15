@@ -478,6 +478,7 @@ async function safeFetch(url){
 ════════════════════════════════════════════════════════════════ */
 const S = {
   dashboard:null, candidates:[], positions:[], capital:null, quotes:{},
+  candidateMeta:{date:null,label:'最新候選',cls:'watch'},
   pnlDaily:null, pnl20:null, pnl90:null,
   decisionsHistory:null, hourlyHistory:null, monitorHistory:null,
   notifications:null, schedulerJobs:null, scheduledTasks:null,
@@ -486,6 +487,27 @@ const S = {
   lastFetchAt:null,
 };
 S.filter = (localStorage.getItem('mobile.filter') || 'all');
+
+function updateCandidateMeta(items){
+  const date = (items||[]).find(c => c && c.tradingDate)?.tradingDate || null;
+  const today = new Date().toISOString().slice(0,10);
+  let label='最新候選', cls='watch';
+  if (date){
+    if (date > today){ label='明日候選'; cls='wait'; }
+    else if (date === today){ label='今日候選'; cls='buy'; }
+    else { label='歷史候選'; cls='watch'; }
+  }
+  S.candidateMeta = {date,label,cls};
+  return S.candidateMeta;
+}
+function candidateTitle(base){
+  const m = S.candidateMeta || {};
+  return `${base}${m.date ? '（'+m.date+'）' : ''}`;
+}
+function candidateMetaBadge(){
+  const m = S.candidateMeta || {label:'最新候選',cls:'watch'};
+  return `<span class="badge-num" style="margin-left:6px">${m.label}</span>`;
+}
 
 /* ════════════════════════════════════════════════════════════════
    classification helpers
@@ -828,10 +850,11 @@ async function fetchCommon(){
 }
 async function fetchOverview(){
   const [candidates, positions] = await Promise.all([
-    safeFetch('/api/candidates/current'),
+    safeFetch('/api/candidates/latest'),
     safeFetch('/api/positions/open?size=10'),
   ]);
   S.candidates = Array.isArray(candidates) ? candidates : [];
+  updateCandidateMeta(S.candidates);
   S.positions  = Array.isArray(positions) ? positions : [];
   await fetchQuotes();
 }
@@ -847,8 +870,9 @@ async function fetchQuotes(){
   if (Array.isArray(quotes)) for (const q of quotes) if (q?.symbol) S.quotes[q.symbol] = q;
 }
 async function fetchCandidatesTab(){
-  const cands = await safeFetch('/api/candidates/current');
+  const cands = await safeFetch('/api/candidates/latest');
   S.candidates = Array.isArray(cands) ? cands : [];
+  updateCandidateMeta(S.candidates);
   await fetchQuotes();
 }
 async function fetchPositionsTab(){
@@ -934,7 +958,7 @@ Views.overview = async () => {
   const showPositions = S.filter === 'all' || S.filter === 'position';
   if (showActions){
     const actSec = el('section',{class:'section'});
-    actSec.append(el('div',{class:'section-title',html:`行動清單 <span class="count">${S.candidates?.length||0}</span>`}));
+    actSec.append(el('div',{class:'section-title',html:`${candidateTitle('行動清單')} ${candidateMetaBadge()} <span class="count">${S.candidates?.length||0}</span>`}));
     if (!S.candidates?.length){
       actSec.append(el('div',{class:'empty',text:'目前無候選股'}));
     } else {
@@ -999,7 +1023,7 @@ Views.candidates = async () => {
   app.append(filterRow);
 
   const wrap = el('section',{class:'section'});
-  wrap.append(el('div',{class:'section-title',html:`候選股 <span class="count">${S.candidates.length}</span>`}));
+  wrap.append(el('div',{class:'section-title',html:`${candidateTitle('候選股')} ${candidateMetaBadge()} <span class="count">${S.candidates.length}</span>`}));
   const list = el('div');
   if (!S.candidates.length) list.append(el('div',{class:'empty',text:'目前無候選股'}));
   else S.candidates.forEach(c => {

@@ -935,8 +935,8 @@
       <section class="terminal-panel panel-main">
         <div class="terminal-head">
           <div>
-            <div class="terminal-title">今日可操作標的</div>
-            <div class="terminal-sub">進場 / 等回測 / 觀察 清單</div>
+            <div class="terminal-title" id="d-actionTitle">最新可操作標的</div>
+            <div class="terminal-sub" id="d-actionSub">最新候選日 / 進場 / 等回測 / 觀察 清單</div>
           </div>
           <span class="live-status">
             <span class="live-dot" id="d-liveDot"></span>
@@ -961,7 +961,7 @@
       </section>
 
       <section class="terminal-panel">
-        <div class="terminal-title">觀察清單</div>
+        <div class="terminal-title" id="d-watchlistTitle">觀察清單</div>
         <div id="d-watchlist" class="watchlist-cards"></div>
       </section>
 
@@ -1027,7 +1027,8 @@
       </section>
 
       <section class="card span-12">
-        <h2>目前候選股（研究資料）
+        <h2><span id="c-currentTitle">最新候選股（研究資料）</span>
+          <span id="c-currentBadge" class="pill session-badge" style="margin-left:8px">--</span>
           <button class="btn primary" id="c-btnAdd" style="margin-left:auto;padding:5px 14px;font-size:13px">＋ 手動新增</button>
         </h2>
         <table>
@@ -2635,7 +2636,7 @@ function clearErr(boxId) {
         api("/api/pnl/summary?days=20"),
         api("/api/positions/open?size=10"),
         api("/api/notifications?limit=5"),
-        api("/api/candidates/current").catch(() => [])
+        api("/api/candidates/latest").catch(() => [])
       ]);
 
       renderTerminalHero(dash);
@@ -2684,6 +2685,7 @@ function clearErr(boxId) {
       _candidateScoreCache = {};
       const sortedCandidates = sortCandidatesByScore(candidates || []);
       _dashboardCandidates = sortedCandidates;
+      updateCandidateDateLabels(sortedCandidates);
       sortedCandidates.forEach(c => {
         _candidateScoreCache[c.symbol] = {
           sortScore: resolveCandidateSortScore(c),
@@ -2793,6 +2795,32 @@ function clearErr(boxId) {
     });
   }
 
+  function candidateDateMeta(items) {
+    const date = (items || []).find(c => c && c.tradingDate)?.tradingDate || null;
+    const today = new Date().toISOString().slice(0, 10);
+    let label = "最新候選";
+    let cls = "muted";
+    if (date) {
+      if (date > today) { label = "明日候選"; cls = "warn"; }
+      else if (date === today) { label = "今日候選"; cls = "ok"; }
+      else { label = "歷史候選"; cls = "muted"; }
+    }
+    return { date, label, cls };
+  }
+
+  function updateCandidateDateLabels(items) {
+    const meta = candidateDateMeta(items);
+    const suffix = meta.date ? `（${meta.date}）` : "";
+    if ($("d-actionTitle")) $("d-actionTitle").textContent = `最新可操作標的${suffix}`;
+    if ($("d-actionSub")) $("d-actionSub").textContent = `${meta.label} / 進場 / 等回測 / 觀察 清單`;
+    if ($("d-watchlistTitle")) $("d-watchlistTitle").textContent = `觀察清單${suffix}`;
+    if ($("c-currentTitle")) $("c-currentTitle").textContent = `最新候選股${suffix}（研究資料）`;
+    if ($("c-currentBadge")) {
+      $("c-currentBadge").className = `pill ${meta.cls}`;
+      $("c-currentBadge").textContent = meta.label;
+    }
+  }
+
   function renderDashboardScoreCell(symbol) {
     const cand = _candidateScoreCache[symbol];
     if (!cand || cand.displayScore == null) {
@@ -2804,7 +2832,8 @@ function clearErr(boxId) {
   async function loadCandidates() {
     clearErr("errBoxCand");
     try {
-      const data = sortCandidatesByScore(await api("/api/candidates/current"));
+      const data = sortCandidatesByScore(await api("/api/candidates/latest"));
+      updateCandidateDateLabels(data || []);
       _candidateCache = {};
       (data || []).forEach(c => {
         _candidateCache[c.symbol] = c;
@@ -4561,7 +4590,7 @@ window.finalizeCatchup = async function(taskId) {
 
   async function fetchLiveQuotes() {
     try {
-      const data = await api("/api/candidates/live-quotes");
+      const data = await api("/api/candidates/latest/live-quotes");
       if (!data || !data.length) {
         setLiveStatus("d-liveDot","d-liveStatus","無候選股","");
         setLiveStatus("c-liveDot","c-liveStatus","無候選股","");
@@ -5036,7 +5065,7 @@ window.finalizeCatchup = async function(taskId) {
       const [configs, themes] = await Promise.all([
         api("/api/config/score"),
         api("/api/market/current").then(() => {
-          return api("/api/candidates/current?limit=1").then(() =>
+          return api("/api/candidates/latest?limit=1").then(() =>
             api("/api/decisions/current").then(() => [])
           ).catch(() => []);
         }).catch(() => [])
