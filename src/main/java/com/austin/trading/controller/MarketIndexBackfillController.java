@@ -20,7 +20,10 @@ public class MarketIndexBackfillController {
 
     @PostMapping("/backfill-symbols")
     public Map<String, Object> backfillSymbols(@RequestParam(defaultValue = "90") int days,
-                                               @RequestParam(required = false) String symbols) {
-        return symbolBackfillService.backfillSymbols(days, symbols);
+                                               @RequestParam(required = false) String symbols,
+                                               @RequestParam(defaultValue = "true") boolean includePaperTrades,
+                                               @RequestParam(defaultValue = "true") boolean includeCandidates,
+                                               @RequestParam(defaultValue = "50") int maxSymbols) {
+        return symbolBackfillService.backfillSymbols(days, symbols, includePaperTrades, includeCandidates, maxSymbols);
     }
 }

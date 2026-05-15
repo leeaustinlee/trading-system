@@ -45,6 +45,7 @@ public class BacktestService {
     private final PaperTradeRepository paperTradeRepository;
     private final CandidateForwardTrackingRepository candidateForwardTrackingRepository;
     private final CandidateStockRepository candidateStockRepository;
+    private final RrShadowValidationService rrShadowValidationService;
 
     @Autowired
     public BacktestService(BacktestRunRepository runRepository,
@@ -55,7 +56,8 @@ public class BacktestService {
                             ObjectMapper objectMapper,
                             PaperTradeRepository paperTradeRepository,
                             CandidateForwardTrackingRepository candidateForwardTrackingRepository,
-                            CandidateStockRepository candidateStockRepository) {
+                            CandidateStockRepository candidateStockRepository,
+                            RrShadowValidationService rrShadowValidationService) {
         this.runRepository = runRepository;
         this.tradeRepository = tradeRepository;
         this.positionRepository = positionRepository;
@@ -65,6 +67,20 @@ public class BacktestService {
         this.paperTradeRepository = paperTradeRepository;
         this.candidateForwardTrackingRepository = candidateForwardTrackingRepository;
         this.candidateStockRepository = candidateStockRepository;
+        this.rrShadowValidationService = rrShadowValidationService;
+    }
+
+    public BacktestService(BacktestRunRepository runRepository,
+                            BacktestTradeRepository tradeRepository,
+                            PositionRepository positionRepository,
+                            BacktestMetricsEngine metricsEngine,
+                            ScoreConfigService configService,
+                            ObjectMapper objectMapper,
+                            PaperTradeRepository paperTradeRepository,
+                            CandidateForwardTrackingRepository candidateForwardTrackingRepository,
+                            CandidateStockRepository candidateStockRepository) {
+        this(runRepository, tradeRepository, positionRepository, metricsEngine, configService, objectMapper,
+                paperTradeRepository, candidateForwardTrackingRepository, candidateStockRepository, null);
     }
 
     public BacktestService(BacktestRunRepository runRepository,
@@ -76,7 +92,7 @@ public class BacktestService {
                            PaperTradeRepository paperTradeRepository,
                            CandidateForwardTrackingRepository candidateForwardTrackingRepository) {
         this(runRepository, tradeRepository, positionRepository, metricsEngine, configService, objectMapper,
-                paperTradeRepository, candidateForwardTrackingRepository, null);
+                paperTradeRepository, candidateForwardTrackingRepository, null, null);
     }
 
     @Transactional
@@ -198,7 +214,47 @@ public class BacktestService {
                 "scoreReturnCorrelation", correlation(candidates),
                 "dataGaps", aiDataGaps(candidates)
         ));
-        out.put("rootCauseRanking", rootCauseRanking(trades, candidates, candidateStocks));
+        List<Map<String, Object>> rootCauseRanking = new ArrayList<>(rootCauseRanking(trades, candidates, candidateStocks));
+        Object rrShadowStatus = rrShadowValidationStatus(window);
+        out.put("rrShadowValidationStatus", rrShadowStatus);
+        if (rrShadowStatus instanceof Map<?, ?> status) {
+            Object pct = status.get("wouldBlockPct");
+            if (pct instanceof BigDecimal) {
+                Map<String, Object> item = new java.util.LinkedHashMap<>();
+                item.put("name", "rrShadowValidationStatus");
+                item.put("count", status.get("wouldBlockCount"));
+                item.put("total", status.get("totalRows"));
+                item.put("pct", pct);
+                item.put("evidenceSample", status.get("sampleSymbols"));
+                item.put("interpretation", "Shadow-only persisted RR validation coverage; DATA_GAP remains separate from AI/gate failure.");
+                rootCauseRanking.add(item);
+            }
+        }
+        out.put("rootCauseRanking", rootCauseRanking.stream()
+                .sorted((a, b) -> pctValue(b).compareTo(pctValue(a)))
+                .toList());
+        return out;
+    }
+
+    private BigDecimal pctValue(Map<String, Object> item) {
+        Object value = item.get("pct");
+        return value instanceof BigDecimal decimal ? decimal : BigDecimal.ZERO;
+    }
+
+    private Object rrShadowValidationStatus(int days) {
+        if (rrShadowValidationService == null || !rrShadowValidationService.hasRows(days)) {
+            return Map.of("status", "DATA_GAP", "reason", "rr_shadow_validation has no rows for requested window");
+        }
+        RrShadowValidationService.Summary summary = rrShadowValidationService.summary(days);
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("status", "OK");
+        out.put("totalRows", summary.totalRows());
+        out.put("wouldBlockCount", summary.wouldBlockCount());
+        out.put("wouldBlockPct", summary.wouldBlockPct());
+        out.put("blockedReturnCoveragePct", summary.blockedReturnCoveragePct());
+        out.put("dataGapRows", summary.dataGapRows());
+        out.put("dataGaps", summary.dataGaps());
+        out.put("sampleSymbols", summary.sampleSymbols());
         return out;
     }
 

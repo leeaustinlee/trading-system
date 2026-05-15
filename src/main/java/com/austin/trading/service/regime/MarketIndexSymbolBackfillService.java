@@ -50,12 +50,22 @@ public class MarketIndexSymbolBackfillService {
 
     @Transactional
     public Map<String, Object> backfillSymbols(int days, String symbols) {
+        return backfillSymbols(days, symbols, true, true, DEFAULT_SYMBOL_LIMIT);
+    }
+
+    @Transactional
+    public Map<String, Object> backfillSymbols(int days,
+                                               String symbols,
+                                               boolean includePaperTrades,
+                                               boolean includeCandidates,
+                                               int maxSymbols) {
         int window = days > 0 ? days : 90;
         LocalDate to = LocalDate.now();
         LocalDate from = to.minusDays(window);
         List<String> requestedSymbols = parseSymbols(symbols);
+        int limit = maxSymbols > 0 ? maxSymbols : DEFAULT_SYMBOL_LIMIT;
         List<String> resolvedSymbols = requestedSymbols.isEmpty()
-                ? resolveRecentSymbols(from, to, DEFAULT_SYMBOL_LIMIT)
+                ? resolveRecentSymbols(from, to, includePaperTrades, includeCandidates, limit)
                 : requestedSymbols;
 
         LinkedHashSet<String> fetchSymbols = new LinkedHashSet<>();
@@ -68,33 +78,77 @@ public class MarketIndexSymbolBackfillService {
         int upserted = 0;
         List<String> skippedSymbols = new ArrayList<>();
         List<Map<String, Object>> dataGaps = new ArrayList<>();
+        List<Map<String, Object>> symbolStats = new ArrayList<>();
+        boolean benchmarkDataGap = false;
         YearMonth startYm = YearMonth.from(from);
         YearMonth endYm = YearMonth.from(to);
 
         for (String symbol : fetchSymbols) {
             if (symbol == null || symbol.isBlank()) continue;
-            int before = upserted;
+            int symbolUpserted = 0;
+            int symbolResolved = 0;
+            List<String> symbolGaps = new ArrayList<>();
             for (YearMonth ym = startYm; !ym.isAfter(endYm); ym = ym.plusMonths(1)) {
-                List<DailyBar> bars = BENCHMARK_SYMBOL.equals(symbol)
-                        ? twseHistoryClient.fetchTaiexMonth(ym)
-                        : twseHistoryClient.fetchStockMonth(symbol, ym);
+                List<DailyBar> bars;
+                try {
+                    bars = BENCHMARK_SYMBOL.equals(symbol)
+                            ? twseHistoryClient.fetchTaiexMonth(ym)
+                            : twseHistoryClient.fetchStockMonth(symbol, ym);
+                } catch (Exception e) {
+                    bars = List.of();
+                    symbolGaps.add("DATA_GAP: TWSE fetch failed " + ym + " " + e.getMessage());
+                }
                 if (bars == null || bars.isEmpty()) {
-                    addGap(dataGaps, symbol, ym, "DATA_GAP: TWSE returned no daily bars");
+                    String reason = BENCHMARK_SYMBOL.equals(symbol)
+                            ? "BENCHMARK_DATA_GAP: TWSE MI_5MINS_HIST returned no daily bars or HTML"
+                            : "DATA_GAP: TWSE returned no daily bars";
+                    addGap(dataGaps, symbol, ym, reason);
+                    symbolGaps.add(reason + " month=" + ym);
                 } else {
-                    upserted += marketIndexBackfillService.upsertBars(bars, from, to);
+                    symbolResolved += bars.size();
+                    int n = marketIndexBackfillService.upsertBars(bars, from, to);
+                    symbolUpserted += n;
+                    upserted += n;
                 }
                 sleepQuietly(throttle);
             }
-            if (before == upserted) {
+            boolean benchmark = BENCHMARK_SYMBOL.equals(symbol);
+            boolean dataGap = !symbolGaps.isEmpty();
+            if (benchmark && dataGap) {
+                benchmarkDataGap = true;
+            }
+            String skippedReason = null;
+            if (symbolUpserted == 0) {
+                if (symbolResolved > 0) {
+                    skippedReason = "IDEMPOTENT_NO_CHANGES";
+                } else if (benchmark) {
+                    skippedReason = "BENCHMARK_DATA_GAP_ONLY";
+                } else {
+                    skippedReason = "DATA_GAP";
+                }
                 skippedSymbols.add(symbol);
             }
+            Map<String, Object> stat = new LinkedHashMap<>();
+            stat.put("symbol", symbol);
+            stat.put("requested", requestedSymbols.contains(symbol) || benchmark);
+            stat.put("resolved", symbolResolved);
+            stat.put("upsertedRows", symbolUpserted);
+            stat.put("skippedReason", skippedReason);
+            stat.put("dataGap", dataGap);
+            if (!symbolGaps.isEmpty()) stat.put("dataGapReasons", symbolGaps.stream().limit(5).toList());
+            symbolStats.add(stat);
         }
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("requestedSymbols", requestedSymbols);
         out.put("resolvedSymbols", resolvedSymbols);
+        out.put("includePaperTrades", includePaperTrades);
+        out.put("includeCandidates", includeCandidates);
+        out.put("maxSymbols", limit);
         out.put("upsertedRows", upserted);
         out.put("skippedSymbols", skippedSymbols);
+        out.put("symbolStats", symbolStats);
+        out.put("benchmarkDataGap", benchmarkDataGap);
         out.put("dataGaps", dataGaps);
         out.put("from", from);
         out.put("to", to);
@@ -111,16 +165,21 @@ public class MarketIndexSymbolBackfillService {
         return new ArrayList<>(out);
     }
 
-    private List<String> resolveRecentSymbols(LocalDate from, LocalDate to, int limit) {
+    private List<String> resolveRecentSymbols(LocalDate from,
+                                              LocalDate to,
+                                              boolean includePaperTrades,
+                                              boolean includeCandidates,
+                                              int limit) {
         LinkedHashSet<String> symbols = new LinkedHashSet<>();
-        for (PaperTradeEntity trade : paperTradeRepository.findByEntryDateBetweenOrderByEntryDateAscIdAsc(from, to)) {
-            addSymbol(symbols, trade.getSymbol(), limit);
+        if (includePaperTrades) {
+            for (PaperTradeEntity trade : paperTradeRepository.findByEntryDateBetweenOrderByEntryDateAscIdAsc(from, to)) {
+                addSymbol(symbols, trade.getSymbol(), limit);
+            }
         }
-        for (CandidateForwardTrackingEntity row : forwardTrackingRepository.findByTradingDateBetween(from, to)) {
-            addSymbol(symbols, row.getStockId(), limit);
-        }
-        for (CandidateStockEntity row : candidateStockRepository.findByTradingDateBetweenOrderByTradingDateAscSymbolAsc(from, to)) {
-            addSymbol(symbols, row.getSymbol(), limit);
+        if (includeCandidates) {
+            for (CandidateForwardTrackingEntity row : forwardTrackingRepository.findByTradingDateBetween(from, to)) {
+                addSymbol(symbols, row.getStockId(), limit);
+            }
         }
         return new ArrayList<>(symbols);
     }

@@ -99,6 +99,52 @@ class RrRootCauseDiagnosisServiceTest {
         assertThat(result.shadowImpact().dataGaps().toString()).contains("DATA_GAP").contains("INSUFFICIENT_SAMPLE");
     }
 
+    @Test
+    void diagnosisUsesPersistedValidationSummaryWhenAvailable() {
+        RrShadowValidationService validationService = mock(RrShadowValidationService.class);
+        when(validationService.hasRows(60)).thenReturn(true);
+        when(validationService.summary(60)).thenReturn(new RrShadowValidationService.Summary(
+                60,
+                LocalDate.now().minusDays(60),
+                LocalDate.now(),
+                10,
+                6,
+                2,
+                6,
+                new BigDecimal("60.00"),
+                new BigDecimal("-0.5000"),
+                null,
+                new BigDecimal("1.2000"),
+                null,
+                java.util.Map.of("T1", 0, "T3", 6, "T5", 0, "T10", 6),
+                2,
+                1,
+                java.util.Map.of("STOP_TOO_WIDE", 4L),
+                List.of("2330"),
+                new BigDecimal("100.00")
+        ));
+        service = new RrRootCauseDiagnosisService(
+                paperTradeRepository,
+                forwardTrackingRepository,
+                candidateStockRepository,
+                new RiskRewardShadowGateService(),
+                validationService,
+                new ObjectMapper()
+        );
+        when(paperTradeRepository.findByEntryDateBetweenOrderByEntryDateAscIdAsc(any(), any()))
+                .thenReturn(List.of(trade("2330", "100", "95", "102", null, null)));
+        when(forwardTrackingRepository.findByTradingDateBetween(any(), any())).thenReturn(List.of());
+        when(candidateStockRepository.findByTradingDateBetweenOrderByTradingDateDescScoreDesc(any(), any()))
+                .thenReturn(List.of());
+
+        var result = service.diagnose(60);
+
+        assertThat(result.shadowImpact().status()).isEqualTo("RR_SHADOW_VALIDATION_SUMMARY");
+        assertThat(result.shadowImpact().wouldBlockCount()).isEqualTo(6);
+        assertThat(result.shadowImpact().blockedAvgForwardReturnT1()).isEqualByComparingTo("-0.5000");
+        assertThat(result.shadowImpact().dataGaps().toString()).contains("T3").contains("T10");
+    }
+
     private PaperTradeEntity trade(String symbol,
                                    String entry,
                                    String stop,

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * P0.5 — TWSE TAIEX + 半導體代理（預設 2330）歷史回補與每日 upsert 服務。
@@ -169,6 +170,14 @@ public class MarketIndexBackfillService {
                 MarketIndexDailyEntity e = repository
                         .findBySymbolAndTradingDate(bar.symbol(), bar.tradingDate())
                         .orElseGet(MarketIndexDailyEntity::new);
+                boolean isNew = e.getId() == null;
+                boolean changed = isNew
+                        || !Objects.equals(e.getOpenPrice(), bar.open())
+                        || !Objects.equals(e.getHighPrice(), bar.high())
+                        || !Objects.equals(e.getLowPrice(), bar.low())
+                        || !Objects.equals(e.getClosePrice(), bar.close())
+                        || !Objects.equals(e.getVolume(), bar.volume());
+                if (!changed) continue;
                 e.setSymbol(bar.symbol());
                 e.setTradingDate(bar.tradingDate());
                 e.setOpenPrice(bar.open());

@@ -12,6 +12,7 @@ import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.PaperTradeRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,18 +38,31 @@ public class RrRootCauseDiagnosisService {
     private final CandidateForwardTrackingRepository forwardTrackingRepository;
     private final CandidateStockRepository candidateStockRepository;
     private final RiskRewardShadowGateService shadowGateService;
+    private final RrShadowValidationService rrShadowValidationService;
     private final ObjectMapper objectMapper;
+
+    @Autowired
+    public RrRootCauseDiagnosisService(PaperTradeRepository paperTradeRepository,
+                                       CandidateForwardTrackingRepository forwardTrackingRepository,
+                                       CandidateStockRepository candidateStockRepository,
+                                       RiskRewardShadowGateService shadowGateService,
+                                       RrShadowValidationService rrShadowValidationService,
+                                       ObjectMapper objectMapper) {
+        this.paperTradeRepository = paperTradeRepository;
+        this.forwardTrackingRepository = forwardTrackingRepository;
+        this.candidateStockRepository = candidateStockRepository;
+        this.shadowGateService = shadowGateService;
+        this.rrShadowValidationService = rrShadowValidationService;
+        this.objectMapper = objectMapper;
+    }
 
     public RrRootCauseDiagnosisService(PaperTradeRepository paperTradeRepository,
                                        CandidateForwardTrackingRepository forwardTrackingRepository,
                                        CandidateStockRepository candidateStockRepository,
                                        RiskRewardShadowGateService shadowGateService,
                                        ObjectMapper objectMapper) {
-        this.paperTradeRepository = paperTradeRepository;
-        this.forwardTrackingRepository = forwardTrackingRepository;
-        this.candidateStockRepository = candidateStockRepository;
-        this.shadowGateService = shadowGateService;
-        this.objectMapper = objectMapper;
+        this(paperTradeRepository, forwardTrackingRepository, candidateStockRepository,
+                shadowGateService, null, objectMapper);
     }
 
     @Transactional(readOnly = true)
@@ -107,7 +121,7 @@ public class RrRootCauseDiagnosisService {
                 avg(analyzed.stream().map(AnalyzedTrade::target1GainPct).toList(), 4),
                 avg(analyzed.stream().map(AnalyzedTrade::target2GainPct).toList(), 4),
                 toBucketResponses(buckets, trades.size()),
-                shadowImpact(analyzed),
+                shadowImpact(window, analyzed),
                 dataGaps
         );
     }
@@ -215,7 +229,33 @@ public class RrRootCauseDiagnosisService {
         return responses;
     }
 
-    private ShadowImpact shadowImpact(List<AnalyzedTrade> analyzed) {
+    private ShadowImpact shadowImpact(int days, List<AnalyzedTrade> analyzed) {
+        if (rrShadowValidationService != null && rrShadowValidationService.hasRows(days)) {
+            RrShadowValidationService.Summary summary = rrShadowValidationService.summary(days);
+            List<String> gaps = new ArrayList<>();
+            summary.dataGaps().forEach((horizon, count) -> {
+                if (count != null && count > 0) {
+                    gaps.add("DATA_GAP: rr_shadow_validation blocked rows missing " + horizon
+                            + " forward return rows=" + count);
+                }
+            });
+            if (summary.totalRows() == 0) {
+                gaps.add("DATA_GAP: rr_shadow_validation empty for requested window");
+            }
+            return new ShadowImpact(
+                    summary.wouldBlockCount(),
+                    summary.wouldBlockPct(),
+                    summary.blockedAvgReturnT1(),
+                    summary.blockedAvgReturnT3(),
+                    summary.blockedAvgReturnT5(),
+                    summary.blockedAvgReturnT10(),
+                    null,
+                    summary.missedWinnerCount(),
+                    summary.avoidedLoserCount(),
+                    "RR_SHADOW_VALIDATION_SUMMARY",
+                    gaps
+            );
+        }
         List<AnalyzedTrade> blocked = analyzed.stream()
                 .filter(a -> RiskRewardShadowGateService.FAIL.equals(a.shadowResult().shadowStatus()))
                 .toList();

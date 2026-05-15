@@ -5,6 +5,8 @@ import com.austin.trading.entity.BacktestTradeEntity;
 import com.austin.trading.dto.response.RrRootCauseDiagnosisResponse;
 import com.austin.trading.service.BacktestService;
 import com.austin.trading.service.RrRootCauseDiagnosisService;
+import com.austin.trading.service.RrShadowValidationService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,11 +21,20 @@ public class BacktestController {
 
     private final BacktestService backtestService;
     private final RrRootCauseDiagnosisService rrRootCauseDiagnosisService;
+    private final RrShadowValidationService rrShadowValidationService;
+
+    @Autowired
+    public BacktestController(BacktestService backtestService,
+                              RrRootCauseDiagnosisService rrRootCauseDiagnosisService,
+                              RrShadowValidationService rrShadowValidationService) {
+        this.backtestService = backtestService;
+        this.rrRootCauseDiagnosisService = rrRootCauseDiagnosisService;
+        this.rrShadowValidationService = rrShadowValidationService;
+    }
 
     public BacktestController(BacktestService backtestService,
                               RrRootCauseDiagnosisService rrRootCauseDiagnosisService) {
-        this.backtestService = backtestService;
-        this.rrRootCauseDiagnosisService = rrRootCauseDiagnosisService;
+        this(backtestService, rrRootCauseDiagnosisService, null);
     }
 
     @PostMapping("/run")
@@ -59,5 +70,21 @@ public class BacktestController {
     @GetMapping("/diagnosis/rr-root-cause")
     public RrRootCauseDiagnosisResponse rrRootCauseDiagnosis(@RequestParam(defaultValue = "60") int days) {
         return rrRootCauseDiagnosisService.diagnose(days);
+    }
+
+    @PostMapping("/diagnosis/rr-shadow-validation/backfill")
+    public Map<String, Object> rrShadowValidationBackfill(@RequestParam(defaultValue = "60") int days) {
+        if (rrShadowValidationService == null) {
+            throw new IllegalStateException("RR shadow validation service is not available");
+        }
+        return rrShadowValidationService.backfill(days);
+    }
+
+    @GetMapping("/diagnosis/rr-shadow-validation/summary")
+    public RrShadowValidationService.Summary rrShadowValidationSummary(@RequestParam(defaultValue = "60") int days) {
+        if (rrShadowValidationService == null) {
+            throw new IllegalStateException("RR shadow validation service is not available");
+        }
+        return rrShadowValidationService.summary(days);
     }
 }

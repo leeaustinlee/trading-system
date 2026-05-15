@@ -2,12 +2,16 @@ package com.austin.trading.service.regime;
 
 import com.austin.trading.client.TwseHistoryClient;
 import com.austin.trading.client.TwseHistoryClient.DailyBar;
+import com.austin.trading.entity.CandidateForwardTrackingEntity;
+import com.austin.trading.entity.MarketIndexDailyEntity;
+import com.austin.trading.entity.PaperTradeEntity;
 import com.austin.trading.repository.CandidateForwardTrackingRepository;
 import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.MarketIndexDailyRepository;
 import com.austin.trading.repository.PaperTradeRepository;
 import com.austin.trading.service.ScoreConfigService;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -50,7 +54,91 @@ class MarketIndexSymbolBackfillServiceTest {
         verify(client, atLeastOnce()).fetchStockMonth(eq("2330"), any(YearMonth.class));
     }
 
+    @Test
+    void autoCollectsPaperTradeAndCandidateForwardSymbolsWithLimit() {
+        TwseHistoryClient client = mock(TwseHistoryClient.class);
+        MarketIndexBackfillService base = mock(MarketIndexBackfillService.class);
+        PaperTradeRepository paperRepo = mock(PaperTradeRepository.class);
+        CandidateForwardTrackingRepository forwardRepo = mock(CandidateForwardTrackingRepository.class);
+        CandidateStockRepository candidateRepo = mock(CandidateStockRepository.class);
+        ScoreConfigService cfg = mock(ScoreConfigService.class);
+        when(cfg.getInt(eq(MarketIndexBackfillService.CFG_THROTTLE_MS), anyInt())).thenReturn(0);
+        when(paperRepo.findByEntryDateBetweenOrderByEntryDateAscIdAsc(any(), any()))
+                .thenReturn(List.of(paper("2330")));
+        when(forwardRepo.findByTradingDateBetween(any(), any()))
+                .thenReturn(List.of(forward("2303"), forward("2454")));
+        when(client.fetchTaiexMonth(any(YearMonth.class))).thenReturn(List.of(bar("t00", LocalDate.now().minusDays(3))));
+        when(client.fetchStockMonth(anyString(), any(YearMonth.class))).thenAnswer(inv ->
+                List.of(bar(inv.getArgument(0), LocalDate.now().minusDays(3))));
+        when(base.upsertBars(anyList(), any(), any())).thenReturn(1);
+
+        MarketIndexSymbolBackfillService service = new MarketIndexSymbolBackfillService(
+                client, base, paperRepo, forwardRepo, candidateRepo, cfg);
+
+        var result = service.backfillSymbols(30, null, true, true, 2);
+
+        assertThat(result.get("resolvedSymbols")).asList().containsExactly("2330", "2303");
+        assertThat(result.get("symbolStats").toString()).contains("2330").contains("2303");
+    }
+
+    @Test
+    void benchmarkDataGapDoesNotFailStockBackfill() {
+        TwseHistoryClient client = mock(TwseHistoryClient.class);
+        MarketIndexBackfillService base = mock(MarketIndexBackfillService.class);
+        PaperTradeRepository paperRepo = mock(PaperTradeRepository.class);
+        CandidateForwardTrackingRepository forwardRepo = mock(CandidateForwardTrackingRepository.class);
+        CandidateStockRepository candidateRepo = mock(CandidateStockRepository.class);
+        ScoreConfigService cfg = mock(ScoreConfigService.class);
+        when(cfg.getInt(eq(MarketIndexBackfillService.CFG_THROTTLE_MS), anyInt())).thenReturn(0);
+        when(client.fetchTaiexMonth(any(YearMonth.class))).thenReturn(List.of());
+        when(client.fetchStockMonth(eq("2330"), any(YearMonth.class))).thenAnswer(inv ->
+                List.of(bar("2330", LocalDate.now().minusDays(3))));
+        when(base.upsertBars(anyList(), any(), any())).thenReturn(1);
+
+        MarketIndexSymbolBackfillService service = new MarketIndexSymbolBackfillService(
+                client, base, paperRepo, forwardRepo, candidateRepo, cfg);
+
+        var result = service.backfillSymbols(30, "2330", true, true, 50);
+
+        assertThat(result.get("benchmarkDataGap")).isEqualTo(true);
+        assertThat((Integer) result.get("upsertedRows")).isGreaterThan(0);
+        assertThat(result.get("dataGaps").toString()).contains("BENCHMARK_DATA_GAP");
+    }
+
+    @Test
+    void upsertBarsSkipsUnchangedExistingDailyRows() {
+        TwseHistoryClient client = mock(TwseHistoryClient.class);
+        MarketIndexDailyRepository marketRepo = mock(MarketIndexDailyRepository.class);
+        ScoreConfigService cfg = mock(ScoreConfigService.class);
+        LocalDate date = LocalDate.now().minusDays(3);
+        MarketIndexDailyEntity existing = new MarketIndexDailyEntity(
+                "2330", date, BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, 100L);
+        ReflectionTestUtils.setField(existing, "id", 1L);
+        when(marketRepo.findBySymbolAndTradingDate("2330", date)).thenReturn(Optional.of(existing));
+
+        MarketIndexBackfillService base = new MarketIndexBackfillService(client, marketRepo, cfg);
+
+        int upserted = base.upsertBars(List.of(bar("2330", date)), date.minusDays(1), date.plusDays(1));
+
+        assertThat(upserted).isZero();
+        verify(marketRepo, never()).save(any());
+    }
+
     private DailyBar bar(String symbol, LocalDate date) {
         return new DailyBar(symbol, date, BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, 100L);
+    }
+
+    private PaperTradeEntity paper(String symbol) {
+        PaperTradeEntity entity = new PaperTradeEntity();
+        entity.setEntryDate(LocalDate.now().minusDays(5));
+        entity.setSymbol(symbol);
+        return entity;
+    }
+
+    private CandidateForwardTrackingEntity forward(String symbol) {
+        CandidateForwardTrackingEntity entity = new CandidateForwardTrackingEntity();
+        entity.setTradingDate(LocalDate.now().minusDays(5));
+        entity.setStockId(symbol);
+        return entity;
     }
 }
