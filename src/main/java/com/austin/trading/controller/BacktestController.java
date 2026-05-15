@@ -90,6 +90,14 @@ public class BacktestController {
         return rrShadowValidationService.backfill(days);
     }
 
+    @PostMapping("/diagnosis/rr-shadow-validation/backfill-expanded")
+    public Map<String, Object> rrShadowValidationBackfillExpanded(@RequestParam(defaultValue = "180") int days) {
+        if (rrShadowValidationService == null) {
+            throw new IllegalStateException("RR shadow validation service is not available");
+        }
+        return rrShadowValidationService.backfillExpanded(days);
+    }
+
     @GetMapping("/diagnosis/rr-shadow-validation/summary")
     public RrShadowValidationService.Summary rrShadowValidationSummary(@RequestParam(defaultValue = "60") int days) {
         if (rrShadowValidationService == null) {

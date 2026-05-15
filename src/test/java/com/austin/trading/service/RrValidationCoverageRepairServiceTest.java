@@ -39,7 +39,7 @@ class RrValidationCoverageRepairServiceTest {
                 eq(false), eq(false), eq(1)))
                 .thenReturn(Map.of("upsertedRows", 3));
         when(forwardBackfill.backfillReturns(60)).thenReturn(Map.of("updatedRows", 2));
-        when(rrService.backfill(60)).thenReturn(Map.of("upsertedRows", 1));
+        when(rrService.backfillExpanded(60)).thenReturn(Map.of("upsertedRows", 1));
 
         RrValidationCoverageRepairService service = new RrValidationCoverageRepairService(
                 validationRepo, marketBackfill, forwardBackfill, rrService);
@@ -61,7 +61,7 @@ class RrValidationCoverageRepairServiceTest {
         inOrder.verify(marketBackfill).backfillSymbols(any(LocalDate.class), any(LocalDate.class), eq("2330"),
                 eq(false), eq(false), eq(1));
         inOrder.verify(forwardBackfill).backfillReturns(60);
-        inOrder.verify(rrService).backfill(60);
+        inOrder.verify(rrService).backfillExpanded(60);
         inOrder.verify(rrService).summary(60);
     }
 
@@ -76,10 +76,15 @@ class RrValidationCoverageRepairServiceTest {
                 60, date.minusDays(48), LocalDate.now(),
                 1, 1, missingSymbols.isEmpty() ? 0 : 1, 1, new BigDecimal("100.00"),
                 null, null, null, null,
-                dataGaps, 0, 0, Map.of("STOP_TOO_WIDE", 1L), List.of("2330"),
+                dataGaps, 0, 0, Map.of("STOP_TOO_WIDE", 1L), Map.of("STOP_TOO_WIDE", 1L), List.of("2330"),
                 new BigDecimal(coverage),
                 new RrShadowValidationService.CoverageGapDetails(
-                        missingSymbols, List.of(), Map.of(), date, date)
+                        missingSymbols, List.of(), Map.of(), date, date),
+                Map.of(), Map.of(), Map.of(), Map.of(),
+                new RrShadowValidationService.PromotionReadiness(
+                        "INSUFFICIENT_SAMPLE", List.of("INSUFFICIENT_SAMPLE"), 50,
+                        new BigDecimal("80.00"), new BigDecimal("20.00"), BigDecimal.ZERO),
+                "INSUFFICIENT_SAMPLE"
         );
     }
 }

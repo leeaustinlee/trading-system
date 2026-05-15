@@ -62,7 +62,7 @@ public class RrValidationCoverageRepairService {
                 Math.max(symbols.size(), 1)
         );
         Map<String, Object> forwardBackfill = candidateForwardReturnBackfillService.backfillReturns(window);
-        Map<String, Object> rrBackfill = rrShadowValidationService.backfill(window);
+        Map<String, Object> rrBackfill = rrShadowValidationService.backfillExpanded(window);
         RrShadowValidationService.Summary after = rrShadowValidationService.summary(window);
 
         Map<String, Object> upsertedRows = new LinkedHashMap<>();

@@ -9,6 +9,7 @@ import java.util.Optional;
 
 public interface RrShadowValidationRepository extends JpaRepository<RrShadowValidationEntity, Long> {
     Optional<RrShadowValidationEntity> findByPaperTradeId(Long paperTradeId);
+    Optional<RrShadowValidationEntity> findBySourceForwardTrackingId(Long sourceForwardTrackingId);
     List<RrShadowValidationEntity> findByTradingDateBetweenOrderByTradingDateAscIdAsc(LocalDate start, LocalDate end);
     long countByTradingDateBetween(LocalDate start, LocalDate end);
 }

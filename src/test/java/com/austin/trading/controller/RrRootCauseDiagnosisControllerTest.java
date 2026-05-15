@@ -65,16 +65,41 @@ class RrRootCauseDiagnosisControllerTest {
         verify(repairService).repairCoverage(60);
     }
 
+    @Test
+    void rrShadowValidationBackfillExpandedDelegatesToShadowService() {
+        RrRootCauseDiagnosisService diagnosisService = mock(RrRootCauseDiagnosisService.class);
+        RrShadowValidationService validationService = mock(RrShadowValidationService.class);
+        Map<String, Object> response = Map.of(
+                "paperRowsProcessed", 1,
+                "forwardRowsProcessed", 2,
+                "forwardRowsSkippedMissingPrice", 0,
+                "upsertedRows", 3,
+                "sourceTypes", List.of("PAPER_TRADE", "FORWARD_CANDIDATE")
+        );
+        when(validationService.backfillExpanded(180)).thenReturn(response);
+
+        BacktestController controller = new BacktestController(
+                mock(BacktestService.class), diagnosisService, validationService, null);
+
+        assertThat(controller.rrShadowValidationBackfillExpanded(180)).isSameAs(response);
+        verify(validationService).backfillExpanded(180);
+    }
+
     private RrShadowValidationService.Summary summary(String coverage, LocalDate date) {
         return new RrShadowValidationService.Summary(
                 60, date.minusDays(55), LocalDate.now(),
                 1, 1, 0, 1, new BigDecimal("100.00"),
                 null, null, null, null,
                 Map.of("T1", 0, "T3", 0, "T5", 1, "T10", 1),
-                0, 0, Map.of("STOP_TOO_WIDE", 1L), List.of("2330"),
+                0, 0, Map.of("STOP_TOO_WIDE", 1L), Map.of("STOP_TOO_WIDE", 1L), List.of("2330"),
                 new BigDecimal(coverage),
                 new RrShadowValidationService.CoverageGapDetails(
-                        List.of(), List.of(), Map.of(), date, date)
+                        List.of(), List.of(), Map.of(), date, date),
+                Map.of(), Map.of(), Map.of(), Map.of(),
+                new RrShadowValidationService.PromotionReadiness(
+                        "INSUFFICIENT_SAMPLE", List.of("INSUFFICIENT_SAMPLE"), 50,
+                        new BigDecimal("80.00"), new BigDecimal("20.00"), BigDecimal.ZERO),
+                "INSUFFICIENT_SAMPLE"
         );
     }
 }

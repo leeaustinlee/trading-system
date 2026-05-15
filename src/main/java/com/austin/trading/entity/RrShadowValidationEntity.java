@@ -14,13 +14,21 @@ import java.time.LocalDateTime;
         indexes = {
                 @Index(name = "idx_rr_shadow_validation_date", columnList = "trading_date"),
                 @Index(name = "idx_rr_shadow_validation_status", columnList = "shadow_status"),
-                @Index(name = "idx_rr_shadow_validation_bucket", columnList = "root_cause_bucket")
+                @Index(name = "idx_rr_shadow_validation_bucket", columnList = "root_cause_bucket"),
+                @Index(name = "idx_rr_shadow_validation_source_type", columnList = "source_type"),
+                @Index(name = "idx_rr_shadow_validation_strategy", columnList = "strategy_type"),
+                @Index(name = "idx_rr_shadow_validation_theme", columnList = "theme_tag"),
+                @Index(name = "idx_rr_shadow_validation_decision", columnList = "final_decision")
         })
 public class RrShadowValidationEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @Column(name = "source_type", nullable = false, length = 30)
+    private String sourceType = "PAPER_TRADE";
     @Column(name = "paper_trade_id")
     private Long paperTradeId;
+    @Column(name = "source_forward_tracking_id")
+    private Long sourceForwardTrackingId;
     @Column(name = "trading_date", nullable = false)
     private LocalDate tradingDate;
     @Column(nullable = false, length = 20)
@@ -41,6 +49,18 @@ public class RrShadowValidationEntity {
     private String shadowStatus;
     @Column(name = "root_cause_bucket", length = 60)
     private String rootCauseBucket;
+    @Column(name = "final_decision", length = 50)
+    private String finalDecision;
+    @Column(name = "final_score", precision = 12, scale = 4)
+    private BigDecimal finalScore;
+    @Column(name = "grade", length = 20)
+    private String grade;
+    @Column(name = "theme_tag", length = 100)
+    private String themeTag;
+    @Column(name = "gate_name", length = 80)
+    private String gateName;
+    @Column(name = "validation_note", length = 1000)
+    private String validationNote;
     @Column(name = "t1_return_pct", precision = 12, scale = 4)
     private BigDecimal t1ReturnPct;
     @Column(name = "t3_return_pct", precision = 12, scale = 4)
@@ -61,8 +81,12 @@ public class RrShadowValidationEntity {
     private LocalDateTime updatedAt;
 
     public Long getId() { return id; }
+    public String getSourceType() { return sourceType; }
+    public void setSourceType(String sourceType) { this.sourceType = sourceType; }
     public Long getPaperTradeId() { return paperTradeId; }
     public void setPaperTradeId(Long paperTradeId) { this.paperTradeId = paperTradeId; }
+    public Long getSourceForwardTrackingId() { return sourceForwardTrackingId; }
+    public void setSourceForwardTrackingId(Long sourceForwardTrackingId) { this.sourceForwardTrackingId = sourceForwardTrackingId; }
     public LocalDate getTradingDate() { return tradingDate; }
     public void setTradingDate(LocalDate tradingDate) { this.tradingDate = tradingDate; }
     public String getSymbol() { return symbol; }
@@ -83,6 +107,18 @@ public class RrShadowValidationEntity {
     public void setShadowStatus(String shadowStatus) { this.shadowStatus = shadowStatus; }
     public String getRootCauseBucket() { return rootCauseBucket; }
     public void setRootCauseBucket(String rootCauseBucket) { this.rootCauseBucket = rootCauseBucket; }
+    public String getFinalDecision() { return finalDecision; }
+    public void setFinalDecision(String finalDecision) { this.finalDecision = finalDecision; }
+    public BigDecimal getFinalScore() { return finalScore; }
+    public void setFinalScore(BigDecimal finalScore) { this.finalScore = finalScore; }
+    public String getGrade() { return grade; }
+    public void setGrade(String grade) { this.grade = grade; }
+    public String getThemeTag() { return themeTag; }
+    public void setThemeTag(String themeTag) { this.themeTag = themeTag; }
+    public String getGateName() { return gateName; }
+    public void setGateName(String gateName) { this.gateName = gateName; }
+    public String getValidationNote() { return validationNote; }
+    public void setValidationNote(String validationNote) { this.validationNote = validationNote; }
     public BigDecimal getT1ReturnPct() { return t1ReturnPct; }
     public void setT1ReturnPct(BigDecimal t1ReturnPct) { this.t1ReturnPct = t1ReturnPct; }
     public BigDecimal getT3ReturnPct() { return t3ReturnPct; }

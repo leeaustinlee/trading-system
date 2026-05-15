@@ -120,10 +120,16 @@ class RrRootCauseDiagnosisServiceTest {
                 2,
                 1,
                 java.util.Map.of("STOP_TOO_WIDE", 4L),
+                java.util.Map.of("STOP_TOO_WIDE", 4L),
                 List.of("2330"),
                 new BigDecimal("100.00"),
                 new RrShadowValidationService.CoverageGapDetails(
-                        List.of(), List.of(), java.util.Map.of(), LocalDate.now().minusDays(60), LocalDate.now())
+                        List.of(), List.of(), java.util.Map.of(), LocalDate.now().minusDays(60), LocalDate.now()),
+                java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
+                new RrShadowValidationService.PromotionReadiness(
+                        "INSUFFICIENT_SAMPLE", List.of("INSUFFICIENT_SAMPLE"), 50,
+                        new BigDecimal("80.00"), new BigDecimal("20.00"), new BigDecimal("16.67")),
+                "INSUFFICIENT_SAMPLE"
         ));
         service = new RrRootCauseDiagnosisService(
                 paperTradeRepository,
