@@ -3,6 +3,7 @@ package com.austin.trading.controller;
 import com.austin.trading.dto.request.ClaudeThemeScoreRequest;
 import com.austin.trading.dto.response.StockThemeMappingResponse;
 import com.austin.trading.dto.response.ThemeExposureResponse;
+import com.austin.trading.dto.response.ThemeManualReviewQueueResponse;
 import com.austin.trading.dto.response.ThemeMappingObservabilityResponse;
 import com.austin.trading.dto.response.ThemeSnapshotResponse;
 import com.austin.trading.dto.response.ThemeTaxonomyResponse;
@@ -96,6 +97,18 @@ public class ThemeController {
         return themeObservabilityService.getMappingObservability(
                 symbol, theme, category, source, activeOnly, minConfidence, limit,
                 suggestedCategory, unresolvedOtherOnly, reviewPriority, recommendedAction);
+    }
+
+    /**
+     * W2-12：GET /api/themes/mappings/manual-review-queue
+     * Read-only unresolved OTHER queue for human taxonomy review; no mapping writes.
+     */
+    @GetMapping("/mappings/manual-review-queue")
+    public ThemeManualReviewQueueResponse manualReviewQueue(
+            @RequestParam(required = false) Boolean activeOnly,
+            @RequestParam(required = false) String reviewPriority,
+            @RequestParam(required = false) Integer limit) {
+        return themeObservabilityService.getManualReviewQueue(activeOnly, reviewPriority, limit);
     }
 
     /** POST /api/themes/mappings  body: {symbol, stockName, themeTag, source} */

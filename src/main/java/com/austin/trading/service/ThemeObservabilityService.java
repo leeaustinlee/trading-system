@@ -1,6 +1,7 @@
 package com.austin.trading.service;
 
 import com.austin.trading.dto.response.StockThemeMappingResponse;
+import com.austin.trading.dto.response.ThemeManualReviewQueueResponse;
 import com.austin.trading.dto.response.ThemeMappingIssueResponse;
 import com.austin.trading.dto.response.ThemeMappingObservabilityResponse;
 import com.austin.trading.dto.response.ThemeOtherCategorySuggestionResponse;
@@ -223,6 +224,40 @@ public class ThemeObservabilityService {
                 issues,
                 otherCategorySuggestions,
                 mappings
+        );
+    }
+
+    public ThemeManualReviewQueueResponse getManualReviewQueue(Boolean activeOnly,
+                                                               String reviewPriority,
+                                                               Integer limit) {
+        boolean onlyActive = activeOnly == null || activeOnly;
+        int safeLimit = limit == null ? 200 : Math.max(1, Math.min(limit, 1_000));
+
+        List<StockThemeMappingEntity> queue = mappingRepo.findAllByOrderBySymbolAscThemeTagAsc().stream()
+                .filter(m -> !onlyActive || Boolean.TRUE.equals(m.getIsActive()))
+                .filter(ThemeObservabilityService::isUnresolvedOtherSuggestion)
+                .toList();
+        Map<String, Long> byPriority = queue.stream()
+                .collect(Collectors.groupingBy(m -> reviewPriority(m, true), LinkedHashMap::new, Collectors.counting()));
+        Map<String, Long> byAction = queue.stream()
+                .collect(Collectors.groupingBy(m -> recommendedAction(true), LinkedHashMap::new, Collectors.counting()));
+        List<StockThemeMappingEntity> filtered = queue.stream()
+                .filter(m -> !hasText(reviewPriority) || equalsIgnoreCase(reviewPriority(m, true), reviewPriority))
+                .toList();
+        List<ThemeOtherCategorySuggestionResponse> items = filtered.stream()
+                .limit(safeLimit)
+                .map(this::toOtherCategorySuggestion)
+                .toList();
+
+        return new ThemeManualReviewQueueResponse(
+                queue.size(),
+                filtered.size(),
+                items.size(),
+                byPriority,
+                byAction,
+                SAFETY_NOTE,
+                LocalDateTime.now(),
+                items
         );
     }
 

@@ -257,6 +257,34 @@ class ThemeObservabilityServiceTests {
     }
 
     @Test
+    void manualReviewQueueSummarizesAndFiltersUnresolvedOtherOnly() {
+        when(mappingRepo.findAllByOrderBySymbolAscThemeTagAsc()).thenReturn(List.of(
+                mapping("9996", "高信心未知", "其他強勢股", "OTHER", null, "CODEX", "0.90", true),
+                mapping("9997", "停用未知", "其他強勢股", "OTHER", null, "CODEX", "1.00", false),
+                mapping("9998", "低信心未知", "其他強勢股", "OTHER", null, "CODEX", "0.60", true),
+                mapping("1319", "東陽", "其他強勢股", "OTHER", null, "CODEX", "1.00", true),
+                mapping("2330", "台積電", "AI算力", "AI_COMPUTE", null, "CODEX", "1.00", true)
+        ));
+
+        var response = service.getManualReviewQueue(false, "HIGH", 10);
+
+        assertThat(response.totalReviewItems()).isEqualTo(3);
+        assertThat(response.filteredReviewItems()).isEqualTo(1);
+        assertThat(response.returnedItems()).isEqualTo(1);
+        assertThat(response.byReviewPriority())
+                .containsEntry("HIGH", 1L)
+                .containsEntry("MEDIUM", 1L)
+                .containsEntry("LOW", 1L);
+        assertThat(response.byRecommendedAction()).containsEntry("MANUAL_CLASSIFICATION_REQUIRED", 3L);
+        assertThat(response.items()).extracting("symbol", "suggestedCategory", "reviewPriority", "recommendedAction")
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("9996", ThemeTaxonomyClassifier.UNRESOLVED_OTHER, "HIGH", "MANUAL_CLASSIFICATION_REQUIRED"));
+        assertThat(response.safetyNote()).contains("READ_ONLY");
+
+        verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
+        verifyNoMoreInteractions(mappingRepo, snapshotRepo);
+    }
+
+    @Test
     void mappingObservabilityReportsOkWhenNoQualityWarningsRemain() {
         when(mappingRepo.findAllByOrderBySymbolAscThemeTagAsc()).thenReturn(List.of(
                 mapping("2330", "台積電", "AI算力", "AI_COMPUTE", null, "MANUAL", "1.00", true),
