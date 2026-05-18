@@ -97,6 +97,21 @@ public class ThemeObservabilityService {
                                                                      Integer limit,
                                                                      String suggestedCategory,
                                                                      Boolean unresolvedOtherOnly) {
+        return getMappingObservability(symbol, theme, category, source, activeOnly, minConfidence, limit,
+                suggestedCategory, unresolvedOtherOnly, null, null);
+    }
+
+    public ThemeMappingObservabilityResponse getMappingObservability(String symbol,
+                                                                     String theme,
+                                                                     String category,
+                                                                     String source,
+                                                                     Boolean activeOnly,
+                                                                     BigDecimal minConfidence,
+                                                                     Integer limit,
+                                                                     String suggestedCategory,
+                                                                     Boolean unresolvedOtherOnly,
+                                                                     String reviewPriority,
+                                                                     String recommendedAction) {
         boolean onlyActive = activeOnly == null || activeOnly;
         BigDecimal threshold = minConfidence != null ? minConfidence : DEFAULT_LOW_CONFIDENCE_THRESHOLD;
         int safeLimit = limit == null ? 200 : Math.max(1, Math.min(limit, 1_000));
@@ -110,7 +125,9 @@ public class ThemeObservabilityService {
                 .filter(m -> !hasText(category) || equalsIgnoreCase(m.getThemeCategory(), category))
                 .filter(m -> !hasText(source) || equalsIgnoreCase(m.getSource(), source))
                 .filter(m -> !hasText(suggestedCategory) || (isOtherCategory(m) && equalsIgnoreCase(suggestedCategory(m), suggestedCategory)))
-                .filter(m -> !onlyUnresolvedOther || (isOtherCategory(m) && ThemeTaxonomyClassifier.UNRESOLVED_OTHER.equals(suggestedCategory(m))))
+                .filter(m -> !onlyUnresolvedOther || isUnresolvedOtherSuggestion(m))
+                .filter(m -> !hasText(reviewPriority) || (isOtherCategory(m) && equalsIgnoreCase(reviewPriority(m, isUnresolvedOtherSuggestion(m)), reviewPriority)))
+                .filter(m -> !hasText(recommendedAction) || (isOtherCategory(m) && equalsIgnoreCase(recommendedAction(isUnresolvedOtherSuggestion(m)), recommendedAction)))
                 .toList();
 
         long activeMappings = filtered.stream().filter(m -> Boolean.TRUE.equals(m.getIsActive())).count();
@@ -291,7 +308,7 @@ public class ThemeObservabilityService {
                         ? "no deterministic stock-name rule matched; keep in OTHER review queue"
                         : "deterministic stock-name review suggestion only; stored category remains unchanged",
                 reviewPriority(e, unresolved),
-                unresolved ? "MANUAL_CLASSIFICATION_REQUIRED" : "REVIEW_AND_APPLY_DETERMINISTIC_CATEGORY",
+                recommendedAction(unresolved),
                 unresolved
                         ? "review stock business/domain externally, then assign a specific taxonomy category or intentionally keep OTHER"
                         : "deterministic suggestion is available; verify before any write/backfill step",
@@ -314,6 +331,10 @@ public class ThemeObservabilityService {
             return "HIGH";
         }
         return unresolved ? "MEDIUM" : "LOW";
+    }
+
+    private static String recommendedAction(boolean unresolved) {
+        return unresolved ? "MANUAL_CLASSIFICATION_REQUIRED" : "REVIEW_AND_APPLY_DETERMINISTIC_CATEGORY";
     }
 
     private static Map<String, Long> countBy(List<StockThemeMappingEntity> mappings,
@@ -404,6 +425,10 @@ public class ThemeObservabilityService {
 
     private static String suggestedCategory(StockThemeMappingEntity mapping) {
         return ThemeTaxonomyClassifier.suggestCategoryForGenericOther(mapping.getSymbol(), mapping.getStockName());
+    }
+
+    private static boolean isUnresolvedOtherSuggestion(StockThemeMappingEntity mapping) {
+        return isOtherCategory(mapping) && ThemeTaxonomyClassifier.UNRESOLVED_OTHER.equals(suggestedCategory(mapping));
     }
 
     private static BigDecimal ratio(long numerator, long denominator) {
