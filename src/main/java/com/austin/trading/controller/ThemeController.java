@@ -3,8 +3,11 @@ package com.austin.trading.controller;
 import com.austin.trading.dto.request.ClaudeThemeScoreRequest;
 import com.austin.trading.dto.response.StockThemeMappingResponse;
 import com.austin.trading.dto.response.ThemeExposureResponse;
+import com.austin.trading.dto.response.ThemeMappingObservabilityResponse;
 import com.austin.trading.dto.response.ThemeSnapshotResponse;
+import com.austin.trading.dto.response.ThemeTaxonomyResponse;
 import com.austin.trading.service.ThemeExposureService;
+import com.austin.trading.service.ThemeObservabilityService;
 import com.austin.trading.service.ThemeService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -20,11 +23,14 @@ public class ThemeController {
 
     private final ThemeService themeService;
     private final ThemeExposureService themeExposureService;
+    private final ThemeObservabilityService themeObservabilityService;
 
     public ThemeController(ThemeService themeService,
-                            ThemeExposureService themeExposureService) {
+                            ThemeExposureService themeExposureService,
+                            ThemeObservabilityService themeObservabilityService) {
         this.themeService = themeService;
         this.themeExposureService = themeExposureService;
+        this.themeObservabilityService = themeObservabilityService;
     }
 
     /**
@@ -56,6 +62,35 @@ public class ThemeController {
         if (symbol != null) return themeService.getMappingsBySymbol(symbol);
         if (theme  != null) return themeService.getMappingsByTheme(theme);
         return themeService.getAllActiveMappings();
+    }
+
+    /**
+     * W2-1 Truth Layer：GET /api/themes/taxonomy
+     * Read-only 題材 taxonomy / snapshot / mapping 聚合；不改交易決策語意。
+     */
+    @GetMapping("/taxonomy")
+    public ThemeTaxonomyResponse taxonomy(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(defaultValue = "true") boolean activeOnly) {
+        return themeObservabilityService.getTaxonomy(date != null ? date : LocalDate.now(), activeOnly);
+    }
+
+    /**
+     * W2-1 Truth Layer：GET /api/themes/mappings/observability
+     * Read-only mapping coverage / quality dashboard；不寫入 mapping，不影響 scoring。
+     */
+    @GetMapping("/mappings/observability")
+    public ThemeMappingObservabilityResponse mappingObservability(
+            @RequestParam(required = false) String symbol,
+            @RequestParam(required = false) String theme,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String source,
+            @RequestParam(required = false) Boolean activeOnly,
+            @RequestParam(required = false) java.math.BigDecimal minConfidence,
+            @RequestParam(required = false) Integer limit) {
+        return themeObservabilityService.getMappingObservability(
+                symbol, theme, category, source, activeOnly, minConfidence, limit);
     }
 
     /** POST /api/themes/mappings  body: {symbol, stockName, themeTag, source} */
