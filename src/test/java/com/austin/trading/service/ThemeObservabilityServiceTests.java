@@ -80,10 +80,40 @@ class ThemeObservabilityServiceTests {
         assertThat(response.ambiguousSymbolCount()).isEqualTo(1);
         assertThat(response.otherCategoryCount()).isEqualTo(1);
         assertThat(response.otherCategoryRatio()).isEqualByComparingTo("0.2500");
+        assertThat(response.byIssueType())
+                .containsEntry("MISSING_CATEGORY", 1L)
+                .containsEntry("MISSING_SOURCE", 1L)
+                .containsEntry("MISSING_CONFIDENCE", 1L)
+                .containsEntry("LOW_CONFIDENCE", 1L)
+                .containsEntry("AMBIGUOUS_SYMBOL", 2L)
+                .containsEntry("OTHER_CATEGORY_REVIEW", 1L);
         assertThat(response.issues()).extracting("issueType")
                 .contains("MISSING_CATEGORY", "MISSING_SOURCE", "MISSING_CONFIDENCE", "LOW_CONFIDENCE", "AMBIGUOUS_SYMBOL", "OTHER_CATEGORY_REVIEW");
         assertThat(response.mappings()).hasSize(4);
         assertThat(response.safetyNote()).contains("FinalDecision");
+
+        verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
+        verifyNoMoreInteractions(mappingRepo, snapshotRepo);
+    }
+
+    @Test
+    void mappingObservabilityReturnsFullIssueCountsEvenWhenIssueListIsLimited() {
+        when(mappingRepo.findAllByOrderBySymbolAscThemeTagAsc()).thenReturn(List.of(
+                mapping("1216", "統一", "其他強勢股", "OTHER", null, "CODEX", "1.00", true),
+                mapping("1319", "東陽", "其他強勢股", "OTHER", null, "CODEX", "1.00", true),
+                mapping("2368", "金像電", "PCB", null, null, null, null, true)
+        ));
+
+        var response = service.getMappingObservability(null, null, null, null, true, new BigDecimal("0.70"), 1);
+
+        assertThat(response.issues()).hasSize(1);
+        assertThat(response.byIssueType())
+                .containsEntry("OTHER_CATEGORY_REVIEW", 2L)
+                .containsEntry("MISSING_CATEGORY", 1L)
+                .containsEntry("MISSING_SOURCE", 1L)
+                .containsEntry("MISSING_CONFIDENCE", 1L);
+        assertThat(response.otherCategoryCount()).isEqualTo(2);
+        assertThat(response.otherCategoryRatio()).isEqualByComparingTo("0.6667");
 
         verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
         verifyNoMoreInteractions(mappingRepo, snapshotRepo);

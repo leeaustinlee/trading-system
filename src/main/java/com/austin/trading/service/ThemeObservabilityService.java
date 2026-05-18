@@ -123,7 +123,9 @@ public class ThemeObservabilityService {
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toSet());
 
-        List<ThemeMappingIssueResponse> issues = buildIssues(filtered, threshold, ambiguousSymbols).stream()
+        List<ThemeMappingIssueResponse> allIssues = buildIssues(filtered, threshold, ambiguousSymbols);
+        Map<String, Long> byIssueType = countIssuesByType(allIssues);
+        List<ThemeMappingIssueResponse> issues = allIssues.stream()
                 .limit(safeLimit)
                 .toList();
 
@@ -155,6 +157,7 @@ public class ThemeObservabilityService {
                 otherCategoryCount,
                 otherCategoryRatio,
                 threshold,
+                byIssueType,
                 SAFETY_NOTE,
                 LocalDateTime.now(),
                 issues,
@@ -249,6 +252,13 @@ public class ThemeObservabilityService {
         return mappings.stream()
                 .map(extractor)
                 .map(v -> hasText(v) ? v.trim() : fallback)
+                .collect(Collectors.groupingBy(Function.identity(), LinkedHashMap::new, Collectors.counting()));
+    }
+
+    private static Map<String, Long> countIssuesByType(List<ThemeMappingIssueResponse> issues) {
+        return issues.stream()
+                .map(ThemeMappingIssueResponse::issueType)
+                .filter(ThemeObservabilityService::hasText)
                 .collect(Collectors.groupingBy(Function.identity(), LinkedHashMap::new, Collectors.counting()));
     }
 

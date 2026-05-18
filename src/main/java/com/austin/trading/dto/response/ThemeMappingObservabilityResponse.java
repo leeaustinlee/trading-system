@@ -24,6 +24,7 @@ public record ThemeMappingObservabilityResponse(
         long otherCategoryCount,
         BigDecimal otherCategoryRatio,
         BigDecimal lowConfidenceThreshold,
+        Map<String, Long> byIssueType,
         String safetyNote,
         LocalDateTime generatedAt,
         List<ThemeMappingIssueResponse> issues,
