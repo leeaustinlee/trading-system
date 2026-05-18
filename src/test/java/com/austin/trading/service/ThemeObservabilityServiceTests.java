@@ -64,7 +64,7 @@ class ThemeObservabilityServiceTests {
                 mapping("1216", "統一", "其他強勢股", "OTHER", null, "CODEX", "1.00", true)
         ));
 
-        var response = service.getMappingObservability(null, null, null, null, true, new BigDecimal("0.70"), 50);
+        var response = service.getMappingObservability(null, null, null, null, true, new BigDecimal("0.70"), 50, null, null);
 
         assertThat(response.totalMappings()).isEqualTo(4);
         assertThat(response.activeMappings()).isEqualTo(4);
@@ -109,7 +109,7 @@ class ThemeObservabilityServiceTests {
                 mapping("2368", "金像電", "PCB", null, null, null, null, true)
         ));
 
-        var response = service.getMappingObservability(null, null, null, null, true, new BigDecimal("0.70"), 1);
+        var response = service.getMappingObservability(null, null, null, null, true, new BigDecimal("0.70"), 1, null, null);
 
         assertThat(response.issues()).hasSize(1);
         assertThat(response.byIssueType())
@@ -136,7 +136,8 @@ class ThemeObservabilityServiceTests {
                 mapping("9999", "未知公司", "其他強勢股", "OTHER", null, "CODEX", "1.00", true)
         ));
 
-        var response = service.getMappingObservability(null, null, null, null, true, new BigDecimal("0.70"), 10);
+        var response = service.getMappingObservability(null, null, null, null, true, new BigDecimal("0.70"), 10,
+                null, null);
 
         assertThat(response.otherCategoryCount()).isEqualTo(1);
         assertThat(response.resolvableOtherCategoryCount()).isZero();
@@ -147,6 +148,52 @@ class ThemeObservabilityServiceTests {
         assertThat(suggestion.currentCategory()).isEqualTo("OTHER");
         assertThat(suggestion.suggestedCategory()).isEqualTo(ThemeTaxonomyClassifier.UNRESOLVED_OTHER);
         assertThat(suggestion.reason()).contains("keep in OTHER review queue");
+
+        verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
+        verifyNoMoreInteractions(mappingRepo, snapshotRepo);
+    }
+
+    @Test
+    void mappingObservabilityCanDrillDownOtherSuggestionsBySuggestedCategory() {
+        when(mappingRepo.findAllByOrderBySymbolAscThemeTagAsc()).thenReturn(List.of(
+                mapping("1216", "統一", "其他強勢股", "OTHER", null, "CODEX", "1.00", true),
+                mapping("1319", "東陽", "其他強勢股", "OTHER", null, "CODEX", "1.00", true),
+                mapping("2330", "台積電", "AI算力", "AI_COMPUTE", null, "CODEX", "1.00", true)
+        ));
+
+        var response = service.getMappingObservability(null, null, null, null, true, new BigDecimal("0.70"), 10,
+                ThemeTaxonomyClassifier.MATERIALS, null);
+
+        assertThat(response.totalMappings()).isEqualTo(1);
+        assertThat(response.otherCategoryCount()).isEqualTo(1);
+        assertThat(response.otherBySuggestedCategory()).containsOnlyKeys(ThemeTaxonomyClassifier.MATERIALS);
+        assertThat(response.otherCategorySuggestions()).hasSize(1);
+        assertThat(response.otherCategorySuggestions().get(0).symbol()).isEqualTo("1319");
+        assertThat(response.otherCategorySuggestions().get(0).suggestedCategory()).isEqualTo(ThemeTaxonomyClassifier.MATERIALS);
+        assertThat(response.byIssueType()).containsEntry("OTHER_CATEGORY_REVIEW", 1L);
+
+        verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
+        verifyNoMoreInteractions(mappingRepo, snapshotRepo);
+    }
+
+    @Test
+    void mappingObservabilityCanDrillDownUnresolvedOtherQueue() {
+        when(mappingRepo.findAllByOrderBySymbolAscThemeTagAsc()).thenReturn(List.of(
+                mapping("1216", "統一", "其他強勢股", "OTHER", null, "CODEX", "1.00", true),
+                mapping("9999", "未知公司", "其他強勢股", "OTHER", null, "CODEX", "1.00", true),
+                mapping("2330", "台積電", "AI算力", "AI_COMPUTE", null, "CODEX", "1.00", true)
+        ));
+
+        var response = service.getMappingObservability(null, null, null, null, true, new BigDecimal("0.70"), 10,
+                null, true);
+
+        assertThat(response.totalMappings()).isEqualTo(1);
+        assertThat(response.otherCategoryCount()).isEqualTo(1);
+        assertThat(response.resolvableOtherCategoryCount()).isZero();
+        assertThat(response.unresolvedOtherCategoryCount()).isEqualTo(1);
+        assertThat(response.otherCategorySuggestions()).hasSize(1);
+        assertThat(response.otherCategorySuggestions().get(0).symbol()).isEqualTo("9999");
+        assertThat(response.otherCategorySuggestions().get(0).suggestedCategory()).isEqualTo(ThemeTaxonomyClassifier.UNRESOLVED_OTHER);
 
         verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
         verifyNoMoreInteractions(mappingRepo, snapshotRepo);

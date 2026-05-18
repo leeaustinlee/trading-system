@@ -88,9 +88,12 @@ public class ThemeController {
             @RequestParam(required = false) String source,
             @RequestParam(required = false) Boolean activeOnly,
             @RequestParam(required = false) java.math.BigDecimal minConfidence,
-            @RequestParam(required = false) Integer limit) {
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) String suggestedCategory,
+            @RequestParam(required = false) Boolean unresolvedOtherOnly) {
         return themeObservabilityService.getMappingObservability(
-                symbol, theme, category, source, activeOnly, minConfidence, limit);
+                symbol, theme, category, source, activeOnly, minConfidence, limit,
+                suggestedCategory, unresolvedOtherOnly);
     }
 
     /** POST /api/themes/mappings  body: {symbol, stockName, themeTag, source} */

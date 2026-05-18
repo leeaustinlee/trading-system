@@ -94,18 +94,23 @@ public class ThemeObservabilityService {
                                                                      String source,
                                                                      Boolean activeOnly,
                                                                      BigDecimal minConfidence,
-                                                                     Integer limit) {
+                                                                     Integer limit,
+                                                                     String suggestedCategory,
+                                                                     Boolean unresolvedOtherOnly) {
         boolean onlyActive = activeOnly == null || activeOnly;
         BigDecimal threshold = minConfidence != null ? minConfidence : DEFAULT_LOW_CONFIDENCE_THRESHOLD;
         int safeLimit = limit == null ? 200 : Math.max(1, Math.min(limit, 1_000));
 
         List<StockThemeMappingEntity> all = mappingRepo.findAllByOrderBySymbolAscThemeTagAsc();
+        boolean onlyUnresolvedOther = Boolean.TRUE.equals(unresolvedOtherOnly);
         List<StockThemeMappingEntity> filtered = all.stream()
                 .filter(m -> !onlyActive || Boolean.TRUE.equals(m.getIsActive()))
                 .filter(m -> !hasText(symbol) || equalsIgnoreCase(m.getSymbol(), symbol))
                 .filter(m -> !hasText(theme) || equalsIgnoreCase(m.getThemeTag(), theme))
                 .filter(m -> !hasText(category) || equalsIgnoreCase(m.getThemeCategory(), category))
                 .filter(m -> !hasText(source) || equalsIgnoreCase(m.getSource(), source))
+                .filter(m -> !hasText(suggestedCategory) || (isOtherCategory(m) && equalsIgnoreCase(suggestedCategory(m), suggestedCategory)))
+                .filter(m -> !onlyUnresolvedOther || (isOtherCategory(m) && ThemeTaxonomyClassifier.UNRESOLVED_OTHER.equals(suggestedCategory(m))))
                 .toList();
 
         long activeMappings = filtered.stream().filter(m -> Boolean.TRUE.equals(m.getIsActive())).count();
