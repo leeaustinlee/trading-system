@@ -136,6 +136,8 @@ public class ThemeObservabilityService {
         long missingSourceCount = filtered.stream().filter(m -> !hasText(m.getSource())).count();
         long missingConfidenceCount = filtered.stream().filter(m -> m.getConfidence() == null).count();
         long lowConfidenceCount = filtered.stream().filter(m -> isLowConfidence(m, threshold)).count();
+        long otherCategoryCount = filtered.stream().filter(ThemeObservabilityService::isOtherCategory).count();
+        BigDecimal otherCategoryRatio = ratio(otherCategoryCount, filtered.size());
 
         return new ThemeMappingObservabilityResponse(
                 filtered.size(),
@@ -150,6 +152,8 @@ public class ThemeObservabilityService {
                 missingConfidenceCount,
                 lowConfidenceCount,
                 ambiguousSymbols.size(),
+                otherCategoryCount,
+                otherCategoryRatio,
                 threshold,
                 SAFETY_NOTE,
                 LocalDateTime.now(),
@@ -215,6 +219,7 @@ public class ThemeObservabilityService {
             if (!hasText(m.getSource())) issues.add(toIssue(m, "MISSING_SOURCE", "source is blank"));
             if (m.getConfidence() == null) issues.add(toIssue(m, "MISSING_CONFIDENCE", "confidence is null"));
             if (isLowConfidence(m, threshold)) issues.add(toIssue(m, "LOW_CONFIDENCE", "confidence below " + threshold));
+            if (isOtherCategory(m)) issues.add(toIssue(m, "OTHER_CATEGORY_REVIEW", "theme_category=OTHER; inspect whether a more specific taxonomy label exists"));
             if (hasText(m.getSymbol()) && ambiguousSymbols.contains(normalizeKey(m.getSymbol()))) {
                 issues.add(toIssue(m, "AMBIGUOUS_SYMBOL", "active symbol maps to multiple themes; inspect whether this is intended"));
             }
@@ -259,6 +264,15 @@ public class ThemeObservabilityService {
 
     private static boolean isLowConfidence(StockThemeMappingEntity mapping, BigDecimal threshold) {
         return mapping.getConfidence() != null && mapping.getConfidence().compareTo(threshold) < 0;
+    }
+
+    private static boolean isOtherCategory(StockThemeMappingEntity mapping) {
+        return equalsIgnoreCase(mapping.getThemeCategory(), ThemeTaxonomyClassifier.OTHER);
+    }
+
+    private static BigDecimal ratio(long numerator, long denominator) {
+        if (denominator <= 0) return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+        return BigDecimal.valueOf(numerator).divide(BigDecimal.valueOf(denominator), 4, RoundingMode.HALF_UP);
     }
 
     private static String firstText(List<String> values, String fallbackValue, String finalFallback) {

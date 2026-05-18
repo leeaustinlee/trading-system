@@ -60,26 +60,29 @@ class ThemeObservabilityServiceTests {
                 mapping("2330", "台積電", "AI算力", "AI", null, "MANUAL", "1.00", true),
                 mapping("2330", "台積電", "CoWoS", "AI", null, "CODEX", "0.60", true),
                 mapping("2368", "金像電", "PCB", null, null, null, null, true),
-                mapping("1802", "台玻", "玻纖布", "PCB", null, "CLAUDE", "0.90", false)
+                mapping("1802", "台玻", "玻纖布", "PCB", null, "CLAUDE", "0.90", false),
+                mapping("1216", "統一", "其他強勢股", "OTHER", null, "CODEX", "1.00", true)
         ));
 
         var response = service.getMappingObservability(null, null, null, null, true, new BigDecimal("0.70"), 50);
 
-        assertThat(response.totalMappings()).isEqualTo(3);
-        assertThat(response.activeMappings()).isEqualTo(3);
+        assertThat(response.totalMappings()).isEqualTo(4);
+        assertThat(response.activeMappings()).isEqualTo(4);
         assertThat(response.inactiveMappings()).isZero();
-        assertThat(response.distinctSymbols()).isEqualTo(2);
-        assertThat(response.distinctThemes()).isEqualTo(3);
-        assertThat(response.byCategory()).containsEntry("AI", 2L).containsEntry("UNCATEGORIZED", 1L);
-        assertThat(response.bySource()).containsEntry("MANUAL", 1L).containsEntry("CODEX", 1L).containsEntry("UNKNOWN_SOURCE", 1L);
+        assertThat(response.distinctSymbols()).isEqualTo(3);
+        assertThat(response.distinctThemes()).isEqualTo(4);
+        assertThat(response.byCategory()).containsEntry("AI", 2L).containsEntry("UNCATEGORIZED", 1L).containsEntry("OTHER", 1L);
+        assertThat(response.bySource()).containsEntry("MANUAL", 1L).containsEntry("CODEX", 2L).containsEntry("UNKNOWN_SOURCE", 1L);
         assertThat(response.missingCategoryCount()).isEqualTo(1);
         assertThat(response.missingSourceCount()).isEqualTo(1);
         assertThat(response.missingConfidenceCount()).isEqualTo(1);
         assertThat(response.lowConfidenceCount()).isEqualTo(1);
         assertThat(response.ambiguousSymbolCount()).isEqualTo(1);
+        assertThat(response.otherCategoryCount()).isEqualTo(1);
+        assertThat(response.otherCategoryRatio()).isEqualByComparingTo("0.2500");
         assertThat(response.issues()).extracting("issueType")
-                .contains("MISSING_CATEGORY", "MISSING_SOURCE", "MISSING_CONFIDENCE", "LOW_CONFIDENCE", "AMBIGUOUS_SYMBOL");
-        assertThat(response.mappings()).hasSize(3);
+                .contains("MISSING_CATEGORY", "MISSING_SOURCE", "MISSING_CONFIDENCE", "LOW_CONFIDENCE", "AMBIGUOUS_SYMBOL", "OTHER_CATEGORY_REVIEW");
+        assertThat(response.mappings()).hasSize(4);
         assertThat(response.safetyNote()).contains("FinalDecision");
 
         verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();

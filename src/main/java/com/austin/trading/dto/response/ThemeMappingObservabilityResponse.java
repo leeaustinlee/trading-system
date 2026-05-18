@@ -21,6 +21,8 @@ public record ThemeMappingObservabilityResponse(
         long missingConfidenceCount,
         long lowConfidenceCount,
         long ambiguousSymbolCount,
+        long otherCategoryCount,
+        BigDecimal otherCategoryRatio,
         BigDecimal lowConfidenceThreshold,
         String safetyNote,
         LocalDateTime generatedAt,
