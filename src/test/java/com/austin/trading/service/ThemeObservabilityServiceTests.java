@@ -155,6 +155,9 @@ class ThemeObservabilityServiceTests {
         assertThat(suggestion.currentCategory()).isEqualTo("OTHER");
         assertThat(suggestion.suggestedCategory()).isEqualTo(ThemeTaxonomyClassifier.UNRESOLVED_OTHER);
         assertThat(suggestion.reason()).contains("keep in OTHER review queue");
+        assertThat(suggestion.reviewPriority()).isEqualTo("HIGH");
+        assertThat(suggestion.recommendedAction()).isEqualTo("MANUAL_CLASSIFICATION_REQUIRED");
+        assertThat(suggestion.reviewHint()).contains("review stock business/domain");
 
         verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
         verifyNoMoreInteractions(mappingRepo, snapshotRepo);
@@ -177,6 +180,8 @@ class ThemeObservabilityServiceTests {
         assertThat(response.otherCategorySuggestions()).hasSize(1);
         assertThat(response.otherCategorySuggestions().get(0).symbol()).isEqualTo("1319");
         assertThat(response.otherCategorySuggestions().get(0).suggestedCategory()).isEqualTo(ThemeTaxonomyClassifier.MATERIALS);
+        assertThat(response.otherCategorySuggestions().get(0).reviewPriority()).isEqualTo("LOW");
+        assertThat(response.otherCategorySuggestions().get(0).recommendedAction()).isEqualTo("REVIEW_AND_APPLY_DETERMINISTIC_CATEGORY");
         assertThat(response.taxonomyQualityStatus()).isEqualTo("REFINEMENT_READY");
         assertThat(response.qualityWarnings()).containsExactly("RESOLVABLE_OTHER=1");
         assertThat(response.byIssueType()).containsEntry("OTHER_CATEGORY_REVIEW", 1L);
@@ -203,6 +208,26 @@ class ThemeObservabilityServiceTests {
         assertThat(response.otherCategorySuggestions()).hasSize(1);
         assertThat(response.otherCategorySuggestions().get(0).symbol()).isEqualTo("9999");
         assertThat(response.otherCategorySuggestions().get(0).suggestedCategory()).isEqualTo(ThemeTaxonomyClassifier.UNRESOLVED_OTHER);
+
+        verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
+        verifyNoMoreInteractions(mappingRepo, snapshotRepo);
+    }
+
+    @Test
+    void mappingObservabilityPrioritizesManualOtherReviewByActiveConfidence() {
+        when(mappingRepo.findAllByOrderBySymbolAscThemeTagAsc()).thenReturn(List.of(
+                mapping("9997", "停用未知", "其他強勢股", "OTHER", null, "CODEX", "1.00", false),
+                mapping("9998", "低信心未知", "其他強勢股", "OTHER", null, "CODEX", "0.60", true)
+        ));
+
+        var response = service.getMappingObservability(null, null, null, null, false, new BigDecimal("0.70"), 10,
+                null, null);
+
+        assertThat(response.otherCategorySuggestions()).extracting("symbol", "reviewPriority", "recommendedAction")
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("9997", "LOW", "MANUAL_CLASSIFICATION_REQUIRED"),
+                        org.assertj.core.groups.Tuple.tuple("9998", "MEDIUM", "MANUAL_CLASSIFICATION_REQUIRED")
+                );
 
         verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
         verifyNoMoreInteractions(mappingRepo, snapshotRepo);

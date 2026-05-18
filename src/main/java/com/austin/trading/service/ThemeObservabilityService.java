@@ -283,12 +283,18 @@ public class ThemeObservabilityService {
 
     private ThemeOtherCategorySuggestionResponse toOtherCategorySuggestion(StockThemeMappingEntity e) {
         String suggested = suggestedCategory(e);
+        boolean unresolved = ThemeTaxonomyClassifier.UNRESOLVED_OTHER.equals(suggested);
         return new ThemeOtherCategorySuggestionResponse(
                 e.getId(), e.getSymbol(), e.getStockName(), e.getThemeTag(), e.getThemeCategory(),
                 suggested,
-                ThemeTaxonomyClassifier.UNRESOLVED_OTHER.equals(suggested)
+                unresolved
                         ? "no deterministic stock-name rule matched; keep in OTHER review queue"
                         : "deterministic stock-name review suggestion only; stored category remains unchanged",
+                reviewPriority(e, unresolved),
+                unresolved ? "MANUAL_CLASSIFICATION_REQUIRED" : "REVIEW_AND_APPLY_DETERMINISTIC_CATEGORY",
+                unresolved
+                        ? "review stock business/domain externally, then assign a specific taxonomy category or intentionally keep OTHER"
+                        : "deterministic suggestion is available; verify before any write/backfill step",
                 e.getSource(), e.getConfidence(), Boolean.TRUE.equals(e.getIsActive())
         );
     }
@@ -300,6 +306,14 @@ public class ThemeObservabilityService {
                 e.getSource(), e.getConfidence(), e.getIsActive(),
                 e.getCreatedAt(), e.getUpdatedAt()
         );
+    }
+
+    private static String reviewPriority(StockThemeMappingEntity mapping, boolean unresolved) {
+        if (!Boolean.TRUE.equals(mapping.getIsActive())) return "LOW";
+        if (unresolved && mapping.getConfidence() != null && mapping.getConfidence().compareTo(DEFAULT_LOW_CONFIDENCE_THRESHOLD) >= 0) {
+            return "HIGH";
+        }
+        return unresolved ? "MEDIUM" : "LOW";
     }
 
     private static Map<String, Long> countBy(List<StockThemeMappingEntity> mappings,

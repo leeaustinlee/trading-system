@@ -13,6 +13,9 @@ public record ThemeOtherCategorySuggestionResponse(
         String currentCategory,
         String suggestedCategory,
         String reason,
+        String reviewPriority,
+        String recommendedAction,
+        String reviewHint,
         String source,
         BigDecimal confidence,
         boolean active
