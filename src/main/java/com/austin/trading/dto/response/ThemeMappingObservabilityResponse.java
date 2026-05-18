@@ -23,11 +23,15 @@ public record ThemeMappingObservabilityResponse(
         long ambiguousSymbolCount,
         long otherCategoryCount,
         BigDecimal otherCategoryRatio,
+        Map<String, Long> otherBySuggestedCategory,
+        long resolvableOtherCategoryCount,
+        long unresolvedOtherCategoryCount,
         BigDecimal lowConfidenceThreshold,
         Map<String, Long> byIssueType,
         String safetyNote,
         LocalDateTime generatedAt,
         List<ThemeMappingIssueResponse> issues,
+        List<ThemeOtherCategorySuggestionResponse> otherCategorySuggestions,
         List<StockThemeMappingResponse> mappings
 ) {
 }

@@ -3,6 +3,7 @@ package com.austin.trading.service;
 import com.austin.trading.dto.response.StockThemeMappingResponse;
 import com.austin.trading.dto.response.ThemeMappingIssueResponse;
 import com.austin.trading.dto.response.ThemeMappingObservabilityResponse;
+import com.austin.trading.dto.response.ThemeOtherCategorySuggestionResponse;
 import com.austin.trading.dto.response.ThemeTaxonomyItemResponse;
 import com.austin.trading.dto.response.ThemeTaxonomyResponse;
 import com.austin.trading.entity.StockThemeMappingEntity;
@@ -140,6 +141,18 @@ public class ThemeObservabilityService {
         long lowConfidenceCount = filtered.stream().filter(m -> isLowConfidence(m, threshold)).count();
         long otherCategoryCount = filtered.stream().filter(ThemeObservabilityService::isOtherCategory).count();
         BigDecimal otherCategoryRatio = ratio(otherCategoryCount, filtered.size());
+        List<StockThemeMappingEntity> otherRows = filtered.stream()
+                .filter(ThemeObservabilityService::isOtherCategory)
+                .toList();
+        Map<String, Long> otherBySuggestedCategory = otherRows.stream()
+                .map(ThemeObservabilityService::suggestedCategory)
+                .collect(Collectors.groupingBy(Function.identity(), LinkedHashMap::new, Collectors.counting()));
+        long unresolvedOtherCategoryCount = otherBySuggestedCategory.getOrDefault(ThemeTaxonomyClassifier.UNRESOLVED_OTHER, 0L);
+        long resolvableOtherCategoryCount = otherCategoryCount - unresolvedOtherCategoryCount;
+        List<ThemeOtherCategorySuggestionResponse> otherCategorySuggestions = otherRows.stream()
+                .limit(safeLimit)
+                .map(this::toOtherCategorySuggestion)
+                .toList();
 
         return new ThemeMappingObservabilityResponse(
                 filtered.size(),
@@ -156,11 +169,15 @@ public class ThemeObservabilityService {
                 ambiguousSymbols.size(),
                 otherCategoryCount,
                 otherCategoryRatio,
+                otherBySuggestedCategory,
+                resolvableOtherCategoryCount,
+                unresolvedOtherCategoryCount,
                 threshold,
                 byIssueType,
                 SAFETY_NOTE,
                 LocalDateTime.now(),
                 issues,
+                otherCategorySuggestions,
                 mappings
         );
     }
@@ -237,6 +254,18 @@ public class ThemeObservabilityService {
         );
     }
 
+    private ThemeOtherCategorySuggestionResponse toOtherCategorySuggestion(StockThemeMappingEntity e) {
+        String suggested = suggestedCategory(e);
+        return new ThemeOtherCategorySuggestionResponse(
+                e.getId(), e.getSymbol(), e.getStockName(), e.getThemeTag(), e.getThemeCategory(),
+                suggested,
+                ThemeTaxonomyClassifier.UNRESOLVED_OTHER.equals(suggested)
+                        ? "no deterministic stock-name rule matched; keep in OTHER review queue"
+                        : "deterministic stock-name review suggestion only; stored category remains unchanged",
+                e.getSource(), e.getConfidence(), Boolean.TRUE.equals(e.getIsActive())
+        );
+    }
+
     private StockThemeMappingResponse toMappingResponse(StockThemeMappingEntity e) {
         return new StockThemeMappingResponse(
                 e.getId(), e.getSymbol(), e.getStockName(),
@@ -278,6 +307,10 @@ public class ThemeObservabilityService {
 
     private static boolean isOtherCategory(StockThemeMappingEntity mapping) {
         return equalsIgnoreCase(mapping.getThemeCategory(), ThemeTaxonomyClassifier.OTHER);
+    }
+
+    private static String suggestedCategory(StockThemeMappingEntity mapping) {
+        return ThemeTaxonomyClassifier.suggestCategoryForGenericOther(mapping.getSymbol(), mapping.getStockName());
     }
 
     private static BigDecimal ratio(long numerator, long denominator) {

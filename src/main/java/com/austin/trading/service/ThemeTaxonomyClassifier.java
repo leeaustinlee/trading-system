@@ -21,8 +21,14 @@ public final class ThemeTaxonomyClassifier {
     public static final String DISPLAY = "DISPLAY";
     public static final String FINANCIAL = "FINANCIAL";
     public static final String MATERIALS = "MATERIALS";
+    public static final String POWER_ENERGY = "POWER_ENERGY";
+    public static final String INDUSTRIAL = "INDUSTRIAL";
+    public static final String CONSUMER = "CONSUMER";
+    public static final String REAL_ESTATE = "REAL_ESTATE";
     public static final String DEFENSE = "DEFENSE";
     public static final String BIOTECH = "BIOTECH";
+    public static final String ELECTRONICS_COMPONENTS = "ELECTRONICS_COMPONENTS";
+    public static final String UNRESOLVED_OTHER = "UNRESOLVED_OTHER";
     public static final String OTHER = "OTHER";
     public static final String UNKNOWN = "UNKNOWN";
 
@@ -77,6 +83,56 @@ public final class ThemeTaxonomyClassifier {
             return OTHER;
         }
         return OTHER;
+    }
+
+    /**
+     * Read-only suggestion for generic OTHER/其他強勢股 review queues.
+     *
+     * This deliberately does not rewrite the stored category. It only gives the
+     * observability API a deterministic first-pass bucket so humans can see which
+     * OTHER rows are likely resolvable before any future reviewed backfill.
+     */
+    public static String suggestCategoryForGenericOther(String symbol, String stockName) {
+        String key = ((symbol == null ? "" : symbol) + " " + (stockName == null ? "" : stockName)).trim();
+        if (!hasText(key)) return UNRESOLVED_OTHER;
+
+        if (containsAny(key, "台積電", "瑞昱", "矽統", "菱生", "偉詮電", "超豐", "全新", "義隆", "晶豪科", "嘉晶", "聯詠", "華晶科", "新唐", "台勝科", "采鈺", "奕力", "訊芯", "華東", "至上", "鼎元", "國巨", "華新科", "禾伸堂", "日電貿")) {
+            return SEMICONDUCTOR;
+        }
+        if (containsAny(key, "PCB", "楠梓電", "敬鵬", "燿華", "志聖", "泰鼎", "精成科", "台表科", "金寶", "廣宇")) {
+            return PCB;
+        }
+        if (containsAny(key, "光聖", "聯鈞", "兆赫", "網通", "通訊", "光通訊", "佳必琪")) {
+            return COMMUNICATION;
+        }
+        if (containsAny(key, "微星", "映泰", "光寶科", "鴻準", "乙盛", "邁科")) {
+            return AI_COMPUTE;
+        }
+        if (containsAny(key, "散熱", "水冷", "風扇", "一詮", "奇鋐", "雙鴻")) {
+            return COOLING;
+        }
+        if (containsAny(key, "瑞軒", "正達", "彩晶", "TPK", "GIS", "瑞儀", "今國光", "面板", "光電")) {
+            return DISPLAY;
+        }
+        if (containsAny(key, "大銀微系統", "恩德", "信錦", "機器人", "自動化")) {
+            return ROBOTICS;
+        }
+        if (containsAny(key, "台新", "金", "銀行", "保險", "證券")) {
+            return FINANCIAL;
+        }
+        if (containsAny(key, "統一")) {
+            return CONSUMER;
+        }
+        if (containsAny(key, "興富發")) {
+            return REAL_ESTATE;
+        }
+        if (containsAny(key, "大亞", "台汽電", "台塑化", "聯合再生")) {
+            return POWER_ENERGY;
+        }
+        if (containsAny(key, "東陽", "可成", "三晃", "康普", "世紀鋼", "塑化", "化工", "鋼")) {
+            return MATERIALS;
+        }
+        return UNRESOLVED_OTHER;
     }
 
     /**

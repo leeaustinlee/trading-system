@@ -80,6 +80,11 @@ class ThemeObservabilityServiceTests {
         assertThat(response.ambiguousSymbolCount()).isEqualTo(1);
         assertThat(response.otherCategoryCount()).isEqualTo(1);
         assertThat(response.otherCategoryRatio()).isEqualByComparingTo("0.2500");
+        assertThat(response.otherBySuggestedCategory()).containsEntry(ThemeTaxonomyClassifier.CONSUMER, 1L);
+        assertThat(response.resolvableOtherCategoryCount()).isEqualTo(1);
+        assertThat(response.unresolvedOtherCategoryCount()).isZero();
+        assertThat(response.otherCategorySuggestions()).hasSize(1);
+        assertThat(response.otherCategorySuggestions().get(0).suggestedCategory()).isEqualTo(ThemeTaxonomyClassifier.CONSUMER);
         assertThat(response.byIssueType())
                 .containsEntry("MISSING_CATEGORY", 1L)
                 .containsEntry("MISSING_SOURCE", 1L)
@@ -114,6 +119,34 @@ class ThemeObservabilityServiceTests {
                 .containsEntry("MISSING_CONFIDENCE", 1L);
         assertThat(response.otherCategoryCount()).isEqualTo(2);
         assertThat(response.otherCategoryRatio()).isEqualByComparingTo("0.6667");
+        assertThat(response.otherCategorySuggestions()).hasSize(1);
+        assertThat(response.otherBySuggestedCategory())
+                .containsEntry(ThemeTaxonomyClassifier.CONSUMER, 1L)
+                .containsEntry(ThemeTaxonomyClassifier.MATERIALS, 1L);
+        assertThat(response.resolvableOtherCategoryCount()).isEqualTo(2);
+        assertThat(response.unresolvedOtherCategoryCount()).isZero();
+
+        verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
+        verifyNoMoreInteractions(mappingRepo, snapshotRepo);
+    }
+
+    @Test
+    void mappingObservabilitySummarizesUnresolvedOtherSuggestionsWithoutChangingStoredCategory() {
+        when(mappingRepo.findAllByOrderBySymbolAscThemeTagAsc()).thenReturn(List.of(
+                mapping("9999", "未知公司", "其他強勢股", "OTHER", null, "CODEX", "1.00", true)
+        ));
+
+        var response = service.getMappingObservability(null, null, null, null, true, new BigDecimal("0.70"), 10);
+
+        assertThat(response.otherCategoryCount()).isEqualTo(1);
+        assertThat(response.resolvableOtherCategoryCount()).isZero();
+        assertThat(response.unresolvedOtherCategoryCount()).isEqualTo(1);
+        assertThat(response.otherBySuggestedCategory()).containsEntry(ThemeTaxonomyClassifier.UNRESOLVED_OTHER, 1L);
+        assertThat(response.otherCategorySuggestions()).hasSize(1);
+        var suggestion = response.otherCategorySuggestions().get(0);
+        assertThat(suggestion.currentCategory()).isEqualTo("OTHER");
+        assertThat(suggestion.suggestedCategory()).isEqualTo(ThemeTaxonomyClassifier.UNRESOLVED_OTHER);
+        assertThat(suggestion.reason()).contains("keep in OTHER review queue");
 
         verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
         verifyNoMoreInteractions(mappingRepo, snapshotRepo);
