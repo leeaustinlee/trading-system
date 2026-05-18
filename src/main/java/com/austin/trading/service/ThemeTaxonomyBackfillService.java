@@ -57,8 +57,9 @@ public class ThemeTaxonomyBackfillService {
     }
 
     /**
-     * Fill blank themeCategory and source values deterministically from themeTag.
-     * Existing non-blank categories/sources are preserved so manual labels remain the source of truth.
+     * Fill blank themeCategory/source values and refine resolvable generic OTHER rows.
+     * Existing non-blank, non-OTHER categories/sources are preserved so manual labels remain the source of truth.
+     * Generic OTHER rows are only changed when the deterministic review classifier has a non-UNRESOLVED suggestion.
      *
      * @return number of changed rows across stock_theme_mapping and theme_snapshot
      */
@@ -76,6 +77,13 @@ public class ThemeTaxonomyBackfillService {
             if (!hasText(mapping.getThemeCategory())) {
                 mapping.setThemeCategory(ThemeTaxonomyClassifier.classify(mapping.getThemeTag()));
                 dirty = true;
+            }
+            if (isOtherCategory(mapping)) {
+                String suggestion = ThemeTaxonomyClassifier.suggestCategoryForGenericOther(mapping.getSymbol(), mapping.getStockName());
+                if (hasText(suggestion) && !ThemeTaxonomyClassifier.UNRESOLVED_OTHER.equals(suggestion)) {
+                    mapping.setThemeCategory(suggestion);
+                    dirty = true;
+                }
             }
             if (!hasText(mapping.getSource())) {
                 mapping.setSource(ThemeTaxonomyClassifier.inferLegacySource(mapping.getThemeTag()));
@@ -103,6 +111,11 @@ public class ThemeTaxonomyBackfillService {
             snapshotRepo.saveAll(changed);
         }
         return changed.size();
+    }
+
+    private static boolean isOtherCategory(StockThemeMappingEntity mapping) {
+        return hasText(mapping.getThemeCategory())
+                && ThemeTaxonomyClassifier.OTHER.equalsIgnoreCase(mapping.getThemeCategory().trim());
     }
 
     private static boolean hasText(String value) {

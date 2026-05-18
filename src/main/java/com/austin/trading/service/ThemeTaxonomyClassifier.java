@@ -86,11 +86,11 @@ public final class ThemeTaxonomyClassifier {
     }
 
     /**
-     * Read-only suggestion for generic OTHER/其他強勢股 review queues.
+     * Deterministic suggestion for generic OTHER/其他強勢股 review queues.
      *
-     * This deliberately does not rewrite the stored category. It only gives the
-     * observability API a deterministic first-pass bucket so humans can see which
-     * OTHER rows are likely resolvable before any future reviewed backfill.
+     * Observability callers expose this as a read-only first-pass bucket; the
+     * reviewed taxonomy backfill may also use it to rewrite stored OTHER rows
+     * when the suggestion is deterministic and non-UNRESOLVED.
      */
     public static String suggestCategoryForGenericOther(String symbol, String stockName) {
         String key = ((symbol == null ? "" : symbol) + " " + (stockName == null ? "" : stockName)).trim();

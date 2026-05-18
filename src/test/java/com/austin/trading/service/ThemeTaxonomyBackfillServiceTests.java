@@ -67,6 +67,49 @@ class ThemeTaxonomyBackfillServiceTests {
     }
 
     @Test
+    void backfillRefinesResolvableOtherRowsButKeepsUnresolvedOtherInReviewQueue() {
+        StockThemeMappingEntity resolvableOther = mapping("1319", "其他強勢股", "OTHER", "codex-v2-postmarket");
+        resolvableOther.setStockName("東陽");
+        StockThemeMappingEntity unresolvedOther = mapping("9999", "其他強勢股", "OTHER", "codex-v2-postmarket");
+        unresolvedOther.setStockName("未知公司");
+        StockThemeMappingEntity manualCategory = mapping("2330", "AI算力", "AI_COMPUTE", "manual-curation");
+        manualCategory.setStockName("台積電");
+        when(mappingRepo.findAllByOrderBySymbolAscThemeTagAsc()).thenReturn(List.of(resolvableOther, unresolvedOther, manualCategory));
+        when(snapshotRepo.findAll()).thenReturn(List.of());
+
+        int updated = service.backfillMissingCategoriesAndSources();
+
+        assertThat(updated).isEqualTo(1);
+        assertThat(resolvableOther.getThemeCategory()).isEqualTo(ThemeTaxonomyClassifier.MATERIALS);
+        assertThat(resolvableOther.getSource()).isEqualTo("codex-v2-postmarket");
+        assertThat(unresolvedOther.getThemeCategory()).isEqualTo(ThemeTaxonomyClassifier.OTHER);
+        assertThat(manualCategory.getThemeCategory()).isEqualTo("AI_COMPUTE");
+        verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
+        verify(mappingRepo).saveAll(List.of(resolvableOther));
+        verify(snapshotRepo).findAll();
+        verify(snapshotRepo, never()).saveAll(anyList());
+        verifyNoMoreInteractions(mappingRepo, snapshotRepo);
+    }
+
+    @Test
+    void backfillCanClassifyBlankGenericOtherAndRefineItInSameRun() {
+        StockThemeMappingEntity blankResolvableOther = mapping("1216", "其他強勢股", null, "codex-v2-postmarket");
+        blankResolvableOther.setStockName("統一");
+        when(mappingRepo.findAllByOrderBySymbolAscThemeTagAsc()).thenReturn(List.of(blankResolvableOther));
+        when(snapshotRepo.findAll()).thenReturn(List.of());
+
+        int updated = service.backfillMissingCategoriesAndSources();
+
+        assertThat(updated).isEqualTo(1);
+        assertThat(blankResolvableOther.getThemeCategory()).isEqualTo(ThemeTaxonomyClassifier.CONSUMER);
+        verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
+        verify(mappingRepo).saveAll(List.of(blankResolvableOther));
+        verify(snapshotRepo).findAll();
+        verify(snapshotRepo, never()).saveAll(anyList());
+        verifyNoMoreInteractions(mappingRepo, snapshotRepo);
+    }
+
+    @Test
     void backfillIsNoOpWhenAllCategoriesExist() {
         StockThemeMappingEntity mapping = mapping("2368", "PCB/載板/材料", "PCB", "codex-v2-postmarket");
         ThemeSnapshotEntity snapshot = snapshot("金融", "FINANCIAL");
