@@ -29,6 +29,9 @@ public final class ThemeTaxonomyClassifier {
     private ThemeTaxonomyClassifier() {
     }
 
+    public static final String LEGACY_AI_CHIP_SEED_SOURCE = "legacy-ai-chip-seed";
+    public static final String LEGACY_THEME_MAPPING_SOURCE = "legacy-theme-mapping";
+
     public static String classify(String themeTag) {
         if (!hasText(themeTag)) return UNKNOWN;
         String tag = themeTag.trim();
@@ -74,6 +77,17 @@ public final class ThemeTaxonomyClassifier {
             return OTHER;
         }
         return OTHER;
+    }
+
+    /**
+     * Deterministic provenance label for legacy mapping rows whose source was blank.
+     * This is a data-lineage label only; it does not imply live trading confidence.
+     */
+    public static String inferLegacySource(String themeTag) {
+        if (hasText(themeTag) && themeTag.trim().toUpperCase(Locale.ROOT).startsWith("AI_CHIP")) {
+            return LEGACY_AI_CHIP_SEED_SOURCE;
+        }
+        return LEGACY_THEME_MAPPING_SOURCE;
     }
 
     private static boolean containsAny(String text, String... needles) {

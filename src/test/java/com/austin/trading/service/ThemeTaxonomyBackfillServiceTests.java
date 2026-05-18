@@ -32,26 +32,35 @@ class ThemeTaxonomyBackfillServiceTests {
         assertThat(ThemeTaxonomyClassifier.classify("金融")).isEqualTo(ThemeTaxonomyClassifier.FINANCIAL);
         assertThat(ThemeTaxonomyClassifier.classify("其他強勢股")).isEqualTo(ThemeTaxonomyClassifier.OTHER);
         assertThat(ThemeTaxonomyClassifier.classify(null)).isEqualTo(ThemeTaxonomyClassifier.UNKNOWN);
+        assertThat(ThemeTaxonomyClassifier.inferLegacySource("AI_CHIP_14313"))
+                .isEqualTo(ThemeTaxonomyClassifier.LEGACY_AI_CHIP_SEED_SOURCE);
+        assertThat(ThemeTaxonomyClassifier.inferLegacySource("其他強勢股"))
+                .isEqualTo(ThemeTaxonomyClassifier.LEGACY_THEME_MAPPING_SOURCE);
     }
 
     @Test
-    void backfillFillsOnlyMissingCategoriesAndPreservesManualLabels() {
-        StockThemeMappingEntity missingMapping = mapping("2330", "AI_CHIP_14313", null);
-        StockThemeMappingEntity manualMapping = mapping("2368", "PCB/載板/材料", "MANUAL_PCB");
+    void backfillFillsOnlyMissingTaxonomyFieldsAndPreservesManualLabels() {
+        StockThemeMappingEntity missingMapping = mapping("2330", "AI_CHIP_14313", null, null);
+        StockThemeMappingEntity missingSourceOnly = mapping("2327", "其他強勢股", "OTHER", " ");
+        StockThemeMappingEntity manualMapping = mapping("2368", "PCB/載板/材料", "MANUAL_PCB", "manual-curation");
         ThemeSnapshotEntity missingSnapshot = snapshot("金融", "");
         ThemeSnapshotEntity manualSnapshot = snapshot("散熱/機構", "MANUAL_COOLING");
-        when(mappingRepo.findAllByOrderBySymbolAscThemeTagAsc()).thenReturn(List.of(missingMapping, manualMapping));
+        when(mappingRepo.findAllByOrderBySymbolAscThemeTagAsc()).thenReturn(List.of(missingMapping, missingSourceOnly, manualMapping));
         when(snapshotRepo.findAll()).thenReturn(List.of(missingSnapshot, manualSnapshot));
 
-        int updated = service.backfillMissingCategories();
+        int updated = service.backfillMissingCategoriesAndSources();
 
-        assertThat(updated).isEqualTo(2);
+        assertThat(updated).isEqualTo(3);
         assertThat(missingMapping.getThemeCategory()).isEqualTo(ThemeTaxonomyClassifier.AI_COMPUTE);
+        assertThat(missingMapping.getSource()).isEqualTo(ThemeTaxonomyClassifier.LEGACY_AI_CHIP_SEED_SOURCE);
+        assertThat(missingSourceOnly.getThemeCategory()).isEqualTo("OTHER");
+        assertThat(missingSourceOnly.getSource()).isEqualTo(ThemeTaxonomyClassifier.LEGACY_THEME_MAPPING_SOURCE);
         assertThat(manualMapping.getThemeCategory()).isEqualTo("MANUAL_PCB");
+        assertThat(manualMapping.getSource()).isEqualTo("manual-curation");
         assertThat(missingSnapshot.getThemeCategory()).isEqualTo(ThemeTaxonomyClassifier.FINANCIAL);
         assertThat(manualSnapshot.getThemeCategory()).isEqualTo("MANUAL_COOLING");
         verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
-        verify(mappingRepo).saveAll(List.of(missingMapping));
+        verify(mappingRepo).saveAll(List.of(missingMapping, missingSourceOnly));
         verify(snapshotRepo).findAll();
         verify(snapshotRepo).saveAll(List.of(missingSnapshot));
         verifyNoMoreInteractions(mappingRepo, snapshotRepo);
@@ -59,12 +68,12 @@ class ThemeTaxonomyBackfillServiceTests {
 
     @Test
     void backfillIsNoOpWhenAllCategoriesExist() {
-        StockThemeMappingEntity mapping = mapping("2368", "PCB/載板/材料", "PCB");
+        StockThemeMappingEntity mapping = mapping("2368", "PCB/載板/材料", "PCB", "codex-v2-postmarket");
         ThemeSnapshotEntity snapshot = snapshot("金融", "FINANCIAL");
         when(mappingRepo.findAllByOrderBySymbolAscThemeTagAsc()).thenReturn(List.of(mapping));
         when(snapshotRepo.findAll()).thenReturn(List.of(snapshot));
 
-        int updated = service.backfillMissingCategories();
+        int updated = service.backfillMissingCategoriesAndSources();
 
         assertThat(updated).isZero();
         verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
@@ -74,11 +83,12 @@ class ThemeTaxonomyBackfillServiceTests {
         verifyNoMoreInteractions(mappingRepo, snapshotRepo);
     }
 
-    private StockThemeMappingEntity mapping(String symbol, String themeTag, String category) {
+    private StockThemeMappingEntity mapping(String symbol, String themeTag, String category, String source) {
         StockThemeMappingEntity entity = new StockThemeMappingEntity();
         entity.setSymbol(symbol);
         entity.setThemeTag(themeTag);
         entity.setThemeCategory(category);
+        entity.setSource(source);
         entity.setIsActive(true);
         return entity;
     }

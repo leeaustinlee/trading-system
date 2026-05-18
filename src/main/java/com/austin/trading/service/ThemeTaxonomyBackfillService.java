@@ -45,11 +45,11 @@ public class ThemeTaxonomyBackfillService {
             return;
         }
         try {
-            int updated = backfillMissingCategories();
+            int updated = backfillMissingCategoriesAndSources();
             if (updated > 0) {
-                log.info("[ThemeTaxonomyBackfill] filled missing theme categories: rows={}", updated);
+                log.info("[ThemeTaxonomyBackfill] filled missing theme taxonomy fields: rows={}", updated);
             } else {
-                log.info("[ThemeTaxonomyBackfill] no missing theme categories to fill");
+                log.info("[ThemeTaxonomyBackfill] no missing theme taxonomy fields to fill");
             }
         } catch (Exception e) {
             log.warn("[ThemeTaxonomyBackfill] failed; startup continues: {}", e.getMessage(), e);
@@ -57,13 +57,13 @@ public class ThemeTaxonomyBackfillService {
     }
 
     /**
-     * Fill blank themeCategory values deterministically from themeTag.
-     * Existing non-blank categories are preserved so manual labels remain the source of truth.
+     * Fill blank themeCategory and source values deterministically from themeTag.
+     * Existing non-blank categories/sources are preserved so manual labels remain the source of truth.
      *
-     * @return number of rows changed across stock_theme_mapping and theme_snapshot
+     * @return number of changed rows across stock_theme_mapping and theme_snapshot
      */
     @Transactional
-    public int backfillMissingCategories() {
+    public int backfillMissingCategoriesAndSources() {
         int updatedMappings = backfillMappings();
         int updatedSnapshots = backfillSnapshots();
         return updatedMappings + updatedSnapshots;
@@ -72,8 +72,16 @@ public class ThemeTaxonomyBackfillService {
     int backfillMappings() {
         List<StockThemeMappingEntity> changed = new ArrayList<>();
         for (StockThemeMappingEntity mapping : mappingRepo.findAllByOrderBySymbolAscThemeTagAsc()) {
+            boolean dirty = false;
             if (!hasText(mapping.getThemeCategory())) {
                 mapping.setThemeCategory(ThemeTaxonomyClassifier.classify(mapping.getThemeTag()));
+                dirty = true;
+            }
+            if (!hasText(mapping.getSource())) {
+                mapping.setSource(ThemeTaxonomyClassifier.inferLegacySource(mapping.getThemeTag()));
+                dirty = true;
+            }
+            if (dirty) {
                 changed.add(mapping);
             }
         }
