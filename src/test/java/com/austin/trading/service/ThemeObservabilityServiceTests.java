@@ -85,6 +85,10 @@ class ThemeObservabilityServiceTests {
         assertThat(response.unresolvedOtherCategoryCount()).isZero();
         assertThat(response.otherCategorySuggestions()).hasSize(1);
         assertThat(response.otherCategorySuggestions().get(0).suggestedCategory()).isEqualTo(ThemeTaxonomyClassifier.CONSUMER);
+        assertThat(response.taxonomyQualityStatus()).isEqualTo("DATA_GAP");
+        assertThat(response.taxonomyQualitySummary()).contains("required metadata gaps");
+        assertThat(response.qualityWarnings())
+                .contains("MISSING_CATEGORY=1", "MISSING_SOURCE=1", "MISSING_CONFIDENCE=1", "LOW_CONFIDENCE=1", "AMBIGUOUS_SYMBOL=1", "RESOLVABLE_OTHER=1");
         assertThat(response.byIssueType())
                 .containsEntry("MISSING_CATEGORY", 1L)
                 .containsEntry("MISSING_SOURCE", 1L)
@@ -142,6 +146,9 @@ class ThemeObservabilityServiceTests {
         assertThat(response.otherCategoryCount()).isEqualTo(1);
         assertThat(response.resolvableOtherCategoryCount()).isZero();
         assertThat(response.unresolvedOtherCategoryCount()).isEqualTo(1);
+        assertThat(response.taxonomyQualityStatus()).isEqualTo("MANUAL_REVIEW");
+        assertThat(response.taxonomyQualitySummary()).contains("manual review");
+        assertThat(response.qualityWarnings()).containsExactly("UNRESOLVED_OTHER_MANUAL_REVIEW=1");
         assertThat(response.otherBySuggestedCategory()).containsEntry(ThemeTaxonomyClassifier.UNRESOLVED_OTHER, 1L);
         assertThat(response.otherCategorySuggestions()).hasSize(1);
         var suggestion = response.otherCategorySuggestions().get(0);
@@ -170,6 +177,8 @@ class ThemeObservabilityServiceTests {
         assertThat(response.otherCategorySuggestions()).hasSize(1);
         assertThat(response.otherCategorySuggestions().get(0).symbol()).isEqualTo("1319");
         assertThat(response.otherCategorySuggestions().get(0).suggestedCategory()).isEqualTo(ThemeTaxonomyClassifier.MATERIALS);
+        assertThat(response.taxonomyQualityStatus()).isEqualTo("REFINEMENT_READY");
+        assertThat(response.qualityWarnings()).containsExactly("RESOLVABLE_OTHER=1");
         assertThat(response.byIssueType()).containsEntry("OTHER_CATEGORY_REVIEW", 1L);
 
         verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
@@ -194,6 +203,25 @@ class ThemeObservabilityServiceTests {
         assertThat(response.otherCategorySuggestions()).hasSize(1);
         assertThat(response.otherCategorySuggestions().get(0).symbol()).isEqualTo("9999");
         assertThat(response.otherCategorySuggestions().get(0).suggestedCategory()).isEqualTo(ThemeTaxonomyClassifier.UNRESOLVED_OTHER);
+
+        verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
+        verifyNoMoreInteractions(mappingRepo, snapshotRepo);
+    }
+
+    @Test
+    void mappingObservabilityReportsOkWhenNoQualityWarningsRemain() {
+        when(mappingRepo.findAllByOrderBySymbolAscThemeTagAsc()).thenReturn(List.of(
+                mapping("2330", "台積電", "AI算力", "AI_COMPUTE", null, "MANUAL", "1.00", true),
+                mapping("3661", "世芯-KY", "ASIC", "AI_COMPUTE", null, "CODEX", "0.90", true)
+        ));
+
+        var response = service.getMappingObservability(null, null, null, null, true, new BigDecimal("0.70"), 10,
+                null, null);
+
+        assertThat(response.taxonomyQualityStatus()).isEqualTo("OK");
+        assertThat(response.taxonomyQualitySummary()).contains("clean");
+        assertThat(response.qualityWarnings()).isEmpty();
+        assertThat(response.byIssueType()).isEmpty();
 
         verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
         verifyNoMoreInteractions(mappingRepo, snapshotRepo);

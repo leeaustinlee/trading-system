@@ -154,6 +154,25 @@ public class ThemeObservabilityService {
                 .collect(Collectors.groupingBy(Function.identity(), LinkedHashMap::new, Collectors.counting()));
         long unresolvedOtherCategoryCount = otherBySuggestedCategory.getOrDefault(ThemeTaxonomyClassifier.UNRESOLVED_OTHER, 0L);
         long resolvableOtherCategoryCount = otherCategoryCount - unresolvedOtherCategoryCount;
+        List<String> qualityWarnings = buildQualityWarnings(
+                missingCategoryCount,
+                missingSourceCount,
+                missingConfidenceCount,
+                lowConfidenceCount,
+                ambiguousSymbols.size(),
+                resolvableOtherCategoryCount,
+                unresolvedOtherCategoryCount
+        );
+        String taxonomyQualityStatus = taxonomyQualityStatus(
+                missingCategoryCount,
+                missingSourceCount,
+                missingConfidenceCount,
+                lowConfidenceCount,
+                ambiguousSymbols.size(),
+                resolvableOtherCategoryCount,
+                unresolvedOtherCategoryCount
+        );
+        String taxonomyQualitySummary = taxonomyQualitySummary(taxonomyQualityStatus, qualityWarnings);
         List<ThemeOtherCategorySuggestionResponse> otherCategorySuggestions = otherRows.stream()
                 .limit(safeLimit)
                 .map(this::toOtherCategorySuggestion)
@@ -179,6 +198,9 @@ public class ThemeObservabilityService {
                 unresolvedOtherCategoryCount,
                 threshold,
                 byIssueType,
+                taxonomyQualityStatus,
+                taxonomyQualitySummary,
+                qualityWarnings,
                 SAFETY_NOTE,
                 LocalDateTime.now(),
                 issues,
@@ -294,6 +316,58 @@ public class ThemeObservabilityService {
                 .map(ThemeMappingIssueResponse::issueType)
                 .filter(ThemeObservabilityService::hasText)
                 .collect(Collectors.groupingBy(Function.identity(), LinkedHashMap::new, Collectors.counting()));
+    }
+
+    private static List<String> buildQualityWarnings(long missingCategoryCount,
+                                                     long missingSourceCount,
+                                                     long missingConfidenceCount,
+                                                     long lowConfidenceCount,
+                                                     long ambiguousSymbolCount,
+                                                     long resolvableOtherCategoryCount,
+                                                     long unresolvedOtherCategoryCount) {
+        List<String> warnings = new ArrayList<>();
+        if (missingCategoryCount > 0) warnings.add("MISSING_CATEGORY=" + missingCategoryCount);
+        if (missingSourceCount > 0) warnings.add("MISSING_SOURCE=" + missingSourceCount);
+        if (missingConfidenceCount > 0) warnings.add("MISSING_CONFIDENCE=" + missingConfidenceCount);
+        if (lowConfidenceCount > 0) warnings.add("LOW_CONFIDENCE=" + lowConfidenceCount);
+        if (ambiguousSymbolCount > 0) warnings.add("AMBIGUOUS_SYMBOL=" + ambiguousSymbolCount);
+        if (resolvableOtherCategoryCount > 0) warnings.add("RESOLVABLE_OTHER=" + resolvableOtherCategoryCount);
+        if (unresolvedOtherCategoryCount > 0) warnings.add("UNRESOLVED_OTHER_MANUAL_REVIEW=" + unresolvedOtherCategoryCount);
+        return warnings;
+    }
+
+    private static String taxonomyQualityStatus(long missingCategoryCount,
+                                                long missingSourceCount,
+                                                long missingConfidenceCount,
+                                                long lowConfidenceCount,
+                                                long ambiguousSymbolCount,
+                                                long resolvableOtherCategoryCount,
+                                                long unresolvedOtherCategoryCount) {
+        if (missingCategoryCount > 0 || missingSourceCount > 0 || missingConfidenceCount > 0) {
+            return "DATA_GAP";
+        }
+        if (resolvableOtherCategoryCount > 0) {
+            return "REFINEMENT_READY";
+        }
+        if (lowConfidenceCount > 0 || ambiguousSymbolCount > 0) {
+            return "REVIEW_REQUIRED";
+        }
+        if (unresolvedOtherCategoryCount > 0) {
+            return "MANUAL_REVIEW";
+        }
+        return "OK";
+    }
+
+    private static String taxonomyQualitySummary(String status, List<String> warnings) {
+        return switch (status) {
+            case "DATA_GAP" -> "taxonomy mapping has required metadata gaps before it can be treated as complete";
+            case "REFINEMENT_READY" -> "deterministic OTHER refinements are available; run reviewed backfill before relying on category concentration";
+            case "REVIEW_REQUIRED" -> "taxonomy mapping is populated but still has low-confidence or ambiguous rows to review";
+            case "MANUAL_REVIEW" -> "taxonomy mapping is mostly normalized; only unresolved OTHER rows remain for manual review";
+            default -> warnings.isEmpty()
+                    ? "taxonomy mapping quality checks are clean for the current filter"
+                    : "taxonomy mapping quality checks reported: " + String.join(", ", warnings);
+        };
     }
 
     private static BigDecimal avgConfidence(List<StockThemeMappingEntity> mappings) {
