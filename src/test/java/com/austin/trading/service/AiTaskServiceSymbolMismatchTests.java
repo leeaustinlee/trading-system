@@ -38,9 +38,10 @@ class AiTaskServiceSymbolMismatchTests {
     private static final LocalDate TODAY = LocalDate.now();
     private static final AtomicInteger TYPE_SEQ = new AtomicInteger();
 
-    /** 測試間避免 UPSERT 衝突，每次用不同但不超過 DB 欄位長度的 taskType */
+    /** 測試間避免 UPSERT 衝突；integration DB 會跨測試執行殘留，suffix 需跨 JVM run 也不同。 */
     private String uniqueType(String base) {
-        return base + "_" + TYPE_SEQ.incrementAndGet();
+        int runSuffix = Math.floorMod(System.nanoTime(), 100_000);
+        return base + "_" + runSuffix + "_" + TYPE_SEQ.incrementAndGet();
     }
 
     /** 場景：OPENING 候選 10 檔，submit 含 4 檔非候選 → 必須丟 IllegalArgumentException */

@@ -13,8 +13,12 @@ trading:
   ai:
     claude:
       enabled: false
-  # 整合測試不撥打 TWSE 歷史 API（避免外網依賴與啟動延遲）
+  # 整合測試不撥打 TWSE 歷史 API，也不執行 startup DB backfill
+  # （避免 persistent integration DB 污染跨測試結果）
   market-index:
+    startup-backfill:
+      enabled: false
+  theme-taxonomy:
     startup-backfill:
       enabled: false
   scheduler:
