@@ -84,7 +84,7 @@ public class FiveMinuteMonitorJob {
         try {
             MarketCurrentResponse market = marketDataService.getCurrentMarket().orElse(null);
             if (market == null) {
-                schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), "Skip: no market snapshot.");
+                schedulerLogService.emptyData(jobName, triggerTime, LocalDateTime.now(), "Skip: no market snapshot.");
                 orchestrationService.markExecuted(today, step, "Skip: no market snapshot.");
                 return;
             }

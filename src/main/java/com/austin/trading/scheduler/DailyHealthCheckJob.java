@@ -183,7 +183,7 @@ public class DailyHealthCheckJob {
             if (incomplete.isEmpty() && swept.isEmpty() && systemIssues.isEmpty()) {
                 String msg = "昨日 (" + yesterday + ") 所有排程步驟完成 ✅；系統健康檢查全綠燈";
                 log.info("[DailyHealthCheck] {}", msg);
-                schedulerLogService.success(jobName, trigger, LocalDateTime.now(), msg);
+                schedulerLogService.successReal(jobName, trigger, LocalDateTime.now(), msg);
                 return null;
             }
 
@@ -222,7 +222,7 @@ public class DailyHealthCheckJob {
             if (lineEnabled) {
                 notificationFacade.notifySystemAlert("每日健康檢查", summary);
             }
-            schedulerLogService.success(jobName, trigger, LocalDateTime.now(),
+            schedulerLogService.degraded(jobName, trigger, LocalDateTime.now(),
                     "incomplete=" + incomplete.size()
                             + " stale=" + swept.size()
                             + " systemIssues=" + systemIssues.size());

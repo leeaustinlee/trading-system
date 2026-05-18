@@ -77,7 +77,7 @@ public class T86DataPrepJob {
             List<InstitutionalFlow> flows = institutionalClient.getT86(today);
             if (flows.isEmpty()) {
                 log.info("[T86DataPrepJob] No T86 data for {}, skip.", today);
-                schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), "No T86 data");
+                schedulerLogService.emptyData(jobName, triggerTime, LocalDateTime.now(), "No T86 data");
                 orchestrationService.markDone(today, step, "No T86 data");
                 return;
             }

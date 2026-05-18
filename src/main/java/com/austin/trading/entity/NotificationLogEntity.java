@@ -34,6 +34,39 @@ public class NotificationLogEntity {
     @Column(name = "payload_json", columnDefinition = "json")
     private String payloadJson;
 
+    @Column(name = "provider", length = 30)
+    private String provider;
+
+    @Column(name = "delivery_status", length = 30)
+    private String deliveryStatus;
+
+    @Column(name = "attempted")
+    private Boolean attempted;
+
+    @Column(name = "delivered")
+    private Boolean delivered;
+
+    @Column(name = "attempted_at")
+    private LocalDateTime attemptedAt;
+
+    @Column(name = "delivered_at")
+    private LocalDateTime deliveredAt;
+
+    @Column(name = "provider_http_status")
+    private Integer providerHttpStatus;
+
+    @Column(name = "provider_message_id", length = 120)
+    private String providerMessageId;
+
+    @Column(name = "error_code", length = 80)
+    private String errorCode;
+
+    @Column(name = "error_body", columnDefinition = "TEXT")
+    private String errorBody;
+
+    @Column(name = "retry_count")
+    private Integer retryCount;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -87,6 +120,94 @@ public class NotificationLogEntity {
 
     public void setPayloadJson(String payloadJson) {
         this.payloadJson = payloadJson;
+    }
+
+    public String getProvider() {
+        return provider;
+    }
+
+    public void setProvider(String provider) {
+        this.provider = provider;
+    }
+
+    public String getDeliveryStatus() {
+        return deliveryStatus;
+    }
+
+    public void setDeliveryStatus(String deliveryStatus) {
+        this.deliveryStatus = deliveryStatus;
+    }
+
+    public Boolean getAttempted() {
+        return attempted;
+    }
+
+    public void setAttempted(Boolean attempted) {
+        this.attempted = attempted;
+    }
+
+    public Boolean getDelivered() {
+        return delivered;
+    }
+
+    public void setDelivered(Boolean delivered) {
+        this.delivered = delivered;
+    }
+
+    public LocalDateTime getAttemptedAt() {
+        return attemptedAt;
+    }
+
+    public void setAttemptedAt(LocalDateTime attemptedAt) {
+        this.attemptedAt = attemptedAt;
+    }
+
+    public LocalDateTime getDeliveredAt() {
+        return deliveredAt;
+    }
+
+    public void setDeliveredAt(LocalDateTime deliveredAt) {
+        this.deliveredAt = deliveredAt;
+    }
+
+    public Integer getProviderHttpStatus() {
+        return providerHttpStatus;
+    }
+
+    public void setProviderHttpStatus(Integer providerHttpStatus) {
+        this.providerHttpStatus = providerHttpStatus;
+    }
+
+    public String getProviderMessageId() {
+        return providerMessageId;
+    }
+
+    public void setProviderMessageId(String providerMessageId) {
+        this.providerMessageId = providerMessageId;
+    }
+
+    public String getErrorCode() {
+        return errorCode;
+    }
+
+    public void setErrorCode(String errorCode) {
+        this.errorCode = errorCode;
+    }
+
+    public String getErrorBody() {
+        return errorBody;
+    }
+
+    public void setErrorBody(String errorBody) {
+        this.errorBody = errorBody;
+    }
+
+    public Integer getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(Integer retryCount) {
+        this.retryCount = retryCount;
     }
 
     public LocalDateTime getCreatedAt() {

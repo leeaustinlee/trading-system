@@ -21,6 +21,12 @@ public class SchedulerExecutionLogEntity {
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 
+    @Column(name = "health_level", length = 40)
+    private String healthLevel;
+
+    @Column(name = "health_reason", length = 500)
+    private String healthReason;
+
     @Column(name = "duration_ms")
     private Long durationMs;
 
@@ -37,6 +43,10 @@ public class SchedulerExecutionLogEntity {
     public void setTriggerTime(LocalDateTime triggerTime) { this.triggerTime = triggerTime; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getHealthLevel() { return healthLevel; }
+    public void setHealthLevel(String healthLevel) { this.healthLevel = healthLevel; }
+    public String getHealthReason() { return healthReason; }
+    public void setHealthReason(String healthReason) { this.healthReason = healthReason; }
     public Long getDurationMs() { return durationMs; }
     public void setDurationMs(Long durationMs) { this.durationMs = durationMs; }
     public String getMessage() { return message; }

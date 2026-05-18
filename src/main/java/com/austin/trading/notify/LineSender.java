@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -40,24 +41,32 @@ public class LineSender {
      * @param message 要發送的文字（最多 5000 字元，超出自動截斷）
      */
     public boolean send(String message) {
+        return sendWithResult(message).delivered();
+    }
+
+    public NotificationDeliveryResult sendWithResult(String message) {
         if (!config.isEnabled()) {
             log.debug("[LineSender] LINE disabled, skip: {}", abbreviate(message));
-            return false;
+            return NotificationDeliveryResult.skipped("LINE", "DISABLED", "LINE sender disabled");
         }
         String token = config.resolveAccessToken();
         if (token == null || token.isBlank()) {
             log.warn("[LineSender] LINE channel access token not set, skip sending.");
-            return false;
+            return NotificationDeliveryResult.skipped("LINE", "MISSING_ACCESS_TOKEN", "LINE channel access token missing");
         }
         String to = config.getTo();
         if (to == null || to.isBlank()) {
             log.warn("[LineSender] LINE to not set, skip sending.");
-            return false;
+            return NotificationDeliveryResult.skipped("LINE", "MISSING_TO", "LINE to missing");
         }
         String pushUrl = config.getPushUrl();
         if (pushUrl == null || pushUrl.isBlank()) {
             log.warn("[LineSender] LINE pushUrl not set, skip sending.");
-            return false;
+            return NotificationDeliveryResult.skipped("LINE", "MISSING_PUSH_URL", "LINE pushUrl missing");
+        }
+        if (message == null || message.isBlank()) {
+            log.debug("[LineSender] empty message, skip");
+            return NotificationDeliveryResult.skipped("LINE", "EMPTY_MESSAGE", "Message is blank");
         }
 
         String truncated = message.length() > 5000 ? message.substring(0, 4997) + "..." : message;
@@ -72,23 +81,24 @@ public class LineSender {
     /**
      * 實際送出，遇 429 最多再試 {@link #MAX_RETRY_ON_429} 次（5 秒間隔），其他錯誤直接 graceful fail。
      */
-    private boolean doSendWithRetry(String pushUrl, String token, Map<String, Object> payload,
-                                    String originalMessage, int attempt) {
+    private NotificationDeliveryResult doSendWithRetry(String pushUrl, String token, Map<String, Object> payload,
+                                                       String originalMessage, int attempt) {
         try {
-            webClient.post()
+            ResponseEntity<String> response = webClient.post()
                     .uri(pushUrl)
                     .header("Authorization", "Bearer " + token)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(payload)
                     .retrieve()
-                    .bodyToMono(String.class)
+                    .toEntity(String.class)
                     .block();
             if (attempt > 0) {
                 log.info("[LineSender] Sent after {} retry: {}", attempt, abbreviate(originalMessage));
             } else {
                 log.info("[LineSender] Sent: {}", abbreviate(originalMessage));
             }
-            return true;
+            Integer httpStatus = response == null ? 200 : response.getStatusCode().value();
+            return NotificationDeliveryResult.delivered("LINE", httpStatus, null, attempt);
         } catch (WebClientResponseException e) {
             HttpStatusCode status = e.getStatusCode();
             if (status.value() == 429 && attempt < MAX_RETRY_ON_429) {
@@ -96,16 +106,19 @@ public class LineSender {
                         attempt + 1, RETRY_DELAY_MS);
                 try { Thread.sleep(RETRY_DELAY_MS); } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
-                    return false;
+                    return NotificationDeliveryResult.failed("LINE", 429,
+                            "INTERRUPTED", "Interrupted during LINE 429 retry backoff", attempt);
                 }
                 return doSendWithRetry(pushUrl, token, payload, originalMessage, attempt + 1);
             }
             log.error("[LineSender] Failed to send LINE message: {} (giving up after {} attempt(s))",
                     e.getMessage(), attempt + 1);
-            return false;
+            return NotificationDeliveryResult.failed("LINE", status.value(),
+                    "HTTP_" + status.value(), abbreviate(e.getResponseBodyAsString()), attempt);
         } catch (Exception e) {
             log.error("[LineSender] Failed to send LINE message: {}", e.getMessage());
-            return false;
+            return NotificationDeliveryResult.failed("LINE", null,
+                    e.getClass().getSimpleName(), abbreviate(e.getMessage()), attempt);
         }
     }
 

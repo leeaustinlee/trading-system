@@ -35,7 +35,7 @@ class MarketIndexDataPrepJobTests {
         job.run();
 
         verify(backfill, atLeastOnce()).dailyRefresh(any(LocalDate.class));
-        verify(logSvc).success(eq("MarketIndexDataPrepJob"),
+        verify(logSvc).successReal(eq("MarketIndexDataPrepJob"),
                 any(LocalDateTime.class), any(LocalDateTime.class),
                 contains("upserted=45"));
         verify(logSvc, never()).failed(anyString(), any(), any(), anyString());
@@ -63,7 +63,7 @@ class MarketIndexDataPrepJobTests {
         MarketIndexDataPrepJob job = new MarketIndexDataPrepJob(backfill, logSvc);
         job.run();
 
-        verify(logSvc).success(eq("MarketIndexDataPrepJob"),
+        verify(logSvc).emptyData(eq("MarketIndexDataPrepJob"),
                 any(LocalDateTime.class), any(LocalDateTime.class),
                 contains("upserted=0"));
         // 確認 message format

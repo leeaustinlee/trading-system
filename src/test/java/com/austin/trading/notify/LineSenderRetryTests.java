@@ -81,9 +81,14 @@ class LineSenderRetryTests {
         enqueue(200);
 
         boolean ok = sender.send("hello");
+        NotificationDeliveryResult result = sender.sendWithResult("hello-result");
 
         assertThat(ok).isTrue();
-        assertThat(requestCount.get()).isEqualTo(1);
+        assertThat(result.status()).isEqualTo(NotificationDeliveryResult.STATUS_DELIVERED);
+        assertThat(result.attempted()).isTrue();
+        assertThat(result.delivered()).isTrue();
+        assertThat(result.httpStatus()).isEqualTo(200);
+        assertThat(requestCount.get()).isEqualTo(2);
     }
 
     @Test
@@ -94,6 +99,11 @@ class LineSenderRetryTests {
 
         assertThat(ok).isTrue();
         assertThat(requestCount.get()).isEqualTo(2);
+
+        enqueue(429, 200);
+        NotificationDeliveryResult result = sender.sendWithResult("retry-me-result");
+        assertThat(result.status()).isEqualTo(NotificationDeliveryResult.STATUS_DELIVERED);
+        assertThat(result.retryCount()).isEqualTo(1);
     }
 
     @Test
@@ -104,6 +114,12 @@ class LineSenderRetryTests {
 
         assertThat(ok).isFalse();
         assertThat(requestCount.get()).isEqualTo(2); // 1 + 1 retry
+
+        enqueue(429, 429);
+        NotificationDeliveryResult result = sender.sendWithResult("rate-limited-result");
+        assertThat(result.status()).isEqualTo(NotificationDeliveryResult.STATUS_FAILED);
+        assertThat(result.httpStatus()).isEqualTo(429);
+        assertThat(result.retryCount()).isEqualTo(1);
     }
 
     @Test
@@ -114,6 +130,12 @@ class LineSenderRetryTests {
 
         assertThat(ok).isFalse();
         assertThat(requestCount.get()).isEqualTo(1);
+
+        enqueue(500);
+        NotificationDeliveryResult result = sender.sendWithResult("server-error-result");
+        assertThat(result.status()).isEqualTo(NotificationDeliveryResult.STATUS_FAILED);
+        assertThat(result.httpStatus()).isEqualTo(500);
+        assertThat(result.errorCode()).isEqualTo("HTTP_500");
     }
 
     @Test
@@ -123,8 +145,27 @@ class LineSenderRetryTests {
         LineSender disabled = new LineSender(cfg, WebClient.builder());
 
         boolean ok = disabled.send("noop");
+        NotificationDeliveryResult result = disabled.sendWithResult("noop");
 
         assertThat(ok).isFalse();
+        assertThat(result.status()).isEqualTo(NotificationDeliveryResult.STATUS_SKIPPED);
+        assertThat(result.attempted()).isFalse();
+        assertThat(result.delivered()).isFalse();
+        assertThat(result.errorCode()).isEqualTo("DISABLED");
         assertThat(requestCount.get()).isZero();
+    }
+
+    @Test
+    void missingCredentials_skipsWithResult() {
+        LineNotifyConfig cfg = new LineNotifyConfig();
+        cfg.setEnabled(true);
+        cfg.setChannelAccessToken("");
+        cfg.setTo("U_dummy");
+
+        NotificationDeliveryResult result = new LineSender(cfg, WebClient.builder()).sendWithResult("noop");
+
+        assertThat(result.status()).isEqualTo(NotificationDeliveryResult.STATUS_SKIPPED);
+        assertThat(result.errorCode()).isEqualTo("MISSING_ACCESS_TOKEN");
+        assertThat(result.attempted()).isFalse();
     }
 }

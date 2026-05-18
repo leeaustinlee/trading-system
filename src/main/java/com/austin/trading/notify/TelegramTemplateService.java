@@ -208,15 +208,24 @@ public class TelegramTemplateService {
                 return;
             }
         }
-        boolean ok = telegramSender.send(htmlMessage);
+        NotificationDeliveryResult deliveryResult;
+        try {
+            deliveryResult = telegramSender.sendWithResult(htmlMessage);
+        } catch (Exception e) {
+            log.warn("[TelegramTemplateService] telegram send threw unexpectedly: {}", e.getMessage());
+            deliveryResult = NotificationDeliveryResult.failed("TELEGRAM", null,
+                    e.getClass().getSimpleName(), e.getMessage(), 0);
+        }
+        LocalDateTime now = LocalDateTime.now();
         try {
             notificationService.create(new NotificationCreateRequest(
-                    LocalDateTime.now(), tgType, SOURCE, title, htmlMessage, null));
+                    now, tgType, SOURCE, title, htmlMessage, null, deliveryResult));
         } catch (Exception e) {
             log.warn("[TelegramTemplateService] notification log persist failed: {}", e.getMessage());
         }
-        if (!ok) {
-            log.debug("[TelegramTemplateService] telegram send returned false (disabled / token missing / HTTP fail)");
+        if (!deliveryResult.delivered()) {
+            log.debug("[TelegramTemplateService] telegram send not delivered status={} errorCode={}",
+                    deliveryResult.status(), deliveryResult.errorCode());
         }
     }
 

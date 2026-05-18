@@ -3,8 +3,8 @@ package com.austin.trading.notify;
 import com.austin.trading.config.TelegramNotifyConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -48,31 +48,55 @@ public class TelegramSender {
      * @return 全部分段都成功才回 true；任一段失敗或被 skip 都回 false
      */
     public boolean send(String message) {
+        return sendWithResult(message).delivered();
+    }
+
+    public NotificationDeliveryResult sendWithResult(String message) {
         if (!config.isEnabled()) {
             log.debug("[TelegramSender] disabled, skip: {}", abbreviate(message));
-            return false;
+            return NotificationDeliveryResult.skipped("TELEGRAM", "DISABLED", "Telegram sender disabled");
         }
         if (!config.hasCredentials()) {
             log.warn("[TelegramSender] bot token / chat id 未設定，跳過發送。");
-            return false;
+            return NotificationDeliveryResult.skipped("TELEGRAM", "MISSING_CREDENTIALS", "Bot token or chat id missing");
         }
         if (message == null || message.isBlank()) {
             log.debug("[TelegramSender] empty message, skip");
-            return false;
+            return NotificationDeliveryResult.skipped("TELEGRAM", "EMPTY_MESSAGE", "Message is blank");
         }
 
         List<String> segments = splitForTelegram(message, Math.max(500, config.getMaxSegmentLength()));
-        boolean allOk = true;
+        NotificationDeliveryResult last = null;
+        List<String> messageIds = new ArrayList<>();
         for (int i = 0; i < segments.size(); i++) {
             String seg = segments.get(i);
             String prefix = segments.size() > 1 ? "(" + (i + 1) + "/" + segments.size() + ")\n" : "";
-            boolean ok = doSend(prefix + seg);
-            allOk = allOk && ok;
+            last = doSend(prefix + seg);
+            if (!last.delivered()) {
+                String partial = "segments=" + segments.size()
+                        + " delivered=" + i
+                        + " failedAt=" + (i + 1)
+                        + (last.errorBody() == null ? "" : " body=" + last.errorBody());
+                return NotificationDeliveryResult.failed("TELEGRAM", last.httpStatus(),
+                        last.errorCode(), abbreviate(partial), last.retryCount());
+            }
+            if (last.providerMessageId() != null && !last.providerMessageId().isBlank()) {
+                messageIds.add(last.providerMessageId());
+            }
         }
-        return allOk;
+        if (last != null && segments.size() > 1) {
+            String summary = "segments=" + segments.size() + " delivered=" + segments.size()
+                    + (messageIds.isEmpty() ? "" : " ids=" + String.join(",", messageIds));
+            return NotificationDeliveryResult.delivered("TELEGRAM", last.httpStatus(),
+                    abbreviate(summary), last.retryCount());
+        }
+        if (last != null) {
+            return last;
+        }
+        return NotificationDeliveryResult.skipped("TELEGRAM", "EMPTY_MESSAGE", "No message segments");
     }
 
-    private boolean doSend(String text) {
+    private NotificationDeliveryResult doSend(String text) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("chat_id", config.getChatId().trim());
         payload.put("text", text);
@@ -81,24 +105,32 @@ public class TelegramSender {
         }
         payload.put("disable_web_page_preview", true);
         try {
-            webClient.post()
+            ResponseEntity<String> response = webClient.post()
                     .uri(config.resolveSendMessageUrl())
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(payload)
                     .retrieve()
-                    .bodyToMono(String.class)
+                    .toEntity(String.class)
                     .block(Duration.ofSeconds(Math.max(1, config.getTimeoutSeconds())));
             log.info("[TelegramSender] sent: {}", abbreviate(text));
-            return true;
+            Integer httpStatus = response == null ? 200 : response.getStatusCode().value();
+            String body = response == null ? null : response.getBody();
+            if (body != null && body.contains("\"ok\":false")) {
+                return NotificationDeliveryResult.failed("TELEGRAM", httpStatus,
+                        "TELEGRAM_OK_FALSE", abbreviate(body), 0);
+            }
+            return NotificationDeliveryResult.delivered("TELEGRAM", httpStatus, extractMessageId(body), 0);
         } catch (WebClientResponseException e) {
-            HttpStatusCode status = e.getStatusCode();
+            int status = e.getStatusCode().value();
             log.warn("[TelegramSender] HTTP {} send failed: {} body={}",
-                    status.value(), e.getMessage(),
+                    status, e.getMessage(),
                     abbreviate(e.getResponseBodyAsString()));
-            return false;
+            return NotificationDeliveryResult.failed("TELEGRAM", status,
+                    "HTTP_" + status, abbreviate(e.getResponseBodyAsString()), 0);
         } catch (Exception e) {
             log.warn("[TelegramSender] send failed: {}", e.getMessage());
-            return false;
+            return NotificationDeliveryResult.failed("TELEGRAM", null,
+                    e.getClass().getSimpleName(), abbreviate(e.getMessage()), 0);
         }
     }
 
@@ -146,5 +178,13 @@ public class TelegramSender {
     private String abbreviate(String s) {
         if (s == null) return "";
         return s.length() > 80 ? s.substring(0, 77) + "..." : s;
+    }
+
+    private String extractMessageId(String body) {
+        if (body == null || body.isBlank()) return null;
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("\\\"message_id\\\"\\s*:\\s*(\\d+)")
+                .matcher(body);
+        return matcher.find() ? matcher.group(1) : null;
     }
 }

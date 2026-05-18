@@ -157,15 +157,32 @@ public class LineTemplateService {
                 return;
             }
         }
-        lineSender.send(message);
-        notificationService.create(new NotificationCreateRequest(
-                LocalDateTime.now(),
-                type,
-                SOURCE,
-                title,
-                message,
-                null
-        ));
+        NotificationDeliveryResult deliveryResult;
+        try {
+            deliveryResult = lineSender.sendWithResult(message);
+        } catch (Exception e) {
+            log.warn("[LineTemplateService] line send threw unexpectedly: {}", e.getMessage());
+            deliveryResult = NotificationDeliveryResult.failed("LINE", null,
+                    e.getClass().getSimpleName(), e.getMessage(), 0);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        try {
+            notificationService.create(new NotificationCreateRequest(
+                    now,
+                    type,
+                    SOURCE,
+                    title,
+                    message,
+                    null,
+                    deliveryResult
+            ));
+        } catch (Exception e) {
+            log.warn("[LineTemplateService] notification log persist failed: {}", e.getMessage());
+        }
+        if (!deliveryResult.delivered()) {
+            log.debug("[LineTemplateService] line send not delivered status={} errorCode={}",
+                    deliveryResult.status(), deliveryResult.errorCode());
+        }
     }
 
     private String ensureSource(String message) {

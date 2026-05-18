@@ -49,7 +49,11 @@ public class MarketIndexDataPrepJob {
             int upserted = backfillService.dailyRefresh(LocalDate.now());
             String msg = String.format("market_index_daily upserted=%d", upserted);
             log.info("[{}] {}", jobName, msg);
-            schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), msg);
+            if (upserted > 0) {
+                schedulerLogService.successReal(jobName, triggerTime, LocalDateTime.now(), msg);
+            } else {
+                schedulerLogService.emptyData(jobName, triggerTime, LocalDateTime.now(), msg);
+            }
         } catch (Exception e) {
             log.warn("[{}] 失敗（fail-safe，不影響其他 job）: {}", jobName, e.getMessage(), e);
             schedulerLogService.failed(jobName, triggerTime, LocalDateTime.now(), e.getMessage());

@@ -322,6 +322,8 @@ public class SchedulerController {
         logRepository.findTopByJobNameOrderByTriggerTimeDesc(jobName).ifPresent(last -> {
             m.put("lastRunAt", last.getTriggerTime());
             m.put("lastStatus", last.getStatus());
+            m.put("lastHealthLevel", last.getHealthLevel());
+            m.put("lastHealthReason", last.getHealthReason());
             m.put("lastMessage", last.getMessage());
             m.put("lastDurationMs", last.getDurationMs());
         });

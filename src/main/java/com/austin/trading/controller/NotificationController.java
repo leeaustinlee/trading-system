@@ -48,6 +48,6 @@ public class NotificationController {
 
     @PostMapping
     public NotificationResponse createNotification(@Valid @RequestBody NotificationCreateRequest request) {
-        return notificationService.create(request);
+        return notificationService.createManual(request);
     }
 }

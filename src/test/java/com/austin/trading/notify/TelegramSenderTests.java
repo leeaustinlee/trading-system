@@ -1,10 +1,13 @@
 package com.austin.trading.notify;
 
 import com.austin.trading.config.TelegramNotifyConfig;
+import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,6 +39,13 @@ class TelegramSenderTests {
         cfg.setBotToken("dummy");
         cfg.setChatId("dummy");
         assertThat(sender.send("hi")).isFalse();
+
+        NotificationDeliveryResult result = sender.sendWithResult("hi");
+        assertThat(result.provider()).isEqualTo("TELEGRAM");
+        assertThat(result.status()).isEqualTo(NotificationDeliveryResult.STATUS_SKIPPED);
+        assertThat(result.attempted()).isFalse();
+        assertThat(result.delivered()).isFalse();
+        assertThat(result.errorCode()).isEqualTo("DISABLED");
     }
 
     @Test
@@ -44,6 +54,10 @@ class TelegramSenderTests {
         cfg.setBotToken("");
         cfg.setChatId("123");
         assertThat(sender.send("hi")).isFalse();
+
+        NotificationDeliveryResult result = sender.sendWithResult("hi");
+        assertThat(result.status()).isEqualTo(NotificationDeliveryResult.STATUS_SKIPPED);
+        assertThat(result.errorCode()).isEqualTo("MISSING_CREDENTIALS");
     }
 
     @Test
@@ -52,6 +66,7 @@ class TelegramSenderTests {
         cfg.setBotToken("dummy");
         cfg.setChatId("");
         assertThat(sender.send("hi")).isFalse();
+        assertThat(sender.sendWithResult("hi").errorCode()).isEqualTo("MISSING_CREDENTIALS");
     }
 
     @Test
@@ -61,6 +76,81 @@ class TelegramSenderTests {
         cfg.setChatId("123");
         assertThat(sender.send("")).isFalse();
         assertThat(sender.send("   ")).isFalse();
+        assertThat(sender.sendWithResult("   ").errorCode()).isEqualTo("EMPTY_MESSAGE");
+    }
+
+    @Test
+    void sendWithResult_http200_returnsDelivered() throws Exception {
+        try (TestHttpServer http = TestHttpServer.start(200, "{\"ok\":true,\"result\":{\"message_id\":777}}")) {
+            cfg.setEnabled(true);
+            cfg.setBotToken("dummy");
+            cfg.setChatId("123");
+            cfg.setApiBase(http.baseUrl());
+
+            NotificationDeliveryResult result = sender.sendWithResult("hello");
+
+            assertThat(result.provider()).isEqualTo("TELEGRAM");
+            assertThat(result.status()).isEqualTo(NotificationDeliveryResult.STATUS_DELIVERED);
+            assertThat(result.attempted()).isTrue();
+            assertThat(result.delivered()).isTrue();
+            assertThat(result.httpStatus()).isEqualTo(200);
+            assertThat(result.providerMessageId()).isEqualTo("777");
+            assertThat(http.requestCount()).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void sendWithResult_telegramOkFalse_isFailedTruth() throws Exception {
+        try (TestHttpServer http = TestHttpServer.start(200, "{\"ok\":false,\"description\":\"bad parse\"}")) {
+            cfg.setEnabled(true);
+            cfg.setBotToken("dummy");
+            cfg.setChatId("123");
+            cfg.setApiBase(http.baseUrl());
+
+            NotificationDeliveryResult result = sender.sendWithResult("hello");
+
+            assertThat(result.status()).isEqualTo(NotificationDeliveryResult.STATUS_FAILED);
+            assertThat(result.attempted()).isTrue();
+            assertThat(result.delivered()).isFalse();
+            assertThat(result.httpStatus()).isEqualTo(200);
+            assertThat(result.errorCode()).isEqualTo("TELEGRAM_OK_FALSE");
+        }
+    }
+
+    @Test
+    void sendWithResult_multiSegment_recordsSegmentSummary() throws Exception {
+        try (TestHttpServer http = TestHttpServer.start(200, "{\"ok\":true,\"result\":{\"message_id\":888}}")) {
+            cfg.setEnabled(true);
+            cfg.setBotToken("dummy");
+            cfg.setChatId("123");
+            cfg.setApiBase(http.baseUrl());
+            cfg.setMaxSegmentLength(500);
+
+            NotificationDeliveryResult result = sender.sendWithResult("x".repeat(1200));
+
+            assertThat(result.status()).isEqualTo(NotificationDeliveryResult.STATUS_DELIVERED);
+            assertThat(result.providerMessageId()).contains("segments=3", "delivered=3", "888");
+            assertThat(http.requestCount()).isEqualTo(3);
+        }
+    }
+
+    @Test
+    void sendWithResult_http500_returnsFailed() throws Exception {
+        try (TestHttpServer http = TestHttpServer.start(500, "boom")) {
+            cfg.setEnabled(true);
+            cfg.setBotToken("dummy");
+            cfg.setChatId("123");
+            cfg.setApiBase(http.baseUrl());
+
+            NotificationDeliveryResult result = sender.sendWithResult("hello");
+
+            assertThat(result.status()).isEqualTo(NotificationDeliveryResult.STATUS_FAILED);
+            assertThat(result.attempted()).isTrue();
+            assertThat(result.delivered()).isFalse();
+            assertThat(result.httpStatus()).isEqualTo(500);
+            assertThat(result.errorCode()).isEqualTo("HTTP_500");
+            assertThat(result.errorBody()).contains("boom");
+        }
     }
 
     @Test
@@ -109,5 +199,42 @@ class TelegramSenderTests {
         assertThat(cfg.hasCredentials()).isFalse();
         cfg.setChatId("b");
         assertThat(cfg.hasCredentials()).isTrue();
+    }
+
+    private static final class TestHttpServer implements AutoCloseable {
+        private final HttpServer server;
+        private int requestCount;
+
+        private TestHttpServer(HttpServer server) {
+            this.server = server;
+        }
+
+        static TestHttpServer start(int status, String body) throws Exception {
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            TestHttpServer wrapper = new TestHttpServer(server);
+            server.createContext("/botdummy/sendMessage", exchange -> {
+                wrapper.requestCount++;
+                byte[] bytes = body.getBytes();
+                exchange.sendResponseHeaders(status, bytes.length);
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(bytes);
+                }
+            });
+            server.start();
+            return wrapper;
+        }
+
+        String baseUrl() {
+            return "http://127.0.0.1:" + server.getAddress().getPort();
+        }
+
+        int requestCount() {
+            return requestCount;
+        }
+
+        @Override
+        public void close() {
+            server.stop(0);
+        }
     }
 }

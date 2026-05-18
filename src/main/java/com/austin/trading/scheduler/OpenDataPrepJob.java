@@ -82,7 +82,7 @@ public class OpenDataPrepJob {
             List<CandidateResponse> candidates = candidateScanService.getCurrentCandidates(20);
             if (candidates.isEmpty()) {
                 log.info("[OpenDataPrepJob] No candidates for {}, skip.", today);
-                schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), "No candidates");
+                schedulerLogService.emptyData(jobName, triggerTime, LocalDateTime.now(), "No candidates");
                 orchestrationService.markDone(today, step, "No candidates");
                 return;
             }

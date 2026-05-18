@@ -55,7 +55,11 @@ public class ExternalProbeHealthJob {
             }
 
             String msg = failures.isEmpty() ? "all_ok" : "failures=" + failures.size();
-            schedulerLogService.success(jobName, triggerTime, LocalDateTime.now(), msg);
+            if (failures.isEmpty()) {
+                schedulerLogService.successReal(jobName, triggerTime, LocalDateTime.now(), msg);
+            } else {
+                schedulerLogService.degraded(jobName, triggerTime, LocalDateTime.now(), msg);
+            }
             orchestrationService.markExecuted(today, step, msg);
         } catch (Exception e) {
             orchestrationService.markFailed(today, step, e.getMessage());
