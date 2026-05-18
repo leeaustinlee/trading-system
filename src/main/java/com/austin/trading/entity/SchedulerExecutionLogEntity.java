@@ -43,13 +43,40 @@ public class SchedulerExecutionLogEntity {
     public void setTriggerTime(LocalDateTime triggerTime) { this.triggerTime = triggerTime; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
-    public String getHealthLevel() { return healthLevel; }
+    public String getHealthLevel() { return healthLevel != null && !healthLevel.isBlank() ? healthLevel : inferHealthLevel(); }
     public void setHealthLevel(String healthLevel) { this.healthLevel = healthLevel; }
-    public String getHealthReason() { return healthReason; }
+    public String getHealthReason() { return healthReason != null && !healthReason.isBlank() ? healthReason : message; }
     public void setHealthReason(String healthReason) { this.healthReason = healthReason; }
     public Long getDurationMs() { return durationMs; }
     public void setDurationMs(Long durationMs) { this.durationMs = durationMs; }
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+
+    private String inferHealthLevel() {
+        if ("FAILED".equalsIgnoreCase(status)) {
+            return "FAILED";
+        }
+        String normalized = message == null ? "" : message.toLowerCase(java.util.Locale.ROOT);
+        if (normalized.contains("fallback") || normalized.contains("fallback_used")) {
+            return "SUCCESS_WITH_FALLBACK";
+        }
+        if (normalized.contains("degraded")
+                || normalized.contains("incomplete")
+                || normalized.contains("stale")
+                || normalized.matches(".*failures=[1-9].*")) {
+            return "DEGRADED";
+        }
+        if (normalized.contains("no data")
+                || normalized.contains("no market snapshot")
+                || normalized.contains("no candidates")
+                || normalized.contains("empty")
+                || normalized.contains("upserted=0")) {
+            return "EMPTY_DATA";
+        }
+        if (normalized.contains("skip") || normalized.contains("skipped")) {
+            return "SKIPPED";
+        }
+        return "SUCCESS_REAL";
+    }
 }
