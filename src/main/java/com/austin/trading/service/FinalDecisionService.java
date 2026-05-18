@@ -270,6 +270,7 @@ public class FinalDecisionService {
     private final ThemeShadowReportService  themeShadowReportService;
     private final ThemeLiveDecisionService  themeLiveDecisionService;
     private final ThemeLineSummaryService   themeLineSummaryService;
+    private final DecisionSnapshotLedgerService decisionSnapshotLedgerService;
     private final ApplicationEventPublisher events;
     private StrategyGateService             strategyGateService;
 
@@ -318,6 +319,7 @@ public class FinalDecisionService {
             ThemeShadowReportService themeShadowReportService,
             ThemeLiveDecisionService themeLiveDecisionService,
             ThemeLineSummaryService themeLineSummaryService,
+            DecisionSnapshotLedgerService decisionSnapshotLedgerService,
             ApplicationEventPublisher events
     ) {
         this.consensusScoringEngine     = consensusScoringEngine;
@@ -357,6 +359,7 @@ public class FinalDecisionService {
         this.themeShadowReportService   = themeShadowReportService;
         this.themeLiveDecisionService   = themeLiveDecisionService;
         this.themeLineSummaryService    = themeLineSummaryService;
+        this.decisionSnapshotLedgerService = decisionSnapshotLedgerService;
         this.events                     = events;
     }
 
@@ -955,7 +958,7 @@ public class FinalDecisionService {
         }
 
         // v2.2: 走 persistAndReturn 確保「產生 FinalDecision → finalize AI task」原子執行
-        return persistAndReturnWithStrategy(tradingDate, enrichedDecision, readiness, strategyType);
+        return persistAndReturnWithStrategy(tradingDate, enrichedDecision, readiness, strategyType, preferTaskType);
     }
 
     public Optional<FinalDecisionRecordResponse> getCurrent() {
@@ -1067,6 +1070,15 @@ public class FinalDecisionService {
                                                                 FinalDecisionResponse response,
                                                                 AiReadiness readiness,
                                                                 String strategyType) {
+        return persistAndReturnWithStrategy(tradingDate, response, readiness, strategyType, null);
+    }
+
+    /** v2.3：帶 strategyType 的持久化版本 */
+    private FinalDecisionResponse persistAndReturnWithStrategy(LocalDate tradingDate,
+                                                                FinalDecisionResponse response,
+                                                                AiReadiness readiness,
+                                                                String strategyType,
+                                                                String preferTaskType) {
         FinalDecisionEntity entity = new FinalDecisionEntity();
         entity.setTradingDate(tradingDate);
         entity.setDecision(response.decision());
@@ -1075,6 +1087,10 @@ public class FinalDecisionService {
         entity.setStrategyType(strategyType);
         fillAiContext(entity, readiness);
         finalDecisionRepository.save(entity);
+
+        // W1-1 Truth Layer：side-effect-only snapshot ledger。寫入失敗不得影響正式決策輸出。
+        decisionSnapshotLedgerService.scheduleCreateAfterCommit(entity, response, readiness, preferTaskType);
+
         syncDashboardState(tradingDate, response, readiness);
 
         // Phase 1 paper trade:final decision 落地後 publish event,
