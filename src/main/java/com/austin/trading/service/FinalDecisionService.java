@@ -62,6 +62,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -265,6 +266,7 @@ public class FinalDecisionService {
     private final IntradayVwapService       intradayVwapService;
     private final VolumeProfileService      volumeProfileService;
     private final CapitalAllocationService  capitalAllocationService;
+    private final Clock                     clock;
     private final ThemeGateOrchestrator     themeGateOrchestrator;
     private final ThemeShadowModeService    themeShadowModeService;
     private final ThemeShadowReportService  themeShadowReportService;
@@ -320,7 +322,8 @@ public class FinalDecisionService {
             ThemeLiveDecisionService themeLiveDecisionService,
             ThemeLineSummaryService themeLineSummaryService,
             DecisionSnapshotLedgerService decisionSnapshotLedgerService,
-            ApplicationEventPublisher events
+            ApplicationEventPublisher events,
+            Clock marketClock
     ) {
         this.consensusScoringEngine     = consensusScoringEngine;
         this.finalDecisionEngine        = finalDecisionEngine;
@@ -361,6 +364,11 @@ public class FinalDecisionService {
         this.themeLineSummaryService    = themeLineSummaryService;
         this.decisionSnapshotLedgerService = decisionSnapshotLedgerService;
         this.events                     = events;
+        this.clock                      = marketClock == null ? Clock.system(MARKET_ZONE) : marketClock;
+    }
+
+    private LocalTime currentMarketTime() {
+        return LocalTime.now(clock.withZone(MARKET_ZONE));
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -512,7 +520,7 @@ public class FinalDecisionService {
         rawCandidates = applyCodexActionableGate(rawCandidates, readiness, codexContext);
 
         // v2.9 Gate 6/7：預先算每檔的 priceGate trace，buildDecisionTrace 時就能直接塞回 trace。
-        MarketSession currentSession = MarketSession.fromTime(LocalTime.now(MARKET_ZONE));
+        MarketSession currentSession = MarketSession.fromTime(currentMarketTime());
         Map<String, Map<String, Object>> priceGateTraceMap = new LinkedHashMap<>();
         for (FinalDecisionCandidateRequest c : rawCandidates) {
             PriceGateDecision pg = priceGateEvaluator.evaluate(c, currentSession);
@@ -694,7 +702,7 @@ public class FinalDecisionService {
 
         FinalDecisionResponse decision = finalDecisionEngine.evaluate(
                 request,
-                MarketSession.fromTime(LocalTime.now(MARKET_ZONE)),
+                MarketSession.fromTime(currentMarketTime()),
                 planningMode);
 
         // 建立 candidateMap 以便回查估值模式

@@ -1,5 +1,6 @@
 package com.austin.trading.service;
 
+import com.austin.trading.config.FixedLiveTradingClockTestConfig;
 import com.austin.trading.dto.internal.ExecutionTimingDecision;
 import com.austin.trading.dto.internal.MarketRegimeDecision;
 import com.austin.trading.dto.internal.PortfolioRiskDecision;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.io.InputStream;
@@ -45,6 +47,7 @@ import static org.mockito.Mockito.when;
 
 @SpringBootTest
 @ActiveProfiles("integration")
+@Import(FixedLiveTradingClockTestConfig.class)
 class FinalDecisionExecutionRealityReplayIntegrationTests {
 
     private static final AtomicInteger DATE_SEQ = new AtomicInteger(0);

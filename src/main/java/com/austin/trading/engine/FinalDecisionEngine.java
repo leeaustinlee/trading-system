@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -56,26 +57,39 @@ public class FinalDecisionEngine {
     private final PriceGateEvaluator priceGateEvaluator;
     /** v2.15：ChasedHigh hard gate，shadow / live 由 entry.chased-high-gate.enabled 控制。 */
     private final ChasedHighEntryEngine chasedHighEntryEngine;
+    private final Clock clock;
 
     @org.springframework.beans.factory.annotation.Autowired
     public FinalDecisionEngine(ScoreConfigService config, PriceGateEvaluator priceGateEvaluator,
-                                ChasedHighEntryEngine chasedHighEntryEngine) {
+                                ChasedHighEntryEngine chasedHighEntryEngine,
+                                Clock marketClock) {
         this.config = config;
         this.priceGateEvaluator = priceGateEvaluator;
         this.chasedHighEntryEngine = chasedHighEntryEngine;
+        this.clock = marketClock == null ? Clock.system(MARKET_ZONE) : marketClock;
     }
 
     /** Test-friendly ctor（無 chased-high 引擎時退回 shadow 行為）。 */
     public FinalDecisionEngine(ScoreConfigService config, PriceGateEvaluator priceGateEvaluator) {
-        this(config, priceGateEvaluator, new ChasedHighEntryEngine());
+        this(config, priceGateEvaluator, new ChasedHighEntryEngine(), Clock.system(MARKET_ZONE));
+    }
+
+    /** Test-friendly ctor：允許單元測試固定盤中 session，避免依 wall-clock 漂移。 */
+    public FinalDecisionEngine(ScoreConfigService config, PriceGateEvaluator priceGateEvaluator,
+                                ChasedHighEntryEngine chasedHighEntryEngine) {
+        this(config, priceGateEvaluator, chasedHighEntryEngine, Clock.system(MARKET_ZONE));
     }
 
     /** ChasedHigh 評估結果：用於 trace + 決策。 */
     public enum ChasedHighOutcome { OK, WARN, BLOCK, NO_DATA }
 
     public FinalDecisionResponse evaluate(FinalDecisionEvaluateRequest request) {
-        return evaluate(request, MarketSession.fromTime(LocalTime.now(MARKET_ZONE)),
+        return evaluate(request, MarketSession.fromTime(currentMarketTime()),
                 DecisionPlanningMode.INTRADAY_ENTRY);
+    }
+
+    private LocalTime currentMarketTime() {
+        return LocalTime.now(clock.withZone(MARKET_ZONE));
     }
 
     /**

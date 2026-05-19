@@ -16,6 +16,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -26,6 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("integration")
 class ThemeStrengthServiceIntegrationTests {
 
+    private static final AtomicInteger DATE_SEQ = new AtomicInteger(0);
+
     @Autowired ThemeStrengthService             service;
     @Autowired ThemeSnapshotRepository          snapshotRepo;
     @Autowired StockThemeMappingRepository      mappingRepo;
@@ -35,10 +38,13 @@ class ThemeStrengthServiceIntegrationTests {
 
     @BeforeEach
     void setUp() {
-        uniqueDate = LocalDate.of(2007, 1, 1).plusDays(System.nanoTime() % 10_000);
+        uniqueDate = LocalDate.of(2200, 1, 1).plusDays(DATE_SEQ.incrementAndGet());
+        decisionRepo.deleteAll(decisionRepo.findByTradingDateOrderByStrengthScoreDesc(uniqueDate));
+        snapshotRepo.deleteAll(snapshotRepo.findByTradingDateOrderByFinalThemeScoreDesc(uniqueDate));
     }
 
     private ThemeSnapshotEntity snapshot(String tag, double mb, double heat, double cont) {
+        snapshotRepo.findByTradingDateAndThemeTag(uniqueDate, tag).ifPresent(snapshotRepo::delete);
         ThemeSnapshotEntity e = new ThemeSnapshotEntity();
         e.setTradingDate(uniqueDate);
         e.setThemeTag(tag);
@@ -110,6 +116,7 @@ class ThemeStrengthServiceIntegrationTests {
         mapping.setSymbol(symbol);
         mapping.setThemeTag(tag);
         mapping.setIsActive(true);
+        mappingRepo.findBySymbolAndThemeTag(symbol, tag).ifPresent(mappingRepo::delete);
         mappingRepo.save(mapping);
 
         Optional<ThemeStrengthDecision> d = service.findForSymbol(symbol, uniqueDate);
