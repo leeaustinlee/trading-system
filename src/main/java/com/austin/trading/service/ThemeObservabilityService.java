@@ -255,6 +255,8 @@ public class ThemeObservabilityService {
                 items.size(),
                 byPriority,
                 byAction,
+                manualReviewCategoryOptions(),
+                manualReviewInstructions(),
                 SAFETY_NOTE,
                 LocalDateTime.now(),
                 items
@@ -370,6 +372,37 @@ public class ThemeObservabilityService {
 
     private static String recommendedAction(boolean unresolved) {
         return unresolved ? "MANUAL_CLASSIFICATION_REQUIRED" : "REVIEW_AND_APPLY_DETERMINISTIC_CATEGORY";
+    }
+
+    private static List<String> manualReviewCategoryOptions() {
+        return List.of(
+                ThemeTaxonomyClassifier.AI_COMPUTE,
+                ThemeTaxonomyClassifier.SEMICONDUCTOR,
+                ThemeTaxonomyClassifier.PCB,
+                ThemeTaxonomyClassifier.MEMORY,
+                ThemeTaxonomyClassifier.COOLING,
+                ThemeTaxonomyClassifier.COMMUNICATION,
+                ThemeTaxonomyClassifier.ROBOTICS,
+                ThemeTaxonomyClassifier.DISPLAY,
+                ThemeTaxonomyClassifier.FINANCIAL,
+                ThemeTaxonomyClassifier.MATERIALS,
+                ThemeTaxonomyClassifier.POWER_ENERGY,
+                ThemeTaxonomyClassifier.INDUSTRIAL,
+                ThemeTaxonomyClassifier.CONSUMER,
+                ThemeTaxonomyClassifier.REAL_ESTATE,
+                ThemeTaxonomyClassifier.DEFENSE,
+                ThemeTaxonomyClassifier.BIOTECH,
+                ThemeTaxonomyClassifier.ELECTRONICS_COMPONENTS,
+                ThemeTaxonomyClassifier.OTHER
+        );
+    }
+
+    private static List<String> manualReviewInstructions() {
+        return List.of(
+                "Review the stock business/domain using external evidence before assigning a category.",
+                "Choose one categoryOptions value, or keep OTHER only when the stock remains intentionally generic.",
+                "This queue is read-only metadata; applying a category requires a separate reviewed mutation/backfill step."
+        );
     }
 
     private static Map<String, Long> countBy(List<StockThemeMappingEntity> mappings,

@@ -276,6 +276,12 @@ class ThemeObservabilityServiceTests {
                 .containsEntry("MEDIUM", 1L)
                 .containsEntry("LOW", 1L);
         assertThat(response.byRecommendedAction()).containsEntry("MANUAL_CLASSIFICATION_REQUIRED", 3L);
+        assertThat(response.categoryOptions())
+                .contains(ThemeTaxonomyClassifier.SEMICONDUCTOR, ThemeTaxonomyClassifier.PCB, ThemeTaxonomyClassifier.OTHER)
+                .doesNotContain(ThemeTaxonomyClassifier.UNRESOLVED_OTHER, ThemeTaxonomyClassifier.UNKNOWN);
+        assertThat(response.reviewInstructions())
+                .anySatisfy(instruction -> assertThat(instruction).contains("read-only"))
+                .anySatisfy(instruction -> assertThat(instruction).contains("external evidence"));
         assertThat(response.items()).extracting("symbol", "suggestedCategory", "reviewPriority", "recommendedAction")
                 .containsExactly(org.assertj.core.groups.Tuple.tuple("9996", ThemeTaxonomyClassifier.UNRESOLVED_OTHER, "HIGH", "MANUAL_CLASSIFICATION_REQUIRED"));
         assertThat(response.safetyNote()).contains("READ_ONLY");

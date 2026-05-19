@@ -16,6 +16,8 @@ public record ThemeManualReviewQueueResponse(
         int returnedItems,
         Map<String, Long> byReviewPriority,
         Map<String, Long> byRecommendedAction,
+        List<String> categoryOptions,
+        List<String> reviewInstructions,
         String safetyNote,
         LocalDateTime generatedAt,
         List<ThemeOtherCategorySuggestionResponse> items
