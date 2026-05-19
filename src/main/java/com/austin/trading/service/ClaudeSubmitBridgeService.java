@@ -269,11 +269,11 @@ public class ClaudeSubmitBridgeService {
         Path target = failedDir.resolve(displayName.replace(".json", ".failed.json"));
         try {
             if (Files.exists(file)) {
-                String original = Files.readString(file);
-                String appended = original + "\n\n__ERROR__ " + e.getClass().getSimpleName()
-                        + ": " + (e.getMessage() == null ? "" : e.getMessage()) + "\n";
-                Files.writeString(target, appended);
-                Files.delete(file);
+                // Keep failed artifacts byte-for-byte as the original submit payload.
+                // Error metadata belongs in file_bridge_error_log and system alerts;
+                // appending plain-text "__ERROR__" made *.failed.json invalid JSON and
+                // broke later forensic/retry tooling that expects JSON files to stay JSON.
+                Files.move(file, target, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException ioe) {
             log.error("[ClaudeSubmitBridge] moveToFailed 失敗: {}", ioe.getMessage());
