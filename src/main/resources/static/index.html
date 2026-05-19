@@ -364,6 +364,35 @@
     .health-table-cell .sub { color:var(--muted); font-size:11px; font-family:var(--mono); }
     @media(max-width:900px){ .health-kpi-grid{grid-template-columns:repeat(2,1fr)} }
 
+    .health-panel .health-title-row { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+    .health-panel .health-note { color:#93a6c0; font-size:12px; margin-top:6px; max-width:760px; }
+    .health-card-grid.integrated { grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .position-health-card { padding:14px; border-radius:14px; background:linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.035)); border-left:4px solid var(--tone); }
+    .position-health-card .stock-row { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+    .position-health-card .stock-title { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px; }
+    .position-health-card .stock-title .sym { font-size:22px; }
+    .position-health-card .stock-title .name { font-size:14px; color:#d7e3f7; }
+    .position-health-card .pnl-block { text-align:right; min-width:96px; }
+    .position-health-card .pnl-pct { font:900 22px/1 var(--mono); }
+    .position-health-card .pnl-amt { margin-top:4px; color:#b8c7df; font:800 12px/1 var(--mono); }
+    .position-health-card .pos-sub { color:#93a6c0; font-size:12px; margin-top:5px; }
+    .position-health-card .health-main { display:grid; grid-template-columns:auto 62px; gap:12px; align-items:center; margin-top:12px; }
+    .position-health-card .health-main .status-line { color:#d7e3f7; font-weight:800; margin-top:7px; }
+    .position-health-card .position-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; margin-top:12px; }
+    .position-health-card .position-metrics div { background:rgba(0,0,0,.14); border:1px solid rgba(255,255,255,.07); border-radius:8px; padding:8px 9px; min-width:0; }
+    .position-health-card .position-metrics span { display:block; color:#93a6c0; font-size:10px; font-weight:900; letter-spacing:.45px; text-transform:uppercase; }
+    .position-health-card .position-metrics b { display:block; color:#fff; font:900 13px/1.18 var(--mono); margin-top:4px; overflow-wrap:anywhere; }
+    .position-health-card .stop-bar { height:7px; border-radius:999px; overflow:hidden; background:rgba(255,255,255,.10); margin-top:10px; }
+    .position-health-card .stop-bar i { display:block; height:100%; width:var(--w); background:linear-gradient(90deg,var(--tone),rgba(255,255,255,.6)); border-radius:inherit; }
+    .position-health-card .card-actions { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,.08); }
+    .position-health-card .card-actions .left { display:flex; flex-wrap:wrap; gap:6px; }
+    .position-health-card .card-actions .right { display:flex; gap:6px; }
+    .position-health-card .mini-btn { border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.055); color:#d9e6ff; border-radius:8px; padding:5px 10px; font-size:12px; cursor:pointer; }
+    .position-health-card .mini-btn:hover { background:rgba(255,255,255,.10); }
+    .position-health-card .mini-btn.danger { color:#fecdd3; border-color:rgba(251,113,133,.35); background:rgba(196,30,53,.16); }
+    .health-table-wrap { overflow:auto; border-radius:10px; border:1px solid rgba(16,24,40,.08); }
+    @media(max-width:1100px){ .health-card-grid.integrated{grid-template-columns:1fr} .position-health-card .position-metrics{grid-template-columns:repeat(2,1fr)} }
+
     /* ── Decision trend chart (dark terminal) ── */
     .decision-terminal { background: var(--panel-dark); border:1px solid var(--line-dark); border-radius:var(--radius); padding:12px; color: var(--ink-dark); }
     .decision-status-strip { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; margin-bottom:10px; }
@@ -1128,14 +1157,14 @@
       </section>
 
       <section class="card span-12">
-        <h2>持倉中
+        <h2>持倉明細表
           <button class="btn primary" id="p-btnAdd" style="margin-left:auto;padding:5px 14px;font-size:13px">＋ 新增持倉</button>
         </h2>
         <div class="toolbar">
           <label>代號 <input type="text" id="p-openSymbol" placeholder="全部" style="width:90px" /></label>
           <button class="btn" id="p-openLoad">查詢</button>
         </div>
-        <table>
+        <div class="health-table-wrap"><table>
           <thead><tr>
             <th>代號</th><th>名稱</th><th>方向</th><th>股數</th><th>均價</th>
             <th>停損</th><th>停利1</th><th>停利2</th>
@@ -1144,7 +1173,7 @@
             <th>開倉時間</th><th>備註</th><th style="width:130px">操作</th>
           </tr></thead>
           <tbody id="p-openBody"></tbody>
-        </table>
+        </table></div>
       </section>
 
       <section class="card span-12">
@@ -2095,7 +2124,7 @@
     const gaps = (h.dataGaps || []).length;
     return `${healthPill(h.actionTier)}<div class="sub">score ${esc(h.healthScore ?? '—')} · ${esc(zhHealthStatus(h.structureStatus || '—'))} · 缺口 ${gaps}</div>`;
   }
-  function renderPortfolioHealthPanel(payload) {
+  function renderPortfolioHealthPanel(payload, positions = [], liveMap = {}) {
     const box = $("portfolioHealthPanel");
     if (!box) return;
     if (!payload || !Array.isArray(payload.positions)) {
@@ -2103,6 +2132,8 @@
       return;
     }
     const rows = payload.positions || [];
+    const healthMap = {};
+    rows.forEach(h => { if (h?.symbol) healthMap[h.symbol] = h; });
     const count = k => rows.filter(x => String(x.actionTier || '').toUpperCase() === k).length;
     const avg = rows.length ? Math.round(rows.reduce((a,b)=>a+Number(b.healthScore || 0),0)/rows.length) : 0;
     const mode = $("healthMode");
@@ -2110,21 +2141,59 @@
     const kpis = [
       ['平均分', avg], ['續抱', count('HOLD')], ['減碼檢查', count('REDUCE_REVIEW')], ['出場檢查', count('EXIT_REVIEW')], ['硬性警報', count('HARD_EXIT_ALERT')]
     ].map(([k,v]) => `<div class="health-kpi-box"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join('');
-    const cards = rows.map(h => {
+
+    const cards = (positions || []).map(p => {
+      const h = healthMap[p.symbol] || {};
       const m = healthTierMeta(h.actionTier);
+      const q = liveMap[p.symbol] || {};
+      const cur = q.currentPrice ?? p.currentPrice ?? null;
+      const qty = Number(p.qty || 0);
+      const avgCost = p.avgCost != null ? Number(p.avgCost) : null;
+      const isShort = (p.side || '').toUpperCase() === 'SHORT' || p.side === '做空';
+      const cost = avgCost != null && qty ? avgCost * qty : null;
+      const currentValue = cur != null && qty ? Number(cur) * qty : null;
+      const unrealized = cur != null && avgCost != null && qty
+        ? Math.round((isShort ? (avgCost - Number(cur)) : (Number(cur) - avgCost)) * qty) : null;
+      const pnlPct = unrealized != null && cost && cost > 0 ? (unrealized / cost * 100) : null;
+      const pnlColor = pnlPct == null ? '#93a6c0' : pnlPct >= 0 ? '#7BF1AB' : '#FDA4AF';
       const tech = h.technicals || {};
       const reasons = (h.reasons || []).slice(0,4).map(r => `<span class="health-tag">${esc(zhHealthReason(r))}</span>`).join('');
       const gaps = (h.dataGaps || []).slice(0,2).map(g => `<span class="health-tag gap">${esc(zhHealthGap(g))}</span>`).join('');
-      return `<div class="health-card">
-        <div class="top"><div><div><span class="sym">${esc(h.symbol)}</span><span class="name">${esc(h.stockName || '')}</span></div><div style="margin-top:7px">${healthPill(h.actionTier)}</div></div>
-        <div class="health-score" style="--score:${Math.max(0,Math.min(100,Number(h.healthScore||0)))};--tone:${m.tone}"><span>${esc(h.healthScore ?? '—')}</span></div></div>
-        <div class="health-mini"><div><span>5MA</span><b>${esc(tech.ma5 ?? '—')}</b></div><div><span>10MA</span><b>${esc(tech.ma10 ?? '—')}</b></div><div><span>前低</span><b>${esc(tech.previousLow ?? '—')}</b></div></div>
-        <div class="health-mini"><div><span>結構</span><b>${esc(zhHealthStatus(h.structureStatus || '—'))}</b></div><div><span>量能</span><b>${esc(zhHealthStatus(h.volumeStatus || '—'))}</b></div><div><span>籌碼</span><b>${esc(zhHealthStatus(h.chipStatus || '—'))}</b></div></div>
+      const distRaw = (() => {
+        if (cur == null || p.stopLossPrice == null) return null;
+        const stop = Number(p.stopLossPrice);
+        if (!Number.isFinite(stop) || stop <= 0) return null;
+        return isShort ? ((stop - Number(cur)) / Number(cur) * 100) : ((Number(cur) - stop) / stop * 100);
+      })();
+      const distWidth = distRaw == null ? 0 : Math.max(6, Math.min(100, Math.abs(distRaw) * 4));
+      const note = renderPositionNote(p.note, p.strategyType);
+      const actionLabel = h.actionTier ? healthPill(h.actionTier) : '<span class="health-pill unknown">資料不足</span>';
+      return `<div class="health-card position-health-card" style="--tone:${m.tone};--score:${Math.max(0,Math.min(100,Number(h.healthScore||0)))}">
+        <div class="stock-row">
+          <div>
+            <div class="stock-title"><span class="sym">${esc(p.symbol)}</span><span class="name">${esc(p.stockName || '')}</span>${strategyBadge(p.strategyType)}</div>
+            <div class="pos-sub">${zhEsc(p.side)} · ${esc(qty.toLocaleString())} 股 · 開倉 ${esc(fmtTime(p.openedAt))}</div>
+          </div>
+          <div class="pnl-block"><div class="pnl-pct" style="color:${pnlColor}">${pnlPct == null ? '—' : `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`}</div><div class="pnl-amt">${unrealized == null ? '損益 —' : `損益 ${fmtPrice(unrealized)}`}</div></div>
+        </div>
+        <div class="health-main"><div>${actionLabel}<div class="status-line">${esc(zhHealthStatus(h.structureStatus || '—'))} · ${esc(zhHealthStatus(h.volumeStatus || '—'))} · ${esc(zhHealthStatus(h.relativeStrengthStatus || '—'))}</div></div><div class="health-score"><span>${esc(h.healthScore ?? '—')}</span></div></div>
+        <div class="position-metrics">
+          <div><span>均價</span><b>${avgCost == null ? '—' : fmtPrice(avgCost)}</b></div><div><span>現價</span><b>${cur == null ? '—' : fmtPrice(cur)}</b></div><div><span>持倉成本</span><b>${cost == null ? '—' : fmtPrice(cost)}</b></div><div><span>現值</span><b>${currentValue == null ? '—' : fmtPrice(currentValue)}</b></div>
+          <div><span>停損</span><b>${p.stopLossPrice == null ? '—' : fmtPrice(p.stopLossPrice)}</b></div><div><span>距停損</span><b>${distRaw == null ? '—' : `${distRaw >= 0 ? '+' : ''}${distRaw.toFixed(1)}%`}</b></div><div><span>TP1</span><b>${p.takeProfit1 == null ? '—' : fmtPrice(p.takeProfit1)}</b></div><div><span>TP2</span><b>${p.takeProfit2 == null ? '—' : fmtPrice(p.takeProfit2)}</b></div>
+          <div><span>5MA</span><b>${esc(tech.ma5 ?? '—')}</b></div><div><span>10MA</span><b>${esc(tech.ma10 ?? '—')}</b></div><div><span>20MA</span><b>${esc(tech.ma20 ?? '—')}</b></div><div><span>前低</span><b>${esc(tech.previousLow ?? '—')}</b></div>
+        </div>
+        <div class="stop-bar"><i style="--w:${distWidth}%"></i></div>
         <div class="health-tags">${reasons}${gaps}</div>
+        <div class="card-actions"><div class="left"><span class="health-tag">${esc(note)}</span></div><div class="right"><button class="mini-btn" onclick="openEditModal(${p.id})">編輯</button><button class="mini-btn danger" onclick="openCloseModal(${p.id})">出清</button></div></div>
       </div>`;
     }).join('');
-    box.innerHTML = `<div class="health-head"><div><div class="health-title">Shadow 持股健康儀表板</div><div class="health-sub">${esc(payload.mode || 'SHADOW')} · ${esc(payload.evaluatedAt || '')} · 不自動買賣，正式出場需人工確認</div></div><div class="health-mode">${esc(payload.persistence || 'READ ONLY')}</div></div>
-      <div class="health-kpi-grid">${kpis}</div><div class="health-card-grid">${cards}</div>`;
+    const fallbackCards = !cards && rows.length ? rows.map(h => {
+      const m = healthTierMeta(h.actionTier);
+      const tech = h.technicals || {};
+      return `<div class="health-card position-health-card" style="--tone:${m.tone};--score:${Math.max(0,Math.min(100,Number(h.healthScore||0)))}"><div class="stock-row"><div><div class="stock-title"><span class="sym">${esc(h.symbol)}</span><span class="name">${esc(h.stockName || '')}</span></div></div><div class="health-score"><span>${esc(h.healthScore ?? '—')}</span></div></div><div style="margin-top:8px">${healthPill(h.actionTier)}</div><div class="position-metrics"><div><span>5MA</span><b>${esc(tech.ma5 ?? '—')}</b></div><div><span>10MA</span><b>${esc(tech.ma10 ?? '—')}</b></div><div><span>前低</span><b>${esc(tech.previousLow ?? '—')}</b></div><div><span>結構</span><b>${esc(zhHealthStatus(h.structureStatus || '—'))}</b></div></div></div>`;
+    }).join('') : '';
+    box.innerHTML = `<div class="health-head"><div><div class="health-title-row"><div><div class="health-title">持倉健康與成本整合視圖</div><div class="health-sub">${esc(payload.mode || 'SHADOW')} · ${esc(payload.evaluatedAt || '')} · 不自動買賣，正式出場需人工確認</div></div></div><div class="health-note">每張卡同時整合股數、均價、現價、持倉成本、現值、未實現損益、停損停利與 health-v2 技術結構，方便直接判斷「這檔現在該續抱、觀察、減碼或人工出場」。</div></div><div class="health-mode">${esc(payload.persistence || 'READ ONLY')}</div></div>
+      <div class="health-kpi-grid">${kpis}</div><div class="health-card-grid integrated">${cards || fallbackCards || '<div class="terminal-empty">目前無持倉</div>'}</div>`;
   }
   function pnlHtml(v) {
     if (v == null) return `<span style="color:var(--muted)">–</span>`;
@@ -3171,7 +3240,6 @@ function clearErr(boxId) {
       const sym = $("p-openSymbol").value.trim();
       const url = `/api/positions/open?size=50${sym ? `&symbol=${encodeURIComponent(sym)}` : ""}`;
       const [data, health] = await Promise.all([api(url), api('/api/portfolio/health-v2').catch(() => null)]);
-      renderPortfolioHealthPanel(health);
       const healthMap = {};
       (health?.positions || []).forEach(h => { if (h?.symbol) healthMap[h.symbol] = h; });
       _openPosCache = {};
@@ -3186,6 +3254,8 @@ function clearErr(boxId) {
           (quotes || []).forEach(q => { liveMap[q.symbol] = q; });
         } catch(_) { /* ignore */ }
       }
+
+      renderPortfolioHealthPanel(health, data || [], liveMap);
 
       $("p-openBody").innerHTML = (data || []).length
         ? (data || []).map(p => {
