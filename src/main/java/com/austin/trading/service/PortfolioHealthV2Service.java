@@ -80,6 +80,11 @@ public class PortfolioHealthV2Service {
         return healthV2Internal(true);
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, Object> healthV2ReadOnlySummary() {
+        return healthV2Internal(false);
+    }
+
     private Map<String, Object> healthV2Internal(boolean persistShadowLog) {
         List<PositionEntity> positions = positionRepository.findByStatus("OPEN");
         Map<String, StockQuote> quotes = fetchQuotes(positions.stream().map(PositionEntity::getSymbol).toList());

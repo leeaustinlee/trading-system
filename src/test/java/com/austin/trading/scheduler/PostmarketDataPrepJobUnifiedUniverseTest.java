@@ -60,6 +60,7 @@ class PostmarketDataPrepJobUnifiedUniverseTest {
     void setUp() throws Exception {
         Files.createDirectories(SCAN_PATH.getParent());
         Files.deleteIfExists(SCAN_PATH);
+        System.setProperty("trading.postmarket.marketBreadthScanPath", SCAN_PATH.toString());
 
         when(orchestrationService.markRunning(any(LocalDate.class), eq(OrchestrationStep.POSTMARKET_DATA_PREP)))
                 .thenReturn(true);
@@ -78,11 +79,12 @@ class PostmarketDataPrepJobUnifiedUniverseTest {
     @AfterEach
     void tearDown() throws Exception {
         Files.deleteIfExists(SCAN_PATH);
+        System.clearProperty("trading.postmarket.marketBreadthScanPath");
     }
 
     @Test
     void run_usesFreshScanUnifiedUniverseAndWritesMarketContext() throws Exception {
-        Files.writeString(SCAN_PATH, """
+        Files.writeString(SCAN_PATH, "\uFEFF" + """
                 {
                   "super_strong_5": [
                     {"Code":"1216","Name":"統一","Theme":"食品","Score":9.1},

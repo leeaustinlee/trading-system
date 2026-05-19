@@ -56,7 +56,10 @@ import java.util.stream.Collectors;
 public class PostmarketDataPrepJob {
 
     private static final Logger log = LoggerFactory.getLogger(PostmarketDataPrepJob.class);
-    private static final Path MARKET_BREADTH_SCAN_PATH = Path.of("D:/ai/stock/market-breadth-scan.json");
+    private static final List<Path> MARKET_BREADTH_SCAN_PATHS = List.of(
+            Path.of("D:/ai/stock/market-breadth-scan.json"),
+            Path.of("/mnt/d/ai/stock/market-breadth-scan.json")
+    );
     private static final String MARKET_GRADE_SOURCE = "JAVA_POSTMARKET_1505";
     private static final String MARKET_GRADE_SOURCE_FALLBACK = "JAVA_POSTMARKET_1505_FALLBACK_NO_BREADTH";
 
@@ -189,8 +192,9 @@ public class PostmarketDataPrepJob {
             currentBySymbol.put(candidate.symbol(), candidate);
         }
 
-        if (!Files.exists(MARKET_BREADTH_SCAN_PATH)) {
-            log.info("[PostmarketDataPrepJob] market-breadth-scan.json missing, fallback to getCurrentCandidates() universe");
+        Optional<Path> scanPath = resolveMarketBreadthScanPath();
+        if (scanPath.isEmpty()) {
+            log.info("[PostmarketDataPrepJob] market-breadth-scan.json missing from known paths {}, fallback to getCurrentCandidates() universe", MARKET_BREADTH_SCAN_PATHS);
             return new UniverseBuildResult(
                     trimToTen(fallback),
                     "FALLBACK_CURRENT_CANDIDATES",
@@ -199,8 +203,8 @@ public class PostmarketDataPrepJob {
             );
         }
 
-        try {
-            JsonNode root = objectMapper.readTree(Files.readString(MARKET_BREADTH_SCAN_PATH));
+        try (var in = Files.newInputStream(scanPath.get())) {
+            JsonNode root = objectMapper.readTree(in);
             List<String> superStrongSymbols = extractSymbols(root.path("super_strong_5"));
             List<String> finalCandidateSymbols = extractSymbols(root.path("final_candidates_5"));
             Set<String> orderedSymbols = new LinkedHashSet<>();
@@ -241,6 +245,17 @@ public class PostmarketDataPrepJob {
                     List.of()
             );
         }
+    }
+
+    private Optional<Path> resolveMarketBreadthScanPath() {
+        String override = System.getProperty("trading.postmarket.marketBreadthScanPath");
+        if (override != null && !override.isBlank()) {
+            Path overridePath = Path.of(override);
+            return Files.exists(overridePath) ? Optional.of(overridePath) : Optional.empty();
+        }
+        return MARKET_BREADTH_SCAN_PATHS.stream()
+                .filter(Files::exists)
+                .findFirst();
     }
 
     private List<String> extractSymbols(JsonNode arrayNode) {

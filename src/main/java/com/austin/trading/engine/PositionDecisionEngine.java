@@ -133,7 +133,14 @@ public class PositionDecisionEngine {
                 && in.currentPrice().compareTo(effectiveStop) <= 0) {
             boolean trailingTriggered = in.trailingStopPrice() != null
                     && effectiveStop.compareTo(in.trailingStopPrice()) == 0;
-            String label = trailingTriggered ? "跌破移動停利" : "觸發停損";
+            if (trailingTriggered) {
+                boolean requireStructure = config.getBoolean("position.review.trailing_stop_requires_structure", true);
+                if (requireStructure && !hasTrailingExitStructureBreak(in)) {
+                    return weaken("跌破移動停利但尚未確認結構破壞，改列人工確認觀察 (stop="
+                            + effectiveStop.toPlainString() + ")");
+                }
+            }
+            String label = trailingTriggered ? "跌破移動停利且結構轉弱" : "觸發停損";
             return exit(label + " (stop=" + effectiveStop.toPlainString() + ")");
         }
 
@@ -320,6 +327,13 @@ public class PositionDecisionEngine {
         return high.subtract(in.currentPrice())
                 .divide(high, 4, RoundingMode.HALF_UP)
                 .multiply(new BigDecimal("100"));
+    }
+
+    private boolean hasTrailingExitStructureBreak(PositionDecisionInput in) {
+        if ("C".equalsIgnoreCase(in.marketGrade())) return true;
+        if (in.failedBreakout() || in.volumeSpikeLongBlack()) return true;
+        if (in.belowMa5() && (in.volumeWeakening() || !in.momentumStrong())) return true;
+        return in.volumeWeakening() && !in.momentumStrong();
     }
 
     private BigDecimal effectiveStopLoss(PositionDecisionInput in) {

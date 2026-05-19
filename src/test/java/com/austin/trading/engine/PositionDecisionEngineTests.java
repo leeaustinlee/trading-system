@@ -220,21 +220,40 @@ class PositionDecisionEngineTests {
     }
 
     @Test
-    void hitTrailingStop_reasonShouldBeTrailingLabel() {
-        // 當 effectiveStop = trailingStopPrice（高於原 stopLoss）且 currentPrice 跌破，
-        // reason 必須是「跌破移動停利」而非一般「觸發停損」
+    void hitTrailingStop_withoutStructureBreak_shouldWarnNotExit() {
+        // 移動停利被碰到但沒有跌破均線/爆量長黑/假突破等結構確認時，
+        // 不再直接給 EXIT，改為 WEAKEN + 人工確認，避免主力正常回測被洗出。
         var input = buildInput(b -> {
             b.entryPrice = bd("100");
             b.currentStopLoss = bd("94");       // 原停損
             b.trailingStopPrice = bd("105");    // 移動停利（getmax 後變 effective=105）
-            b.currentPrice = bd("105");         // 跌破
+            b.currentPrice = bd("105");         // 碰到 trailing stop
             b.unrealizedPnlPct = bd("5");
             b.sessionHighPrice = bd("110");
+            b.momentumStrong = true;
+            b.volumeWeakening = false;
+            b.failedBreakout = false;
+        });
+        var result = engine.evaluate(input);
+        assertThat(result.status()).isEqualTo(PositionStatus.WEAKEN);
+        assertThat(result.reason()).contains("跌破移動停利").contains("尚未確認結構破壞");
+        assertThat(result.reason()).doesNotContain("觸發停損");
+    }
+
+    @Test
+    void hitTrailingStop_withStructureBreak_shouldExitReview() {
+        var input = buildInput(b -> {
+            b.entryPrice = bd("100");
+            b.currentStopLoss = bd("94");
+            b.trailingStopPrice = bd("105");
+            b.currentPrice = bd("105");
+            b.unrealizedPnlPct = bd("5");
+            b.sessionHighPrice = bd("110");
+            b.failedBreakout = true;
         });
         var result = engine.evaluate(input);
         assertThat(result.status()).isEqualTo(PositionStatus.EXIT);
-        assertThat(result.reason()).contains("跌破移動停利");
-        assertThat(result.reason()).doesNotContain("觸發停損");
+        assertThat(result.reason()).contains("跌破移動停利且結構轉弱");
     }
 
     // ── Helper ─────────────────────────────────────────────────────────────

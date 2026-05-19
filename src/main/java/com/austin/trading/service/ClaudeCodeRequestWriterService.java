@@ -21,6 +21,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Claude Code 研究請求寫入服務。
@@ -79,16 +80,27 @@ public class ClaudeCodeRequestWriterService {
     /** v2.6：Live capital + positions context（避免 capital-summary.md 過舊）。可選注入。 */
     private final CapitalService  capitalService;
     private final PositionService positionService;
+    private final PortfolioHealthV2Service portfolioHealthV2Service;
 
     @Autowired
     public ClaudeCodeRequestWriterService(AiClaudeConfig config,
                                           ObjectMapper objectMapper,
                                           CapitalService capitalService,
-                                          PositionService positionService) {
+                                          PositionService positionService,
+                                          PortfolioHealthV2Service portfolioHealthV2Service) {
         this.config          = config;
         this.objectMapper    = objectMapper;
         this.capitalService  = capitalService;
         this.positionService = positionService;
+        this.portfolioHealthV2Service = portfolioHealthV2Service;
+    }
+
+    /** 向下相容建構式：未提供 health-v2 service，position_health_v2 會以 warning 標示。 */
+    public ClaudeCodeRequestWriterService(AiClaudeConfig config,
+                                          ObjectMapper objectMapper,
+                                          CapitalService capitalService,
+                                          PositionService positionService) {
+        this(config, objectMapper, capitalService, positionService, null);
     }
 
     /** 向下相容建構式：未提供 capital/position service，capital_context 會以 warning 標示。 */
@@ -206,8 +218,9 @@ public class ClaudeCodeRequestWriterService {
             // v2.6：附加即時資金 / 持倉 context，避免 Claude 只讀過舊的 capital-summary.md。
             attachCapitalContext(root);
             attachOpenPositions(root);
+            attachPortfolioHealthV2(root);
             root.put("live_context_note",
-                    "capital_context/open_positions 為 Java live context，資金與持倉判讀優先於 rules_files 中可能過期的 capital-summary.md。");
+                    "capital_context/open_positions/position_health_v2 為 Java live context；持倉判讀優先使用 health-v2 的均線/量價/籌碼分級，不得只用 trailing stop 單點價格下 EXIT 結論。");
 
             String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
             Path dest = Paths.get(path);
@@ -301,6 +314,30 @@ public class ClaudeCodeRequestWriterService {
             arr.removeAll();
             ObjectNode warn = arr.addObject();
             warn.put("warning", "OPEN_POSITIONS_FAILED: " + e.getMessage());
+        }
+    }
+
+    /** 寫入 health-v2 持股結構判讀，讓 Claude/Codex 不再只依 stop/trailing stop 單點價格判斷 EXIT。 */
+    private void attachPortfolioHealthV2(ObjectNode root) {
+        if (portfolioHealthV2Service == null) {
+            ObjectNode warn = root.putObject("position_health_v2");
+            warn.put("warning", "PORTFOLIO_HEALTH_V2_SERVICE_NOT_AVAILABLE");
+            warn.put("mode", "SHADOW_MANUAL_CONFIRM_ONLY");
+            warn.put("autoBuyEnabled", false);
+            warn.put("autoSellEnabled", false);
+            return;
+        }
+        try {
+            Map<String, Object> health = portfolioHealthV2Service.healthV2ReadOnlySummary();
+            root.set("position_health_v2", objectMapper.valueToTree(health));
+            root.put("position_health_v2_contract_note",
+                    "health-v2 actionTier 僅為 HOLD/SOFT_WARNING/REDUCE_REVIEW/EXIT_REVIEW/HARD_EXIT_ALERT 人工確認分級；autoSellEnabled=false 時不得當成自動賣出。若 open_positions stop 與 health-v2 衝突，以 health-v2 結構分級作為持股分析主依據。");
+        } catch (Exception e) {
+            ObjectNode warn = root.putObject("position_health_v2");
+            warn.put("warning", "POSITION_HEALTH_V2_FAILED: " + e.getMessage());
+            warn.put("mode", "SHADOW_MANUAL_CONFIRM_ONLY");
+            warn.put("autoBuyEnabled", false);
+            warn.put("autoSellEnabled", false);
         }
     }
 
