@@ -4,6 +4,7 @@ import com.austin.trading.entity.BacktestRunEntity;
 import com.austin.trading.entity.BacktestTradeEntity;
 import com.austin.trading.dto.response.RrRootCauseDiagnosisResponse;
 import com.austin.trading.service.BacktestService;
+import com.austin.trading.service.P0BacktestDiagnosisService;
 import com.austin.trading.service.RrRootCauseDiagnosisService;
 import com.austin.trading.service.RrShadowValidationService;
 import com.austin.trading.service.RrValidationCoverageRepairService;
@@ -24,16 +25,26 @@ public class BacktestController {
     private final RrRootCauseDiagnosisService rrRootCauseDiagnosisService;
     private final RrShadowValidationService rrShadowValidationService;
     private final RrValidationCoverageRepairService rrValidationCoverageRepairService;
+    private final P0BacktestDiagnosisService p0BacktestDiagnosisService;
 
     @Autowired
     public BacktestController(BacktestService backtestService,
                               RrRootCauseDiagnosisService rrRootCauseDiagnosisService,
                               RrShadowValidationService rrShadowValidationService,
-                              RrValidationCoverageRepairService rrValidationCoverageRepairService) {
+                              RrValidationCoverageRepairService rrValidationCoverageRepairService,
+                              P0BacktestDiagnosisService p0BacktestDiagnosisService) {
         this.backtestService = backtestService;
         this.rrRootCauseDiagnosisService = rrRootCauseDiagnosisService;
         this.rrShadowValidationService = rrShadowValidationService;
         this.rrValidationCoverageRepairService = rrValidationCoverageRepairService;
+        this.p0BacktestDiagnosisService = p0BacktestDiagnosisService;
+    }
+
+    public BacktestController(BacktestService backtestService,
+                              RrRootCauseDiagnosisService rrRootCauseDiagnosisService,
+                              RrShadowValidationService rrShadowValidationService,
+                              RrValidationCoverageRepairService rrValidationCoverageRepairService) {
+        this(backtestService, rrRootCauseDiagnosisService, rrShadowValidationService, rrValidationCoverageRepairService, null);
     }
 
     public BacktestController(BacktestService backtestService,
@@ -80,6 +91,30 @@ public class BacktestController {
     @GetMapping("/diagnosis/rr-root-cause")
     public RrRootCauseDiagnosisResponse rrRootCauseDiagnosis(@RequestParam(defaultValue = "60") int days) {
         return rrRootCauseDiagnosisService.diagnose(days);
+    }
+
+    @GetMapping("/diagnosis/price-plan-sanity")
+    public Map<String, Object> pricePlanSanity(@RequestParam(defaultValue = "60") int days) {
+        if (p0BacktestDiagnosisService == null) {
+            throw new IllegalStateException("P0 diagnosis service is not available");
+        }
+        return p0BacktestDiagnosisService.pricePlanSanity(days);
+    }
+
+    @GetMapping("/diagnosis/theme-propagation")
+    public Map<String, Object> themePropagation(@RequestParam(defaultValue = "60") int days) {
+        if (p0BacktestDiagnosisService == null) {
+            throw new IllegalStateException("P0 diagnosis service is not available");
+        }
+        return p0BacktestDiagnosisService.themePropagation(days);
+    }
+
+    @GetMapping("/diagnosis/exit-rule-comparison")
+    public Map<String, Object> exitRuleComparison(@RequestParam(defaultValue = "60") int days) {
+        if (p0BacktestDiagnosisService == null) {
+            throw new IllegalStateException("P0 diagnosis service is not available");
+        }
+        return p0BacktestDiagnosisService.exitRuleComparison(days);
     }
 
     @PostMapping("/diagnosis/rr-shadow-validation/backfill")
