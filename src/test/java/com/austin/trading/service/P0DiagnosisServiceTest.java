@@ -135,6 +135,33 @@ class P0DiagnosisServiceTest {
         assertThat(cases.get(0).get("currentVsBestDeltaPct")).isEqualTo(bd("18.0000"));
     }
 
+    @Test
+    void exitRuleComparisonUsesPreEntryLookbackForMaAndAtrRules() {
+        PaperTradeRepository paperRepo = mock(PaperTradeRepository.class);
+        MarketIndexDailyRepository marketRepo = mock(MarketIndexDailyRepository.class);
+        LocalDate d = LocalDate.now().minusDays(20);
+        PaperTradeEntity t = trade("2330", bd("100"));
+        t.setEntryDate(d);
+        t.setExitDate(d.plusDays(5));
+        t.setPnlPct(bd("1.0"));
+        when(paperRepo.findByEntryDateBetweenOrderByEntryDateAscIdAsc(any(), any())).thenReturn(List.of(t));
+        List<MarketIndexDailyEntity> bars = new java.util.ArrayList<>();
+        for (int i = -15; i <= 6; i++) {
+            bars.add(bar("2330", d.plusDays(i), "100", "105", "95", String.valueOf(100 + Math.max(i, 0)), 1000L));
+        }
+        when(marketRepo.findBySymbolAndTradingDateBetweenOrderByTradingDateAsc(eq("2330"), any(), any())).thenReturn(bars);
+        P0BacktestDiagnosisService service = new P0BacktestDiagnosisService(
+                paperRepo, mock(CandidateForwardTrackingRepository.class), mock(CandidateStockRepository.class), marketRepo,
+                new PricePlanSanityEngine(null), new ObjectMapper());
+
+        Map<String, Object> out = service.exitRuleComparison(60);
+
+        assertThat(out.get("status")).isEqualTo("OK");
+        @SuppressWarnings("unchecked")
+        List<String> gaps = (List<String>) out.get("dataGaps");
+        assertThat(gaps).noneMatch(s -> s.contains("MA5 requires") || s.contains("MA10 requires") || s.contains("ATR14 requires"));
+    }
+
     private PaperTradeEntity trade(String symbol, BigDecimal entry) {
         PaperTradeEntity t = new PaperTradeEntity();
         t.setTradeId("T-" + symbol + "-" + System.nanoTime());

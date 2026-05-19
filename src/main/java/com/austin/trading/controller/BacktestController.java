@@ -125,6 +125,22 @@ public class BacktestController {
         return p0BacktestDiagnosisService.exitRuleCaseTable(days);
     }
 
+    @PostMapping("/diagnosis/exit-rule-shadow-validation/backfill")
+    public Map<String, Object> exitRuleShadowValidationBackfill(@RequestParam(defaultValue = "60") int days) {
+        if (p0BacktestDiagnosisService == null) {
+            throw new IllegalStateException("P0 diagnosis service is not available");
+        }
+        return p0BacktestDiagnosisService.backfillExitRuleShadowValidation(days);
+    }
+
+    @GetMapping("/diagnosis/exit-rule-shadow-validation/summary")
+    public Map<String, Object> exitRuleShadowValidationSummary(@RequestParam(defaultValue = "30") int days) {
+        if (p0BacktestDiagnosisService == null) {
+            throw new IllegalStateException("P0 diagnosis service is not available");
+        }
+        return p0BacktestDiagnosisService.exitRuleShadowValidationSummary(days);
+    }
+
     @PostMapping("/diagnosis/rr-shadow-validation/backfill")
     public Map<String, Object> rrShadowValidationBackfill(@RequestParam(defaultValue = "60") int days) {
         if (rrShadowValidationService == null) {

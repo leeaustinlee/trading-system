@@ -7,6 +7,7 @@ import com.austin.trading.service.PortfolioHealthV2Service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -47,6 +48,15 @@ public class PortfolioDecisionController {
             throw new IllegalStateException("Portfolio health-v2 service is not available");
         }
         return healthV2Service.healthV2DataGaps();
+    }
+
+    @GetMapping("/health-v2/history")
+    public Map<String, Object> healthV2History(@RequestParam(defaultValue = "30") int days,
+                                               @RequestParam(required = false) String symbol) {
+        if (healthV2Service == null) {
+            throw new IllegalStateException("Portfolio health-v2 service is not available");
+        }
+        return healthV2Service.healthV2History(days, symbol);
     }
 
     @GetMapping("/next-day-strategy")

@@ -7,9 +7,11 @@ import com.austin.trading.engine.PositionHealthInput;
 import com.austin.trading.engine.PositionHealthResult;
 import com.austin.trading.entity.CandidateStockEntity;
 import com.austin.trading.entity.PositionEntity;
+import com.austin.trading.entity.PositionHealthLogEntity;
 import com.austin.trading.entity.StockThemeMappingEntity;
 import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.PositionRepository;
+import com.austin.trading.repository.PositionHealthLogRepository;
 import com.austin.trading.repository.StockThemeMappingRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,6 +35,7 @@ public class PortfolioHealthV2Service {
     private final PositionHealthEngine positionHealthEngine;
     private final CandidateStockRepository candidateStockRepository;
     private final StockThemeMappingRepository stockThemeMappingRepository;
+    private final PositionHealthLogRepository positionHealthLogRepository;
     private final ObjectMapper objectMapper;
 
     @Autowired
@@ -42,6 +45,7 @@ public class PortfolioHealthV2Service {
                                     PositionHealthEngine positionHealthEngine,
                                     CandidateStockRepository candidateStockRepository,
                                     StockThemeMappingRepository stockThemeMappingRepository,
+                                    PositionHealthLogRepository positionHealthLogRepository,
                                     ObjectMapper objectMapper) {
         this.positionRepository = positionRepository;
         this.dailyTechnicalService = dailyTechnicalService;
@@ -49,7 +53,19 @@ public class PortfolioHealthV2Service {
         this.positionHealthEngine = positionHealthEngine;
         this.candidateStockRepository = candidateStockRepository;
         this.stockThemeMappingRepository = stockThemeMappingRepository;
+        this.positionHealthLogRepository = positionHealthLogRepository;
         this.objectMapper = objectMapper;
+    }
+
+    public PortfolioHealthV2Service(PositionRepository positionRepository,
+                                    DailyTechnicalService dailyTechnicalService,
+                                    TwseMisClient twseMisClient,
+                                    PositionHealthEngine positionHealthEngine,
+                                    CandidateStockRepository candidateStockRepository,
+                                    StockThemeMappingRepository stockThemeMappingRepository,
+                                    ObjectMapper objectMapper) {
+        this(positionRepository, dailyTechnicalService, twseMisClient, positionHealthEngine,
+                candidateStockRepository, stockThemeMappingRepository, null, objectMapper);
     }
 
     public PortfolioHealthV2Service(PositionRepository positionRepository,
@@ -59,13 +75,18 @@ public class PortfolioHealthV2Service {
         this(positionRepository, dailyTechnicalService, twseMisClient, positionHealthEngine, null, null, new ObjectMapper());
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Map<String, Object> healthV2() {
+        return healthV2Internal(true);
+    }
+
+    private Map<String, Object> healthV2Internal(boolean persistShadowLog) {
         List<PositionEntity> positions = positionRepository.findByStatus("OPEN");
         Map<String, StockQuote> quotes = fetchQuotes(positions.stream().map(PositionEntity::getSymbol).toList());
         List<Map<String, Object>> rows = positions.stream()
                 .map(p -> evaluate(p, quotes.get(p.getSymbol())))
                 .toList();
+        if (persistShadowLog) persistHealthRows(rows);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("status", "OK");
         out.put("mode", "SHADOW_MANUAL_CONFIRM_ONLY");
@@ -75,12 +96,63 @@ public class PortfolioHealthV2Service {
         out.put("positionCount", rows.size());
         out.put("positions", rows);
         out.put("notice", "health-v2 只產生人工確認提醒；不會自動 BUY/SELL。正式出場仍需 Austin 人工確認。");
+        out.put("persistence", !persistShadowLog ? "SKIPPED_READ_ONLY_SUMMARY" :
+                (positionHealthLogRepository == null ? "DISABLED_REPOSITORY_UNAVAILABLE" : "SHADOW_LOG_WRITTEN"));
+        return out;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> healthV2History(int days, String symbol) {
+        int d = days > 0 ? days : 30;
+        LocalDateTime since = LocalDateTime.now().minusDays(d);
+        List<PositionHealthLogEntity> logs = positionHealthLogRepository == null ? List.of() :
+                (symbol != null && !symbol.isBlank()
+                        ? positionHealthLogRepository.findBySymbolAndEvaluatedAtGreaterThanEqualOrderByEvaluatedAtDesc(symbol, since)
+                        : positionHealthLogRepository.findByEvaluatedAtGreaterThanEqualOrderByEvaluatedAtDesc(since));
+        Map<String, Integer> byTier = new LinkedHashMap<>();
+        Map<String, Integer> bySymbol = new LinkedHashMap<>();
+        Map<String, Integer> byStructure = new LinkedHashMap<>();
+        List<Map<String, Object>> samples = new java.util.ArrayList<>();
+        for (PositionHealthLogEntity l : logs) {
+            byTier.merge(value(l.getExitTier()).toString(), 1, Integer::sum);
+            bySymbol.merge(value(l.getSymbol()).toString(), 1, Integer::sum);
+            byStructure.merge(value(l.getStructureStatus()).toString(), 1, Integer::sum);
+            if (samples.size() < 100) {
+                samples.add(Map.ofEntries(
+                        Map.entry("id", value(l.getId())),
+                        Map.entry("positionId", value(l.getPositionId())),
+                        Map.entry("symbol", value(l.getSymbol())),
+                        Map.entry("evaluatedAt", value(l.getEvaluatedAt())),
+                        Map.entry("currentPrice", value(l.getCurrentPrice())),
+                        Map.entry("healthScore", value(l.getHealthScore())),
+                        Map.entry("structureStatus", value(l.getStructureStatus())),
+                        Map.entry("volumeStatus", value(l.getVolumeStatus())),
+                        Map.entry("relativeStrengthStatus", value(l.getRelativeStrengthStatus())),
+                        Map.entry("chipStatus", value(l.getChipStatus())),
+                        Map.entry("actionTier", value(l.getExitTier())),
+                        Map.entry("dataGapsJson", value(l.getDataGapsJson()))));
+            }
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("status", positionHealthLogRepository == null ? "DISABLED_REPOSITORY_UNAVAILABLE" : "OK");
+        out.put("mode", "SHADOW_HISTORY_READ_ONLY");
+        out.put("autoBuyEnabled", false);
+        out.put("autoSellEnabled", false);
+        out.put("days", d);
+        out.put("since", since);
+        out.put("symbol", symbol == null || symbol.isBlank() ? "ALL" : symbol);
+        out.put("logCount", logs.size());
+        out.put("byActionTier", byTier);
+        out.put("bySymbol", bySymbol);
+        out.put("byStructureStatus", byStructure);
+        out.put("samples", samples);
+        out.put("safetyNote", "READ_ONLY_SHADOW_HISTORY: records health-v2 diagnostics only; no BUY/SELL/exit automation");
         return out;
     }
 
     @Transactional(readOnly = true)
     public Map<String, Object> healthV2DataGaps() {
-        Map<String, Object> health = healthV2();
+        Map<String, Object> health = healthV2Internal(false);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> positions = (List<Map<String, Object>>) health.getOrDefault("positions", List.of());
         Map<String, Integer> byGap = new LinkedHashMap<>();
@@ -113,6 +185,46 @@ public class PortfolioHealthV2Service {
         out.put("affectedPositions", affectedPositions);
         out.put("safetyNote", "READ_ONLY_DIAGNOSTIC_ONLY: data-gap summary does not change BUY/SELL/exit behavior");
         return out;
+    }
+
+
+    private void persistHealthRows(List<Map<String, Object>> rows) {
+        if (positionHealthLogRepository == null || rows == null || rows.isEmpty()) return;
+        for (Map<String, Object> row : rows) {
+            try {
+                PositionHealthLogEntity log = new PositionHealthLogEntity();
+                log.setPositionId(asLong(row.get("positionId")));
+                log.setSymbol(String.valueOf(row.get("symbol")));
+                log.setCurrentPrice(asBigDecimal(row.get("currentPrice")));
+                log.setHealthScore(asInteger(row.get("healthScore")));
+                log.setStructureStatus(String.valueOf(row.get("structureStatus")));
+                log.setVolumeStatus(String.valueOf(row.get("volumeStatus")));
+                log.setRelativeStrengthStatus(String.valueOf(row.get("relativeStrengthStatus")));
+                log.setChipStatus(String.valueOf(row.get("chipStatus")));
+                log.setExitTier(String.valueOf(row.get("actionTier")));
+                log.setReasonsJson(objectMapper.writeValueAsString(row.getOrDefault("reasons", List.of())));
+                log.setDataGapsJson(objectMapper.writeValueAsString(row.getOrDefault("dataGaps", List.of())));
+                positionHealthLogRepository.save(log);
+            } catch (Exception ignored) {
+                // Shadow logging must never break read-only diagnosis output.
+            }
+        }
+    }
+
+    private Long asLong(Object v) {
+        if (v instanceof Number n) return n.longValue();
+        try { return v == null ? null : Long.parseLong(String.valueOf(v)); } catch (Exception e) { return null; }
+    }
+
+    private Integer asInteger(Object v) {
+        if (v instanceof Number n) return n.intValue();
+        try { return v == null ? null : Integer.parseInt(String.valueOf(v)); } catch (Exception e) { return null; }
+    }
+
+    private BigDecimal asBigDecimal(Object v) {
+        if (v instanceof BigDecimal bd) return bd;
+        if (v instanceof Number n) return BigDecimal.valueOf(n.doubleValue());
+        try { return v == null || "DATA_GAP".equals(String.valueOf(v)) ? null : new BigDecimal(String.valueOf(v)); } catch (Exception e) { return null; }
     }
 
     private Map<String, StockQuote> fetchQuotes(List<String> symbols) {

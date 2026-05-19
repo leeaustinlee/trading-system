@@ -8,6 +8,7 @@ import com.austin.trading.entity.MarketIndexDailyEntity;
 import com.austin.trading.entity.PositionEntity;
 import com.austin.trading.entity.StockThemeMappingEntity;
 import com.austin.trading.repository.CandidateStockRepository;
+import com.austin.trading.repository.PositionHealthLogRepository;
 import com.austin.trading.repository.PositionRepository;
 import com.austin.trading.repository.StockThemeMappingRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class PortfolioHealthV2ServiceTest {
@@ -119,6 +121,30 @@ class PortfolioHealthV2ServiceTest {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> affected = (List<Map<String, Object>>) out.get("affectedPositions");
         assertThat(affected.get(0).get("recommendedDataFix").toString()).contains("日線");
+    }
+
+    @Test
+    void healthV2PersistsShadowHistoryWhenRepositoryAvailable() {
+        PositionRepository positionRepo = mock(PositionRepository.class);
+        DailyTechnicalService tech = mock(DailyTechnicalService.class);
+        PositionHealthLogRepository logRepo = mock(PositionHealthLogRepository.class);
+        PositionEntity p = new PositionEntity();
+        p.setSymbol("2330");
+        p.setStockName("台積電");
+        p.setStatus("OPEN");
+        p.setAvgCost(bd("100"));
+        when(positionRepo.findByStatus("OPEN")).thenReturn(List.of(p));
+        when(tech.snapshot(eq("2330"), any())).thenReturn(new DailyTechnicalService.TechnicalSnapshot(
+                bd("100"), bd("99"), bd("98"), bd("99"), bd("95"), bd("105"), bd("2"), bd("1.1"), bd("5"), bd("6"), List.of()));
+        when(tech.snapshot(eq("t00"), any())).thenReturn(new DailyTechnicalService.TechnicalSnapshot(
+                null, null, null, null, null, null, null, bd("1.0"), bd("1"), bd("2"), List.of()));
+
+        PortfolioHealthV2Service service = new PortfolioHealthV2Service(
+                positionRepo, tech, null, new PositionHealthEngine(), null, null, logRepo, new ObjectMapper());
+        Map<String, Object> out = service.healthV2();
+
+        assertThat(out.get("persistence")).isEqualTo("SHADOW_LOG_WRITTEN");
+        verify(logRepo).save(any());
     }
 
     private BigDecimal bd(String v) { return new BigDecimal(v); }

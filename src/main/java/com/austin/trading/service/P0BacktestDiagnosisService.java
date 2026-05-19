@@ -6,17 +6,21 @@ import com.austin.trading.entity.CandidateForwardTrackingEntity;
 import com.austin.trading.entity.CandidateStockEntity;
 import com.austin.trading.entity.MarketIndexDailyEntity;
 import com.austin.trading.entity.PaperTradeEntity;
+import com.austin.trading.entity.ShadowExitComparisonEntity;
 import com.austin.trading.repository.CandidateForwardTrackingRepository;
 import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.MarketIndexDailyRepository;
 import com.austin.trading.repository.PaperTradeRepository;
+import com.austin.trading.repository.ShadowExitComparisonRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,6 +35,7 @@ public class P0BacktestDiagnosisService {
     private final CandidateForwardTrackingRepository forwardRepository;
     private final CandidateStockRepository candidateRepository;
     private final MarketIndexDailyRepository marketIndexDailyRepository;
+    private final ShadowExitComparisonRepository shadowExitComparisonRepository;
     private final PricePlanSanityEngine pricePlanSanityEngine;
     @SuppressWarnings("unused")
     private final ObjectMapper objectMapper;
@@ -41,10 +46,22 @@ public class P0BacktestDiagnosisService {
                                       MarketIndexDailyRepository marketIndexDailyRepository,
                                       PricePlanSanityEngine pricePlanSanityEngine,
                                       ObjectMapper objectMapper) {
+        this(paperTradeRepository, forwardRepository, candidateRepository, marketIndexDailyRepository, null, pricePlanSanityEngine, objectMapper);
+    }
+
+    @Autowired
+    public P0BacktestDiagnosisService(PaperTradeRepository paperTradeRepository,
+                                      CandidateForwardTrackingRepository forwardRepository,
+                                      CandidateStockRepository candidateRepository,
+                                      MarketIndexDailyRepository marketIndexDailyRepository,
+                                      ShadowExitComparisonRepository shadowExitComparisonRepository,
+                                      PricePlanSanityEngine pricePlanSanityEngine,
+                                      ObjectMapper objectMapper) {
         this.paperTradeRepository = paperTradeRepository;
         this.forwardRepository = forwardRepository;
         this.candidateRepository = candidateRepository;
         this.marketIndexDailyRepository = marketIndexDailyRepository;
+        this.shadowExitComparisonRepository = shadowExitComparisonRepository;
         this.pricePlanSanityEngine = pricePlanSanityEngine;
         this.objectMapper = objectMapper;
     }
@@ -151,16 +168,14 @@ public class P0BacktestDiagnosisService {
             returnsByRule.put(r, new ArrayList<>());
         }
         for (PaperTradeEntity t : trades) {
-            LocalDate end = t.getExitDate() != null ? t.getExitDate().plusDays(1) : t.getEntryDate().plusDays(30);
-            List<MarketIndexDailyEntity> bars = marketIndexDailyRepository.findBySymbolAndTradingDateBetweenOrderByTradingDateAsc(
-                    t.getSymbol(), t.getEntryDate(), end);
-            if (bars.isEmpty()) {
-                dataGaps.add("DATA_GAP: no daily bars for " + t.getSymbol() + " entryDate=" + t.getEntryDate());
+            BarWindow bw = loadBarWindow(t);
+            if (!bw.usable()) {
+                dataGaps.add(bw.dataGap());
                 rows.add(Map.of("symbol", value(t.getSymbol()), "entryDate", t.getEntryDate(), "status", "DATA_GAP",
-                        "dataGaps", List.of("DATA_GAP: no daily bars")));
+                        "dataGapType", bw.dataGapType(), "dataGaps", List.of(bw.dataGap())));
                 continue;
             }
-            Map<String, Object> row = compareTrade(t, bars, dataGaps);
+            Map<String, Object> row = compareTrade(t, bw.bars(), bw.entryIndex(), dataGaps);
             rows.add(row);
             @SuppressWarnings("unchecked")
             Map<String, Object> ruleReturns = (Map<String, Object>) row.get("returnsPct");
@@ -184,19 +199,16 @@ public class P0BacktestDiagnosisService {
         List<Map<String, Object>> cases = new ArrayList<>();
         Map<String, Integer> byDiagnosis = new LinkedHashMap<>();
         for (PaperTradeEntity t : trades) {
-            LocalDate end = t.getExitDate() != null ? t.getExitDate().plusDays(1) : t.getEntryDate().plusDays(30);
-            List<MarketIndexDailyEntity> bars = marketIndexDailyRepository.findBySymbolAndTradingDateBetweenOrderByTradingDateAsc(
-                    t.getSymbol(), t.getEntryDate(), end);
-            if (bars.isEmpty()) {
-                String gap = "DATA_GAP: no daily bars for " + t.getSymbol() + " entryDate=" + t.getEntryDate();
-                dataGaps.add(gap);
+            BarWindow bw = loadBarWindow(t);
+            if (!bw.usable()) {
+                dataGaps.add(bw.dataGap());
                 Map<String, Object> row = Map.of("symbol", value(t.getSymbol()), "entryDate", t.getEntryDate(), "status", "DATA_GAP",
-                        "diagnosis", "DATA_GAP_DAILY_BARS", "dataGaps", List.of(gap));
+                        "diagnosis", "DATA_GAP_" + bw.dataGapType(), "dataGapType", bw.dataGapType(), "dataGaps", List.of(bw.dataGap()));
                 cases.add(row);
-                byDiagnosis.merge("DATA_GAP_DAILY_BARS", 1, Integer::sum);
+                byDiagnosis.merge("DATA_GAP_" + bw.dataGapType(), 1, Integer::sum);
                 continue;
             }
-            Map<String, Object> compared = compareTrade(t, bars, dataGaps);
+            Map<String, Object> compared = compareTrade(t, bw.bars(), bw.entryIndex(), dataGaps);
             @SuppressWarnings("unchecked")
             Map<String, Object> returns = (Map<String, Object>) compared.get("returnsPct");
             @SuppressWarnings("unchecked")
@@ -225,7 +237,7 @@ public class P0BacktestDiagnosisService {
             row.put("bestAlternativeRule", value(bestRule));
             row.put("bestAlternativeReturnPct", value(bestReturn));
             row.put("currentVsBestDeltaPct", value(delta));
-            row.put("maxDrawdownPct", value(maxDrawdownPct(bars, t.getEntryPrice())));
+            row.put("maxDrawdownPct", value(maxDrawdownPct(bw.postEntryBars(), t.getEntryPrice())));
             row.put("diagnosis", diagnosis);
             row.put("readableConclusion", readableExitConclusion(diagnosis, bestRule, delta));
             row.put("returnsPct", returns);
@@ -243,15 +255,15 @@ public class P0BacktestDiagnosisService {
         return out;
     }
 
-    private Map<String, Object> compareTrade(PaperTradeEntity t, List<MarketIndexDailyEntity> bars, List<String> globalGaps) {
+    private Map<String, Object> compareTrade(PaperTradeEntity t, List<MarketIndexDailyEntity> bars, int entryIndex, List<String> globalGaps) {
         Map<String, Object> returns = new LinkedHashMap<>();
         Map<String, Object> exitDates = new LinkedHashMap<>();
         returns.put("CURRENT", t.getPnlPct());
         exitDates.put("CURRENT", t.getExitDate());
-        RuleExit ma5 = exitByMa(t, bars, 5);
-        RuleExit ma10 = exitByMa(t, bars, 10);
-        RuleExit prevLow = exitByPreviousLow(t, bars, 10);
-        RuleExit atr = exitByAtr(t, bars, 14);
+        RuleExit ma5 = exitByMa(t, bars, entryIndex, 5);
+        RuleExit ma10 = exitByMa(t, bars, entryIndex, 10);
+        RuleExit prevLow = exitByPreviousLow(t, bars, entryIndex, 10);
+        RuleExit atr = exitByAtr(t, bars, entryIndex, 14);
         RuleExit hybrid = firstExit(ma5, ma10);
         putRule("MA5", ma5, returns, exitDates, globalGaps, t);
         putRule("MA10", ma10, returns, exitDates, globalGaps, t);
@@ -262,21 +274,132 @@ public class P0BacktestDiagnosisService {
                 "status", "OK", "returnsPct", returns, "exitDates", exitDates);
     }
 
+    @Transactional
+    public Map<String, Object> backfillExitRuleShadowValidation(int days) {
+        Window window = window(days);
+        List<PaperTradeEntity> trades = paperTradeRepository.findByEntryDateBetweenOrderByEntryDateAscIdAsc(window.start(), window.end());
+        int written = 0;
+        int dataGapRows = 0;
+        Map<String, Integer> byGapType = new LinkedHashMap<>();
+        List<Map<String, Object>> samples = new ArrayList<>();
+        for (PaperTradeEntity t : trades) {
+            BarWindow bw = loadBarWindow(t);
+            Map<String, Object> returns = Map.of();
+            Map<String, Object> exitDates = Map.of();
+            List<String> rowGaps = new ArrayList<>();
+            if (bw.usable()) {
+                Map<String, Object> compared = compareTrade(t, bw.bars(), bw.entryIndex(), rowGaps);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> r = (Map<String, Object>) compared.get("returnsPct");
+                @SuppressWarnings("unchecked")
+                Map<String, Object> d = (Map<String, Object>) compared.get("exitDates");
+                returns = r;
+                exitDates = d;
+            } else {
+                dataGapRows++;
+                byGapType.merge(bw.dataGapType(), 1, Integer::sum);
+                rowGaps.add(bw.dataGap());
+            }
+            if (shadowExitComparisonRepository != null && t.getId() != null) {
+                try {
+                    ShadowExitComparisonEntity row = shadowExitComparisonRepository
+                            .findByTradeRefTypeAndTradeRefId("PAPER_TRADE", t.getId())
+                            .orElseGet(ShadowExitComparisonEntity::new);
+                    row.setTradeRefType("PAPER_TRADE");
+                    row.setTradeRefId(t.getId());
+                    row.setSymbol(t.getSymbol());
+                    row.setEvaluatedAt(LocalDateTime.now());
+                    row.setCurrentRuleAction(value(t.getExitReason()).toString());
+                    row.setCurrentRuleExitPrice(t.getExitPrice());
+                    row.setMa5Action(ruleAction(returns.get("MA5")));
+                    row.setMa10Action(ruleAction(returns.get("MA10")));
+                    row.setPrevLowAction(ruleAction(returns.get("PREVIOUS_LOW")));
+                    row.setAtrAction(ruleAction(returns.get("ATR_STRUCTURE")));
+                    row.setHybridAction(ruleAction(returns.get("TRAILING_PLUS_MA")));
+                    row.setHypotheticalReturnJson(objectMapper.writeValueAsString(Map.of("returnsPct", returns, "exitDates", exitDates)));
+                    row.setDataGaps(objectMapper.writeValueAsString(rowGaps));
+                    shadowExitComparisonRepository.save(row);
+                    written++;
+                } catch (Exception e) {
+                    rowGaps.add("DATA_GAP[LOOKUP_MISMATCH]: shadow validation persist failed " + e.getMessage());
+                }
+            }
+            if (samples.size() < 50) samples.add(Map.of("symbol", value(t.getSymbol()), "tradeId", value(t.getTradeId()),
+                    "entryDate", t.getEntryDate(), "status", bw.usable() ? "OK" : "DATA_GAP", "dataGaps", rowGaps));
+        }
+        Map<String, Object> out = base(window, "OK");
+        out.put("mode", "SHADOW_VALIDATION_BACKFILL_ONLY");
+        out.put("totalTrades", trades.size());
+        out.put("writtenRows", written);
+        out.put("dataGapRows", dataGapRows);
+        out.put("byDataGapType", byGapType);
+        out.put("samples", samples);
+        out.put("safetyNote", "Writes shadow_exit_comparison rows only; production BUY/SELL/exit behavior unchanged");
+        return out;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> exitRuleShadowValidationSummary(int days) {
+        int d = days > 0 ? days : 30;
+        LocalDateTime since = LocalDateTime.now().minusDays(d);
+        List<ShadowExitComparisonEntity> rows = shadowExitComparisonRepository == null ? List.of()
+                : shadowExitComparisonRepository.findByEvaluatedAtGreaterThanEqualOrderByEvaluatedAtDesc(since);
+        Map<String, Integer> byRefType = new LinkedHashMap<>();
+        Map<String, Integer> byCurrentAction = new LinkedHashMap<>();
+        Map<String, Integer> byRuleDataGap = new LinkedHashMap<>();
+        List<Map<String, Object>> samples = new ArrayList<>();
+        for (ShadowExitComparisonEntity row : rows) {
+            byRefType.merge(value(row.getTradeRefType()).toString(), 1, Integer::sum);
+            byCurrentAction.merge(value(row.getCurrentRuleAction()).toString(), 1, Integer::sum);
+            if (row.getDataGaps() != null && !row.getDataGaps().equals("[]")) byRuleDataGap.merge(row.getDataGaps(), 1, Integer::sum);
+            if (samples.size() < 100) samples.add(Map.ofEntries(
+                    Map.entry("id", value(row.getId())),
+                    Map.entry("tradeRefType", value(row.getTradeRefType())),
+                    Map.entry("tradeRefId", value(row.getTradeRefId())),
+                    Map.entry("symbol", value(row.getSymbol())),
+                    Map.entry("evaluatedAt", value(row.getEvaluatedAt())),
+                    Map.entry("currentRuleAction", value(row.getCurrentRuleAction())),
+                    Map.entry("ma5Action", value(row.getMa5Action())),
+                    Map.entry("ma10Action", value(row.getMa10Action())),
+                    Map.entry("prevLowAction", value(row.getPrevLowAction())),
+                    Map.entry("atrAction", value(row.getAtrAction())),
+                    Map.entry("hybridAction", value(row.getHybridAction())),
+                    Map.entry("dataGaps", value(row.getDataGaps()))));
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("status", shadowExitComparisonRepository == null ? "DISABLED_REPOSITORY_UNAVAILABLE" : "OK");
+        out.put("mode", "SHADOW_VALIDATION_READ_ONLY");
+        out.put("days", d);
+        out.put("since", since);
+        out.put("rowCount", rows.size());
+        out.put("byRefType", byRefType);
+        out.put("byCurrentRuleAction", byCurrentAction);
+        out.put("dataGapRowGroups", byRuleDataGap);
+        out.put("samples", samples);
+        out.put("safetyNote", "READ_ONLY summary of shadow_exit_comparison; no live exit automation");
+        return out;
+    }
+
+    private String ruleAction(Object ret) {
+        if (ret == null || "DATA_GAP".equals(ret)) return "DATA_GAP";
+        return "SIMULATED_EXIT";
+    }
+
     private void putRule(String name, RuleExit exit, Map<String, Object> returns, Map<String, Object> dates,
                          List<String> gaps, PaperTradeEntity t) {
         if (exit.dataGap() != null) {
             returns.put(name, "DATA_GAP");
             dates.put(name, null);
-            gaps.add(exit.dataGap() + " symbol=" + t.getSymbol() + " entryDate=" + t.getEntryDate());
+            gaps.add(exit.dataGap() + " rule=" + name + " symbol=" + t.getSymbol() + " entryDate=" + t.getEntryDate());
         } else {
             returns.put(name, exit.returnPct());
             dates.put(name, exit.exitDate());
         }
     }
 
-    private RuleExit exitByMa(PaperTradeEntity t, List<MarketIndexDailyEntity> bars, int n) {
-        if (bars.size() < n) return RuleExit.gap("DATA_GAP: MA" + n + " requires bars");
-        for (int i = 0; i < bars.size(); i++) {
+    private RuleExit exitByMa(PaperTradeEntity t, List<MarketIndexDailyEntity> bars, int entryIndex, int n) {
+        if (bars.size() < n) return RuleExit.gap("DATA_GAP[PRE_ENTRY_LOOKBACK]: MA" + n + " requires lookback bars", "PRE_ENTRY_LOOKBACK");
+        for (int i = entryIndex; i < bars.size(); i++) {
             BigDecimal ma = ma(bars, i, n);
             BigDecimal close = bars.get(i).getClosePrice();
             if (ma != null && close != null && close.compareTo(ma) < 0) return RuleExit.of(bars.get(i).getTradingDate(), pct(close, t.getEntryPrice()));
@@ -285,9 +408,9 @@ public class P0BacktestDiagnosisService {
         return RuleExit.of(last.getTradingDate(), pct(last.getClosePrice(), t.getEntryPrice()));
     }
 
-    private RuleExit exitByPreviousLow(PaperTradeEntity t, List<MarketIndexDailyEntity> bars, int lookback) {
-        if (bars.size() < 2) return RuleExit.gap("DATA_GAP: previous-low requires bars");
-        for (int i = 1; i < bars.size(); i++) {
+    private RuleExit exitByPreviousLow(PaperTradeEntity t, List<MarketIndexDailyEntity> bars, int entryIndex, int lookback) {
+        if (bars.size() < 2) return RuleExit.gap("DATA_GAP[PRE_ENTRY_LOOKBACK]: previous-low requires bars", "PRE_ENTRY_LOOKBACK");
+        for (int i = Math.max(1, entryIndex); i < bars.size(); i++) {
             BigDecimal low = previousLow(bars, i, lookback);
             BigDecimal close = bars.get(i).getClosePrice();
             if (low != null && close != null && close.compareTo(low) < 0) return RuleExit.of(bars.get(i).getTradingDate(), pct(close, t.getEntryPrice()));
@@ -296,9 +419,9 @@ public class P0BacktestDiagnosisService {
         return RuleExit.of(last.getTradingDate(), pct(last.getClosePrice(), t.getEntryPrice()));
     }
 
-    private RuleExit exitByAtr(PaperTradeEntity t, List<MarketIndexDailyEntity> bars, int n) {
-        if (bars.size() < n + 1) return RuleExit.gap("DATA_GAP: ATR" + n + " requires bars");
-        for (int i = n; i < bars.size(); i++) {
+    private RuleExit exitByAtr(PaperTradeEntity t, List<MarketIndexDailyEntity> bars, int entryIndex, int n) {
+        if (bars.size() < n + 1) return RuleExit.gap("DATA_GAP[PRE_ENTRY_LOOKBACK]: ATR" + n + " requires lookback bars", "PRE_ENTRY_LOOKBACK");
+        for (int i = Math.max(n, entryIndex); i < bars.size(); i++) {
             BigDecimal atr = atr(bars, i, n);
             BigDecimal close = bars.get(i).getClosePrice();
             if (atr != null && close != null && t.getEntryPrice() != null) {
@@ -316,6 +439,33 @@ public class P0BacktestDiagnosisService {
         if (a.dataGap() != null) return b;
         if (b.dataGap() != null) return a;
         return !a.exitDate().isAfter(b.exitDate()) ? a : b;
+    }
+
+    private BarWindow loadBarWindow(PaperTradeEntity t) {
+        if (t.getSymbol() == null || t.getEntryDate() == null) {
+            return BarWindow.gap(List.of(), -1, "LOOKUP_MISMATCH", "DATA_GAP[LOOKUP_MISMATCH]: trade missing symbol or entryDate");
+        }
+        LocalDate end = t.getExitDate() != null ? t.getExitDate().plusDays(1) : t.getEntryDate().plusDays(30);
+        LocalDate start = t.getEntryDate().minusDays(40);
+        List<MarketIndexDailyEntity> bars = marketIndexDailyRepository.findBySymbolAndTradingDateBetweenOrderByTradingDateAsc(
+                t.getSymbol(), start, end);
+        if (bars.isEmpty()) {
+            return BarWindow.gap(bars, -1, "MISSING_BARS", "DATA_GAP[MISSING_BARS]: no daily bars for " + t.getSymbol() + " entryDate=" + t.getEntryDate());
+        }
+        int entryIndex = -1;
+        for (int i = 0; i < bars.size(); i++) {
+            if (!bars.get(i).getTradingDate().isBefore(t.getEntryDate())) {
+                entryIndex = i;
+                break;
+            }
+        }
+        if (entryIndex < 0) {
+            return BarWindow.gap(bars, -1, "POST_ENTRY_FORWARD_BARS", "DATA_GAP[POST_ENTRY_FORWARD_BARS]: no bars on/after entryDate for " + t.getSymbol() + " entryDate=" + t.getEntryDate());
+        }
+        if (bars.get(entryIndex).getTradingDate().isAfter(t.getEntryDate().plusDays(5))) {
+            return BarWindow.gap(bars, entryIndex, "LOOKUP_MISMATCH", "DATA_GAP[LOOKUP_MISMATCH]: first bar too far after entryDate for " + t.getSymbol() + " entryDate=" + t.getEntryDate());
+        }
+        return new BarWindow(bars, entryIndex, null, null);
     }
 
     private Map<String, Object> summarizeExitCases(List<Map<String, Object>> cases, Map<String, Integer> byDiagnosis) {
@@ -445,8 +595,13 @@ public class P0BacktestDiagnosisService {
     private Object value(Object v) { return v == null ? "DATA_GAP" : v; }
 
     private record Window(int days, LocalDate start, LocalDate end) {}
-    private record RuleExit(LocalDate exitDate, BigDecimal returnPct, String dataGap) {
-        static RuleExit of(LocalDate date, BigDecimal ret) { return new RuleExit(date, ret, null); }
-        static RuleExit gap(String gap) { return new RuleExit(null, null, gap); }
+    private record BarWindow(List<MarketIndexDailyEntity> bars, int entryIndex, String dataGapType, String dataGap) {
+        boolean usable() { return dataGap == null; }
+        List<MarketIndexDailyEntity> postEntryBars() { return entryIndex < 0 || entryIndex >= bars.size() ? List.of() : bars.subList(entryIndex, bars.size()); }
+        static BarWindow gap(List<MarketIndexDailyEntity> bars, int entryIndex, String type, String gap) { return new BarWindow(bars, entryIndex, type, gap); }
+    }
+    private record RuleExit(LocalDate exitDate, BigDecimal returnPct, String dataGap, String dataGapType) {
+        static RuleExit of(LocalDate date, BigDecimal ret) { return new RuleExit(date, ret, null, null); }
+        static RuleExit gap(String gap, String type) { return new RuleExit(null, null, gap, type); }
     }
 }
