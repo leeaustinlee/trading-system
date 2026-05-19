@@ -26,7 +26,7 @@ import java.util.Optional;
  * <ul>
  *   <li>個股: {@code /exchangeReport/STOCK_DAY?response=json&date=YYYYMM01&stockNo=2330}</li>
  *   <li>TAIEX:
- *       {@code /exchangeReport/MI_5MINS_HIST?response=json&date=YYYYMM01}
+ *       {@code /indicesReport/MI_5MINS_HIST?response=json&date=YYYYMM01}
  *       — 回傳當月每個交易日的開高低收（加權指數）。</li>
  * </ul>
  *
@@ -40,7 +40,7 @@ public class TwseHistoryClient {
 
     private static final String BASE_URL    = "https://www.twse.com.tw";
     private static final String STOCK_PATH  = "/exchangeReport/STOCK_DAY";
-    private static final String TAIEX_PATH  = "/exchangeReport/MI_5MINS_HIST";
+    private static final String TAIEX_PATH  = "/indicesReport/MI_5MINS_HIST";
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private final WebClient    webClient;
