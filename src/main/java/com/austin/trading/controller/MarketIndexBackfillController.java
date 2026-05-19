@@ -1,6 +1,7 @@
 package com.austin.trading.controller;
 
 import com.austin.trading.service.regime.MarketIndexSymbolBackfillService;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -25,5 +26,14 @@ public class MarketIndexBackfillController {
                                                @RequestParam(defaultValue = "true") boolean includeCandidates,
                                                @RequestParam(defaultValue = "50") int maxSymbols) {
         return symbolBackfillService.backfillSymbols(days, symbols, includePaperTrades, includeCandidates, maxSymbols);
+    }
+
+    @GetMapping("/coverage")
+    public Map<String, Object> coverage(@RequestParam(defaultValue = "90") int days,
+                                        @RequestParam(required = false) String symbols,
+                                        @RequestParam(defaultValue = "true") boolean includePaperTrades,
+                                        @RequestParam(defaultValue = "true") boolean includeCandidates,
+                                        @RequestParam(defaultValue = "50") int maxSymbols) {
+        return symbolBackfillService.coverage(days, symbols, includePaperTrades, includeCandidates, maxSymbols);
     }
 }

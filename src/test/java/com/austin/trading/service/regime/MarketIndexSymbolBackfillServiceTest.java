@@ -106,6 +106,30 @@ class MarketIndexSymbolBackfillServiceTest {
     }
 
     @Test
+    void coverageReportsInsufficientBarsReadOnly() {
+        TwseHistoryClient client = mock(TwseHistoryClient.class);
+        MarketIndexBackfillService base = mock(MarketIndexBackfillService.class);
+        PaperTradeRepository paperRepo = mock(PaperTradeRepository.class);
+        CandidateForwardTrackingRepository forwardRepo = mock(CandidateForwardTrackingRepository.class);
+        CandidateStockRepository candidateRepo = mock(CandidateStockRepository.class);
+        ScoreConfigService cfg = mock(ScoreConfigService.class);
+        when(base.findBars(eq("t00"), any(), any())).thenReturn(List.of(
+                new MarketIndexDailyEntity("t00", LocalDate.now().minusDays(2), BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, 1L)));
+        when(base.findBars(eq("2330"), any(), any())).thenReturn(List.of(
+                new MarketIndexDailyEntity("2330", LocalDate.now().minusDays(2), BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, 1L)));
+
+        MarketIndexSymbolBackfillService service = new MarketIndexSymbolBackfillService(
+                client, base, paperRepo, forwardRepo, candidateRepo, cfg);
+
+        var result = service.coverage(30, "2330", false, false, 10);
+
+        assertThat(result.get("mode")).isEqualTo("READ_ONLY_COVERAGE_ONLY");
+        assertThat(result.get("symbolsWithInsufficientBars")).isEqualTo(2);
+        assertThat(result.get("symbolStats").toString()).contains("BACKFILL_DAILY_BARS");
+        verify(base, never()).upsertBars(anyList(), any(), any());
+    }
+
+    @Test
     void upsertBarsSkipsUnchangedExistingDailyRows() {
         TwseHistoryClient client = mock(TwseHistoryClient.class);
         MarketIndexDailyRepository marketRepo = mock(MarketIndexDailyRepository.class);

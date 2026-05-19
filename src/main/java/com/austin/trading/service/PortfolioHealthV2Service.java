@@ -5,8 +5,15 @@ import com.austin.trading.client.dto.StockQuote;
 import com.austin.trading.engine.PositionHealthEngine;
 import com.austin.trading.engine.PositionHealthInput;
 import com.austin.trading.engine.PositionHealthResult;
+import com.austin.trading.entity.CandidateStockEntity;
 import com.austin.trading.entity.PositionEntity;
+import com.austin.trading.entity.StockThemeMappingEntity;
+import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.PositionRepository;
+import com.austin.trading.repository.StockThemeMappingRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,15 +31,32 @@ public class PortfolioHealthV2Service {
     private final DailyTechnicalService dailyTechnicalService;
     private final TwseMisClient twseMisClient;
     private final PositionHealthEngine positionHealthEngine;
+    private final CandidateStockRepository candidateStockRepository;
+    private final StockThemeMappingRepository stockThemeMappingRepository;
+    private final ObjectMapper objectMapper;
+
+    @Autowired
+    public PortfolioHealthV2Service(PositionRepository positionRepository,
+                                    DailyTechnicalService dailyTechnicalService,
+                                    TwseMisClient twseMisClient,
+                                    PositionHealthEngine positionHealthEngine,
+                                    CandidateStockRepository candidateStockRepository,
+                                    StockThemeMappingRepository stockThemeMappingRepository,
+                                    ObjectMapper objectMapper) {
+        this.positionRepository = positionRepository;
+        this.dailyTechnicalService = dailyTechnicalService;
+        this.twseMisClient = twseMisClient;
+        this.positionHealthEngine = positionHealthEngine;
+        this.candidateStockRepository = candidateStockRepository;
+        this.stockThemeMappingRepository = stockThemeMappingRepository;
+        this.objectMapper = objectMapper;
+    }
 
     public PortfolioHealthV2Service(PositionRepository positionRepository,
                                     DailyTechnicalService dailyTechnicalService,
                                     TwseMisClient twseMisClient,
                                     PositionHealthEngine positionHealthEngine) {
-        this.positionRepository = positionRepository;
-        this.dailyTechnicalService = dailyTechnicalService;
-        this.twseMisClient = twseMisClient;
-        this.positionHealthEngine = positionHealthEngine;
+        this(positionRepository, dailyTechnicalService, twseMisClient, positionHealthEngine, null, null, new ObjectMapper());
     }
 
     @Transactional(readOnly = true)
@@ -110,14 +134,18 @@ public class PortfolioHealthV2Service {
         DailyTechnicalService.TechnicalSnapshot benchmark = dailyTechnicalService != null
                 ? dailyTechnicalService.snapshot("t00", LocalDate.now())
                 : DailyTechnicalService.TechnicalSnapshot.empty(List.of("DATA_GAP: benchmark daily data unavailable"));
+        ThemeHealthContext theme = resolveThemeHealth(p.getSymbol());
+        ChipHealthContext chip = resolveChipHealth(p.getSymbol());
         PositionHealthResult health = positionHealthEngine.evaluate(new PositionHealthInput(
                 p.getSymbol(), p.getAvgCost(), current,
                 tech.ma5(), tech.ma10(), tech.ma20(), tech.ma5Previous(), tech.previousLow(), tech.recentHigh(), tech.atr(), tech.volumeRatio(),
                 tech.return5d(), benchmark.return5d(), tech.return10d(), benchmark.return10d(),
-                null, null, "UNKNOWN"));
+                theme.themeStage(), theme.mainstreamTheme(), chip.chipStatus()));
         List<String> dataGaps = new java.util.ArrayList<>(health.dataGaps());
         dataGaps.addAll(tech.dataGaps());
         dataGaps.addAll(benchmark.dataGaps().stream().map(g -> "BENCHMARK_" + g).toList());
+        dataGaps.addAll(theme.dataGaps());
+        dataGaps.addAll(chip.dataGaps());
         if (current == null) dataGaps.add("DATA_GAP: live current price missing");
 
         Map<String, Object> row = new LinkedHashMap<>();
@@ -141,6 +169,11 @@ public class PortfolioHealthV2Service {
         row.put("manualConfirmRequired", true);
         row.put("reasons", health.reasons());
         row.put("dataGaps", dataGaps.stream().distinct().toList());
+        row.put("healthInputs", Map.of(
+                "mainstreamTheme", value(theme.mainstreamTheme()),
+                "themeStage", value(theme.themeStage()),
+                "chipStatus", value(chip.chipStatus()),
+                "chipSourceDate", value(chip.sourceDate())));
         row.put("technicals", Map.ofEntries(
                 Map.entry("ma5", value(tech.ma5())), Map.entry("ma10", value(tech.ma10())), Map.entry("ma20", value(tech.ma20())),
                 Map.entry("ma5Previous", value(tech.ma5Previous())), Map.entry("previousLow", value(tech.previousLow())),
@@ -160,15 +193,68 @@ public class PortfolioHealthV2Service {
         };
     }
 
+    private ThemeHealthContext resolveThemeHealth(String symbol) {
+        if (stockThemeMappingRepository == null || symbol == null || symbol.isBlank()) {
+            return new ThemeHealthContext(null, null, List.of("DATA_GAP: theme mapping repository unavailable"));
+        }
+        List<StockThemeMappingEntity> mappings = stockThemeMappingRepository.findBySymbolAndIsActiveTrue(symbol);
+        if (mappings.isEmpty()) return new ThemeHealthContext(null, null, List.of("DATA_GAP: mainstream theme mapping missing"));
+        boolean mainstream = mappings.stream().anyMatch(m -> isMainstreamTheme(m.getThemeCategory(), m.getThemeTag()));
+        String stage = mainstream ? "ACTIVE" : "UNKNOWN";
+        return new ThemeHealthContext(stage, mainstream, List.of());
+    }
+
+    private boolean isMainstreamTheme(String category, String tag) {
+        String c = category == null ? "" : category.trim().toUpperCase();
+        String t = tag == null ? "" : tag.trim().toUpperCase();
+        return !(c.isBlank() || "OTHER".equals(c) || "UNKNOWN".equals(c))
+                || MainstreamThemeNormalizer.normalize(tag, tag) != null
+                && !List.of("UNKNOWN", "OTHER").contains(MainstreamThemeNormalizer.normalize(tag, tag));
+    }
+
+    private ChipHealthContext resolveChipHealth(String symbol) {
+        if (candidateStockRepository == null || objectMapper == null || symbol == null || symbol.isBlank()) {
+            return new ChipHealthContext("UNKNOWN", null, List.of("DATA_GAP: chip source unavailable"));
+        }
+        return candidateStockRepository.findTopBySymbolOrderByTradingDateDesc(symbol)
+                .map(c -> chipFromCandidate(c))
+                .orElse(new ChipHealthContext("UNKNOWN", null, List.of("DATA_GAP: latest candidate chip payload missing")));
+    }
+
+    private ChipHealthContext chipFromCandidate(CandidateStockEntity c) {
+        try {
+            String json = c.getPayloadJson();
+            if (json == null || json.isBlank() || !json.trim().startsWith("{")) {
+                return new ChipHealthContext("UNKNOWN", c.getTradingDate(), List.of("DATA_GAP: candidate institutional payload missing"));
+            }
+            JsonNode n = objectMapper.readTree(json);
+            boolean bothBuy = n.path("foreign_and_trust_buy").asBoolean(false);
+            Long total = n.hasNonNull("total_institutional_net") ? n.path("total_institutional_net").asLong() : null;
+            Long foreign = n.hasNonNull("foreign_net") ? n.path("foreign_net").asLong() : null;
+            Long trust = n.hasNonNull("invest_trust_net") ? n.path("invest_trust_net").asLong() : null;
+            if (bothBuy) return new ChipHealthContext("BULLISH", c.getTradingDate(), List.of());
+            if (total != null && total < 0 && (foreign == null || foreign < 0) && (trust == null || trust <= 0)) {
+                return new ChipHealthContext("BEARISH", c.getTradingDate(), List.of());
+            }
+            if (total != null) return new ChipHealthContext("NEUTRAL", c.getTradingDate(), List.of());
+            return new ChipHealthContext("UNKNOWN", c.getTradingDate(), List.of("DATA_GAP: institutional net fields missing"));
+        } catch (Exception e) {
+            return new ChipHealthContext("UNKNOWN", c.getTradingDate(), List.of("DATA_GAP: candidate institutional payload parse failed"));
+        }
+    }
+
     private String recommendDataFix(List<String> gaps) {
         String joined = String.join(" | ", gaps).toLowerCase();
+        if (joined.contains("daily bars") || joined.contains("ma")) return "補個股 market_index_daily 日線與均線所需資料";
+        if (joined.contains("benchmark")) return "補 t00/TAIEX market_index_daily 日線資料";
         if (joined.contains("chip")) return "補法人/投信/外資籌碼資料後再判讀持股健康度";
         if (joined.contains("mainstream theme") || joined.contains("theme")) return "補 stock_theme_mapping / theme taxonomy，避免題材健康度缺失";
-        if (joined.contains("benchmark")) return "補 t00/TAIEX market_index_daily 日線資料";
-        if (joined.contains("daily bars") || joined.contains("ma")) return "補個股 market_index_daily 日線與均線所需資料";
         if (joined.contains("live current price")) return "修正即時報價來源或 OTC fallback，再重新評估";
         return "保留人工確認；資料補齊前不要自動升級為正式出場訊號";
     }
 
     private Object value(Object v) { return v == null ? "DATA_GAP" : v; }
+
+    private record ThemeHealthContext(String themeStage, Boolean mainstreamTheme, List<String> dataGaps) {}
+    private record ChipHealthContext(String chipStatus, LocalDate sourceDate, List<String> dataGaps) {}
 }

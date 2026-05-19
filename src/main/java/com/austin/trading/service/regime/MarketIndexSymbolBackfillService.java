@@ -65,6 +65,53 @@ public class MarketIndexSymbolBackfillService {
         return backfillSymbols(from, to, symbols, includePaperTrades, includeCandidates, maxSymbols);
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, Object> coverage(int days,
+                                        String symbols,
+                                        boolean includePaperTrades,
+                                        boolean includeCandidates,
+                                        int maxSymbols) {
+        int window = days > 0 ? days : 90;
+        LocalDate to = LocalDate.now();
+        LocalDate from = to.minusDays(window);
+        int limit = maxSymbols > 0 ? maxSymbols : DEFAULT_SYMBOL_LIMIT;
+        List<String> requestedSymbols = parseSymbols(symbols);
+        List<String> resolvedSymbols = requestedSymbols.isEmpty()
+                ? resolveRecentSymbols(from, to, includePaperTrades, includeCandidates, limit)
+                : requestedSymbols;
+        LinkedHashSet<String> checkSymbols = new LinkedHashSet<>();
+        checkSymbols.add(BENCHMARK_SYMBOL);
+        checkSymbols.addAll(resolvedSymbols);
+        List<Map<String, Object>> symbolStats = new ArrayList<>();
+        int symbolsWithInsufficientBars = 0;
+        for (String symbol : checkSymbols) {
+            List<?> bars = marketIndexBackfillService.findBars(symbol, from, to);
+            long count = bars.size();
+            boolean sufficientForMa10 = count >= 10;
+            boolean sufficientForAtr14 = count >= 15;
+            if (!sufficientForMa10 || !sufficientForAtr14) symbolsWithInsufficientBars++;
+            Map<String, Object> stat = new LinkedHashMap<>();
+            stat.put("symbol", symbol);
+            stat.put("barCount", count);
+            stat.put("sufficientForMA10", sufficientForMa10);
+            stat.put("sufficientForATR14", sufficientForAtr14);
+            stat.put("recommendedAction", sufficientForAtr14 ? "OK" : "BACKFILL_DAILY_BARS");
+            symbolStats.add(stat);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("status", "OK");
+        out.put("mode", "READ_ONLY_COVERAGE_ONLY");
+        out.put("from", from);
+        out.put("to", to);
+        out.put("requestedSymbols", requestedSymbols);
+        out.put("resolvedSymbols", resolvedSymbols);
+        out.put("symbolCount", checkSymbols.size());
+        out.put("symbolsWithInsufficientBars", symbolsWithInsufficientBars);
+        out.put("symbolStats", symbolStats);
+        out.put("safetyNote", "READ_ONLY: coverage report does not fetch, write, or change trading decisions; use POST /api/market-index/backfill-symbols to repair gaps manually");
+        return out;
+    }
+
     @Transactional
     public Map<String, Object> backfillSymbols(LocalDate from,
                                                LocalDate to,

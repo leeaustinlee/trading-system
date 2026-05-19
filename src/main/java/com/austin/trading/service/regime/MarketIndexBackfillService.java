@@ -152,6 +152,11 @@ public class MarketIndexBackfillService {
         return backfillRange(asOf.minusMonths(2).withDayOfMonth(1), asOf, semi);
     }
 
+    public List<MarketIndexDailyEntity> findBars(String symbol, LocalDate from, LocalDate to) {
+        if (symbol == null || symbol.isBlank() || from == null || to == null || from.isAfter(to)) return List.of();
+        return repository.findBySymbolAndTradingDateBetweenOrderByTradingDateAsc(symbol, from, to);
+    }
+
     // ── upsert ────────────────────────────────────────────────────────────
 
     /**

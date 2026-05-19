@@ -236,6 +236,7 @@ public class P0BacktestDiagnosisService {
         Map<String, Object> out = base(window, dataGaps.size() == trades.size() && !trades.isEmpty() ? "DATA_GAP" : "OK");
         out.put("totalTrades", trades.size());
         out.put("byDiagnosis", byDiagnosis);
+        out.put("summary", summarizeExitCases(cases, byDiagnosis));
         out.put("cases", cases);
         out.put("dataGaps", dataGaps.stream().distinct().toList());
         out.put("safetyNote", "READ_ONLY_DIAGNOSTIC_ONLY: exit-case table compares rules only; it does not change live exit behavior");
@@ -315,6 +316,36 @@ public class P0BacktestDiagnosisService {
         if (a.dataGap() != null) return b;
         if (b.dataGap() != null) return a;
         return !a.exitDate().isAfter(b.exitDate()) ? a : b;
+    }
+
+    private Map<String, Object> summarizeExitCases(List<Map<String, Object>> cases, Map<String, Integer> byDiagnosis) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        int comparable = 0;
+        BigDecimal totalPositiveDelta = BigDecimal.ZERO;
+        int positiveDeltaCount = 0;
+        Map<String, Integer> byExitReason = new LinkedHashMap<>();
+        Map<String, Integer> byBestRule = new LinkedHashMap<>();
+        for (Map<String, Object> row : cases) {
+            if (!"OK".equals(row.get("status"))) continue;
+            comparable++;
+            String exitReason = String.valueOf(row.getOrDefault("exitReason", "DATA_GAP"));
+            byExitReason.merge(exitReason, 1, Integer::sum);
+            String bestRule = String.valueOf(row.getOrDefault("bestAlternativeRule", "DATA_GAP"));
+            byBestRule.merge(bestRule, 1, Integer::sum);
+            Object deltaObj = row.get("currentVsBestDeltaPct");
+            if (deltaObj instanceof BigDecimal bd && bd.compareTo(ZERO) > 0) {
+                totalPositiveDelta = totalPositiveDelta.add(bd);
+                positiveDeltaCount++;
+            }
+        }
+        out.put("comparableCases", comparable);
+        out.put("byDiagnosis", byDiagnosis);
+        out.put("byExitReason", byExitReason);
+        out.put("byBestAlternativeRule", byBestRule);
+        out.put("positiveAlternativeDeltaCases", positiveDeltaCount);
+        out.put("avgPositiveAlternativeDeltaPct", positiveDeltaCount == 0 ? null : totalPositiveDelta.divide(BigDecimal.valueOf(positiveDeltaCount), 4, RoundingMode.HALF_UP));
+        out.put("interpretation", "READ_ONLY: high EXIT_TOO_EARLY/positiveAlternativeDelta suggests reviewing TP/exit timing; DATA_GAP rules require daily-bar coverage before live rule changes");
+        return out;
     }
 
     private Map<String, Object> summarizeRules(Map<String, List<BigDecimal>> returnsByRule) {
