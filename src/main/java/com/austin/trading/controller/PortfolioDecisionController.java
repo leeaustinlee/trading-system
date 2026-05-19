@@ -41,6 +41,14 @@ public class PortfolioDecisionController {
         return healthV2Service.healthV2();
     }
 
+    @GetMapping("/health-v2/data-gaps")
+    public Map<String, Object> healthV2DataGaps() {
+        if (healthV2Service == null) {
+            throw new IllegalStateException("Portfolio health-v2 service is not available");
+        }
+        return healthV2Service.healthV2DataGaps();
+    }
+
     @GetMapping("/next-day-strategy")
     public NextDayStrategyDto nextDayStrategy() {
         return builder.buildStrategy();

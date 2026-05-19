@@ -98,6 +98,43 @@ class P0DiagnosisServiceTest {
         assertThat(gaps).anyMatch(s -> s.contains("no daily bars"));
     }
 
+    @Test
+    void exitRuleCaseTableClassifiesSensitiveStopWithReadableConclusion() {
+        PaperTradeRepository paperRepo = mock(PaperTradeRepository.class);
+        MarketIndexDailyRepository marketRepo = mock(MarketIndexDailyRepository.class);
+        LocalDate d = LocalDate.now().minusDays(20);
+        PaperTradeEntity t = trade("2330", bd("100"));
+        t.setEntryDate(d);
+        t.setExitDate(d.plusDays(1));
+        t.setExitReason("TRAILING_STOP");
+        t.setPnlPct(bd("-2.0"));
+        when(paperRepo.findByEntryDateBetweenOrderByEntryDateAscIdAsc(any(), any())).thenReturn(List.of(t));
+        when(marketRepo.findBySymbolAndTradingDateBetweenOrderByTradingDateAsc(eq("2330"), any(), any())).thenReturn(List.of(
+                bar("2330", d, "100", "103", "98", "100", 1000L),
+                bar("2330", d.plusDays(1), "101", "104", "97", "99", 900L),
+                bar("2330", d.plusDays(2), "102", "106", "100", "104", 1200L),
+                bar("2330", d.plusDays(3), "104", "108", "103", "107", 1500L),
+                bar("2330", d.plusDays(4), "107", "110", "106", "109", 1300L),
+                bar("2330", d.plusDays(5), "109", "112", "108", "111", 1250L),
+                bar("2330", d.plusDays(6), "111", "113", "110", "112", 1100L),
+                bar("2330", d.plusDays(7), "112", "115", "111", "114", 1050L),
+                bar("2330", d.plusDays(8), "114", "116", "113", "115", 1000L),
+                bar("2330", d.plusDays(9), "115", "117", "114", "116", 1000L)
+        ));
+        P0BacktestDiagnosisService service = new P0BacktestDiagnosisService(
+                paperRepo, mock(CandidateForwardTrackingRepository.class), mock(CandidateStockRepository.class), marketRepo,
+                new PricePlanSanityEngine(null), new ObjectMapper());
+
+        Map<String, Object> out = service.exitRuleCaseTable(60);
+        @SuppressWarnings("unchecked")
+        Map<String, Integer> byDiagnosis = (Map<String, Integer>) out.get("byDiagnosis");
+        assertThat(byDiagnosis).containsEntry("STOP_TOO_SENSITIVE", 1);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> cases = (List<Map<String, Object>>) out.get("cases");
+        assertThat(cases.get(0).get("readableConclusion").toString()).contains("stop/trailing stop");
+        assertThat(cases.get(0).get("currentVsBestDeltaPct")).isEqualTo(bd("18.0000"));
+    }
+
     private PaperTradeEntity trade(String symbol, BigDecimal entry) {
         PaperTradeEntity t = new PaperTradeEntity();
         t.setTradeId("T-" + symbol + "-" + System.nanoTime());
@@ -117,6 +154,10 @@ class P0DiagnosisServiceTest {
     private CandidateStockEntity candidate(LocalDate d, String symbol, String theme, String reason) {
         CandidateStockEntity c = new CandidateStockEntity();
         c.setTradingDate(d); c.setSymbol(symbol); c.setThemeTag(theme); c.setReason(reason); return c;
+    }
+
+    private MarketIndexDailyEntity bar(String symbol, LocalDate d, String open, String high, String low, String close, Long volume) {
+        return new MarketIndexDailyEntity(symbol, d, bd(open), bd(high), bd(low), bd(close), volume);
     }
 
     private BigDecimal bd(String v) { return new BigDecimal(v); }

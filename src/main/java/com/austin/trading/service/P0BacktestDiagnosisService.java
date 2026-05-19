@@ -176,6 +176,72 @@ public class P0BacktestDiagnosisService {
         return out;
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, Object> exitRuleCaseTable(int days) {
+        Window window = window(days);
+        List<PaperTradeEntity> trades = paperTradeRepository.findByEntryDateBetweenOrderByEntryDateAscIdAsc(window.start(), window.end());
+        List<String> dataGaps = new ArrayList<>();
+        List<Map<String, Object>> cases = new ArrayList<>();
+        Map<String, Integer> byDiagnosis = new LinkedHashMap<>();
+        for (PaperTradeEntity t : trades) {
+            LocalDate end = t.getExitDate() != null ? t.getExitDate().plusDays(1) : t.getEntryDate().plusDays(30);
+            List<MarketIndexDailyEntity> bars = marketIndexDailyRepository.findBySymbolAndTradingDateBetweenOrderByTradingDateAsc(
+                    t.getSymbol(), t.getEntryDate(), end);
+            if (bars.isEmpty()) {
+                String gap = "DATA_GAP: no daily bars for " + t.getSymbol() + " entryDate=" + t.getEntryDate();
+                dataGaps.add(gap);
+                Map<String, Object> row = Map.of("symbol", value(t.getSymbol()), "entryDate", t.getEntryDate(), "status", "DATA_GAP",
+                        "diagnosis", "DATA_GAP_DAILY_BARS", "dataGaps", List.of(gap));
+                cases.add(row);
+                byDiagnosis.merge("DATA_GAP_DAILY_BARS", 1, Integer::sum);
+                continue;
+            }
+            Map<String, Object> compared = compareTrade(t, bars, dataGaps);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> returns = (Map<String, Object>) compared.get("returnsPct");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> exitDates = (Map<String, Object>) compared.get("exitDates");
+            BigDecimal current = returns.get("CURRENT") instanceof BigDecimal bd ? bd : null;
+            String bestRule = null;
+            BigDecimal bestReturn = null;
+            for (var e : returns.entrySet()) {
+                if ("CURRENT".equals(e.getKey()) || !(e.getValue() instanceof BigDecimal bd)) continue;
+                if (bestReturn == null || bd.compareTo(bestReturn) > 0) {
+                    bestReturn = bd;
+                    bestRule = e.getKey();
+                }
+            }
+            BigDecimal delta = current != null && bestReturn != null ? bestReturn.subtract(current).setScale(4, RoundingMode.HALF_UP) : null;
+            String diagnosis = classifyExitCase(t, current, bestReturn, delta, bestRule);
+            byDiagnosis.merge(diagnosis, 1, Integer::sum);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("symbol", value(t.getSymbol()));
+            row.put("entryDate", t.getEntryDate());
+            row.put("exitDate", t.getExitDate());
+            row.put("entryPrice", value(t.getEntryPrice()));
+            row.put("exitReason", value(t.getExitReason()));
+            row.put("strategyType", value(t.getStrategyType()));
+            row.put("currentReturnPct", value(current));
+            row.put("bestAlternativeRule", value(bestRule));
+            row.put("bestAlternativeReturnPct", value(bestReturn));
+            row.put("currentVsBestDeltaPct", value(delta));
+            row.put("maxDrawdownPct", value(maxDrawdownPct(bars, t.getEntryPrice())));
+            row.put("diagnosis", diagnosis);
+            row.put("readableConclusion", readableExitConclusion(diagnosis, bestRule, delta));
+            row.put("returnsPct", returns);
+            row.put("exitDates", exitDates);
+            row.put("status", "OK");
+            cases.add(row);
+        }
+        Map<String, Object> out = base(window, dataGaps.size() == trades.size() && !trades.isEmpty() ? "DATA_GAP" : "OK");
+        out.put("totalTrades", trades.size());
+        out.put("byDiagnosis", byDiagnosis);
+        out.put("cases", cases);
+        out.put("dataGaps", dataGaps.stream().distinct().toList());
+        out.put("safetyNote", "READ_ONLY_DIAGNOSTIC_ONLY: exit-case table compares rules only; it does not change live exit behavior");
+        return out;
+    }
+
     private Map<String, Object> compareTrade(PaperTradeEntity t, List<MarketIndexDailyEntity> bars, List<String> globalGaps) {
         Map<String, Object> returns = new LinkedHashMap<>();
         Map<String, Object> exitDates = new LinkedHashMap<>();
@@ -302,6 +368,40 @@ public class P0BacktestDiagnosisService {
     private BigDecimal pct(BigDecimal exit, BigDecimal entry) {
         if (exit == null || entry == null || entry.signum() == 0) return null;
         return exit.subtract(entry).divide(entry, 6, RoundingMode.HALF_UP).multiply(HUNDRED).setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal maxDrawdownPct(List<MarketIndexDailyEntity> bars, BigDecimal entry) {
+        if (bars == null || bars.isEmpty() || entry == null || entry.signum() == 0) return null;
+        BigDecimal worst = null;
+        for (MarketIndexDailyEntity bar : bars) {
+            BigDecimal low = bar.getLowPrice() != null ? bar.getLowPrice() : bar.getClosePrice();
+            BigDecimal dd = pct(low, entry);
+            if (dd != null && (worst == null || dd.compareTo(worst) < 0)) worst = dd;
+        }
+        return worst;
+    }
+
+    private String classifyExitCase(PaperTradeEntity t, BigDecimal current, BigDecimal bestReturn, BigDecimal delta, String bestRule) {
+        if (current == null || bestReturn == null || delta == null) return "DATA_GAP_RETURN";
+        if (delta.compareTo(new BigDecimal("2.0")) >= 0) {
+            String reason = t.getExitReason() == null ? "" : t.getExitReason().toUpperCase();
+            if (reason.contains("STOP") || reason.contains("TRAIL")) return "STOP_TOO_SENSITIVE";
+            return "EXIT_TOO_EARLY";
+        }
+        if (current.compareTo(bestReturn) >= 0 || delta.abs().compareTo(new BigDecimal("0.5")) <= 0) return "CURRENT_RULE_OK";
+        return bestRule != null && bestRule.contains("MA") ? "STRUCTURE_CONFIRMATION_MAY_HELP" : "ALTERNATIVE_RULE_MAY_HELP";
+    }
+
+    private String readableExitConclusion(String diagnosis, String bestRule, BigDecimal delta) {
+        String gain = delta == null ? "DATA_GAP" : delta.toPlainString() + "%";
+        return switch (diagnosis) {
+            case "STOP_TOO_SENSITIVE" -> "現行 stop/trailing stop 可能太敏感；若改用 " + bestRule + "，本案例理論改善 " + gain + "。";
+            case "EXIT_TOO_EARLY" -> "本案例疑似出場太早；最佳替代規則 " + bestRule + " 理論改善 " + gain + "。";
+            case "STRUCTURE_CONFIRMATION_MAY_HELP" -> "加入均線/結構確認可能略有幫助，但改善幅度有限：" + gain + "。";
+            case "ALTERNATIVE_RULE_MAY_HELP" -> "替代出場規則可能略優，需更多樣本驗證：" + gain + "。";
+            case "CURRENT_RULE_OK" -> "現行出場規則與替代規則差距不大，暫不構成過早出場證據。";
+            default -> "資料不足，需補日線/出場/報酬資料後再判讀。";
+        };
     }
 
     private boolean isMainstream(String v) {

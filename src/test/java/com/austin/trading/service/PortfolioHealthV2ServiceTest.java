@@ -50,5 +50,31 @@ class PortfolioHealthV2ServiceTest {
         assertThat(rows.get(0).get("autoSellEnabled")).isEqualTo(false);
     }
 
+    @Test
+    void healthV2DataGapsSummarizesAffectedPositionsWithoutAutoSell() {
+        PositionRepository positionRepo = mock(PositionRepository.class);
+        DailyTechnicalService tech = mock(DailyTechnicalService.class);
+        PositionEntity p = new PositionEntity();
+        p.setSymbol("2383");
+        p.setStockName("台光電");
+        p.setStatus("OPEN");
+        p.setAvgCost(bd("100"));
+        when(positionRepo.findByStatus("OPEN")).thenReturn(List.of(p));
+        when(tech.snapshot(eq("2383"), any())).thenReturn(DailyTechnicalService.TechnicalSnapshot.empty(List.of("DATA_GAP: daily bars missing")));
+        when(tech.snapshot(eq("t00"), any())).thenReturn(DailyTechnicalService.TechnicalSnapshot.empty(List.of("DATA_GAP: benchmark daily data unavailable")));
+
+        PortfolioHealthV2Service service = new PortfolioHealthV2Service(positionRepo, tech, null, new PositionHealthEngine());
+        Map<String, Object> out = service.healthV2DataGaps();
+
+        assertThat(out.get("autoSellEnabled")).isEqualTo(false);
+        assertThat(out.get("positionsWithDataGaps")).isEqualTo(1);
+        @SuppressWarnings("unchecked")
+        Map<String, Integer> byGap = (Map<String, Integer>) out.get("byDataGap");
+        assertThat(byGap.keySet()).anyMatch(k -> k.contains("daily bars"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> affected = (List<Map<String, Object>>) out.get("affectedPositions");
+        assertThat(affected.get(0).get("recommendedDataFix").toString()).contains("日線");
+    }
+
     private BigDecimal bd(String v) { return new BigDecimal(v); }
 }

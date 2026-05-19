@@ -54,6 +54,43 @@ public class PortfolioHealthV2Service {
         return out;
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, Object> healthV2DataGaps() {
+        Map<String, Object> health = healthV2();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> positions = (List<Map<String, Object>>) health.getOrDefault("positions", List.of());
+        Map<String, Integer> byGap = new LinkedHashMap<>();
+        Map<String, Integer> byTier = new LinkedHashMap<>();
+        List<Map<String, Object>> affectedPositions = new java.util.ArrayList<>();
+        for (Map<String, Object> row : positions) {
+            String tier = String.valueOf(row.getOrDefault("actionTier", "UNKNOWN"));
+            byTier.merge(tier, 1, Integer::sum);
+            @SuppressWarnings("unchecked")
+            List<String> gaps = (List<String>) row.getOrDefault("dataGaps", List.of());
+            if (!gaps.isEmpty()) {
+                for (String gap : gaps) byGap.merge(gap, 1, Integer::sum);
+                affectedPositions.add(Map.of(
+                        "symbol", row.get("symbol"),
+                        "actionTier", tier,
+                        "dataGaps", gaps,
+                        "recommendedDataFix", recommendDataFix(gaps)));
+            }
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("status", "OK");
+        out.put("mode", "SHADOW_MANUAL_CONFIRM_ONLY");
+        out.put("autoBuyEnabled", false);
+        out.put("autoSellEnabled", false);
+        out.put("evaluatedAt", health.get("evaluatedAt"));
+        out.put("positionCount", positions.size());
+        out.put("positionsWithDataGaps", affectedPositions.size());
+        out.put("byActionTier", byTier);
+        out.put("byDataGap", byGap);
+        out.put("affectedPositions", affectedPositions);
+        out.put("safetyNote", "READ_ONLY_DIAGNOSTIC_ONLY: data-gap summary does not change BUY/SELL/exit behavior");
+        return out;
+    }
+
     private Map<String, StockQuote> fetchQuotes(List<String> symbols) {
         if (twseMisClient == null || symbols == null || symbols.isEmpty()) return Map.of();
         try {
@@ -121,6 +158,16 @@ public class PortfolioHealthV2Service {
             case EXIT_CONFIRM_REQUIRED -> "EXIT_REVIEW";
             case HARD_EXIT -> "HARD_EXIT_ALERT";
         };
+    }
+
+    private String recommendDataFix(List<String> gaps) {
+        String joined = String.join(" | ", gaps).toLowerCase();
+        if (joined.contains("chip")) return "補法人/投信/外資籌碼資料後再判讀持股健康度";
+        if (joined.contains("mainstream theme") || joined.contains("theme")) return "補 stock_theme_mapping / theme taxonomy，避免題材健康度缺失";
+        if (joined.contains("benchmark")) return "補 t00/TAIEX market_index_daily 日線資料";
+        if (joined.contains("daily bars") || joined.contains("ma")) return "補個股 market_index_daily 日線與均線所需資料";
+        if (joined.contains("live current price")) return "修正即時報價來源或 OTC fallback，再重新評估";
+        return "保留人工確認；資料補齊前不要自動升級為正式出場訊號";
     }
 
     private Object value(Object v) { return v == null ? "DATA_GAP" : v; }
