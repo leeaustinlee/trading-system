@@ -18,6 +18,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -232,18 +233,8 @@ public class ThemeObservabilityService {
                                                                Integer limit) {
         boolean onlyActive = activeOnly == null || activeOnly;
         int safeLimit = limit == null ? 200 : Math.max(1, Math.min(limit, 1_000));
-
-        List<StockThemeMappingEntity> queue = mappingRepo.findAllByOrderBySymbolAscThemeTagAsc().stream()
-                .filter(m -> !onlyActive || Boolean.TRUE.equals(m.getIsActive()))
-                .filter(ThemeObservabilityService::isUnresolvedOtherSuggestion)
-                .toList();
-        Map<String, Long> byPriority = queue.stream()
-                .collect(Collectors.groupingBy(m -> reviewPriority(m, true), LinkedHashMap::new, Collectors.counting()));
-        Map<String, Long> byAction = queue.stream()
-                .collect(Collectors.groupingBy(m -> recommendedAction(true), LinkedHashMap::new, Collectors.counting()));
-        List<StockThemeMappingEntity> filtered = queue.stream()
-                .filter(m -> !hasText(reviewPriority) || equalsIgnoreCase(reviewPriority(m, true), reviewPriority))
-                .toList();
+        List<StockThemeMappingEntity> queue = loadManualReviewQueue(onlyActive);
+        List<StockThemeMappingEntity> filtered = filterManualReviewQueue(queue, reviewPriority);
         List<ThemeOtherCategorySuggestionResponse> items = filtered.stream()
                 .limit(safeLimit)
                 .map(this::toOtherCategorySuggestion)
@@ -253,8 +244,8 @@ public class ThemeObservabilityService {
                 queue.size(),
                 filtered.size(),
                 items.size(),
-                byPriority,
-                byAction,
+                countManualReviewPriority(queue),
+                countManualReviewAction(queue),
                 manualReviewCategoryOptions(),
                 manualReviewInstructions(),
                 manualReviewEvidenceChecklist(),
@@ -265,10 +256,100 @@ public class ThemeObservabilityService {
         );
     }
 
+    public String getManualReviewWorksheetCsv(Boolean activeOnly,
+                                              String reviewPriority,
+                                              Integer limit) {
+        boolean onlyActive = activeOnly == null || activeOnly;
+        int safeLimit = limit == null ? 200 : Math.max(1, Math.min(limit, 1_000));
+        List<ThemeOtherCategorySuggestionResponse> items = filterManualReviewQueue(loadManualReviewQueue(onlyActive), reviewPriority).stream()
+                .limit(safeLimit)
+                .map(this::toOtherCategorySuggestion)
+                .toList();
+
+        List<String> headers = List.of(
+                "symbol",
+                "stockName",
+                "themeTag",
+                "currentCategory",
+                "suggestedCategory",
+                "reviewPriority",
+                "recommendedAction",
+                "chosenCategory",
+                "evidenceSummary",
+                "evidenceUrl",
+                "reviewer",
+                "reviewDecision",
+                "reviewerNote",
+                "safetyNote"
+        );
+        StringBuilder csv = new StringBuilder();
+        appendCsvRow(csv, headers);
+        for (ThemeOtherCategorySuggestionResponse item : items) {
+            appendCsvRow(csv, Arrays.asList(
+                    item.symbol(),
+                    item.stockName(),
+                    item.themeTag(),
+                    item.currentCategory(),
+                    item.suggestedCategory(),
+                    item.reviewPriority(),
+                    item.recommendedAction(),
+                    "",
+                    "",
+                    "",
+                    "",
+                    "DEFER",
+                    "",
+                    SAFETY_NOTE
+            ));
+        }
+        return csv.toString();
+    }
+
     private List<StockThemeMappingEntity> loadMappings(boolean activeOnly) {
         return mappingRepo.findAllByOrderBySymbolAscThemeTagAsc().stream()
                 .filter(m -> !activeOnly || Boolean.TRUE.equals(m.getIsActive()))
                 .toList();
+    }
+
+    private List<StockThemeMappingEntity> loadManualReviewQueue(boolean onlyActive) {
+        return mappingRepo.findAllByOrderBySymbolAscThemeTagAsc().stream()
+                .filter(m -> !onlyActive || Boolean.TRUE.equals(m.getIsActive()))
+                .filter(ThemeObservabilityService::isUnresolvedOtherSuggestion)
+                .toList();
+    }
+
+    private List<StockThemeMappingEntity> filterManualReviewQueue(List<StockThemeMappingEntity> queue,
+                                                                  String reviewPriority) {
+        return queue.stream()
+                .filter(m -> !hasText(reviewPriority) || equalsIgnoreCase(reviewPriority(m, true), reviewPriority))
+                .toList();
+    }
+
+    private static Map<String, Long> countManualReviewPriority(List<StockThemeMappingEntity> queue) {
+        return queue.stream()
+                .collect(Collectors.groupingBy(m -> reviewPriority(m, true), LinkedHashMap::new, Collectors.counting()));
+    }
+
+    private static Map<String, Long> countManualReviewAction(List<StockThemeMappingEntity> queue) {
+        return queue.stream()
+                .collect(Collectors.groupingBy(m -> recommendedAction(true), LinkedHashMap::new, Collectors.counting()));
+    }
+
+    private static void appendCsvRow(StringBuilder csv, List<String> values) {
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) csv.append(',');
+            csv.append(csvCell(values.get(i)));
+        }
+        csv.append('\n');
+    }
+
+    private static String csvCell(String value) {
+        if (value == null) return "";
+        String normalized = value.replace("\r\n", "\n").replace('\r', '\n');
+        if (normalized.contains(",") || normalized.contains("\"") || normalized.contains("\n")) {
+            return "\"" + normalized.replace("\"", "\"\"") + "\"";
+        }
+        return normalized;
     }
 
     private ThemeTaxonomyItemResponse buildTaxonomyItem(String normalizedTheme,

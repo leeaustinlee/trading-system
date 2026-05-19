@@ -297,6 +297,27 @@ class ThemeObservabilityServiceTests {
     }
 
     @Test
+    void manualReviewWorksheetCsvExportsReviewFieldsWithoutWritingMappings() {
+        when(mappingRepo.findAllByOrderBySymbolAscThemeTagAsc()).thenReturn(List.of(
+                mapping("9996", "高信心,未知", "其他\"強勢股", "OTHER", null, "CODEX", "0.90", true),
+                mapping("9998", "低信心未知", "其他強勢股", "OTHER", null, "CODEX", "0.60", true),
+                mapping("2330", "台積電", "AI算力", "AI_COMPUTE", null, "CODEX", "1.00", true)
+        ));
+
+        String csv = service.getManualReviewWorksheetCsv(true, "HIGH", 10);
+
+        assertThat(csv).startsWith("symbol,stockName,themeTag,currentCategory,suggestedCategory,reviewPriority,recommendedAction,chosenCategory,evidenceSummary,evidenceUrl,reviewer,reviewDecision,reviewerNote,safetyNote\n");
+        assertThat(csv).contains("9996,\"高信心,未知\",\"其他\"\"強勢股\",OTHER,UNRESOLVED_OTHER,HIGH,MANUAL_CLASSIFICATION_REQUIRED,,,,,DEFER,,");
+        assertThat(csv).contains(ThemeObservabilityService.SAFETY_NOTE);
+        assertThat(csv).doesNotContain("2330");
+        assertThat(csv).doesNotContain("9998");
+        assertThat(csv.lines()).hasSize(2);
+
+        verify(mappingRepo).findAllByOrderBySymbolAscThemeTagAsc();
+        verifyNoMoreInteractions(mappingRepo, snapshotRepo);
+    }
+
+    @Test
     void mappingObservabilityReportsOkWhenNoQualityWarningsRemain() {
         when(mappingRepo.findAllByOrderBySymbolAscThemeTagAsc()).thenReturn(List.of(
                 mapping("2330", "台積電", "AI算力", "AI_COMPUTE", null, "MANUAL", "1.00", true),

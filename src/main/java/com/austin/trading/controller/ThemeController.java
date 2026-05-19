@@ -11,6 +11,8 @@ import com.austin.trading.service.ThemeExposureService;
 import com.austin.trading.service.ThemeObservabilityService;
 import com.austin.trading.service.ThemeService;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -109,6 +111,22 @@ public class ThemeController {
             @RequestParam(required = false) String reviewPriority,
             @RequestParam(required = false) Integer limit) {
         return themeObservabilityService.getManualReviewQueue(activeOnly, reviewPriority, limit);
+    }
+
+    /**
+     * W2-15：GET /api/themes/mappings/manual-review-queue/worksheet.csv
+     * Read-only CSV worksheet for operator evidence collection; no mapping writes.
+     */
+    @GetMapping(value = "/mappings/manual-review-queue/worksheet.csv", produces = "text/csv")
+    public ResponseEntity<String> manualReviewWorksheetCsv(
+            @RequestParam(required = false) Boolean activeOnly,
+            @RequestParam(required = false) String reviewPriority,
+            @RequestParam(required = false) Integer limit) {
+        String csv = themeObservabilityService.getManualReviewWorksheetCsv(activeOnly, reviewPriority, limit);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=theme-manual-review-worksheet.csv")
+                .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
+                .body("\uFEFF" + csv);
     }
 
     /** POST /api/themes/mappings  body: {symbol, stockName, themeTag, source} */
