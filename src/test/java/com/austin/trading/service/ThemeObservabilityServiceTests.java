@@ -282,6 +282,12 @@ class ThemeObservabilityServiceTests {
         assertThat(response.reviewInstructions())
                 .anySatisfy(instruction -> assertThat(instruction).contains("read-only"))
                 .anySatisfy(instruction -> assertThat(instruction).contains("external evidence"));
+        assertThat(response.evidenceChecklist())
+                .contains("company_primary_business", "official_or_exchange_source_url", "chosen_category", "reviewer_note");
+        assertThat(response.reviewDecisionSchema())
+                .containsEntry("chosenCategory", "one value from categoryOptions; do not use UNRESOLVED_OTHER or UNKNOWN")
+                .containsEntry("reviewDecision", "APPLY_CATEGORY, KEEP_OTHER, or DEFER");
+        assertThat(response.reviewDecisionSchema().get("safety")).contains("read-only");
         assertThat(response.items()).extracting("symbol", "suggestedCategory", "reviewPriority", "recommendedAction")
                 .containsExactly(org.assertj.core.groups.Tuple.tuple("9996", ThemeTaxonomyClassifier.UNRESOLVED_OTHER, "HIGH", "MANUAL_CLASSIFICATION_REQUIRED"));
         assertThat(response.safetyNote()).contains("READ_ONLY");

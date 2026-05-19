@@ -18,6 +18,8 @@ public record ThemeManualReviewQueueResponse(
         Map<String, Long> byRecommendedAction,
         List<String> categoryOptions,
         List<String> reviewInstructions,
+        List<String> evidenceChecklist,
+        Map<String, String> reviewDecisionSchema,
         String safetyNote,
         LocalDateTime generatedAt,
         List<ThemeOtherCategorySuggestionResponse> items

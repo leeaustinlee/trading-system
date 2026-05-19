@@ -257,6 +257,8 @@ public class ThemeObservabilityService {
                 byAction,
                 manualReviewCategoryOptions(),
                 manualReviewInstructions(),
+                manualReviewEvidenceChecklist(),
+                manualReviewDecisionSchema(),
                 SAFETY_NOTE,
                 LocalDateTime.now(),
                 items
@@ -403,6 +405,29 @@ public class ThemeObservabilityService {
                 "Choose one categoryOptions value, or keep OTHER only when the stock remains intentionally generic.",
                 "This queue is read-only metadata; applying a category requires a separate reviewed mutation/backfill step."
         );
+    }
+
+    private static List<String> manualReviewEvidenceChecklist() {
+        return List.of(
+                "company_primary_business",
+                "revenue_or_product_evidence",
+                "official_or_exchange_source_url",
+                "chosen_category",
+                "reviewer_note"
+        );
+    }
+
+    private static Map<String, String> manualReviewDecisionSchema() {
+        LinkedHashMap<String, String> schema = new LinkedHashMap<>();
+        schema.put("symbol", "stock symbol from items[].symbol");
+        schema.put("stockName", "stock display name from items[].stockName");
+        schema.put("chosenCategory", "one value from categoryOptions; do not use UNRESOLVED_OTHER or UNKNOWN");
+        schema.put("evidenceSummary", "short human-readable business/domain rationale");
+        schema.put("evidenceUrl", "official company, exchange, filing, or similarly durable source URL");
+        schema.put("reviewer", "human/operator identifier for audit trail");
+        schema.put("reviewDecision", "APPLY_CATEGORY, KEEP_OTHER, or DEFER");
+        schema.put("safety", "read-only worksheet metadata; not an apply request and not a trading signal");
+        return schema;
     }
 
     private static Map<String, Long> countBy(List<StockThemeMappingEntity> mappings,
