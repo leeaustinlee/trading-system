@@ -316,6 +316,54 @@
     .stat-box .stat-label { font-size:11px; color:var(--muted); font-weight:800; letter-spacing:.5px; text-transform: uppercase; }
     .stat-box .stat-value { font-size:22px; font-weight:800; margin-top:4px; line-height: 1.1; font-family: var(--mono); font-feature-settings: "tnum" 1; }
 
+    /* ── Position Health v2 ── */
+    .health-panel {
+      position:relative; overflow:hidden;
+      background: linear-gradient(135deg, #0f1626 0%, #131c30 58%, #10192b 100%);
+      color: var(--ink-dark); border-color: var(--line-dark);
+      box-shadow: 0 12px 32px rgba(12,22,38,.18);
+    }
+    .health-panel::before { content:""; position:absolute; inset:0; pointer-events:none; background:
+      radial-gradient(620px 220px at 8% 0%, rgba(22,101,216,.22), transparent 62%),
+      radial-gradient(520px 220px at 100% 0%, rgba(7,169,156,.14), transparent 60%); }
+    .health-panel > * { position:relative; z-index:1; }
+    .health-panel h2 { color:#e6edf8; border-bottom-color:rgba(255,255,255,.10); }
+    .health-panel h2::before { background: var(--accent-2); }
+    .health-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:14px; }
+    .health-title { font-size:22px; font-weight:900; letter-spacing:.2px; color:#fff; }
+    .health-sub { color:#93a6c0; font-size:12px; font-family:var(--mono); margin-top:3px; }
+    .health-mode { border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.05); border-radius:999px; padding:6px 10px; font:800 11px/1 var(--mono); color:#d9e6ff; white-space:nowrap; }
+    .health-kpi-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+    .health-kpi-box { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.10); border-radius:8px; padding:12px 14px; }
+    .health-kpi-box .k { color:#93a6c0; font-size:10px; font-weight:900; letter-spacing:.6px; text-transform:uppercase; }
+    .health-kpi-box .v { color:#fff; font-size:24px; line-height:1.05; margin-top:4px; font-family:var(--mono); font-weight:900; }
+    .health-card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:10px; }
+    .health-card { border:1px solid rgba(255,255,255,.10); background:rgba(255,255,255,.04); border-radius:10px; padding:12px; box-shadow:0 1px 0 rgba(255,255,255,.04) inset; }
+    .health-card .top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+    .health-card .sym { font-family:var(--mono); font-size:18px; font-weight:900; color:#fff; }
+    .health-card .name { color:#b8c7df; font-size:12px; margin-left:6px; }
+    .health-score { width:54px; height:54px; border-radius:50%; display:grid; place-items:center; flex-shrink:0; background:conic-gradient(var(--tone) calc(var(--score)*1%), rgba(255,255,255,.11) 0); }
+    .health-score span { width:42px; height:42px; border-radius:50%; display:grid; place-items:center; background:#111a2d; color:#fff; font:900 14px/1 var(--mono); }
+    .health-pill { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:4px 8px; font:900 10px/1 var(--mono); letter-spacing:.35px; border:1px solid rgba(255,255,255,.12); text-transform:uppercase; }
+    .health-pill::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; box-shadow:0 0 8px currentColor; }
+    .health-pill.hold { color:#7BF1AB; background:rgba(14,156,110,.16); border-color:rgba(14,156,110,.45); }
+    .health-pill.soft { color:#9cc4ff; background:rgba(26,95,208,.17); border-color:rgba(26,95,208,.45); }
+    .health-pill.reduce { color:#FDE68A; background:rgba(192,132,0,.18); border-color:rgba(192,132,0,.48); }
+    .health-pill.exit { color:#FDA4AF; background:rgba(196,30,53,.18); border-color:rgba(196,30,53,.50); }
+    .health-pill.hard { color:#FCA5A5; background:rgba(127,29,29,.36); border-color:#FB7185; }
+    .health-pill.unknown { color:#cbd5e1; background:rgba(80,97,120,.22); border-color:rgba(80,97,120,.50); }
+    .health-mini { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:10px; }
+    .health-mini div { background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.07); border-radius:6px; padding:6px 7px; }
+    .health-mini b { display:block; color:#fff; font-family:var(--mono); font-size:12px; }
+    .health-mini span { display:block; color:#93a6c0; font-size:10px; font-weight:800; text-transform:uppercase; }
+    .health-tags { display:flex; gap:5px; flex-wrap:wrap; margin-top:10px; }
+    .health-tag { color:#d7e3f7; background:rgba(255,255,255,.055); border:1px solid rgba(255,255,255,.09); border-radius:999px; padding:3px 7px; font-size:11px; }
+    .health-tag.gap { color:#FDE68A; background:rgba(192,132,0,.12); border-color:rgba(192,132,0,.32); }
+    .health-table-cell { min-width:150px; }
+    .health-table-cell .health-pill { margin-bottom:4px; }
+    .health-table-cell .sub { color:var(--muted); font-size:11px; font-family:var(--mono); }
+    @media(max-width:900px){ .health-kpi-grid{grid-template-columns:repeat(2,1fr)} }
+
     /* ── Decision trend chart (dark terminal) ── */
     .decision-terminal { background: var(--panel-dark); border:1px solid var(--line-dark); border-radius:var(--radius); padding:12px; color: var(--ink-dark); }
     .decision-status-strip { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; margin-bottom:10px; }
@@ -1074,6 +1122,11 @@
     <div id="errBoxPos" class="errbox"></div>
     <div class="grid">
 
+      <section class="card span-12 health-panel" id="portfolioHealthSection">
+        <h2>持股健康判斷 v2 <span class="health-mode" id="healthMode" style="margin-left:auto">SHADOW</span></h2>
+        <div id="portfolioHealthPanel"></div>
+      </section>
+
       <section class="card span-12">
         <h2>持倉中
           <button class="btn primary" id="p-btnAdd" style="margin-left:auto;padding:5px 14px;font-size:13px">＋ 新增持倉</button>
@@ -1087,7 +1140,7 @@
             <th>代號</th><th>名稱</th><th>方向</th><th>股數</th><th>均價</th>
             <th>停損</th><th>停利1</th><th>停利2</th>
             <th>距停損</th><th>現值</th><th>預估損益</th>
-            <th>AI 建議</th>
+            <th>AI 建議</th><th>健康 v2</th>
             <th>開倉時間</th><th>備註</th><th style="width:130px">操作</th>
           </tr></thead>
           <tbody id="p-openBody"></tbody>
@@ -1995,6 +2048,83 @@
     const color = pct < 2 ? "var(--up)" : pct < 4 ? "#c87000" : "var(--muted)";
     const weight = pct < 2 ? "800" : "600";
     return `<span style="color:${color};font-weight:${weight}">${pct.toFixed(1)}%</span>`;
+  }
+
+  function healthTierMeta(tier) {
+    const t = String(tier || 'UNKNOWN').toUpperCase();
+    if (t === 'HOLD') return {cls:'hold', label:'續抱', tone:'#0e9c6e'};
+    if (t === 'SOFT_WARNING') return {cls:'soft', label:'觀察', tone:'#1a5fd0'};
+    if (t === 'REDUCE_REVIEW') return {cls:'reduce', label:'減碼檢查', tone:'#c08400'};
+    if (t === 'EXIT_REVIEW') return {cls:'exit', label:'出場檢查', tone:'#c41e35'};
+    if (t === 'HARD_EXIT_ALERT') return {cls:'hard', label:'硬性警報', tone:'#FB7185'};
+    return {cls:'unknown', label:t || '未知', tone:'#506178'};
+  }
+  function zhHealthReason(raw) {
+    const r = String(raw || '');
+    const map = {
+      price_above_ma5_ma10_ma20:'站上 5/10/20MA', relative_strength_outperform:'相對強勢勝出', mainstream_theme:'主流題材',
+      below_ma10:'跌破 10MA', low_volume_pullback:'量縮拉回', recent_high:'接近近期高', rising_volume:'上漲放量',
+      below_ma5:'跌破 5MA', volume_breakdown:'放量轉弱', previous_low_break:'跌破前低'
+    };
+    return map[r] || r.replaceAll('_',' ');
+  }
+  function zhHealthStatus(raw) {
+    const r = String(raw || '');
+    const map = {
+      BULL_ALIGNED:'多頭排列', MA10_BREAK:'跌破10MA', MA5_BREAK:'跌破5MA', NEUTRAL:'中性整理', NORMAL:'量能正常',
+      LOW_VOLUME_PULLBACK:'量縮拉回', RISING_VOLUME:'上漲放量', VOLUME_BREAKDOWN:'放量轉弱', OUTPERFORM:'強於大盤', INLINE:'與大盤同步',
+      UNDERPERFORM:'弱於大盤', BULLISH:'籌碼偏多', BEARISH:'籌碼轉弱', UNKNOWN:'資料不足'
+    };
+    return map[r] || zh(r) || r.replaceAll('_',' ');
+  }
+  function zhHealthGap(raw) {
+    const g = String(raw || '').replace(/^DATA_GAP:\s*/, '').replace(/^BENCHMARK_DATA_GAP:\s*/, '');
+    if (g.includes('chip data')) return '籌碼資料不足';
+    if (g.includes('mainstream theme')) return '主流題材資料不足';
+    if (g.includes('current volume')) return '即時量能資料不足';
+    if (g.includes('candidate chip')) return '候選籌碼資料不足';
+    if (g.includes('institutional net')) return '法人買賣超資料不足';
+    return g.replaceAll('_',' ');
+  }
+  function healthPill(tier) {
+    const m = healthTierMeta(tier);
+    return `<span class="health-pill ${m.cls}">${esc(m.label)}</span>`;
+  }
+  function renderHealthTableCell(h) {
+    if (!h) return `<span class="quote-meta">尚無 health-v2</span>`;
+    const gaps = (h.dataGaps || []).length;
+    return `${healthPill(h.actionTier)}<div class="sub">score ${esc(h.healthScore ?? '—')} · ${esc(zhHealthStatus(h.structureStatus || '—'))} · 缺口 ${gaps}</div>`;
+  }
+  function renderPortfolioHealthPanel(payload) {
+    const box = $("portfolioHealthPanel");
+    if (!box) return;
+    if (!payload || !Array.isArray(payload.positions)) {
+      box.innerHTML = `<div class="terminal-empty">health-v2 尚無資料</div>`;
+      return;
+    }
+    const rows = payload.positions || [];
+    const count = k => rows.filter(x => String(x.actionTier || '').toUpperCase() === k).length;
+    const avg = rows.length ? Math.round(rows.reduce((a,b)=>a+Number(b.healthScore || 0),0)/rows.length) : 0;
+    const mode = $("healthMode");
+    if (mode) mode.textContent = payload.autoSellEnabled ? 'AUTO SELL ON' : 'MANUAL ONLY';
+    const kpis = [
+      ['平均分', avg], ['續抱', count('HOLD')], ['減碼檢查', count('REDUCE_REVIEW')], ['出場檢查', count('EXIT_REVIEW')], ['硬性警報', count('HARD_EXIT_ALERT')]
+    ].map(([k,v]) => `<div class="health-kpi-box"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join('');
+    const cards = rows.map(h => {
+      const m = healthTierMeta(h.actionTier);
+      const tech = h.technicals || {};
+      const reasons = (h.reasons || []).slice(0,4).map(r => `<span class="health-tag">${esc(zhHealthReason(r))}</span>`).join('');
+      const gaps = (h.dataGaps || []).slice(0,2).map(g => `<span class="health-tag gap">${esc(zhHealthGap(g))}</span>`).join('');
+      return `<div class="health-card">
+        <div class="top"><div><div><span class="sym">${esc(h.symbol)}</span><span class="name">${esc(h.stockName || '')}</span></div><div style="margin-top:7px">${healthPill(h.actionTier)}</div></div>
+        <div class="health-score" style="--score:${Math.max(0,Math.min(100,Number(h.healthScore||0)))};--tone:${m.tone}"><span>${esc(h.healthScore ?? '—')}</span></div></div>
+        <div class="health-mini"><div><span>5MA</span><b>${esc(tech.ma5 ?? '—')}</b></div><div><span>10MA</span><b>${esc(tech.ma10 ?? '—')}</b></div><div><span>前低</span><b>${esc(tech.previousLow ?? '—')}</b></div></div>
+        <div class="health-mini"><div><span>結構</span><b>${esc(zhHealthStatus(h.structureStatus || '—'))}</b></div><div><span>量能</span><b>${esc(zhHealthStatus(h.volumeStatus || '—'))}</b></div><div><span>籌碼</span><b>${esc(zhHealthStatus(h.chipStatus || '—'))}</b></div></div>
+        <div class="health-tags">${reasons}${gaps}</div>
+      </div>`;
+    }).join('');
+    box.innerHTML = `<div class="health-head"><div><div class="health-title">Shadow 持股健康儀表板</div><div class="health-sub">${esc(payload.mode || 'SHADOW')} · ${esc(payload.evaluatedAt || '')} · 不自動買賣，正式出場需人工確認</div></div><div class="health-mode">${esc(payload.persistence || 'READ ONLY')}</div></div>
+      <div class="health-kpi-grid">${kpis}</div><div class="health-card-grid">${cards}</div>`;
   }
   function pnlHtml(v) {
     if (v == null) return `<span style="color:var(--muted)">–</span>`;
@@ -3040,7 +3170,10 @@ function clearErr(boxId) {
     try {
       const sym = $("p-openSymbol").value.trim();
       const url = `/api/positions/open?size=50${sym ? `&symbol=${encodeURIComponent(sym)}` : ""}`;
-      const data = await api(url);
+      const [data, health] = await Promise.all([api(url), api('/api/portfolio/health-v2').catch(() => null)]);
+      renderPortfolioHealthPanel(health);
+      const healthMap = {};
+      (health?.positions || []).forEach(h => { if (h?.symbol) healthMap[h.symbol] = h; });
       _openPosCache = {};
       (data || []).forEach(p => { _openPosCache[p.id] = p; });
 
@@ -3099,6 +3232,7 @@ function clearErr(boxId) {
               <td style="text-align:right">${valueCell}</td>
               <td style="text-align:right">${pnlCell}</td>
               <td>${renderAiAdvice(p, cur ?? p.currentPrice)}</td>
+              <td class="health-table-cell">${renderHealthTableCell(healthMap[p.symbol])}</td>
               <td class="small mono">${fmtTime(p.openedAt)}</td>
               <td class="small">${esc(renderPositionNote(p.note, p.strategyType))}</td>
               <td style="white-space:nowrap">
@@ -3109,7 +3243,7 @@ function clearErr(boxId) {
               </td>
             </tr>`;
           }).join("")
-        : `<tr class="empty-row"><td colspan="15">無持倉</td></tr>`;
+        : `<tr class="empty-row"><td colspan="16">無持倉</td></tr>`;
     } catch(e) { showErr("errBoxPos", `載入失敗：${e.message}`); }
   }
 

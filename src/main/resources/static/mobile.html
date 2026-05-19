@@ -295,6 +295,39 @@
   .p-card .more{display:none;margin-top:var(--sp-3);padding-top:var(--sp-3);border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
   .p-card.exp .more{display:block}
 
+  /* ─── position health v2 (shadow / manual confirm) ─────────── */
+  .health-hero{position:relative;overflow:hidden;background:
+      radial-gradient(360px 160px at 10% 0%, rgba(96,165,250,.14), transparent 65%),
+      radial-gradient(360px 180px at 100% 0%, rgba(34,221,122,.10), transparent 62%),
+      var(--bg-card);
+    border-radius:var(--r);padding:16px 18px;margin-bottom:var(--sp-3);box-shadow:var(--card-edge)}
+  .health-hero::before{content:"";position:absolute;inset:0;border:1px solid rgba(255,255,255,.08);border-radius:inherit;pointer-events:none}
+  .health-hero .hh-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+  .health-hero .hh-title{font:900 18px/1.15 var(--f-sans);letter-spacing:.4px;color:var(--ink)}
+  .health-hero .hh-sub{margin-top:4px;color:var(--muted);font-size:12px;font-family:var(--f-mono)}
+  .health-hero .hh-badge{font:800 10px/1 var(--f-sans);letter-spacing:.6px;text-transform:uppercase;border-radius:999px;padding:6px 9px;border:1px solid rgba(255,255,255,.10);color:var(--ink-2);background:rgba(255,255,255,.04);white-space:nowrap}
+  .health-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
+  .health-kpi{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035);border-radius:12px;padding:10px 8px;text-align:center}
+  .health-kpi .v{font:900 20px/1 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+  .health-kpi .k{margin-top:5px;font:800 10px/1 var(--f-sans);letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+  .health-pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 10px;font:900 11px/1 var(--f-sans);letter-spacing:.45px;text-transform:uppercase;border:1px solid rgba(255,255,255,.10);white-space:nowrap}
+  .health-pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 10px currentColor}
+  .health-pill.hold{background:var(--c-buy-bg);color:#7BF1AB;border-color:var(--c-buy-border)}
+  .health-pill.soft{background:var(--c-watch-bg);color:#93C5FD;border-color:var(--c-watch-border)}
+  .health-pill.reduce{background:var(--c-wait-bg);color:#FDE68A;border-color:var(--c-wait-border)}
+  .health-pill.exit{background:var(--c-stop-bg);color:#FDA4AF;border-color:var(--c-stop-border)}
+  .health-pill.hard{background:rgba(127,29,29,.44);color:#FCA5A5;border-color:#FB7185;animation:pillPulse 1.4s ease-in-out infinite}
+  .health-pill.unknown{background:rgba(100,116,139,.16);color:#CBD5E1;border-color:rgba(100,116,139,.45)}
+  .health-inline{margin-top:12px;padding:12px;border-radius:14px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07)}
+  .health-inline .hi-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .health-score-ring{--p:0;--c:var(--c-rest);width:54px;height:54px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;background:conic-gradient(var(--c) calc(var(--p)*1%), rgba(148,163,184,.16) 0);box-shadow:0 0 18px rgba(0,0,0,.25)}
+  .health-score-ring span{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--bg-card);font:900 14px/1 var(--f-mono);color:var(--ink)}
+  .health-line{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-top:10px;font-size:11px;color:var(--muted)}
+  .health-line b{color:var(--ink-2);font-family:var(--f-mono);font-weight:800}
+  .health-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .health-tag{font:700 10px/1.25 var(--f-sans);color:var(--ink-2);background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:999px;padding:5px 8px}
+  .health-gap{color:#FDE68A;background:rgba(250,204,21,.09);border-color:rgba(250,204,21,.28)}
+
   /* ─── timeline / activity feed ──────────────────────────────── */
   .timeline-day{margin:18px 0 8px;font:800 11px/1 var(--f-sans);color:var(--muted);
     letter-spacing:.8px;text-transform:uppercase}
@@ -477,7 +510,7 @@ async function safeFetch(url){
    global state + cache
 ════════════════════════════════════════════════════════════════ */
 const S = {
-  dashboard:null, candidates:[], positions:[], capital:null, quotes:{},
+  dashboard:null, candidates:[], positions:[], capital:null, quotes:{}, portfolioHealth:null, healthBySymbol:{},
   candidateMeta:{date:null,label:'最新候選',cls:'watch'},
   pnlDaily:null, pnl20:null, pnl90:null,
   decisionsHistory:null, hourlyHistory:null, monitorHistory:null,
@@ -538,6 +571,95 @@ function distBarHtml(pct){
   for (let i=0;i<8;i++) html += `<i class="${i<on?'on':''}"></i>`;
   html += '</span>';
   return html;
+}
+
+function tierMeta(tier){
+  const t = String(tier||'UNKNOWN').toUpperCase();
+  if (t === 'HOLD') return {cls:'hold', label:'續抱', tone:'var(--c-buy)'};
+  if (t === 'SOFT_WARNING') return {cls:'soft', label:'觀察', tone:'var(--c-watch)'};
+  if (t === 'REDUCE_REVIEW') return {cls:'reduce', label:'減碼檢查', tone:'var(--c-wait)'};
+  if (t === 'EXIT_REVIEW') return {cls:'exit', label:'出場檢查', tone:'var(--c-stop)'};
+  if (t === 'HARD_EXIT_ALERT') return {cls:'hard', label:'硬性警報', tone:'#FB7185'};
+  return {cls:'unknown', label:t || '未知', tone:'var(--c-rest)'};
+}
+function zhHealthReason(raw){
+  const r = String(raw||'');
+  const map = {
+    price_above_ma5_ma10_ma20:'站上 5/10/20MA', relative_strength_outperform:'相對強勢勝出', mainstream_theme:'主流題材仍在',
+    below_ma10:'跌破 10MA', low_volume_pullback:'量縮拉回', recent_high:'接近近期高', rising_volume:'上漲放量',
+    below_ma5:'跌破 5MA', volume_breakdown:'放量轉弱', previous_low_break:'跌破前低'
+  };
+  return map[r] || r.replaceAll('_',' ');
+}
+function zhHealthStatus(raw){
+  const r = String(raw||'');
+  const map = {
+    BULL_ALIGNED:'多頭排列', MA10_BREAK:'跌破10MA', MA5_BREAK:'跌破5MA', NEUTRAL:'中性整理', NORMAL:'量能正常',
+    LOW_VOLUME_PULLBACK:'量縮拉回', RISING_VOLUME:'上漲放量', VOLUME_BREAKDOWN:'放量轉弱', OUTPERFORM:'強於大盤', INLINE:'與大盤同步',
+    UNDERPERFORM:'弱於大盤', BULLISH:'籌碼偏多', BEARISH:'籌碼轉弱', UNKNOWN:'資料不足'
+  };
+  return map[r] || r.replaceAll('_',' ');
+}
+function zhHealthGap(raw){
+  const g = String(raw||'').replace(/^DATA_GAP:\s*/,'').replace(/^BENCHMARK_DATA_GAP:\s*/,'');
+  if (g.includes('chip data')) return '籌碼資料不足';
+  if (g.includes('mainstream theme')) return '主流題材資料不足';
+  if (g.includes('current volume')) return '即時量能資料不足';
+  if (g.includes('candidate chip')) return '候選籌碼資料不足';
+  if (g.includes('institutional net')) return '法人買賣超資料不足';
+  return g.replaceAll('_',' ');
+}
+function HealthPill(tier){
+  const m = tierMeta(tier);
+  return `<span class="health-pill ${m.cls}">${m.label}</span>`;
+}
+function buildHealthIndexes(payload){
+  S.portfolioHealth = payload || null;
+  S.healthBySymbol = {};
+  (payload?.positions || []).forEach(h => { if (h?.symbol) S.healthBySymbol[h.symbol] = h; });
+}
+function PositionHealthHero(){
+  const h = S.portfolioHealth || {};
+  const rows = h.positions || [];
+  const count = k => rows.filter(x => String(x.actionTier||'').toUpperCase() === k).length;
+  const scoreVals = rows.map(x => Number(x.healthScore)).filter(Number.isFinite);
+  const avg = scoreVals.length ? Math.round(scoreVals.reduce((a,b)=>a+b,0)/scoreVals.length) : null;
+  const hero = el('section',{class:'health-hero'});
+  hero.append(el('div',{class:'hh-top'},[
+    el('div',{},[
+      el('div',{class:'hh-title',text:'持股健康儀表板'}),
+      el('div',{class:'hh-sub',text:`${h.mode || 'SHADOW'} · ${HHmm(h.evaluatedAt)} · 不自動買賣`})
+    ]),
+    el('span',{class:'hh-badge',text:h.autoSellEnabled ? 'Auto Sell ON' : 'Manual Only'})
+  ]));
+  const kpis = el('div',{class:'health-kpis'});
+  [
+    ['平均', avg==null?'—':String(avg)], ['續抱', count('HOLD')], ['減碼', count('REDUCE_REVIEW')], ['出場', count('EXIT_REVIEW')+count('HARD_EXIT_ALERT')]
+  ].forEach(([k,v]) => kpis.append(el('div',{class:'health-kpi'},[el('div',{class:'v',text:String(v)}), el('div',{class:'k',text:k})])));
+  hero.append(kpis);
+  if (h.notice) hero.append(el('div',{class:'hh-sub',style:'margin-top:12px;line-height:1.45',text:h.notice}));
+  return hero;
+}
+function PositionHealthBlock(h){
+  if (!h) return null;
+  const meta = tierMeta(h.actionTier);
+  const tech = h.technicals || {};
+  const p = Math.max(0, Math.min(100, Number(h.healthScore||0)));
+  const block = el('div',{class:'health-inline'});
+  block.append(el('div',{class:'hi-head'},[
+    el('div',{},[el('div',{html:HealthPill(h.actionTier)}), el('div',{class:'hh-sub',style:'margin-top:6px',text:`${zhHealthStatus(h.structureStatus)||'—'} · ${zhHealthStatus(h.volumeStatus)||'—'} · ${zhHealthStatus(h.relativeStrengthStatus)||'—'}`})]),
+    el('div',{class:'health-score-ring',style:`--p:${p};--c:${meta.tone}`},[el('span',{text:String(h.healthScore ?? '—')})])
+  ]));
+  block.append(el('div',{class:'health-line'},[
+    el('span',{html:`5MA <b>${fmtPrice(tech.ma5)}</b>`}), el('span',{html:`10MA <b>${fmtPrice(tech.ma10)}</b>`}),
+    el('span',{html:`20MA <b>${fmtPrice(tech.ma20)}</b>`}), el('span',{html:`前低 <b>${fmtPrice(tech.previousLow)}</b>`}),
+    el('span',{html:`量比 <b>${tech.volumeRatio!=null?Number(tech.volumeRatio).toFixed(2):'—'}</b>`}), el('span',{html:`5日 <b>${fmtPct(tech.return5d,1)}</b>`})
+  ]));
+  const tags = el('div',{class:'health-tags'});
+  (h.reasons||[]).slice(0,4).forEach(r => tags.append(el('span',{class:'health-tag',text:zhHealthReason(r)})));
+  (h.dataGaps||[]).slice(0,2).forEach(g => tags.append(el('span',{class:'health-tag health-gap',text:truncate(zhHealthGap(g),18)})));
+  block.append(tags);
+  return block;
 }
 function pickTopReasons(reasons, limit){
   const out = new Map();
@@ -746,19 +868,30 @@ function PositionCard(p, quote){
   ]);
   card.append(stopRow);
 
-  // 風險等級：後端 review_log 優先（STRONG/WEAKEN/EXIT），fallback 用距停損 % 推導
-  let riskTxt, riskCls;
-  const rs = (p.reviewStatus||'').toUpperCase();
-  if (rs === 'STRONG'){ riskTxt='續抱'; riskCls='safe'; }
-  else if (rs === 'WEAKEN'){ riskTxt='轉弱'; riskCls='warn'; }
-  else if (rs === 'EXIT'){ riskTxt='出場'; riskCls='danger'; }
-  else {
-    riskTxt = dist.cls==='danger'?'高':dist.cls==='warn'?'中':dist.cls==='safe'?'低':'未知';
-    riskCls = dist.cls;
+  // 風險等級：health-v2 優先；fallback 才用舊 review_log / 距停損。避免新健康結論與舊 reviewStatus 顯示矛盾。
+  let riskTxt, riskCls, riskSrc;
+  const hraw = S.healthBySymbol[p.symbol];
+  if (hraw) {
+    const tm = tierMeta(hraw.actionTier);
+    riskTxt = tm.label;
+    riskCls = tm.cls === 'hold' ? 'safe' : (tm.cls === 'reduce' || tm.cls === 'soft' ? 'warn' : (tm.cls === 'exit' || tm.cls === 'hard' ? 'danger' : 'dim'));
+    riskSrc = '<span style="color:var(--dim)">（health-v2）</span>';
+  } else {
+    const rs = (p.reviewStatus||'').toUpperCase();
+    if (rs === 'STRONG'){ riskTxt='續抱'; riskCls='safe'; }
+    else if (rs === 'WEAKEN'){ riskTxt='轉弱'; riskCls='warn'; }
+    else if (rs === 'EXIT'){ riskTxt='出場'; riskCls='danger'; }
+    else {
+      riskTxt = dist.cls==='danger'?'高':dist.cls==='warn'?'中':dist.cls==='safe'?'低':'未知';
+      riskCls = dist.cls;
+    }
+    riskSrc = rs ? '<span style="color:var(--dim)">（後端 review）</span>' : '';
   }
-  const riskSrc = rs ? '<span style="color:var(--dim)">（後端 review）</span>' : '';
   card.append(el('div',{class:'risk',html:
     `風險：<b class="${riskCls}">${riskTxt}</b>${riskSrc} · 停損 <b class="mono">${fmtPrice(p.stopLossPrice)}</b> · TP1 <b class="mono">${fmtPrice(p.takeProfit1)}</b>`}));
+
+  const hb = PositionHealthBlock(hraw);
+  if (hb) card.append(hb);
 
   const acts = el('div',{class:'actions'});
   ['hold','add','reduce','exit'].forEach(act => {
@@ -849,13 +982,15 @@ async function fetchCommon(){
   S.capital   = capital;
 }
 async function fetchOverview(){
-  const [candidates, positions] = await Promise.all([
+  const [candidates, positions, health] = await Promise.all([
     safeFetch('/api/candidates/latest'),
     safeFetch('/api/positions/open?size=10'),
+    safeFetch('/api/portfolio/health-v2'),
   ]);
   S.candidates = Array.isArray(candidates) ? candidates : [];
   updateCandidateMeta(S.candidates);
   S.positions  = Array.isArray(positions) ? positions : [];
+  buildHealthIndexes(health);
   await fetchQuotes();
 }
 async function fetchQuotes(){
@@ -876,8 +1011,12 @@ async function fetchCandidatesTab(){
   await fetchQuotes();
 }
 async function fetchPositionsTab(){
-  const ps = await safeFetch('/api/positions/open?size=20');
+  const [ps, health] = await Promise.all([
+    safeFetch('/api/positions/open?size=20'),
+    safeFetch('/api/portfolio/health-v2')
+  ]);
   S.positions = Array.isArray(ps) ? ps : [];
+  buildHealthIndexes(health);
   await fetchQuotes();
 }
 async function fetchPnlTab(){
@@ -980,6 +1119,7 @@ Views.overview = async () => {
     app.append(actSec);
   }
   if (showPositions){
+    app.append(PositionHealthHero());
     const posSec = el('section',{class:'section'});
     posSec.append(el('div',{class:'section-title',html:`持倉 <span class="count">${S.positions?.length||0} 檔</span>`}));
     if (!S.positions?.length) posSec.append(el('div',{class:'empty',text:'目前無持倉，等待下一個高品質 setup'}));
@@ -1041,6 +1181,7 @@ Views.positions = async () => {
   const app = $('app'); app.innerHTML = '';
   await fetchCommon(); await fetchPositionsTab();
   app.append(AIStatusPill(S.dashboard?.finalDecision));
+  app.append(PositionHealthHero());
 
   const cap = S.capital;
   app.append(MetricStrip([
