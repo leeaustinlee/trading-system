@@ -289,12 +289,14 @@ public class TelegramTemplateService {
 
     static PositionIntelligenceResultDto toPositionIntelligenceResult(Map<String, Object> row) {
         String actionTier = stringValue(row.get("actionTier"));
-        HoldDecision holdDecision = holdDecisionFromHealthTier(actionTier);
-        PositionRiskLevel risk = riskFromHealthTier(actionTier);
-        PositionStrength strength = strengthFromHealth(row, actionTier);
+        String structuralTier = stringValue(row.get("structuralTier"));
+        String effectiveTier = effectiveHealthTier(actionTier, structuralTier);
+        HoldDecision holdDecision = holdDecisionFromHealthTier(effectiveTier);
+        PositionRiskLevel risk = riskFromHealthTier(effectiveTier);
+        PositionStrength strength = strengthFromHealth(row, effectiveTier);
         BigDecimal stop = firstBigDecimal(row.get("trailingStopPrice"), row.get("stopLossPrice"));
         BigDecimal takeProfit = firstBigDecimal(row.get("takeProfit2"), row.get("takeProfit1"));
-        String reason = healthReason(row, actionTier);
+        String reason = healthReason(row, effectiveTier);
         return new PositionIntelligenceResultDto(
                 stringValue(row.get("symbol")),
                 stringValue(row.get("stockName")),
@@ -306,6 +308,15 @@ public class TelegramTemplateService {
                 null,
                 reason
         );
+    }
+
+    private static String effectiveHealthTier(String actionTier, String structuralTier) {
+        return switch (structuralTier == null ? "" : structuralTier) {
+            case "HOLD", "OBSERVE_1D" -> "HOLD";
+            case "REDUCE_REVIEW" -> "REDUCE_REVIEW";
+            case "EXIT_REVIEW", "HARD_EXIT_ALERT" -> structuralTier;
+            default -> actionTier;
+        };
     }
 
     private static HoldDecision holdDecisionFromHealthTier(String tier) {
@@ -345,6 +356,8 @@ public class TelegramTemplateService {
         String structure = stringValue(row.get("structureStatus"));
         String volume = stringValue(row.get("volumeStatus"));
         String rs = stringValue(row.get("relativeStrengthStatus"));
+        String structuralReason = stringValue(row.get("structuralReason"));
+        if (!structuralReason.isBlank()) reason = reason.isBlank() ? structuralReason : reason + "、" + structuralReason;
         if (reason.isBlank()) reason = "health-v2 actionTier=" + actionTier;
         return reason + "；structure=" + structure + "；volume=" + volume + "；rs=" + rs;
     }

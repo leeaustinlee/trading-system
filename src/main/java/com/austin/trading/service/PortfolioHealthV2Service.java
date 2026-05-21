@@ -2,9 +2,12 @@ package com.austin.trading.service;
 
 import com.austin.trading.client.TwseMisClient;
 import com.austin.trading.client.dto.StockQuote;
+import com.austin.trading.dto.StructuralExitInput;
 import com.austin.trading.engine.PositionHealthEngine;
 import com.austin.trading.engine.PositionHealthInput;
 import com.austin.trading.engine.PositionHealthResult;
+import com.austin.trading.engine.StructuralExitEngine;
+import com.austin.trading.engine.StructuralExitResult;
 import com.austin.trading.entity.CandidateStockEntity;
 import com.austin.trading.entity.PositionEntity;
 import com.austin.trading.entity.PositionHealthLogEntity;
@@ -33,6 +36,7 @@ public class PortfolioHealthV2Service {
     private final DailyTechnicalService dailyTechnicalService;
     private final TwseMisClient twseMisClient;
     private final PositionHealthEngine positionHealthEngine;
+    private final StructuralExitEngine structuralExitEngine;
     private final CandidateStockRepository candidateStockRepository;
     private final StockThemeMappingRepository stockThemeMappingRepository;
     private final PositionHealthLogRepository positionHealthLogRepository;
@@ -43,6 +47,7 @@ public class PortfolioHealthV2Service {
                                     DailyTechnicalService dailyTechnicalService,
                                     TwseMisClient twseMisClient,
                                     PositionHealthEngine positionHealthEngine,
+                                    StructuralExitEngine structuralExitEngine,
                                     CandidateStockRepository candidateStockRepository,
                                     StockThemeMappingRepository stockThemeMappingRepository,
                                     PositionHealthLogRepository positionHealthLogRepository,
@@ -51,6 +56,7 @@ public class PortfolioHealthV2Service {
         this.dailyTechnicalService = dailyTechnicalService;
         this.twseMisClient = twseMisClient;
         this.positionHealthEngine = positionHealthEngine;
+        this.structuralExitEngine = structuralExitEngine == null ? new StructuralExitEngine() : structuralExitEngine;
         this.candidateStockRepository = candidateStockRepository;
         this.stockThemeMappingRepository = stockThemeMappingRepository;
         this.positionHealthLogRepository = positionHealthLogRepository;
@@ -65,7 +71,19 @@ public class PortfolioHealthV2Service {
                                     StockThemeMappingRepository stockThemeMappingRepository,
                                     ObjectMapper objectMapper) {
         this(positionRepository, dailyTechnicalService, twseMisClient, positionHealthEngine,
-                candidateStockRepository, stockThemeMappingRepository, null, objectMapper);
+                new StructuralExitEngine(), candidateStockRepository, stockThemeMappingRepository, null, objectMapper);
+    }
+
+    public PortfolioHealthV2Service(PositionRepository positionRepository,
+                                    DailyTechnicalService dailyTechnicalService,
+                                    TwseMisClient twseMisClient,
+                                    PositionHealthEngine positionHealthEngine,
+                                    CandidateStockRepository candidateStockRepository,
+                                    StockThemeMappingRepository stockThemeMappingRepository,
+                                    PositionHealthLogRepository positionHealthLogRepository,
+                                    ObjectMapper objectMapper) {
+        this(positionRepository, dailyTechnicalService, twseMisClient, positionHealthEngine,
+                new StructuralExitEngine(), candidateStockRepository, stockThemeMappingRepository, positionHealthLogRepository, objectMapper);
     }
 
     public PortfolioHealthV2Service(PositionRepository positionRepository,
@@ -258,6 +276,9 @@ public class PortfolioHealthV2Service {
                 tech.ma5(), tech.ma10(), tech.ma20(), tech.ma5Previous(), tech.previousLow(), tech.recentHigh(), tech.atr(), tech.volumeRatio(),
                 tech.return5d(), benchmark.return5d(), tech.return10d(), benchmark.return10d(),
                 theme.themeStage(), theme.mainstreamTheme(), chip.chipStatus()));
+        StructuralExitResult structural = structuralExitEngine.evaluate(new StructuralExitInput(
+                p.getSymbol(), current, p.getTrailingStopPrice(), health.healthScore(), health.structureStatus(),
+                health.volumeStatus(), health.relativeStrengthStatus(), health.chipStatus(), theme.mainstreamTheme()));
         List<String> dataGaps = new java.util.ArrayList<>(health.dataGaps());
         dataGaps.addAll(tech.dataGaps());
         dataGaps.addAll(benchmark.dataGaps().stream().map(g -> "BENCHMARK_" + g).toList());
@@ -282,8 +303,11 @@ public class PortfolioHealthV2Service {
         row.put("relativeStrengthStatus", health.relativeStrengthStatus());
         row.put("chipStatus", health.chipStatus());
         row.put("actionTier", mapTier(health.exitTier()));
-        row.put("autoSellEnabled", false);
-        row.put("manualConfirmRequired", true);
+        row.put("structuralTier", structural.structuralTier().name());
+        row.put("structuralReason", structural.reason());
+        row.put("structuralSignals", structural.signals());
+        row.put("autoSellEnabled", structural.autoSellEnabled());
+        row.put("manualConfirmRequired", structural.manualConfirmRequired());
         row.put("reasons", health.reasons());
         row.put("dataGaps", dataGaps.stream().distinct().toList());
         row.put("healthInputs", Map.of(

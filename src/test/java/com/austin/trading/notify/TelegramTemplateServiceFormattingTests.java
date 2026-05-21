@@ -61,4 +61,24 @@ class TelegramTemplateServiceFormattingTests {
         assertThat(dto.suggestedStop()).isEqualByComparingTo("30.24");
         assertThat(dto.reason()).contains("below_ma10", "structure=MA10_BREAK");
     }
+
+    @Test
+    void structuralObserveTierPreventsTelegramExitWordingEvenWhenLegacyActionTierIsExitReview() {
+        var dto = TelegramTemplateService.toPositionIntelligenceResult(Map.of(
+                "symbol", "1582",
+                "stockName", "信錦",
+                "actionTier", "EXIT_REVIEW",
+                "structuralTier", "OBSERVE_1D",
+                "structuralReason", "price_broken but structure_intact; tolerate washout and observe one trading day",
+                "structureStatus", "NEUTRAL",
+                "volumeStatus", "RISING_VOLUME",
+                "relativeStrengthStatus", "OUTPERFORM",
+                "trailingStopPrice", new BigDecimal("117.98"),
+                "reasons", List.of("below_trailing_stop")
+        ));
+
+        assertThat(dto.holdDecision()).isEqualTo(HoldDecision.HOLD);
+        assertThat(dto.reason()).contains("structure_intact");
+        assertThat(dto.reason()).doesNotContain("actionTier=EXIT_REVIEW");
+    }
 }

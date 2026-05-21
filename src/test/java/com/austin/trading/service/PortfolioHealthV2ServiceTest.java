@@ -98,6 +98,47 @@ class PortfolioHealthV2ServiceTest {
     }
 
     @Test
+    void healthV2AddsStructuralObserveWhenPriceBreaksTrailingStopButHealthIsHold() {
+        PositionRepository positionRepo = mock(PositionRepository.class);
+        DailyTechnicalService tech = mock(DailyTechnicalService.class);
+        CandidateStockRepository candidateRepo = mock(CandidateStockRepository.class);
+        StockThemeMappingRepository mappingRepo = mock(StockThemeMappingRepository.class);
+        TwseMisClient quoteClient = mock(TwseMisClient.class);
+        PositionEntity p = new PositionEntity();
+        p.setSymbol("1582");
+        p.setStockName("信錦");
+        p.setStatus("OPEN");
+        p.setAvgCost(bd("110"));
+        p.setTrailingStopPrice(bd("117.98"));
+        when(positionRepo.findByStatus("OPEN")).thenReturn(List.of(p));
+        when(tech.snapshot(eq("1582"), any())).thenReturn(new DailyTechnicalService.TechnicalSnapshot(
+                bd("116"), bd("117"), bd("110"), bd("115"), bd("114"), bd("121"), bd("3"), bd("1.4"), bd("5"), bd("8"), List.of()));
+        when(tech.snapshot(eq("t00"), any())).thenReturn(new DailyTechnicalService.TechnicalSnapshot(
+                null, null, null, null, null, null, null, bd("1.0"), bd("1"), bd("2"), List.of()));
+        StockThemeMappingEntity mapping = new StockThemeMappingEntity();
+        mapping.setSymbol("1582"); mapping.setThemeTag("AI_HINGE"); mapping.setThemeCategory("AI_SUPPLY_CHAIN"); mapping.setIsActive(true);
+        when(mappingRepo.findBySymbolAndIsActiveTrue("1582")).thenReturn(List.of(mapping));
+        CandidateStockEntity candidate = new CandidateStockEntity();
+        candidate.setTradingDate(LocalDate.now().minusDays(1));
+        candidate.setSymbol("1582");
+        candidate.setPayloadJson("{\"foreign_and_trust_buy\":true,\"total_institutional_net\":1000,\"foreign_net\":700,\"invest_trust_net\":300}");
+        when(candidateRepo.findTopBySymbolOrderByTradingDateDesc("1582")).thenReturn(Optional.of(candidate));
+        when(quoteClient.getQuotesWithOtcFallback(List.of("1582"))).thenReturn(List.of(
+                new StockQuote("1582", "信錦", "tse", 117.5, 118.0, 116.5, 120.0, 116.0, 117.4, 117.6, 1000L, "20260521", "10:00:00", true)));
+
+        PortfolioHealthV2Service service = new PortfolioHealthV2Service(positionRepo, tech, quoteClient, new PositionHealthEngine(), candidateRepo, mappingRepo, new ObjectMapper());
+        Map<String, Object> out = service.healthV2();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) out.get("positions");
+
+        assertThat(rows.get(0).get("actionTier")).isEqualTo("HOLD");
+        assertThat(rows.get(0).get("structuralTier")).isEqualTo("OBSERVE_1D");
+        assertThat(rows.get(0).get("structuralReason").toString()).contains("price_broken", "structure_intact");
+        assertThat(rows.get(0).get("manualConfirmRequired")).isEqualTo(true);
+        assertThat(rows.get(0).get("autoSellEnabled")).isEqualTo(false);
+    }
+
+    @Test
     void healthV2DataGapsSummarizesAffectedPositionsWithoutAutoSell() {
         PositionRepository positionRepo = mock(PositionRepository.class);
         DailyTechnicalService tech = mock(DailyTechnicalService.class);
