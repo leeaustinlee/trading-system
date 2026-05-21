@@ -67,6 +67,7 @@ class KolSignalShadowModeServiceTests {
         assertThat(item.narrativeContext().theme()).isEqualTo("PCB/載板/材料");
         assertThat(item.narrativeContext().direction()).isEqualTo("POSITIVE");
         assertThat(item.narrativeContext().attention()).isEqualByComparingTo("7.6");
+        assertThat(item.narrativeContext().freshness()).isEqualTo("DAILY_SNAPSHOT");
         assertThat(item.narrativeContext().crowding()).isEqualByComparingTo("5.2");
         assertThat(item.note()).contains("production candidate score and final decision are unchanged");
     }

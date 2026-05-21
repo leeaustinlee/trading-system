@@ -28,6 +28,7 @@ public record KolShadowReportResponse(
             String theme,
             String lifecycle,
             BigDecimal attention,
+            String freshness,
             BigDecimal crowding,
             String direction,
             int sourceCount,

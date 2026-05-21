@@ -76,6 +76,7 @@ public class KolSignalShadowModeService {
                 snapshot.getThemeTag(),
                 lifecycle(attention, crowding, snapshot.getSourceCount()),
                 attention,
+                "DAILY_SNAPSHOT",
                 crowding,
                 snapshot.getDirection(),
                 safeInt(snapshot.getSourceCount()),

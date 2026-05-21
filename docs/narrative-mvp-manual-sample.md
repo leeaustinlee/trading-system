@@ -76,7 +76,7 @@ Expected：`rows` 不再是空陣列，且每列含：
 - `theme`
 - `lifecycle`
 - `attention`
-- `freshness`：MVP 目前以 daily snapshot 當日 aggregate 表示 freshness；尚未獨立成 response field。
+- `freshness`：MVP 以 `DAILY_SNAPSHOT` 標示此列來自當日 daily aggregation。
 - `crowding`
 - `direction`
 - `sourceCount`

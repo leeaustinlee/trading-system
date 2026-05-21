@@ -37,6 +37,7 @@ class NarrativeDashboardServiceTests {
                 .containsExactly("機器人", "AI power", "被動元件");
         assertThat(dashboard.rows().get(0).lifecycle()).isEqualTo("CROWDED");
         assertThat(dashboard.rows().get(0).attention()).isEqualByComparingTo("9.1");
+        assertThat(dashboard.rows().get(0).freshness()).isEqualTo("DAILY_SNAPSHOT");
         assertThat(dashboard.rows().get(0).crowding()).isEqualByComparingTo("8.7");
         assertThat(dashboard.rows().get(1).lifecycle()).isEqualTo("EXPANDING");
         assertThat(dashboard.rows().get(1).attention()).isEqualByComparingTo("8.2");

@@ -37,6 +37,7 @@ public class NarrativeDashboardService {
                 e.getThemeTag(),
                 lifecycle(attention, crowding, e.getSourceCount(), e.getEvidenceCount()),
                 attention,
+                "DAILY_SNAPSHOT",
                 crowding,
                 e.getDirection(),
                 safeInt(e.getSourceCount()),
