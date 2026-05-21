@@ -47,7 +47,30 @@ public class CandidateScanService {
     private final MomentumCandidateEngine momentumCandidateEngine;
     private final ScoreConfigService scoreConfigService;
     private final ObjectMapper objectMapper;
+    private final NarrativeCandidateContextService narrativeCandidateContextService;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    public CandidateScanService(
+            CandidateStockRepository candidateStockRepository,
+            StockEvaluationRepository stockEvaluationRepository,
+            ThemeSnapshotRepository themeSnapshotRepository,
+            TwseMisClient twseMisClient,
+            MomentumCandidateEngine momentumCandidateEngine,
+            ScoreConfigService scoreConfigService,
+            ObjectMapper objectMapper,
+            NarrativeCandidateContextService narrativeCandidateContextService
+    ) {
+        this.candidateStockRepository = candidateStockRepository;
+        this.stockEvaluationRepository = stockEvaluationRepository;
+        this.themeSnapshotRepository = themeSnapshotRepository;
+        this.twseMisClient = twseMisClient;
+        this.momentumCandidateEngine = momentumCandidateEngine;
+        this.scoreConfigService = scoreConfigService;
+        this.objectMapper = objectMapper;
+        this.narrativeCandidateContextService = narrativeCandidateContextService;
+    }
+
+    /** Backward-compatible ctor for existing unit tests that do not wire the narrative context layer. */
     public CandidateScanService(
             CandidateStockRepository candidateStockRepository,
             StockEvaluationRepository stockEvaluationRepository,
@@ -57,13 +80,8 @@ public class CandidateScanService {
             ScoreConfigService scoreConfigService,
             ObjectMapper objectMapper
     ) {
-        this.candidateStockRepository = candidateStockRepository;
-        this.stockEvaluationRepository = stockEvaluationRepository;
-        this.themeSnapshotRepository = themeSnapshotRepository;
-        this.twseMisClient = twseMisClient;
-        this.momentumCandidateEngine = momentumCandidateEngine;
-        this.scoreConfigService = scoreConfigService;
-        this.objectMapper = objectMapper;
+        this(candidateStockRepository, stockEvaluationRepository, themeSnapshotRepository, twseMisClient,
+                momentumCandidateEngine, scoreConfigService, objectMapper, null);
     }
 
     /** 從 candidate_stock.payload_json 抽出 tradabilityTag。失敗回 null（被視為主候選）。 */
@@ -391,7 +409,13 @@ public class CandidateScanService {
             if (item.reason()      != null) entity.setReason(item.reason());
             if (item.themeTag()    != null) entity.setThemeTag(item.themeTag());
             if (item.sector()      != null) entity.setSector(item.sector());
-            if (item.payloadJson() != null) entity.setPayloadJson(item.payloadJson());
+            if (item.payloadJson() != null) {
+                String payloadJson = item.payloadJson();
+                if (narrativeCandidateContextService != null) {
+                    payloadJson = narrativeCandidateContextService.mergeIntoPayload(date, item.themeTag(), payloadJson);
+                }
+                entity.setPayloadJson(payloadJson);
+            }
 
             if (decision != null) {
                 entity.setMomentumCandidate(true);
