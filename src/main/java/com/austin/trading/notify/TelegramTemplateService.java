@@ -6,17 +6,25 @@ import com.austin.trading.dto.response.HourlyGateDecisionResponse;
 import com.austin.trading.dto.response.MonitorDecisionResponse;
 import com.austin.trading.dto.response.NextDayStrategyDto;
 import com.austin.trading.dto.response.PositionIntelligenceResultDto;
+import com.austin.trading.domain.enums.HoldDecision;
+import com.austin.trading.domain.enums.PositionRiskLevel;
+import com.austin.trading.domain.enums.PositionStrength;
 import com.austin.trading.service.NextDayStrategyBuilder;
 import com.austin.trading.service.NotificationService;
+import com.austin.trading.service.PortfolioHealthV2Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Telegram 業務模板層（與 {@link LineTemplateService} 平行）。
@@ -40,15 +48,26 @@ public class TelegramTemplateService {
     private final NotificationService notificationService;
     private final TradingNotificationDecisionFormatter decisionFormatter;
     private final NextDayStrategyBuilder nextDayStrategyBuilder;
+    private final ObjectProvider<PortfolioHealthV2Service> portfolioHealthV2ServiceProvider;
 
     public TelegramTemplateService(TelegramSender telegramSender,
                                     NotificationService notificationService,
                                     TradingNotificationDecisionFormatter decisionFormatter,
                                     NextDayStrategyBuilder nextDayStrategyBuilder) {
+        this(telegramSender, notificationService, decisionFormatter, nextDayStrategyBuilder, null);
+    }
+
+    @Autowired
+    public TelegramTemplateService(TelegramSender telegramSender,
+                                    NotificationService notificationService,
+                                    TradingNotificationDecisionFormatter decisionFormatter,
+                                    NextDayStrategyBuilder nextDayStrategyBuilder,
+                                    ObjectProvider<PortfolioHealthV2Service> portfolioHealthV2ServiceProvider) {
         this.telegramSender = telegramSender;
         this.notificationService = notificationService;
         this.decisionFormatter = decisionFormatter;
         this.nextDayStrategyBuilder = nextDayStrategyBuilder;
+        this.portfolioHealthV2ServiceProvider = portfolioHealthV2ServiceProvider;
     }
 
     public void notifyPremarket(String marketSummary, String topCandidates, LocalDate date) {
@@ -242,12 +261,117 @@ public class TelegramTemplateService {
     }
 
     private List<PositionIntelligenceResultDto> safePortfolioReview() {
+        List<PositionIntelligenceResultDto> healthV2Review = safePortfolioHealthV2Review();
+        if (!healthV2Review.isEmpty()) return healthV2Review;
         try {
             return nextDayStrategyBuilder.reviewPositions();
         } catch (Exception e) {
             log.warn("[TelegramTemplateService] portfolio review unavailable: {}", e.getMessage());
             return List.of();
         }
+    }
+
+    private List<PositionIntelligenceResultDto> safePortfolioHealthV2Review() {
+        PortfolioHealthV2Service healthV2 = portfolioHealthV2ServiceProvider != null
+                ? portfolioHealthV2ServiceProvider.getIfAvailable()
+                : null;
+        if (healthV2 == null) return List.of();
+        try {
+            Map<String, Object> summary = healthV2.healthV2ReadOnlySummary();
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> rows = (List<Map<String, Object>>) summary.getOrDefault("positions", List.of());
+            return rows.stream().map(TelegramTemplateService::toPositionIntelligenceResult).toList();
+        } catch (Exception e) {
+            log.warn("[TelegramTemplateService] portfolio health-v2 unavailable: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    static PositionIntelligenceResultDto toPositionIntelligenceResult(Map<String, Object> row) {
+        String actionTier = stringValue(row.get("actionTier"));
+        HoldDecision holdDecision = holdDecisionFromHealthTier(actionTier);
+        PositionRiskLevel risk = riskFromHealthTier(actionTier);
+        PositionStrength strength = strengthFromHealth(row, actionTier);
+        BigDecimal stop = firstBigDecimal(row.get("trailingStopPrice"), row.get("stopLossPrice"));
+        BigDecimal takeProfit = firstBigDecimal(row.get("takeProfit2"), row.get("takeProfit1"));
+        String reason = healthReason(row, actionTier);
+        return new PositionIntelligenceResultDto(
+                stringValue(row.get("symbol")),
+                stringValue(row.get("stockName")),
+                strength,
+                risk,
+                holdDecision,
+                stop,
+                takeProfit,
+                null,
+                reason
+        );
+    }
+
+    private static HoldDecision holdDecisionFromHealthTier(String tier) {
+        return switch (tier == null ? "" : tier) {
+            case "HARD_EXIT_ALERT", "EXIT_REVIEW" -> HoldDecision.EXIT;
+            case "REDUCE_REVIEW" -> HoldDecision.REDUCE;
+            default -> HoldDecision.HOLD;
+        };
+    }
+
+    private static PositionRiskLevel riskFromHealthTier(String tier) {
+        return switch (tier == null ? "" : tier) {
+            case "HARD_EXIT_ALERT", "EXIT_REVIEW" -> PositionRiskLevel.HIGH;
+            case "REDUCE_REVIEW", "SOFT_WARNING" -> PositionRiskLevel.MEDIUM;
+            default -> PositionRiskLevel.LOW;
+        };
+    }
+
+    private static PositionStrength strengthFromHealth(Map<String, Object> row, String tier) {
+        String structure = stringValue(row.get("structureStatus"));
+        if ("HARD_EXIT_ALERT".equals(tier) || "EXIT_REVIEW".equals(tier) || "REDUCE_REVIEW".equals(tier)
+                || structure.contains("BREAK") || structure.contains("UNKNOWN")) {
+            return PositionStrength.WEAK;
+        }
+        if ("HOLD".equals(tier) && (structure.contains("BULL") || structure.contains("RECENT_HIGH"))) {
+            return PositionStrength.STRONG;
+        }
+        return PositionStrength.NEUTRAL;
+    }
+
+    private static String healthReason(Map<String, Object> row, String actionTier) {
+        Object reasonsObj = row.get("reasons");
+        String reason = "";
+        if (reasonsObj instanceof List<?> reasons && !reasons.isEmpty()) {
+            reason = String.join("、", reasons.stream().map(String::valueOf).toList());
+        }
+        String structure = stringValue(row.get("structureStatus"));
+        String volume = stringValue(row.get("volumeStatus"));
+        String rs = stringValue(row.get("relativeStrengthStatus"));
+        if (reason.isBlank()) reason = "health-v2 actionTier=" + actionTier;
+        return reason + "；structure=" + structure + "；volume=" + volume + "；rs=" + rs;
+    }
+
+    private static BigDecimal firstBigDecimal(Object... values) {
+        for (Object value : values) {
+            BigDecimal bd = toBigDecimal(value);
+            if (bd != null) return bd;
+        }
+        return null;
+    }
+
+    private static BigDecimal toBigDecimal(Object value) {
+        if (value == null) return null;
+        if (value instanceof BigDecimal bd) return bd;
+        if (value instanceof Number n) return BigDecimal.valueOf(n.doubleValue());
+        try {
+            String s = String.valueOf(value);
+            if (s.isBlank() || "DATA_GAP".equalsIgnoreCase(s) || "null".equalsIgnoreCase(s)) return null;
+            return new BigDecimal(s);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String stringValue(Object value) {
+        return value == null ? "" : String.valueOf(value);
     }
 
     private NextDayStrategyDto safeNextDayStrategy() {
