@@ -1,8 +1,10 @@
 package com.austin.trading.controller;
 
 import com.austin.trading.dto.request.KolSignalCreateRequest;
+import com.austin.trading.dto.response.KolShadowReportResponse;
 import com.austin.trading.dto.response.NarrativeDashboardResponse;
 import com.austin.trading.service.KolSignalIngestionService;
+import com.austin.trading.service.KolSignalShadowModeService;
 import com.austin.trading.service.NarrativeDashboardService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -17,11 +19,14 @@ public class NarrativeController {
 
     private final KolSignalIngestionService ingestionService;
     private final NarrativeDashboardService dashboardService;
+    private final KolSignalShadowModeService shadowModeService;
 
     public NarrativeController(KolSignalIngestionService ingestionService,
-                               NarrativeDashboardService dashboardService) {
+                               NarrativeDashboardService dashboardService,
+                               KolSignalShadowModeService shadowModeService) {
         this.ingestionService = ingestionService;
         this.dashboardService = dashboardService;
+        this.shadowModeService = shadowModeService;
     }
 
     @PostMapping("/transcripts")
@@ -38,5 +43,17 @@ public class NarrativeController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return dashboardService.dashboard(date != null ? date : LocalDate.now());
+    }
+
+    @PostMapping("/shadow/run")
+    public KolShadowReportResponse shadowRun(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return shadowModeService.run(date);
+    }
+
+    @GetMapping("/shadow/report")
+    public KolShadowReportResponse shadowReport(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return shadowModeService.report(date);
     }
 }
