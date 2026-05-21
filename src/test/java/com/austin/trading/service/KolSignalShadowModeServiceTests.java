@@ -1,6 +1,7 @@
 package com.austin.trading.service;
 
 import com.austin.trading.entity.CandidateStockEntity;
+import com.austin.trading.entity.KolThemeSignalDailySnapshotEntity;
 import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.KolThemeSignalDailySnapshotRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +49,28 @@ class KolSignalShadowModeServiceTests {
         verify(snapshotRepo, times(2)).findByTradingDateOrderByNetShadowBoostDesc(date);
     }
 
+    @Test
+    void report_exposesNarrativeContextWhenCandidateThemeMatchesSnapshot() {
+        LocalDate date = LocalDate.of(2026, 5, 21);
+        CandidateStockEntity candidate = candidate("4989", "榮科", "PCB/載板/材料", "9.2100");
+        KolThemeSignalDailySnapshotEntity snapshot = snapshot(date, "PCB/載板/材料", "POSITIVE",
+                "0.7600", "0.0000", "0.1600", "MEDIUM", 1, 2);
+        when(snapshotRepo.findByTradingDateOrderByNetShadowBoostDesc(date)).thenReturn(List.of(snapshot));
+        when(candidateRepo.findByTradingDateOrderByScoreDesc(eq(date), any(Pageable.class))).thenReturn(List.of(candidate));
+
+        var report = service.report(date);
+        var item = report.items().get(0);
+
+        assertThat(item.kolBoostShadow()).isEqualByComparingTo("0.1600");
+        assertThat(item.narrativeContext()).isNotNull();
+        assertThat(item.narrativeContext().weakSignalOnly()).isTrue();
+        assertThat(item.narrativeContext().theme()).isEqualTo("PCB/載板/材料");
+        assertThat(item.narrativeContext().direction()).isEqualTo("POSITIVE");
+        assertThat(item.narrativeContext().attention()).isEqualByComparingTo("7.6");
+        assertThat(item.narrativeContext().crowding()).isEqualByComparingTo("5.2");
+        assertThat(item.note()).contains("production candidate score and final decision are unchanged");
+    }
+
     private CandidateStockEntity candidate(String symbol, String stockName, String themeTag, String score) {
         CandidateStockEntity candidate = new CandidateStockEntity();
         candidate.setSymbol(symbol);
@@ -55,5 +78,21 @@ class KolSignalShadowModeServiceTests {
         candidate.setThemeTag(themeTag);
         candidate.setScore(new BigDecimal(score));
         return candidate;
+    }
+
+    private KolThemeSignalDailySnapshotEntity snapshot(LocalDate date, String theme, String direction,
+                                                       String positiveScore, String negativeScore, String boost,
+                                                       String crowdingRisk, int sourceCount, int evidenceCount) {
+        KolThemeSignalDailySnapshotEntity snapshot = new KolThemeSignalDailySnapshotEntity();
+        snapshot.setTradingDate(date);
+        snapshot.setThemeTag(theme);
+        snapshot.setDirection(direction);
+        snapshot.setPositiveScore(new BigDecimal(positiveScore));
+        snapshot.setNegativeScore(new BigDecimal(negativeScore));
+        snapshot.setNetShadowBoost(new BigDecimal(boost));
+        snapshot.setCrowdingRisk(crowdingRisk);
+        snapshot.setSourceCount(sourceCount);
+        snapshot.setEvidenceCount(evidenceCount);
+        return snapshot;
     }
 }

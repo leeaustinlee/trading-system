@@ -18,7 +18,22 @@ public record KolShadowReportResponse(
             BigDecimal kolBoostShadow,
             BigDecimal shadowScore,
             String crowdingRisk,
+            NarrativeContext narrativeContext,
             String note
+    ) {
+    }
+
+    public record NarrativeContext(
+            boolean weakSignalOnly,
+            String theme,
+            String lifecycle,
+            BigDecimal attention,
+            BigDecimal crowding,
+            String direction,
+            int sourceCount,
+            int evidenceCount,
+            BigDecimal shadowBoost,
+            String guardrail
     ) {
     }
 }

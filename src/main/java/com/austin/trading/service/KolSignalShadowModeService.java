@@ -8,6 +8,7 @@ import com.austin.trading.repository.KolThemeSignalDailySnapshotRepository;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
@@ -60,8 +61,54 @@ public class KolSignalShadowModeService {
                 boost,
                 base.add(boost),
                 snapshot == null ? "NONE" : snapshot.getCrowdingRisk(),
+                snapshot == null ? null : toNarrativeContext(snapshot),
                 "shadow only; production candidate score and final decision are unchanged"
         );
+    }
+
+    private KolShadowReportResponse.NarrativeContext toNarrativeContext(KolThemeSignalDailySnapshotEntity snapshot) {
+        BigDecimal positive = safeDecimal(snapshot.getPositiveScore());
+        BigDecimal negative = safeDecimal(snapshot.getNegativeScore());
+        BigDecimal attention = positive.max(negative).multiply(BigDecimal.TEN).setScale(1, RoundingMode.HALF_UP);
+        BigDecimal crowding = crowdingScore(snapshot.getCrowdingRisk());
+        return new KolShadowReportResponse.NarrativeContext(
+                true,
+                snapshot.getThemeTag(),
+                lifecycle(attention, crowding, snapshot.getSourceCount()),
+                attention,
+                crowding,
+                snapshot.getDirection(),
+                safeInt(snapshot.getSourceCount()),
+                safeInt(snapshot.getEvidenceCount()),
+                safeDecimal(snapshot.getNetShadowBoost()),
+                KolSignalContextService.WEAK_SIGNAL_GUARDRAIL
+        );
+    }
+
+    private String lifecycle(BigDecimal attention, BigDecimal crowding, Integer sourceCount) {
+        if (crowding.compareTo(new BigDecimal("8.0")) >= 0) return "CROWDED";
+        if (attention.compareTo(new BigDecimal("8.0")) >= 0 && safeInt(sourceCount) >= 5) return "EXPANDING";
+        if (attention.compareTo(new BigDecimal("6.5")) >= 0 && crowding.compareTo(new BigDecimal("6.5")) < 0) return "EMERGING";
+        if (attention.compareTo(new BigDecimal("4.0")) >= 0) return "EARLY";
+        return "NOISE";
+    }
+
+    private BigDecimal crowdingScore(String crowdingRisk) {
+        String risk = crowdingRisk == null ? "LOW" : crowdingRisk.trim().toUpperCase();
+        BigDecimal base = switch (risk) {
+            case "HIGH" -> new BigDecimal("8.7");
+            case "MEDIUM" -> new BigDecimal("5.2");
+            default -> new BigDecimal("3.1");
+        };
+        return base.setScale(1, RoundingMode.HALF_UP);
+    }
+
+    private int safeInt(Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    private BigDecimal safeDecimal(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     private BigDecimal abs(BigDecimal value) {

@@ -64,7 +64,7 @@ class NarrativeControllerTests {
         var report = new KolShadowReportResponse(date, 1, List.of(
                 new KolShadowReportResponse.Item("2382", "廣達", "AI伺服器",
                         new BigDecimal("8.0000"), new BigDecimal("0.2000"), new BigDecimal("8.2000"),
-                        "LOW", "shadow only; production candidate score and final decision are unchanged")
+                        "LOW", null, "shadow only; production candidate score and final decision are unchanged")
         ), "computedOnDemand=true; not persisted; shadow only; production decision unchanged");
         when(shadow.run(date)).thenReturn(report);
         when(shadow.report(date)).thenReturn(report);

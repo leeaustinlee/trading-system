@@ -75,6 +75,56 @@ class ApiIntegrationTests {
     }
 
     @Test
+    void finalDecisionEvaluateIgnoresNarrativeContextAndKeepsHardGateDecision() throws Exception {
+        String request = """
+                {
+                  "marketGrade": "C",
+                  "decisionLock": "NONE",
+                  "timeDecayStage": "EARLY",
+                  "hasPosition": false,
+                  "candidates": [
+                    {
+                      "stockCode": "4989",
+                      "stockName": "榮科",
+                      "valuationMode": "VALUE_GROWTH",
+                      "entryType": "BREAKOUT",
+                      "riskRewardRatio": 3.0,
+                      "includeInFinalPlan": true,
+                      "mainStream": true,
+                      "falseBreakout": false,
+                      "belowOpen": false,
+                      "belowPrevClose": false,
+                      "nearDayHigh": false,
+                      "stopLossReasonable": true,
+                      "rationale": "Narrative context is strong but market grade C must still rest",
+                      "entryPriceZone": "30.00-31.00",
+                      "stopLossPrice": 28.5,
+                      "takeProfit1": 33.0,
+                      "takeProfit2": 35.0,
+                      "finalRankScore": 9.5,
+                      "isVetoed": false,
+                      "entryTriggered": true,
+                      "narrativeContext": {
+                        "weakSignalOnly": true,
+                        "theme": "PCB/載板/材料",
+                        "attention": 9.5,
+                        "shadowBoost": 0.2,
+                        "guardrail": "shadow only"
+                      }
+                    }
+                  ]
+                }
+                """;
+
+        mockMvc.perform(post("/api/decisions/final/evaluate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.decision").value("REST"))
+                .andExpect(jsonPath("$.selectedStocks").isEmpty());
+    }
+
+    @Test
     void dashboardCurrentShouldReturnResponseEnvelope() throws Exception {
         mockMvc.perform(get("/api/dashboard/current"))
                 .andExpect(status().isOk())

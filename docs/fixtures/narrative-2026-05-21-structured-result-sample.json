@@ -1,0 +1,70 @@
+{
+  "themes": [
+    {
+      "themeTag": "PCB/載板/材料",
+      "direction": "POSITIVE",
+      "confidence": 0.76,
+      "summary": "AI 伺服器高速板材、銅箔與載板材料需求延續；但短線仍需確認量價與風控。",
+      "stocks": [
+        {
+          "symbol": "4989",
+          "stockName": "榮科",
+          "confidence": 0.64,
+          "payload": {
+            "relation": "PCB/銅箔材料相關候選股；僅作敘事對照，不構成推薦",
+            "weakSignalOnly": true,
+            "productionDecisionAllowed": false
+          }
+        }
+      ],
+      "evidence": [
+        {
+          "evidenceType": "REASONED_ANALYSIS",
+          "direction": "POSITIVE",
+          "evidenceText": "AI server 板材、銅箔與高速傳輸需求延續，PCB/載板/材料敘事偏正向。",
+          "confidence": 0.76,
+          "payload": {"sourceWindow": "fixture paragraph 1"}
+        },
+        {
+          "evidenceType": "DIRECT_CLAIM",
+          "direction": "POSITIVE",
+          "evidenceText": "GB200/GB300 等 AI 伺服器平台提高機櫃功耗，電源、散熱與 PCB 材料供應鏈受關注。",
+          "confidence": 0.72,
+          "payload": {"sourceWindow": "fixture paragraph 1"}
+        }
+      ],
+      "payload": {
+        "weakSignalOnly": true,
+        "crowdingCaution": "部分題材股短線漲多；不可因 mention 追價",
+        "notBuySignal": true
+      }
+    },
+    {
+      "themeTag": "AI power/BBU",
+      "direction": "POSITIVE",
+      "confidence": 0.70,
+      "summary": "AI 伺服器功耗提升使電源模組與 BBU 備援電源題材受關注。",
+      "stocks": [],
+      "evidence": [
+        {
+          "evidenceType": "REASONED_ANALYSIS",
+          "direction": "POSITIVE",
+          "evidenceText": "AI 伺服器電源與 BBU 備援電源成為市場敘事焦點，但需避免只因 KOL/news mention 追價。",
+          "confidence": 0.70,
+          "payload": {"sourceWindow": "fixture paragraph 1"}
+        }
+      ],
+      "payload": {
+        "weakSignalOnly": true,
+        "notBuySignal": true
+      }
+    }
+  ],
+  "payload": {
+    "model": "manual-fixture-extraction-v1",
+    "weakSignalOnly": true,
+    "productionDecisionAllowed": false,
+    "blockedUses": ["BUY_SIGNAL", "FINAL_DECISION_OVERRIDE", "LIVE_SCORE_INPUT", "AUTO_TRADING"],
+    "operatorNote": "Structured manually for MVP data-flow validation; do not use as live score."
+  }
+}

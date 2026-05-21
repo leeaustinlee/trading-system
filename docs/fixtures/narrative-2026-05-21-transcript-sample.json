@@ -1,0 +1,17 @@
+{
+  "tradingDate": "2026-05-21",
+  "sourceKey": "narrative-fixture-2026-05-21-ai-power-pcb-v1",
+  "sourceType": "TEST_FIXTURE_MARKET_NARRATIVE",
+  "sourceTitle": "Test fixture: AI power / BBU / PCB 市場敘事摘要（非爬蟲、非ASR）",
+  "rawContent": "【TEST FIXTURE／接近真實市場敘事，非逐字稿】今日市場討論集中在 AI 伺服器電源、BBU 備援電源與高速 PCB/銅箔材料。市場敘事認為，GB200/GB300 等 AI 伺服器平台提高機櫃功耗，電源模組、備援電池、散熱與 PCB 材料供應鏈受到關注。不過多位市場參與者也提醒，部分題材股短線漲多，若只靠 KOL 或新聞提及追價，容易遇到開高走低與籌碼擁擠風險。對 PCB/載板/材料而言，敘事偏正向，重點在 AI server 板材、銅箔與高速傳輸需求延續，但仍需要量價、主流族群與風控條件確認，不能單靠 mention 形成買進訊號。",
+  "payload": {
+    "testFixture": true,
+    "fixtureReason": "No crawler/ASR in this MVP slice; manually curated market narrative sample for end-to-end pipeline validation.",
+    "weakSignalOnly": true,
+    "productionDecisionAllowed": false,
+    "blockedUses": ["BUY_SIGNAL", "FINAL_DECISION_OVERRIDE", "LIVE_SCORE_INPUT", "AUTO_TRADING"],
+    "allowedUses": ["dashboard context", "candidate narrativeContext", "shadow report"],
+    "topics": ["AI power", "BBU", "PCB/載板/材料", "散熱"],
+    "sourceNote": "Fixture text is intentionally marked; it is not a crawler/ASR transcript."
+  }
+}
