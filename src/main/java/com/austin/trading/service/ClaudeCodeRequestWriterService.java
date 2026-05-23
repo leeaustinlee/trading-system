@@ -234,11 +234,14 @@ public class ClaudeCodeRequestWriterService {
                 }
             }
             ArrayNode peerShadow = root.putArray("peer_shadow_candidates");
+            Set<String> emittedPeerShadowSymbols = new LinkedHashSet<>();
             if (peerShadowContexts != null) {
                 for (PeerShadowContext peer : peerShadowContexts) {
                     if (peer == null || peer.symbol() == null || peer.symbol().isBlank()) continue;
+                    String symbol = peer.symbol().trim();
+                    if (allowedUnion.contains(symbol) || !emittedPeerShadowSymbols.add(symbol)) continue;
                     ObjectNode item = peerShadow.addObject();
-                    item.put("symbol", peer.symbol().trim());
+                    item.put("symbol", symbol);
                     if (peer.role() != null) item.put("role", peer.role());
                     if (peer.leaderSymbol() != null) item.put("leader_symbol", peer.leaderSymbol());
                     if (peer.themeTag() != null) item.put("theme_tag", peer.themeTag());
@@ -247,8 +250,9 @@ public class ClaudeCodeRequestWriterService {
                     if (peer.evidenceSummary() != null) item.put("evidence_summary", peer.evidenceSummary());
                 }
             }
+            root.put("peer_shadow_tradable_false_allowed", true);
             root.put("peer_shadow_contract",
-                    "peer_shadow_candidates are not tradable candidates; they must not enter ENTER/FinalDecision/ranking and must_not_expand_allowed_symbols=true keeps them out of allowed_symbols unless separately present as tradable/leadership context.");
+                    "peer_shadow_candidates are not tradable candidates; they must not enter ENTER/FinalDecision/ranking and must_not_expand_allowed_symbols=true keeps them disjoint from allowed_symbols/tradable_candidate_symbols.");
 
             ArrayNode allowed = root.putArray("allowed_symbols");
             allowedUnion.forEach(allowed::add);

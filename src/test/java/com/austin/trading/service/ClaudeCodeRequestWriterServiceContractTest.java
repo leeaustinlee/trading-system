@@ -138,10 +138,20 @@ class ClaudeCodeRequestWriterServiceContractTest {
                         "POSTMARKET super_strong_5 retained for next-phase leadership validation",
                         List.of("MARKET_LEADERSHIP", "THEME_VALIDATION", "PEER_DISCOVERY")
                 )),
-                List.of(new ClaudeCodeRequestWriterService.PeerShadowContext(
-                        "2492", "SECOND_LEADER", "2327", "MLCC", false,
-                        new java.math.BigDecimal("9.20"), "同 themeTag + hot stock overlap"
-                )),
+                List.of(
+                        new ClaudeCodeRequestWriterService.PeerShadowContext(
+                                "2492", "SECOND_LEADER", "2327", "MLCC", false,
+                                new java.math.BigDecimal("9.20"), "同 themeTag + hot stock overlap"
+                        ),
+                        new ClaudeCodeRequestWriterService.PeerShadowContext(
+                                "2458", "SECOND_LEADER", "2327", "MLCC", false,
+                                new java.math.BigDecimal("8.20"), "already formal tradable candidate"
+                        ),
+                        new ClaudeCodeRequestWriterService.PeerShadowContext(
+                                "2327", "THEME_LEADER", "2327", "MLCC", false,
+                                new java.math.BigDecimal("10.00"), "already leadership/allowed symbol"
+                        )
+                ),
                 "{\"source\":\"premarket_data_prep\"}"
         );
 
@@ -163,6 +173,10 @@ class ClaudeCodeRequestWriterServiceContractTest {
                 .containsExactly("2458", "2327");
         assertThat(root.path("allowed_symbols")).extracting(JsonNode::asText)
                 .doesNotContain("2492");
+        assertThat(root.path("peer_shadow_candidates")).extracting(node -> node.path("symbol").asText())
+                .doesNotContain("2458", "2327");
+        assertThat(root.path("peer_shadow_tradable_false_allowed").asBoolean()).isTrue();
+        assertThat(root.path("leader_tradable_false_allowed").asBoolean()).isTrue();
         assertThat(root.path("must_not_expand_allowed_symbols").asBoolean()).isTrue();
         assertThat(root.path("peer_shadow_contract").asText())
                 .contains("not tradable candidates")
