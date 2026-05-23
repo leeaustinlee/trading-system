@@ -19,6 +19,21 @@ public record CandidateResponse(
         // ── Phase 1 新增欄位 ────────────────────────────────
         String themeTag,
         String sector,
+        // ── MVP-4 Theme-first / role-aware shadow integration ─────────────
+        String candidateRole,
+        BigDecimal themeImportanceScore,
+        BigDecimal tradableScore,
+        BigDecimal shadowRankScore,
+        String themeLeaderSymbol,
+        Boolean isThemeLeader,
+        Boolean leaderTradable,
+        String leaderRetentionReason,
+        String themeTraceId,
+        Integer themeRank,
+        BigDecimal finalThemeScore,
+        BigDecimal marketBehaviorScore,
+        BigDecimal themeHeatScore,
+        BigDecimal themeContinuationScore,
         BigDecimal javaStructureScore,
         BigDecimal claudeScore,
         BigDecimal codexScore,
@@ -29,4 +44,36 @@ public record CandidateResponse(
         BigDecimal consensusScore,
         BigDecimal disagreementPenalty
 ) {
+    public CandidateResponse(
+            LocalDate tradingDate,
+            String symbol,
+            String stockName,
+            BigDecimal score,
+            String reason,
+            String valuationMode,
+            String entryPriceZone,
+            BigDecimal riskRewardRatio,
+            Boolean includeInFinalPlan,
+            BigDecimal stopLossPrice,
+            BigDecimal takeProfit1,
+            BigDecimal takeProfit2,
+            String themeTag,
+            String sector,
+            BigDecimal javaStructureScore,
+            BigDecimal claudeScore,
+            BigDecimal codexScore,
+            BigDecimal finalRankScore,
+            Boolean isVetoed,
+            BigDecimal aiWeightedScore,
+            BigDecimal consensusScore,
+            BigDecimal disagreementPenalty
+    ) {
+        this(tradingDate, symbol, stockName, score, reason, valuationMode, entryPriceZone,
+                riskRewardRatio, includeInFinalPlan, stopLossPrice, takeProfit1, takeProfit2,
+                themeTag, sector,
+                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null,
+                javaStructureScore, claudeScore, codexScore, finalRankScore, isVetoed,
+                aiWeightedScore, consensusScore, disagreementPenalty);
+    }
 }

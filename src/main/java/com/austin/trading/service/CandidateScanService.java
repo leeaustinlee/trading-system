@@ -29,9 +29,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Comparator;
 import java.util.stream.Collectors;
 
 @Service
@@ -39,6 +41,7 @@ public class CandidateScanService {
 
     private static final Logger log = LoggerFactory.getLogger(CandidateScanService.class);
     private static final ObjectMapper PAYLOAD_MAPPER = new ObjectMapper();
+    public static final int THEME_FIRST_UNIVERSE_LIMIT = 10;
 
     private final CandidateStockRepository candidateStockRepository;
     private final StockEvaluationRepository stockEvaluationRepository;
@@ -409,6 +412,15 @@ public class CandidateScanService {
             if (item.reason()      != null) entity.setReason(item.reason());
             if (item.themeTag()    != null) entity.setThemeTag(item.themeTag());
             if (item.sector()      != null) entity.setSector(item.sector());
+            if (item.candidateRole() != null) entity.setCandidateRole(item.candidateRole());
+            if (item.themeImportanceScore() != null) entity.setThemeImportanceScore(item.themeImportanceScore());
+            if (item.tradableScore() != null) entity.setTradableScore(item.tradableScore());
+            if (item.shadowRankScore() != null) entity.setShadowRankScore(item.shadowRankScore());
+            if (item.themeLeaderSymbol() != null) entity.setThemeLeaderSymbol(item.themeLeaderSymbol());
+            if (item.isThemeLeader() != null) entity.setIsThemeLeader(item.isThemeLeader());
+            if (item.leaderTradable() != null) entity.setLeaderTradable(item.leaderTradable());
+            if (item.leaderRetentionReason() != null) entity.setLeaderRetentionReason(item.leaderRetentionReason());
+            if (item.themeTraceId() != null) entity.setThemeTraceId(item.themeTraceId());
             if (item.payloadJson() != null) {
                 String payloadJson = item.payloadJson();
                 if (narrativeCandidateContextService != null) {
@@ -581,6 +593,93 @@ public class CandidateScanService {
                 .orElse(List.of());
     }
 
+    public List<CandidateResponse> getThemeFirstCurrentCandidates(int limit) {
+        return getThemeFirstCandidatesByDate(resolveDbLatestTradingDate(), limit);
+    }
+
+    public List<CandidateResponse> getThemeFirstCandidatesByDate(LocalDate tradingDate, int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, THEME_FIRST_UNIVERSE_LIMIT));
+        List<CandidateStockEntity> candidates = candidateStockRepository.findByTradingDateOrderByScoreDesc(
+                tradingDate,
+                PageRequest.of(0, Math.max(safeLimit, THEME_FIRST_UNIVERSE_LIMIT * 2))
+        );
+        return mergeWithEvaluation(candidates, tradingDate).stream()
+                .sorted(themeFirstComparator())
+                .limit(safeLimit)
+                .toList();
+    }
+
+    public Map<String, Object> buildThemeFirstReplay(LocalDate tradingDate, List<CandidateResponse> themeFirst) {
+        List<CandidateResponse> baseline = tradingDate == null ? List.of() : getCandidatesByDate(tradingDate, 5);
+        Map<String, Object> replay = new LinkedHashMap<>();
+        replay.put("tradingDate", tradingDate);
+        replay.put("mode", "MVP-4_THEME_FIRST_SHADOW");
+        replay.put("shadowFirst", true);
+        replay.put("safetyBoundary", "FinalDecision/BUY/SELL/ENTER/risk gates unchanged; scores are ranking/explainability only");
+        replay.put("baseline5", baseline);
+        replay.put("themeFirst10", themeFirst);
+        replay.put("baselineCount", baseline.size());
+        replay.put("themeFirstCount", themeFirst.size());
+        replay.put("candidateRoles", themeFirst.stream().collect(Collectors.groupingBy(
+                c -> nullSafe(c.candidateRole(), "UNKNOWN"), LinkedHashMap::new, Collectors.counting())));
+        replay.put("mainstreamThemeRecall", ratio(
+                themeFirst.stream().map(CandidateResponse::themeTag).filter(t -> t != null && !t.isBlank()).distinct().count(),
+                Math.max(1, baseline.stream().map(CandidateResponse::themeTag).filter(t -> t != null && !t.isBlank()).distinct().count())));
+        replay.put("leaderRetentionRate", ratio(themeFirst.stream().filter(c -> Boolean.TRUE.equals(c.isThemeLeader())).count(),
+                Math.max(1, themeFirst.size())));
+        replay.put("peerDiscoveryHitRate", ratio(themeFirst.stream().filter(c -> c.themeLeaderSymbol() != null && !Boolean.TRUE.equals(c.isThemeLeader())).count(),
+                Math.max(1, themeFirst.size())));
+        replay.put("candidateDiversification", themeFirst.stream().map(c -> nullSafe(c.candidateRole(), "UNKNOWN")).distinct().count());
+        replay.put("overlapWithStrongThemes", themeFirst.stream().filter(c -> c.themeRank() != null && c.themeRank() <= 5).count());
+        replay.put("falsePositiveRate", null);
+        replay.put("excessReturnT3", null);
+        replay.put("excessReturnT5", null);
+        return replay;
+    }
+
+    public Map<String, Object> getThemeFirstTrace(String traceId) {
+        List<CandidateStockEntity> rows = candidateStockRepository.findByThemeTraceIdOrderByTradingDateDescScoreDesc(traceId);
+        List<CandidateResponse> candidates = mergeWithEvaluation(rows, null);
+        Map<String, Object> trace = new LinkedHashMap<>();
+        trace.put("traceId", traceId);
+        trace.put("mode", "MVP-4_THEME_FIRST_SHADOW");
+        trace.put("shadowFirst", true);
+        trace.put("candidates", candidates);
+        return trace;
+    }
+
+    private BigDecimal ratio(long numerator, long denominator) {
+        if (denominator <= 0) return BigDecimal.ZERO;
+        return BigDecimal.valueOf(numerator).divide(BigDecimal.valueOf(denominator), 4, java.math.RoundingMode.HALF_UP);
+    }
+
+    private Comparator<CandidateResponse> themeFirstComparator() {
+        return Comparator
+                .comparingInt((CandidateResponse c) -> rolePriority(c.candidateRole()))
+                .thenComparing((CandidateResponse c) -> c.themeRank() == null ? Integer.MAX_VALUE : c.themeRank())
+                .thenComparing((CandidateResponse c) -> nullSafe(c.themeImportanceScore(), BigDecimal.ZERO), Comparator.reverseOrder())
+                .thenComparing((CandidateResponse c) -> nullSafe(c.tradableScore(), BigDecimal.ZERO), Comparator.reverseOrder())
+                .thenComparing((CandidateResponse c) -> nullSafe(c.shadowRankScore(), BigDecimal.ZERO), Comparator.reverseOrder())
+                .thenComparing((CandidateResponse c) -> nullSafe(c.finalRankScore(), BigDecimal.ZERO), Comparator.reverseOrder())
+                .thenComparing((CandidateResponse c) -> nullSafe(c.score(), BigDecimal.ZERO), Comparator.reverseOrder())
+                .thenComparing(CandidateResponse::symbol);
+    }
+
+    private int rolePriority(String role) {
+        if (role == null) return 99;
+        return switch (role) {
+            case "THEME_LEADER" -> 0;
+            case "SECOND_LEADER" -> 1;
+            case "TRADABLE_PULLBACK" -> 2;
+            case "BREAKOUT_CANDIDATE" -> 3;
+            case "LOW_BASE_FOLLOWER" -> 4;
+            case "CHANNEL_DISTRIBUTOR" -> 5;
+            case "SENTIMENT_STOCK" -> 6;
+            case "WATCH_ONLY" -> 7;
+            default -> 50;
+        };
+    }
+
     /** 最新候選清單即時報價（給 Dashboard/Candidate UI 使用）。 */
     public List<LiveQuoteResponse> getLatestLiveQuotes() {
         return getLiveQuotesForCandidates(getLatestCandidates(20));
@@ -627,14 +726,17 @@ public class CandidateScanService {
 
     private List<CandidateResponse> mergeWithEvaluation(List<CandidateStockEntity> candidates, LocalDate filterDate) {
         Map<String, StockEvaluationEntity> evaluationBySymbol = new HashMap<>();
+        Map<String, ThemeSnapshotEntity> themeByDateAndTag = new HashMap<>();
         if (filterDate != null) {
             for (StockEvaluationEntity e : stockEvaluationRepository.findByTradingDate(filterDate)) {
                 evaluationBySymbol.put(filterDate + ":" + e.getSymbol(), e);
             }
+            loadThemeSnapshots(filterDate, themeByDateAndTag);
         } else {
             Map<LocalDate, List<StockEvaluationEntity>> grouped = new HashMap<>();
             for (CandidateStockEntity c : candidates) {
                 grouped.computeIfAbsent(c.getTradingDate(), d -> stockEvaluationRepository.findByTradingDate(d));
+                loadThemeSnapshots(c.getTradingDate(), themeByDateAndTag);
             }
             for (Map.Entry<LocalDate, List<StockEvaluationEntity>> entry : grouped.entrySet()) {
                 for (StockEvaluationEntity e : entry.getValue()) {
@@ -644,34 +746,84 @@ public class CandidateScanService {
         }
 
         return candidates.stream()
-                .map(c -> {
-                    StockEvaluationEntity eval = evaluationBySymbol.get(c.getTradingDate() + ":" + c.getSymbol());
-                    return new CandidateResponse(
-                            c.getTradingDate(),
-                            c.getSymbol(),
-                            c.getStockName(),
-                            c.getScore(),
-                            c.getReason(),
-                            eval == null ? null : eval.getValuationMode(),
-                            eval == null ? null : eval.getEntryPriceZone(),
-                            eval == null ? null : eval.getRiskRewardRatio(),
-                            eval == null ? null : eval.getIncludeInFinalPlan(),
-                            eval == null ? null : eval.getStopLossPrice(),
-                            eval == null ? null : eval.getTakeProfit1(),
-                            eval == null ? null : eval.getTakeProfit2(),
-                            c.getThemeTag(),
-                            c.getSector(),
-                            eval == null ? null : eval.getJavaStructureScore(),
-                            eval == null ? null : eval.getClaudeScore(),
-                            eval == null ? null : eval.getCodexScore(),
-                            eval == null ? null : eval.getFinalRankScore(),
-                            eval == null ? null : eval.getIsVetoed(),
-                            eval == null ? null : eval.getAiWeightedScore(),
-                            eval == null ? null : eval.getConsensusScore(),
-                            eval == null ? null : eval.getDisagreementPenalty()
-                    );
-                })
+                .map(c -> toCandidateResponse(c,
+                        evaluationBySymbol.get(c.getTradingDate() + ":" + c.getSymbol()),
+                        themeSnapshotFor(c, themeByDateAndTag)))
                 .toList();
+    }
+
+    private void loadThemeSnapshots(LocalDate tradingDate, Map<String, ThemeSnapshotEntity> out) {
+        for (ThemeSnapshotEntity t : themeSnapshotRepository.findByTradingDateOrderByRankingOrderAsc(tradingDate)) {
+            out.put(tradingDate + ":" + t.getThemeTag(), t);
+        }
+    }
+
+    private ThemeSnapshotEntity themeSnapshotFor(CandidateStockEntity c, Map<String, ThemeSnapshotEntity> themeByDateAndTag) {
+        if (c.getThemeTag() == null) return null;
+        return themeByDateAndTag.get(c.getTradingDate() + ":" + c.getThemeTag());
+    }
+
+    private CandidateResponse toCandidateResponse(CandidateStockEntity c, StockEvaluationEntity eval, ThemeSnapshotEntity theme) {
+        return new CandidateResponse(
+                c.getTradingDate(),
+                c.getSymbol(),
+                c.getStockName(),
+                c.getScore(),
+                c.getReason(),
+                eval == null ? null : eval.getValuationMode(),
+                eval == null ? null : eval.getEntryPriceZone(),
+                eval == null ? null : eval.getRiskRewardRatio(),
+                eval == null ? null : eval.getIncludeInFinalPlan(),
+                eval == null ? null : eval.getStopLossPrice(),
+                eval == null ? null : eval.getTakeProfit1(),
+                eval == null ? null : eval.getTakeProfit2(),
+                c.getThemeTag(),
+                c.getSector(),
+                c.getCandidateRole() != null ? c.getCandidateRole() : inferCandidateRole(c),
+                c.getThemeImportanceScore() != null ? c.getThemeImportanceScore() : (theme == null ? null : theme.getFinalThemeScore()),
+                c.getTradableScore() != null ? c.getTradableScore() : deriveTradableScore(c, eval),
+                c.getShadowRankScore() != null ? c.getShadowRankScore() : c.getScore(),
+                c.getThemeLeaderSymbol(),
+                c.getIsThemeLeader(),
+                c.getLeaderTradable(),
+                c.getLeaderRetentionReason(),
+                c.getThemeTraceId(),
+                theme == null ? null : theme.getRankingOrder(),
+                theme == null ? null : theme.getFinalThemeScore(),
+                theme == null ? null : theme.getMarketBehaviorScore(),
+                theme == null ? null : theme.getThemeHeatScore(),
+                theme == null ? null : theme.getThemeContinuationScore(),
+                eval == null ? null : eval.getJavaStructureScore(),
+                eval == null ? null : eval.getClaudeScore(),
+                eval == null ? null : eval.getCodexScore(),
+                eval == null ? null : eval.getFinalRankScore(),
+                eval == null ? null : eval.getIsVetoed(),
+                eval == null ? null : eval.getAiWeightedScore(),
+                eval == null ? null : eval.getConsensusScore(),
+                eval == null ? null : eval.getDisagreementPenalty()
+        );
+    }
+
+    private String inferCandidateRole(CandidateStockEntity c) {
+        String reason = c.getReason() == null ? "" : c.getReason().toLowerCase(Locale.ROOT);
+        if (Boolean.TRUE.equals(c.getIsThemeLeader())) return "THEME_LEADER";
+        if (reason.contains("低基期") || reason.contains("low-base")) return "LOW_BASE_FOLLOWER";
+        if (reason.contains("通路") || reason.contains("distributor")) return "CHANNEL_DISTRIBUTOR";
+        if (reason.contains("回測") || reason.contains("pullback")) return "TRADABLE_PULLBACK";
+        if (reason.contains("突破") || reason.contains("breakout")) return "BREAKOUT_CANDIDATE";
+        if (reason.contains("情緒") || reason.contains("sentiment")) return "SENTIMENT_STOCK";
+        return c.getThemeTag() == null ? "WATCH_ONLY" : "BREAKOUT_CANDIDATE";
+    }
+
+    private BigDecimal deriveTradableScore(CandidateStockEntity c, StockEvaluationEntity eval) {
+        BigDecimal score = c.getScore() == null ? BigDecimal.ZERO : c.getScore();
+        if (eval != null && eval.getRiskRewardRatio() != null) {
+            score = score.add(eval.getRiskRewardRatio());
+        }
+        if (eval != null && Boolean.TRUE.equals(eval.getIsVetoed())) {
+            score = score.subtract(BigDecimal.valueOf(3));
+        }
+        return score.max(BigDecimal.ZERO);
     }
 
     private FinalDecisionCandidateRequest toFinalDecisionCandidate(
@@ -778,17 +930,9 @@ public class CandidateScanService {
 
         CandidateStockEntity cand = candidateStockRepository
                 .findByTradingDateAndSymbol(today, symbol).orElse(null);
-        return cand == null ? null : new CandidateResponse(
-                cand.getTradingDate(), cand.getSymbol(), cand.getStockName(),
-                cand.getScore(), cand.getReason(),
-                eval.getValuationMode(), eval.getEntryPriceZone(), eval.getRiskRewardRatio(),
-                eval.getIncludeInFinalPlan(), eval.getStopLossPrice(),
-                eval.getTakeProfit1(), eval.getTakeProfit2(),
-                cand.getThemeTag(), cand.getSector(),
-                eval.getJavaStructureScore(), eval.getClaudeScore(),
-                eval.getCodexScore(), eval.getFinalRankScore(), eval.getIsVetoed(),
-                eval.getAiWeightedScore(), eval.getConsensusScore(), eval.getDisagreementPenalty()
-        );
+        ThemeSnapshotEntity theme = cand == null ? null : (cand.getThemeTag() == null ? null : themeSnapshotRepository
+                .findByTradingDateAndThemeTag(cand.getTradingDate(), cand.getThemeTag()).orElse(null));
+        return cand == null ? null : toCandidateResponse(cand, eval, theme);
     }
 
     /**
@@ -807,6 +951,15 @@ public class CandidateScanService {
         if (req.stockName() != null) cand.setStockName(req.stockName());
         if (req.themeTag()  != null) cand.setThemeTag(req.themeTag());
         if (req.sector()    != null) cand.setSector(req.sector());
+        if (req.candidateRole() != null) cand.setCandidateRole(req.candidateRole());
+        if (req.themeImportanceScore() != null) cand.setThemeImportanceScore(req.themeImportanceScore());
+        if (req.tradableScore() != null) cand.setTradableScore(req.tradableScore());
+        if (req.shadowRankScore() != null) cand.setShadowRankScore(req.shadowRankScore());
+        if (req.themeLeaderSymbol() != null) cand.setThemeLeaderSymbol(req.themeLeaderSymbol());
+        if (req.isThemeLeader() != null) cand.setIsThemeLeader(req.isThemeLeader());
+        if (req.leaderTradable() != null) cand.setLeaderTradable(req.leaderTradable());
+        if (req.leaderRetentionReason() != null) cand.setLeaderRetentionReason(req.leaderRetentionReason());
+        if (req.themeTraceId() != null) cand.setThemeTraceId(req.themeTraceId());
         candidateStockRepository.save(cand);
 
         StockEvaluationEntity eval = stockEvaluationRepository
@@ -826,17 +979,9 @@ public class CandidateScanService {
         if (req.includeInFinalPlan()!= null) eval.setIncludeInFinalPlan(req.includeInFinalPlan());
         stockEvaluationRepository.save(eval);
 
-        return new CandidateResponse(
-                cand.getTradingDate(), cand.getSymbol(), cand.getStockName(),
-                cand.getScore(), cand.getReason(),
-                eval.getValuationMode(), eval.getEntryPriceZone(), eval.getRiskRewardRatio(),
-                eval.getIncludeInFinalPlan(), eval.getStopLossPrice(),
-                eval.getTakeProfit1(), eval.getTakeProfit2(),
-                cand.getThemeTag(), cand.getSector(),
-                eval.getJavaStructureScore(), eval.getClaudeScore(),
-                eval.getCodexScore(), eval.getFinalRankScore(), eval.getIsVetoed(),
-                eval.getAiWeightedScore(), eval.getConsensusScore(), eval.getDisagreementPenalty()
-        );
+        ThemeSnapshotEntity theme = cand.getThemeTag() == null ? null : themeSnapshotRepository
+                .findByTradingDateAndThemeTag(cand.getTradingDate(), cand.getThemeTag()).orElse(null);
+        return toCandidateResponse(cand, eval, theme);
     }
 
     private <T> T nullSafe(T value, T fallback) {

@@ -463,8 +463,24 @@ public class PostmarketDataPrepJob {
         var scoringUniverse = root.putObject("scoringUniverse");
         scoringUniverse.put("count", scoringSymbols.size());
         scoringUniverse.put("maxSymbols", 10);
+        scoringUniverse.put("universeContract", "Candidate universe 10; FinalDecision max entries/risk gates unchanged; theme/tradable/shadow scores are shadow/explainability only.");
         var symbols = scoringUniverse.putArray("symbols");
         scoringSymbols.forEach(symbols::add);
+        var candidateRoles = scoringUniverse.putArray("candidate_roles");
+        for (CandidateResponse candidate : universe.candidates()) {
+            var item = candidateRoles.addObject();
+            item.put("symbol", candidate.symbol());
+            if (candidate.stockName() != null) item.put("stockName", candidate.stockName());
+            if (candidate.themeTag() != null) item.put("themeTag", candidate.themeTag());
+            if (candidate.candidateRole() != null) item.put("candidateRole", candidate.candidateRole());
+            if (candidate.themeImportanceScore() != null) item.put("themeImportanceScore", candidate.themeImportanceScore());
+            if (candidate.tradableScore() != null) item.put("tradableScore", candidate.tradableScore());
+            if (candidate.shadowRankScore() != null) item.put("shadowRankScore", candidate.shadowRankScore());
+            if (candidate.themeLeaderSymbol() != null) item.put("themeLeaderSymbol", candidate.themeLeaderSymbol());
+            if (candidate.isThemeLeader() != null) item.put("isThemeLeader", candidate.isThemeLeader());
+            if (candidate.leaderTradable() != null) item.put("leaderTradable", candidate.leaderTradable());
+            if (candidate.themeTraceId() != null) item.put("themeTraceId", candidate.themeTraceId());
+        }
         var superStrong = scoringUniverse.putArray("superStrongSymbols");
         universe.superStrongSymbols().forEach(superStrong::add);
         var finalCandidates = scoringUniverse.putArray("finalCandidateSymbols");

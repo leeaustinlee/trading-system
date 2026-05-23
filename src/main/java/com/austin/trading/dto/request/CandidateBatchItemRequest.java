@@ -30,6 +30,39 @@ public record CandidateBatchItemRequest(
         BigDecimal takeProfit1,
         BigDecimal takeProfit2,
         BigDecimal riskRewardRatio,
-        Boolean includeInFinalPlan
+        Boolean includeInFinalPlan,
+
+        // ── MVP-4 Theme-first / role-aware shadow integration（選填）── //
+        String candidateRole,
+        BigDecimal themeImportanceScore,
+        BigDecimal tradableScore,
+        BigDecimal shadowRankScore,
+        String themeLeaderSymbol,
+        Boolean isThemeLeader,
+        Boolean leaderTradable,
+        String leaderRetentionReason,
+        String themeTraceId
 ) {
+    public CandidateBatchItemRequest(
+            LocalDate tradingDate,
+            String symbol,
+            String stockName,
+            BigDecimal score,
+            String reason,
+            String themeTag,
+            String sector,
+            String payloadJson,
+            String valuationMode,
+            String entryPriceZone,
+            BigDecimal stopLossPrice,
+            BigDecimal takeProfit1,
+            BigDecimal takeProfit2,
+            BigDecimal riskRewardRatio,
+            Boolean includeInFinalPlan
+    ) {
+        this(tradingDate, symbol, stockName, score, reason, themeTag, sector, payloadJson,
+                valuationMode, entryPriceZone, stopLossPrice, takeProfit1, takeProfit2,
+                riskRewardRatio, includeInFinalPlan,
+                null, null, null, null, null, null, null, null, null);
+    }
 }

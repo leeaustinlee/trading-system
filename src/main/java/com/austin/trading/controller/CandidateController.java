@@ -61,6 +61,25 @@ public class CandidateController {
         return candidateScanService.getLatestCandidates(limit);
     }
 
+    @GetMapping("/theme-first/current")
+    public Map<String, Object> getThemeFirstCurrent(@RequestParam(defaultValue = "10") int limit) {
+        List<CandidateResponse> candidates = candidateScanService.getThemeFirstCurrentCandidates(limit);
+        return candidateScanService.buildThemeFirstReplay(candidates.isEmpty() ? null : candidates.get(0).tradingDate(), candidates);
+    }
+
+    @GetMapping("/theme-first/replay")
+    public Map<String, Object> getThemeFirstReplay(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        return candidateScanService.buildThemeFirstReplay(date, candidateScanService.getThemeFirstCandidatesByDate(date, limit));
+    }
+
+    @GetMapping("/theme-first/trace/{traceId}")
+    public Map<String, Object> getThemeFirstTrace(@PathVariable String traceId) {
+        return candidateScanService.getThemeFirstTrace(traceId);
+    }
+
     @GetMapping("/today")
     public List<CandidateResponse> getToday(@RequestParam(defaultValue = "20") int limit) {
         return candidateScanService.getTodayCandidates(limit);

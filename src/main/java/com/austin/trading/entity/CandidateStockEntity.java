@@ -35,6 +35,33 @@ public class CandidateStockEntity {
     @Column(name = "sector", length = 100)
     private String sector;
 
+    @Column(name = "candidate_role", length = 40)
+    private String candidateRole;
+
+    @Column(name = "theme_importance_score", precision = 8, scale = 4)
+    private BigDecimal themeImportanceScore;
+
+    @Column(name = "tradable_score", precision = 8, scale = 4)
+    private BigDecimal tradableScore;
+
+    @Column(name = "shadow_rank_score", precision = 8, scale = 4)
+    private BigDecimal shadowRankScore;
+
+    @Column(name = "theme_leader_symbol", length = 20)
+    private String themeLeaderSymbol;
+
+    @Column(name = "is_theme_leader")
+    private Boolean isThemeLeader;
+
+    @Column(name = "leader_tradable")
+    private Boolean leaderTradable;
+
+    @Column(name = "leader_retention_reason", length = 500)
+    private String leaderRetentionReason;
+
+    @Column(name = "theme_trace_id", length = 80)
+    private String themeTraceId;
+
     @Column(name = "payload_json", columnDefinition = "json")
     private String payloadJson;
 
@@ -63,6 +90,24 @@ public class CandidateStockEntity {
     public void setThemeTag(String themeTag) { this.themeTag = themeTag; }
     public String getSector() { return sector; }
     public void setSector(String sector) { this.sector = sector; }
+    public String getCandidateRole() { return candidateRole; }
+    public void setCandidateRole(String candidateRole) { this.candidateRole = candidateRole; }
+    public BigDecimal getThemeImportanceScore() { return themeImportanceScore; }
+    public void setThemeImportanceScore(BigDecimal themeImportanceScore) { this.themeImportanceScore = themeImportanceScore; }
+    public BigDecimal getTradableScore() { return tradableScore; }
+    public void setTradableScore(BigDecimal tradableScore) { this.tradableScore = tradableScore; }
+    public BigDecimal getShadowRankScore() { return shadowRankScore; }
+    public void setShadowRankScore(BigDecimal shadowRankScore) { this.shadowRankScore = shadowRankScore; }
+    public String getThemeLeaderSymbol() { return themeLeaderSymbol; }
+    public void setThemeLeaderSymbol(String themeLeaderSymbol) { this.themeLeaderSymbol = themeLeaderSymbol; }
+    public Boolean getIsThemeLeader() { return isThemeLeader; }
+    public void setIsThemeLeader(Boolean themeLeader) { isThemeLeader = themeLeader; }
+    public Boolean getLeaderTradable() { return leaderTradable; }
+    public void setLeaderTradable(Boolean leaderTradable) { this.leaderTradable = leaderTradable; }
+    public String getLeaderRetentionReason() { return leaderRetentionReason; }
+    public void setLeaderRetentionReason(String leaderRetentionReason) { this.leaderRetentionReason = leaderRetentionReason; }
+    public String getThemeTraceId() { return themeTraceId; }
+    public void setThemeTraceId(String themeTraceId) { this.themeTraceId = themeTraceId; }
     public String getPayloadJson() { return payloadJson; }
     public void setPayloadJson(String payloadJson) { this.payloadJson = payloadJson; }
     public boolean isMomentumCandidate() { return isMomentumCandidate; }
