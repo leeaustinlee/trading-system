@@ -3,13 +3,16 @@ package com.austin.trading.controller;
 import com.austin.trading.dto.request.ClaudeThemeScoreRequest;
 import com.austin.trading.dto.response.StockThemeMappingResponse;
 import com.austin.trading.dto.response.ThemeExposureResponse;
+import com.austin.trading.dto.response.ThemeLeadershipSnapshotResponse;
 import com.austin.trading.dto.response.ThemeManualReviewQueueResponse;
 import com.austin.trading.dto.response.ThemeMappingObservabilityResponse;
 import com.austin.trading.dto.response.ThemeSnapshotResponse;
 import com.austin.trading.dto.response.ThemeTaxonomyResponse;
 import com.austin.trading.service.ThemeExposureService;
+import com.austin.trading.service.ThemeLeadershipObservabilityService;
 import com.austin.trading.service.ThemeObservabilityService;
 import com.austin.trading.service.ThemeService;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -27,13 +30,16 @@ public class ThemeController {
     private final ThemeService themeService;
     private final ThemeExposureService themeExposureService;
     private final ThemeObservabilityService themeObservabilityService;
+    private final ThemeLeadershipObservabilityService themeLeadershipObservabilityService;
 
     public ThemeController(ThemeService themeService,
                             ThemeExposureService themeExposureService,
-                            ThemeObservabilityService themeObservabilityService) {
+                            ThemeObservabilityService themeObservabilityService,
+                            ThemeLeadershipObservabilityService themeLeadershipObservabilityService) {
         this.themeService = themeService;
         this.themeExposureService = themeExposureService;
         this.themeObservabilityService = themeObservabilityService;
+        this.themeLeadershipObservabilityService = themeLeadershipObservabilityService;
     }
 
     /**
@@ -51,6 +57,40 @@ public class ThemeController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return themeService.getSnapshotsByDate(date != null ? date : LocalDate.now());
+    }
+
+    /**
+     * Theme-first MVP-1A：POST /api/themes/leadership/snapshots
+     * Persist read-only observability rows from a market-breadth scan payload.
+     * This does not call FinalDecisionEngine and does not affect candidate ranking.
+     */
+    @PostMapping("/leadership/snapshots")
+    public ThemeLeadershipSnapshotResponse generateLeadershipSnapshot(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(defaultValue = "POSTMARKET") String sourcePhase,
+            @RequestBody JsonNode payload) {
+        return themeLeadershipObservabilityService.generateSnapshot(
+                date != null ? date : LocalDate.now(), sourcePhase, payload);
+    }
+
+    /** GET /api/themes/leadership/snapshots?date=2026-05-22&sourcePhase=POSTMARKET */
+    @GetMapping("/leadership/snapshots")
+    public ThemeLeadershipSnapshotResponse leadershipSnapshot(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) String sourcePhase,
+            @RequestParam(defaultValue = "50") int limit) {
+        return themeLeadershipObservabilityService.getSnapshot(date != null ? date : LocalDate.now(), sourcePhase, limit);
+    }
+
+    /** GET /api/themes/leadership/divergence?date=2026-05-22 */
+    @GetMapping("/leadership/divergence")
+    public ThemeLeadershipSnapshotResponse leadershipDivergence(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(defaultValue = "50") int limit) {
+        return themeLeadershipObservabilityService.getDivergence(date != null ? date : LocalDate.now(), limit);
     }
 
     /**

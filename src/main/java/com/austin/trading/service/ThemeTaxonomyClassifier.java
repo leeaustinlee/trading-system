@@ -28,6 +28,9 @@ public final class ThemeTaxonomyClassifier {
     public static final String DEFENSE = "DEFENSE";
     public static final String BIOTECH = "BIOTECH";
     public static final String ELECTRONICS_COMPONENTS = "ELECTRONICS_COMPONENTS";
+    public static final String PASSIVE_COMPONENTS = "PASSIVE_COMPONENTS";
+    public static final String MLCC = "MLCC";
+    public static final String ALUMINUM_CAPACITOR = "ALUMINUM_CAPACITOR";
     public static final String UNRESOLVED_OTHER = "UNRESOLVED_OTHER";
     public static final String OTHER = "OTHER";
     public static final String UNKNOWN = "UNKNOWN";
@@ -51,6 +54,9 @@ public final class ThemeTaxonomyClassifier {
         }
         if (containsAny(tag, "記憶體", "儲存", "DRAM", "NAND", "SSD")) {
             return MEMORY;
+        }
+        if (containsAny(tag, "被動元件", "MLCC", "電阻", "電容", "鋁電", "鋁質電容", "固態電容", "電感", "磁性元件", "奇力新", "國巨", "華新科", "禾伸堂", "日電貿", "信昌電", "凱美", "立隆電", "金山電", "九豪", "千如", "美磊", "臺慶科", "台慶科")) {
+            return ELECTRONICS_COMPONENTS;
         }
         if (containsAny(tag, "半導體", "IC", "晶圓", "封測", "ASIC")) {
             return SEMICONDUCTOR;
@@ -96,7 +102,10 @@ public final class ThemeTaxonomyClassifier {
         String key = ((symbol == null ? "" : symbol) + " " + (stockName == null ? "" : stockName)).trim();
         if (!hasText(key)) return UNRESOLVED_OTHER;
 
-        if (containsAny(key, "台積電", "瑞昱", "矽統", "菱生", "偉詮電", "超豐", "全新", "義隆", "晶豪科", "嘉晶", "聯詠", "華晶科", "新唐", "台勝科", "采鈺", "奕力", "訊芯", "華東", "至上", "鼎元", "國巨", "華新科", "禾伸堂", "日電貿")) {
+        if (containsAny(key, "國巨", "華新科", "禾伸堂", "日電貿", "信昌電", "凱美", "立隆電", "金山電", "九豪", "千如", "美磊", "奇力新", "臺慶科", "台慶科", "被動元件", "MLCC", "鋁電", "電容", "電阻", "電感")) {
+            return ELECTRONICS_COMPONENTS;
+        }
+        if (containsAny(key, "台積電", "瑞昱", "矽統", "菱生", "偉詮電", "超豐", "全新", "義隆", "晶豪科", "嘉晶", "聯詠", "華晶科", "新唐", "台勝科", "采鈺", "奕力", "訊芯", "華東", "至上", "鼎元")) {
             return SEMICONDUCTOR;
         }
         if (containsAny(key, "PCB", "楠梓電", "敬鵬", "燿華", "志聖", "泰鼎", "精成科", "台表科", "金寶", "廣宇")) {
@@ -133,6 +142,26 @@ public final class ThemeTaxonomyClassifier {
             return MATERIALS;
         }
         return UNRESOLVED_OTHER;
+    }
+
+    /**
+     * Read-only sub-theme suggestion for generic OTHER/其他強勢股 rows.
+     * This refines electronics-components leaders for observability/review only;
+     * it must not be used as a BUY/SELL signal.
+     */
+    public static String suggestSubThemeForGenericOther(String symbol, String stockName) {
+        String key = ((symbol == null ? "" : symbol) + " " + (stockName == null ? "" : stockName)).trim();
+        if (!hasText(key)) return null;
+        if (containsAny(key, "國巨", "華新科", "禾伸堂", "日電貿", "信昌電", "MLCC", "積層陶瓷")) {
+            return MLCC;
+        }
+        if (containsAny(key, "凱美", "立隆電", "金山電", "鋁電", "鋁質電容", "固態電容")) {
+            return ALUMINUM_CAPACITOR;
+        }
+        if (containsAny(key, "九豪", "千如", "美磊", "奇力新", "臺慶科", "台慶科", "被動元件", "電阻", "電容", "電感", "磁性元件")) {
+            return PASSIVE_COMPONENTS;
+        }
+        return null;
     }
 
     /**
