@@ -111,6 +111,8 @@ class ClaudeCodeRequestWriterServiceContractTest {
         assertThat(leader.path("retention_reason").asText()).contains("super_strong_5");
         assertThat(leader.path("use_for")).extracting(JsonNode::asText)
                 .containsExactly("MARKET_LEADERSHIP", "THEME_VALIDATION", "PEER_DISCOVERY");
+        assertThat(root.path("leader_tradable_false_allowed").asBoolean()).isTrue();
+        assertThat(root.path("must_not_expand_allowed_symbols").asBoolean()).isTrue();
         assertThat(root.path("contract_note").asText()).contains("leadership_symbols").contains("不得視為 ENTER candidate");
     }
 }

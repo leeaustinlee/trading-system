@@ -220,6 +220,7 @@ public class ClaudeCodeRequestWriterService {
             ArrayNode allowed = root.putArray("allowed_symbols");
             allowedUnion.forEach(allowed::add);
             root.put("leader_tradable_false_allowed", true);
+            root.put("must_not_expand_allowed_symbols", true);
             root.put("candidate_scope_contract",
                     "tradable_candidate_symbols/candidates 才可進入 ENTER 評估；leadership_symbols 僅供 MARKET_LEADERSHIP/THEME_VALIDATION/PEER_DISCOVERY，不得視為 ENTER candidate。" );
             root.put("contract_note",
