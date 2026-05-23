@@ -188,5 +188,8 @@ class ClaudeCodeRequestWriterServiceContractTest {
                 .contains("OUTSIDE_ALLOWED_UNIVERSE_SHADOW_ONLY");
         assertThat(root.path("theme_governance_trace").path("requires_peer_shadow_analysis").asBoolean()).isTrue();
         assertThat(root.path("theme_governance_trace").path("requires_leadership_analysis").asBoolean()).isTrue();
+        assertThat(root.path("taxonomy_gap_alerts").toString())
+                .contains("2327")
+                .contains("被動元件/MLCC");
     }
 }

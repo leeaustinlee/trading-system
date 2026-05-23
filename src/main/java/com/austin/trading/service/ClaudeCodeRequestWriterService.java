@@ -216,11 +216,13 @@ public class ClaudeCodeRequestWriterService {
 
             ArrayNode leadershipSymbols = root.putArray("leadership_symbols");
             ArrayNode leadershipContext = root.putArray("leadership_context");
+            Set<String> leadershipSymbolSet = new LinkedHashSet<>();
             if (leadershipContexts != null) {
                 for (LeaderContext leader : leadershipContexts) {
                     if (leader == null || leader.symbol() == null || leader.symbol().isBlank()) continue;
                     String symbol = leader.symbol().trim();
                     leadershipSymbols.add(symbol);
+                    leadershipSymbolSet.add(symbol);
                     allowedUnion.add(symbol);
                     ObjectNode item = leadershipContext.addObject();
                     item.put("symbol", symbol);
@@ -253,6 +255,16 @@ public class ClaudeCodeRequestWriterService {
             root.put("peer_shadow_tradable_false_allowed", true);
             root.put("peer_shadow_contract",
                     "peer_shadow_candidates are not tradable candidates; they must not enter ENTER/FinalDecision/ranking and must_not_expand_allowed_symbols=true keeps them disjoint from allowed_symbols/tradable_candidate_symbols.");
+            ArrayNode taxonomyGapAlerts = root.putArray("taxonomy_gap_alerts");
+            if (leadershipSymbolSet.contains("2327")) {
+                ObjectNode alert = taxonomyGapAlerts.addObject();
+                alert.put("symbol", "2327");
+                alert.put("stockName", "國巨");
+                alert.put("reason", "hot leader / retained leader may be underclassified as OTHER or absent from strong_themes");
+                alert.put("temporary_theme", "被動元件/MLCC");
+                alert.put("required_action", "Claude must mention 國巨 and 被動元件/MLCC in taxonomy_gap_analysis and compare peer_shadow_candidates before deciding watchlist vs tradable.");
+                alert.put("confidence", "medium");
+            }
 
             boolean hasLeadership = leadershipContext.size() > 0 || leadershipSymbols.size() > 0;
             boolean hasPeerShadow = peerShadow.size() > 0;
