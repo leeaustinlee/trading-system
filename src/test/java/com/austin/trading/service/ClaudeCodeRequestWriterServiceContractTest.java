@@ -115,4 +115,57 @@ class ClaudeCodeRequestWriterServiceContractTest {
         assertThat(root.path("must_not_expand_allowed_symbols").asBoolean()).isTrue();
         assertThat(root.path("contract_note").asText()).contains("leadership_symbols").contains("不得視為 ENTER candidate");
     }
+
+    @Test
+    void writeRequest_includesPeerShadowCandidatesButDoesNotExpandAllowedSymbols() throws Exception {
+        Path requestPath = tempDir.resolve("claude-research-request.json");
+        Path outputPath = tempDir.resolve("claude-research-latest.md");
+
+        AiClaudeConfig config = new AiClaudeConfig();
+        config.setRequestOutputPath(requestPath.toString());
+        config.setResearchOutputPath(outputPath.toString());
+
+        ObjectMapper mapper = new ObjectMapper();
+        ClaudeCodeRequestWriterService service = new ClaudeCodeRequestWriterService(config, mapper);
+
+        boolean written = service.writeRequest(
+                174L,
+                "PREMARKET",
+                LocalDate.of(2026, 5, 24),
+                List.of("2458"),
+                List.of(new ClaudeCodeRequestWriterService.LeaderContext(
+                        "2327", "國巨", "MLCC", 1, false,
+                        "POSTMARKET super_strong_5 retained for next-phase leadership validation",
+                        List.of("MARKET_LEADERSHIP", "THEME_VALIDATION", "PEER_DISCOVERY")
+                )),
+                List.of(new ClaudeCodeRequestWriterService.PeerShadowContext(
+                        "2492", "SECOND_LEADER", "2327", "MLCC", false,
+                        new java.math.BigDecimal("9.20"), "同 themeTag + hot stock overlap"
+                )),
+                "{\"source\":\"premarket_data_prep\"}"
+        );
+
+        assertThat(written).isTrue();
+        JsonNode root = mapper.readTree(Files.readString(requestPath));
+        assertThat(root.path("peer_shadow_candidates")).hasSize(1);
+        JsonNode peer = root.path("peer_shadow_candidates").get(0);
+        assertThat(peer.path("symbol").asText()).isEqualTo("2492");
+        assertThat(peer.path("role").asText()).isEqualTo("SECOND_LEADER");
+        assertThat(peer.path("leader_symbol").asText()).isEqualTo("2327");
+        assertThat(peer.path("theme_tag").asText()).isEqualTo("MLCC");
+        assertThat(peer.path("tradable").asBoolean()).isFalse();
+        assertThat(peer.path("shadow_rank_score").decimalValue()).isEqualByComparingTo("9.20");
+        assertThat(peer.path("evidence_summary").asText()).contains("themeTag");
+
+        assertThat(root.path("tradable_candidate_symbols")).extracting(JsonNode::asText)
+                .containsExactly("2458");
+        assertThat(root.path("allowed_symbols")).extracting(JsonNode::asText)
+                .containsExactly("2458", "2327");
+        assertThat(root.path("allowed_symbols")).extracting(JsonNode::asText)
+                .doesNotContain("2492");
+        assertThat(root.path("must_not_expand_allowed_symbols").asBoolean()).isTrue();
+        assertThat(root.path("peer_shadow_contract").asText())
+                .contains("not tradable candidates")
+                .contains("must_not_expand_allowed_symbols");
+    }
 }

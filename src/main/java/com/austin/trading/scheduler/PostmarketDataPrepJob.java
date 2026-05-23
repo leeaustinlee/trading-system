@@ -17,6 +17,7 @@ import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
 import com.austin.trading.service.ThemeLeaderRetentionService;
+import com.austin.trading.service.ThemePeerDiscoveryService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -75,6 +76,7 @@ public class PostmarketDataPrepJob {
     private final DailyOrchestrationService       orchestrationService;
     private final AiTaskService                   aiTaskService;
     private final ThemeLeaderRetentionService     themeLeaderRetentionService;
+    private final ThemePeerDiscoveryService       themePeerDiscoveryService;
     private final ObjectMapper                    objectMapper;
 
     @Autowired
@@ -89,6 +91,7 @@ public class PostmarketDataPrepJob {
             DailyOrchestrationService orchestrationService,
             AiTaskService aiTaskService,
             ThemeLeaderRetentionService themeLeaderRetentionService,
+            ThemePeerDiscoveryService themePeerDiscoveryService,
             ObjectMapper objectMapper
     ) {
         this.marketBreadthClient      = marketBreadthClient;
@@ -101,7 +104,27 @@ public class PostmarketDataPrepJob {
         this.orchestrationService     = orchestrationService;
         this.aiTaskService            = aiTaskService;
         this.themeLeaderRetentionService = themeLeaderRetentionService;
+        this.themePeerDiscoveryService = themePeerDiscoveryService;
         this.objectMapper             = objectMapper;
+    }
+
+    /** Backward-compatible constructor for MVP-2A tests. */
+    public PostmarketDataPrepJob(
+            MarketBreadthClient marketBreadthClient,
+            TwseMisClient twseMisClient,
+            CandidateScanService candidateScanService,
+            CandidateStockRepository candidateStockRepository,
+            MarketSnapshotRepository marketSnapshotRepository,
+            SchedulerLogService schedulerLogService,
+            ClaudeCodeRequestWriterService requestWriterService,
+            DailyOrchestrationService orchestrationService,
+            AiTaskService aiTaskService,
+            ThemeLeaderRetentionService themeLeaderRetentionService,
+            ObjectMapper objectMapper
+    ) {
+        this(marketBreadthClient, twseMisClient, candidateScanService, candidateStockRepository,
+                marketSnapshotRepository, schedulerLogService, requestWriterService, orchestrationService,
+                aiTaskService, themeLeaderRetentionService, null, objectMapper);
     }
 
     /** Backward-compatible constructor for legacy tests. */
@@ -119,7 +142,7 @@ public class PostmarketDataPrepJob {
     ) {
         this(marketBreadthClient, twseMisClient, candidateScanService, candidateStockRepository,
                 marketSnapshotRepository, schedulerLogService, requestWriterService, orchestrationService,
-                aiTaskService, null, objectMapper);
+                aiTaskService, null, null, objectMapper);
     }
 
     @Scheduled(cron = "${trading.scheduler.postmarket-data-prep-cron:0 5 15 * * MON-FRI}",
@@ -183,13 +206,27 @@ public class PostmarketDataPrepJob {
             Long postmarketTaskId = task.getId();
 
             int retainedLeaders = 0;
+            List<CandidateResponse> superStrongLeaders = selectSuperStrongLeaders(candidates, universe.superStrongSymbols());
             if (themeLeaderRetentionService != null) {
                 retainedLeaders = themeLeaderRetentionService.retainPostmarketSuperStrong(
-                        today, selectSuperStrongLeaders(candidates, universe.superStrongSymbols()));
+                        today, superStrongLeaders);
             }
 
+            List<ClaudeCodeRequestWriterService.LeaderContext> leaderContexts = superStrongLeaders.stream()
+                    .map(c -> new ClaudeCodeRequestWriterService.LeaderContext(
+                            c.symbol(), c.stockName(), c.themeTag(), null, false,
+                            "POSTMARKET super_strong_5 retained for next-phase leadership validation",
+                            List.of("MARKET_LEADERSHIP", "THEME_VALIDATION", "PEER_DISCOVERY")))
+                    .toList();
+            List<ClaudeCodeRequestWriterService.PeerShadowContext> peerShadows = themePeerDiscoveryService == null
+                    ? List.of()
+                    : themePeerDiscoveryService.toPeerShadowContexts(
+                            themePeerDiscoveryService.discoverAndSaveFromCandidates(today, "POSTMARKET", superStrongLeaders));
+
             String marketContext = buildMarketContextJson(breadth.orElse(null), marketGradeDecision, universe, symbols);
-            boolean requestWritten = requestWriterService.writeRequest(postmarketTaskId, "POSTMARKET", today, symbols, marketContext);
+            boolean requestWritten = themePeerDiscoveryService == null
+                    ? requestWriterService.writeRequest(postmarketTaskId, "POSTMARKET", today, symbols, marketContext)
+                    : requestWriterService.writeRequest(postmarketTaskId, "POSTMARKET", today, symbols, leaderContexts, peerShadows, marketContext);
             if (!requestWritten) {
                 throw new IllegalStateException("POSTMARKET request 寫出失敗，拒絕留下只有 task、沒有 file bridge request 的狀態");
             }

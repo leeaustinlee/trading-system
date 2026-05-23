@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS theme_peer_shadow_candidate (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    trading_date DATE NOT NULL,
+    source_phase VARCHAR(32) NOT NULL,
+    leader_symbol VARCHAR(20) NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    stock_name VARCHAR(120) NULL,
+    theme_tag VARCHAR(100) NULL,
+    candidate_role VARCHAR(40) NOT NULL,
+    theme_importance_score DECIMAL(8,4) NULL,
+    tradable_score DECIMAL(8,4) NULL,
+    shadow_rank_score DECIMAL(8,4) NULL,
+    tradable BOOLEAN NOT NULL DEFAULT FALSE,
+    rejection_reason VARCHAR(500) NULL,
+    evidence_json JSON NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_theme_peer_shadow_candidate (trading_date, source_phase, leader_symbol, symbol),
+    KEY idx_theme_peer_shadow_date_phase (trading_date, source_phase, shadow_rank_score),
+    KEY idx_theme_peer_shadow_leader (leader_symbol, trading_date, shadow_rank_score),
+    KEY idx_theme_peer_shadow_symbol (symbol, trading_date)
+);

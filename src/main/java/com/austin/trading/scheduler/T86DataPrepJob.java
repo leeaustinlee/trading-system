@@ -11,6 +11,7 @@ import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
 import com.austin.trading.service.ThemeLeaderRetentionService;
+import com.austin.trading.service.ThemePeerDiscoveryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,6 +47,7 @@ public class T86DataPrepJob {
     private final AiTaskService            aiTaskService;
     private final ClaudeCodeRequestWriterService requestWriterService;
     private final ThemeLeaderRetentionService themeLeaderRetentionService;
+    private final ThemePeerDiscoveryService themePeerDiscoveryService;
 
     @Autowired
     public T86DataPrepJob(
@@ -55,7 +57,8 @@ public class T86DataPrepJob {
             DailyOrchestrationService orchestrationService,
             AiTaskService aiTaskService,
             ClaudeCodeRequestWriterService requestWriterService,
-            ThemeLeaderRetentionService themeLeaderRetentionService
+            ThemeLeaderRetentionService themeLeaderRetentionService,
+            ThemePeerDiscoveryService themePeerDiscoveryService
     ) {
         this.institutionalClient      = institutionalClient;
         this.candidateStockRepository = candidateStockRepository;
@@ -64,6 +67,21 @@ public class T86DataPrepJob {
         this.aiTaskService            = aiTaskService;
         this.requestWriterService     = requestWriterService;
         this.themeLeaderRetentionService = themeLeaderRetentionService;
+        this.themePeerDiscoveryService = themePeerDiscoveryService;
+    }
+
+    /** Backward-compatible constructor for MVP-2A tests. */
+    public T86DataPrepJob(
+            TwseInstitutionalClient institutionalClient,
+            CandidateStockRepository candidateStockRepository,
+            SchedulerLogService schedulerLogService,
+            DailyOrchestrationService orchestrationService,
+            AiTaskService aiTaskService,
+            ClaudeCodeRequestWriterService requestWriterService,
+            ThemeLeaderRetentionService themeLeaderRetentionService
+    ) {
+        this(institutionalClient, candidateStockRepository, schedulerLogService,
+                orchestrationService, aiTaskService, requestWriterService, themeLeaderRetentionService, null);
     }
 
     /** Backward-compatible constructor for legacy tests. */
@@ -76,7 +94,7 @@ public class T86DataPrepJob {
             ClaudeCodeRequestWriterService requestWriterService
     ) {
         this(institutionalClient, candidateStockRepository, schedulerLogService,
-                orchestrationService, aiTaskService, requestWriterService, null);
+                orchestrationService, aiTaskService, requestWriterService, null, null);
     }
 
     @Scheduled(cron = "${trading.scheduler.t86-data-prep-cron:0 10 18 * * MON-FRI}",
@@ -153,7 +171,13 @@ public class T86DataPrepJob {
                 List<ClaudeCodeRequestWriterService.LeaderContext> leaders = themeLeaderRetentionService == null
                         ? List.of()
                         : themeLeaderRetentionService.loadLeaderContexts(today, "T86_TOMORROW");
-                boolean requestWritten = requestWriterService.writeRequest(t86TaskId, "T86_TOMORROW", today, symbols, leaders, context);
+                List<ClaudeCodeRequestWriterService.PeerShadowContext> peerShadows = themePeerDiscoveryService == null
+                        ? List.of()
+                        : themePeerDiscoveryService.toPeerShadowContexts(
+                                themePeerDiscoveryService.discoverAndSaveFromLeaderContexts(today, "T86_TOMORROW", leaders));
+                boolean requestWritten = themePeerDiscoveryService == null
+                        ? requestWriterService.writeRequest(t86TaskId, "T86_TOMORROW", today, symbols, leaders, context)
+                        : requestWriterService.writeRequest(t86TaskId, "T86_TOMORROW", today, symbols, leaders, peerShadows, context);
                 if (!requestWritten) {
                     throw new IllegalStateException("T86_TOMORROW request 寫出失敗");
                 }

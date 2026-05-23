@@ -13,6 +13,7 @@ import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
 import com.austin.trading.service.ThemeLeaderRetentionService;
+import com.austin.trading.service.ThemePeerDiscoveryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +50,7 @@ public class OpenDataPrepJob {
     private final AiTaskService            aiTaskService;
     private final ClaudeCodeRequestWriterService requestWriterService;
     private final ThemeLeaderRetentionService themeLeaderRetentionService;
+    private final ThemePeerDiscoveryService themePeerDiscoveryService;
 
     @Autowired
     public OpenDataPrepJob(
@@ -59,7 +61,8 @@ public class OpenDataPrepJob {
             DailyOrchestrationService orchestrationService,
             AiTaskService aiTaskService,
             ClaudeCodeRequestWriterService requestWriterService,
-            ThemeLeaderRetentionService themeLeaderRetentionService
+            ThemeLeaderRetentionService themeLeaderRetentionService,
+            ThemePeerDiscoveryService themePeerDiscoveryService
     ) {
         this.twseMisClient           = twseMisClient;
         this.candidateScanService    = candidateScanService;
@@ -69,6 +72,22 @@ public class OpenDataPrepJob {
         this.aiTaskService           = aiTaskService;
         this.requestWriterService    = requestWriterService;
         this.themeLeaderRetentionService = themeLeaderRetentionService;
+        this.themePeerDiscoveryService = themePeerDiscoveryService;
+    }
+
+    /** Backward-compatible constructor for MVP-2A tests. */
+    public OpenDataPrepJob(
+            TwseMisClient twseMisClient,
+            CandidateScanService candidateScanService,
+            CandidateStockRepository candidateStockRepository,
+            SchedulerLogService schedulerLogService,
+            DailyOrchestrationService orchestrationService,
+            AiTaskService aiTaskService,
+            ClaudeCodeRequestWriterService requestWriterService,
+            ThemeLeaderRetentionService themeLeaderRetentionService
+    ) {
+        this(twseMisClient, candidateScanService, candidateStockRepository, schedulerLogService,
+                orchestrationService, aiTaskService, requestWriterService, themeLeaderRetentionService, null);
     }
 
     /** Backward-compatible constructor for legacy tests. */
@@ -82,7 +101,7 @@ public class OpenDataPrepJob {
             ClaudeCodeRequestWriterService requestWriterService
     ) {
         this(twseMisClient, candidateScanService, candidateStockRepository, schedulerLogService,
-                orchestrationService, aiTaskService, requestWriterService, null);
+                orchestrationService, aiTaskService, requestWriterService, null, null);
     }
 
     @Scheduled(cron = "${trading.scheduler.open-data-prep-cron:0 1 9 * * MON-FRI}",
@@ -159,7 +178,13 @@ public class OpenDataPrepJob {
                 List<ClaudeCodeRequestWriterService.LeaderContext> leaders = themeLeaderRetentionService == null
                         ? List.of()
                         : themeLeaderRetentionService.loadLeaderContexts(today, "OPENING");
-                boolean requestWritten = requestWriterService.writeRequest(openingTaskId, "OPENING", today, symbols, leaders, context);
+                List<ClaudeCodeRequestWriterService.PeerShadowContext> peerShadows = themePeerDiscoveryService == null
+                        ? List.of()
+                        : themePeerDiscoveryService.toPeerShadowContexts(
+                                themePeerDiscoveryService.discoverAndSaveFromLeaderContexts(today, "OPENING", leaders));
+                boolean requestWritten = themePeerDiscoveryService == null
+                        ? requestWriterService.writeRequest(openingTaskId, "OPENING", today, symbols, leaders, context)
+                        : requestWriterService.writeRequest(openingTaskId, "OPENING", today, symbols, leaders, peerShadows, context);
                 if (!requestWritten) {
                     throw new IllegalStateException("OPENING request 寫出失敗");
                 }

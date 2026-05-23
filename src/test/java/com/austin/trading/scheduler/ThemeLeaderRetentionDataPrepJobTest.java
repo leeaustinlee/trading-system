@@ -19,6 +19,7 @@ import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
 import com.austin.trading.service.ThemeLeaderRetentionService;
+import com.austin.trading.service.ThemePeerDiscoveryService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
@@ -117,7 +118,7 @@ class ThemeLeaderRetentionDataPrepJobTest {
         when(repository.findByTradingDateOrderByScoreDesc(eq(today), any(PageRequest.class))).thenReturn(List.of(tradable));
         when(aiTaskService.createTask(eq(today), eq("T86_TOMORROW"), eq(null), anyList(), anyString(), anyString())).thenReturn(task);
         when(retentionService.loadLeaderContexts(today, "T86_TOMORROW")).thenReturn(List.of(yageoLeader));
-        when(requestWriterService.writeRequest(any(), anyString(), any(LocalDate.class), anyList(), anyList(), anyString())).thenReturn(true);
+        when(requestWriterService.writeRequest(any(Long.class), anyString(), any(LocalDate.class), anyList(), anyList(), anyString())).thenReturn(true);
 
         new T86DataPrepJob(institutionalClient, repository, schedulerLogService, orchestrationService,
                 aiTaskService, requestWriterService, retentionService).run();
@@ -145,7 +146,7 @@ class ThemeLeaderRetentionDataPrepJobTest {
         when(twseMisClient.getQuotesWithOtcFallback(List.of("2458"))).thenReturn(List.of());
         when(aiTaskService.createTask(eq(today), eq("PREMARKET"), eq(null), anyList(), anyString(), anyString())).thenReturn(task);
         when(retentionService.loadLeaderContexts(today, "PREMARKET")).thenReturn(List.of(yageoLeader));
-        when(requestWriterService.writeRequest(any(), anyString(), any(LocalDate.class), anyList(), anyList(), anyString())).thenReturn(true);
+        when(requestWriterService.writeRequest(any(Long.class), anyString(), any(LocalDate.class), anyList(), anyList(), anyString())).thenReturn(true);
 
         new PremarketDataPrepJob(mock(TaifexClient.class), twseMisClient, scanService,
                 mock(MarketSnapshotRepository.class), mock(SchedulerLogService.class), requestWriterService,
@@ -156,6 +157,45 @@ class ThemeLeaderRetentionDataPrepJobTest {
         verify(requestWriterService).writeRequest(eq(302L), eq("PREMARKET"), eq(today), tradableCap.capture(), leaderCap.capture(), anyString());
         assertThat(tradableCap.getValue()).containsExactly("2458");
         assertThat(leaderCap.getValue()).extracting(ClaudeCodeRequestWriterService.LeaderContext::symbol).containsExactly("2327");
+    }
+
+    @Test
+    void premarketDataPrep_passesPeerShadowCandidatesAsPayloadContextOnly() {
+        CandidateScanService scanService = mock(CandidateScanService.class);
+        ClaudeCodeRequestWriterService requestWriterService = mock(ClaudeCodeRequestWriterService.class);
+        ThemeLeaderRetentionService retentionService = mock(ThemeLeaderRetentionService.class);
+        ThemePeerDiscoveryService peerDiscoveryService = mock(ThemePeerDiscoveryService.class);
+        DailyOrchestrationService orchestrationService = mock(DailyOrchestrationService.class);
+        AiTaskService aiTaskService = mock(AiTaskService.class);
+        TwseMisClient twseMisClient = mock(TwseMisClient.class);
+        LocalDate today = LocalDate.now();
+        AiTaskEntity task = new AiTaskEntity(); task.setId(304L);
+        ClaudeCodeRequestWriterService.PeerShadowContext peer = new ClaudeCodeRequestWriterService.PeerShadowContext(
+                "2492", "SECOND_LEADER", "2327", "MLCC", false,
+                new BigDecimal("9.20"), "same themeTag + hot stock overlap");
+
+        when(orchestrationService.markRunning(eq(today), eq(OrchestrationStep.PREMARKET_DATA_PREP))).thenReturn(true);
+        when(scanService.getCandidatesByDate(eq(today), eq(10))).thenReturn(List.of(candidate(today, "2458")));
+        when(twseMisClient.getQuotesWithOtcFallback(List.of("2458"))).thenReturn(List.of());
+        when(aiTaskService.createTask(eq(today), eq("PREMARKET"), eq(null), anyList(), anyString(), anyString())).thenReturn(task);
+        when(retentionService.loadLeaderContexts(today, "PREMARKET")).thenReturn(List.of(yageoLeader));
+        when(peerDiscoveryService.discoverAndSaveFromLeaderContexts(today, "PREMARKET", List.of(yageoLeader))).thenReturn(List.of());
+        when(peerDiscoveryService.toPeerShadowContexts(List.of())).thenReturn(List.of(peer));
+        when(requestWriterService.writeRequest(any(), anyString(), any(LocalDate.class), anyList(), anyList(), anyList(), anyString())).thenReturn(true);
+
+        new PremarketDataPrepJob(mock(TaifexClient.class), twseMisClient, scanService,
+                mock(MarketSnapshotRepository.class), mock(SchedulerLogService.class), requestWriterService,
+                orchestrationService, aiTaskService, retentionService, peerDiscoveryService).run();
+
+        ArgumentCaptor<List<String>> tradableCap = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<ClaudeCodeRequestWriterService.LeaderContext>> leaderCap = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<ClaudeCodeRequestWriterService.PeerShadowContext>> peerCap = ArgumentCaptor.forClass(List.class);
+        verify(requestWriterService).writeRequest(eq(304L), eq("PREMARKET"), eq(today),
+                tradableCap.capture(), leaderCap.capture(), peerCap.capture(), anyString());
+        assertThat(tradableCap.getValue()).containsExactly("2458");
+        assertThat(leaderCap.getValue()).extracting(ClaudeCodeRequestWriterService.LeaderContext::symbol).containsExactly("2327");
+        assertThat(peerCap.getValue()).extracting(ClaudeCodeRequestWriterService.PeerShadowContext::symbol).containsExactly("2492");
+        assertThat(peerCap.getValue()).allSatisfy(p -> assertThat(p.tradable()).isFalse());
     }
 
     @Test
@@ -176,7 +216,7 @@ class ThemeLeaderRetentionDataPrepJobTest {
         when(repository.findByTradingDateOrderByScoreDesc(eq(today), any(PageRequest.class))).thenReturn(List.of(entity(today, "2458", "義隆", "IC設計")));
         when(aiTaskService.createTask(eq(today), eq("OPENING"), eq(null), anyList(), anyString(), anyString())).thenReturn(task);
         when(retentionService.loadLeaderContexts(today, "OPENING")).thenReturn(List.of(yageoLeader));
-        when(requestWriterService.writeRequest(any(), anyString(), any(LocalDate.class), anyList(), anyList(), anyString())).thenReturn(true);
+        when(requestWriterService.writeRequest(any(Long.class), anyString(), any(LocalDate.class), anyList(), anyList(), anyString())).thenReturn(true);
 
         new OpenDataPrepJob(twseMisClient, scanService, repository, mock(SchedulerLogService.class),
                 orchestrationService, aiTaskService, requestWriterService, retentionService).run();

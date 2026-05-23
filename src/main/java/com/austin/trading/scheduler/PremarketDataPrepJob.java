@@ -15,6 +15,7 @@ import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
 import com.austin.trading.service.ThemeLeaderRetentionService;
+import com.austin.trading.service.ThemePeerDiscoveryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +53,7 @@ public class PremarketDataPrepJob {
     private final DailyOrchestrationService       orchestrationService;
     private final AiTaskService                   aiTaskService;
     private final ThemeLeaderRetentionService     themeLeaderRetentionService;
+    private final ThemePeerDiscoveryService       themePeerDiscoveryService;
 
     @Autowired
     public PremarketDataPrepJob(
@@ -63,7 +65,8 @@ public class PremarketDataPrepJob {
             ClaudeCodeRequestWriterService requestWriterService,
             DailyOrchestrationService orchestrationService,
             AiTaskService aiTaskService,
-            ThemeLeaderRetentionService themeLeaderRetentionService
+            ThemeLeaderRetentionService themeLeaderRetentionService,
+            ThemePeerDiscoveryService themePeerDiscoveryService
     ) {
         this.taifexClient            = taifexClient;
         this.twseMisClient           = twseMisClient;
@@ -74,6 +77,23 @@ public class PremarketDataPrepJob {
         this.orchestrationService    = orchestrationService;
         this.aiTaskService           = aiTaskService;
         this.themeLeaderRetentionService = themeLeaderRetentionService;
+        this.themePeerDiscoveryService = themePeerDiscoveryService;
+    }
+
+    /** Backward-compatible constructor for MVP-2A tests. */
+    public PremarketDataPrepJob(
+            TaifexClient taifexClient,
+            TwseMisClient twseMisClient,
+            CandidateScanService candidateScanService,
+            MarketSnapshotRepository marketSnapshotRepository,
+            SchedulerLogService schedulerLogService,
+            ClaudeCodeRequestWriterService requestWriterService,
+            DailyOrchestrationService orchestrationService,
+            AiTaskService aiTaskService,
+            ThemeLeaderRetentionService themeLeaderRetentionService
+    ) {
+        this(taifexClient, twseMisClient, candidateScanService, marketSnapshotRepository,
+                schedulerLogService, requestWriterService, orchestrationService, aiTaskService, themeLeaderRetentionService, null);
     }
 
     /** Backward-compatible constructor for legacy tests. */
@@ -88,7 +108,7 @@ public class PremarketDataPrepJob {
             AiTaskService aiTaskService
     ) {
         this(taifexClient, twseMisClient, candidateScanService, marketSnapshotRepository,
-                schedulerLogService, requestWriterService, orchestrationService, aiTaskService, null);
+                schedulerLogService, requestWriterService, orchestrationService, aiTaskService, null, null);
     }
 
     @Scheduled(cron = "${trading.scheduler.premarket-data-prep-cron:0 10 8 * * MON-FRI}",
@@ -170,8 +190,15 @@ public class PremarketDataPrepJob {
             List<ClaudeCodeRequestWriterService.LeaderContext> leaders = themeLeaderRetentionService == null
                     ? List.of()
                     : themeLeaderRetentionService.loadLeaderContexts(today, "PREMARKET");
-            boolean requestWritten = requestWriterService.writeRequest(premarketTaskId, "PREMARKET", today, symbols, leaders,
-                    buildPayload(txf.orElse(null), quoteSummary, candidateSourceDate, candidateSourcePolicy));
+            List<ClaudeCodeRequestWriterService.PeerShadowContext> peerShadows = themePeerDiscoveryService == null
+                    ? List.of()
+                    : themePeerDiscoveryService.toPeerShadowContexts(
+                            themePeerDiscoveryService.discoverAndSaveFromLeaderContexts(today, "PREMARKET", leaders));
+            boolean requestWritten = themePeerDiscoveryService == null
+                    ? requestWriterService.writeRequest(premarketTaskId, "PREMARKET", today, symbols, leaders,
+                            buildPayload(txf.orElse(null), quoteSummary, candidateSourceDate, candidateSourcePolicy))
+                    : requestWriterService.writeRequest(premarketTaskId, "PREMARKET", today, symbols, leaders, peerShadows,
+                            buildPayload(txf.orElse(null), quoteSummary, candidateSourceDate, candidateSourcePolicy));
             if (!requestWritten) {
                 throw new IllegalStateException("PREMARKET request 寫出失敗，拒絕留下只有 task、沒有 file bridge request 的狀態");
             }

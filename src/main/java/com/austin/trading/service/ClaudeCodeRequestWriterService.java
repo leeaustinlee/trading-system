@@ -166,6 +166,22 @@ public class ClaudeCodeRequestWriterService {
             List<LeaderContext> leadershipContexts,
             String contextPayload
     ) {
+        return writeRequest(taskId, type, tradingDate, tradableCandidateSymbols, leadershipContexts, List.of(), contextPayload);
+    }
+
+    /**
+     * MVP-2B：peer_shadow_candidates are context-only. They are intentionally
+     * not added to candidates/tradable_candidate_symbols/allowed_symbols.
+     */
+    public boolean writeRequest(
+            Long taskId,
+            String type,
+            LocalDate tradingDate,
+            List<String> tradableCandidateSymbols,
+            List<LeaderContext> leadershipContexts,
+            List<PeerShadowContext> peerShadowContexts,
+            String contextPayload
+    ) {
         String path = config.getRequestOutputPath();
         if (path == null || path.isBlank()) {
             log.debug("[ClaudeCodeRequestWriter] request-output-path not set, skip.");
@@ -217,6 +233,23 @@ public class ClaudeCodeRequestWriterService {
                     if (leader.useFor() != null) leader.useFor().forEach(useFor::add);
                 }
             }
+            ArrayNode peerShadow = root.putArray("peer_shadow_candidates");
+            if (peerShadowContexts != null) {
+                for (PeerShadowContext peer : peerShadowContexts) {
+                    if (peer == null || peer.symbol() == null || peer.symbol().isBlank()) continue;
+                    ObjectNode item = peerShadow.addObject();
+                    item.put("symbol", peer.symbol().trim());
+                    if (peer.role() != null) item.put("role", peer.role());
+                    if (peer.leaderSymbol() != null) item.put("leader_symbol", peer.leaderSymbol());
+                    if (peer.themeTag() != null) item.put("theme_tag", peer.themeTag());
+                    item.put("tradable", peer.tradable());
+                    if (peer.shadowRankScore() != null) item.put("shadow_rank_score", peer.shadowRankScore());
+                    if (peer.evidenceSummary() != null) item.put("evidence_summary", peer.evidenceSummary());
+                }
+            }
+            root.put("peer_shadow_contract",
+                    "peer_shadow_candidates are not tradable candidates; they must not enter ENTER/FinalDecision/ranking and must_not_expand_allowed_symbols=true keeps them out of allowed_symbols unless separately present as tradable/leadership context.");
+
             ArrayNode allowed = root.putArray("allowed_symbols");
             allowedUnion.forEach(allowed::add);
             root.put("leader_tradable_false_allowed", true);
@@ -297,6 +330,16 @@ public class ClaudeCodeRequestWriterService {
             boolean leaderTradable,
             String retentionReason,
             List<String> useFor
+    ) {}
+
+    public record PeerShadowContext(
+            String symbol,
+            String role,
+            String leaderSymbol,
+            String themeTag,
+            boolean tradable,
+            BigDecimal shadowRankScore,
+            String evidenceSummary
     ) {}
 
     /**
