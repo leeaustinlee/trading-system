@@ -5,6 +5,7 @@ import com.austin.trading.client.TaifexClient;
 import com.austin.trading.client.TwseInstitutionalClient;
 import com.austin.trading.client.TwseMisClient;
 import com.austin.trading.client.dto.InstitutionalFlow;
+import com.austin.trading.client.dto.MarketBreadth;
 import com.austin.trading.client.dto.StockQuote;
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.entity.AiTaskEntity;
@@ -41,11 +42,61 @@ import static org.mockito.Mockito.when;
 
 class ThemeLeaderRetentionDataPrepJobTest {
 
+    @TempDir
+    Path tempDir;
+
     private final ClaudeCodeRequestWriterService.LeaderContext yageoLeader = new ClaudeCodeRequestWriterService.LeaderContext(
             "2327", "國巨", "MLCC", 1, false,
             "POSTMARKET super_strong_5 retained for next-phase leadership validation",
             List.of("MARKET_LEADERSHIP", "THEME_VALIDATION", "PEER_DISCOVERY")
     );
+
+    @Test
+    void postmarketDataPrep_retainsSuperStrong5ForT86PremarketAndOpening() throws Exception {
+        Path scanPath = tempDir.resolve("market-breadth-scan.json");
+        Files.writeString(scanPath, """
+                {
+                  "super_strong_5": [
+                    {"Code":"2327","Name":"國巨","Theme":"MLCC","Score":9.8}
+                  ],
+                  "final_candidates_5": [
+                    {"Code":"2458","Name":"義隆","Theme":"IC設計","Score":8.8}
+                  ]
+                }
+                """);
+        System.setProperty("trading.postmarket.marketBreadthScanPath", scanPath.toString());
+        try {
+            MarketBreadthClient breadthClient = mock(MarketBreadthClient.class);
+            TwseMisClient twseMisClient = mock(TwseMisClient.class);
+            CandidateScanService scanService = mock(CandidateScanService.class);
+            CandidateStockRepository repository = mock(CandidateStockRepository.class);
+            ClaudeCodeRequestWriterService requestWriterService = mock(ClaudeCodeRequestWriterService.class);
+            DailyOrchestrationService orchestrationService = mock(DailyOrchestrationService.class);
+            AiTaskService aiTaskService = mock(AiTaskService.class);
+            ThemeLeaderRetentionService retentionService = mock(ThemeLeaderRetentionService.class);
+            LocalDate today = LocalDate.now();
+            AiTaskEntity task = new AiTaskEntity(); task.setId(300L);
+
+            when(orchestrationService.markRunning(eq(today), eq(OrchestrationStep.POSTMARKET_DATA_PREP))).thenReturn(true);
+            when(breadthClient.getBreadth(today)).thenReturn(Optional.of(new MarketBreadth(1200, 800, 100, 21000.0, 180.0, 1.1, "20260523")));
+            when(scanService.getCurrentCandidates(20)).thenReturn(List.of());
+            when(twseMisClient.getQuotesWithOtcFallback(anyList())).thenReturn(List.of());
+            when(repository.findByTradingDateOrderByScoreDesc(eq(today), any(PageRequest.class))).thenReturn(List.of());
+            when(aiTaskService.createTask(eq(today), eq("POSTMARKET"), eq(null), anyList(), anyString(), anyString())).thenReturn(task);
+            when(requestWriterService.writeRequest(any(), anyString(), any(LocalDate.class), anyList(), anyString())).thenReturn(true);
+            when(retentionService.retainPostmarketSuperStrong(any(LocalDate.class), anyList())).thenReturn(3);
+
+            new PostmarketDataPrepJob(breadthClient, twseMisClient, scanService, repository,
+                    mock(MarketSnapshotRepository.class), mock(SchedulerLogService.class), requestWriterService,
+                    orchestrationService, aiTaskService, retentionService, new com.fasterxml.jackson.databind.ObjectMapper()).run();
+
+            ArgumentCaptor<List<CandidateResponse>> leadersCap = ArgumentCaptor.forClass(List.class);
+            verify(retentionService).retainPostmarketSuperStrong(eq(today), leadersCap.capture());
+            assertThat(leadersCap.getValue()).extracting(CandidateResponse::symbol).containsExactly("2327");
+        } finally {
+            System.clearProperty("trading.postmarket.marketBreadthScanPath");
+        }
+    }
 
     @Test
     void t86DataPrep_passesRetainedLeaderAsLeadershipOnlyNotTradableCandidate() {
