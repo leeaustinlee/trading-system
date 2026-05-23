@@ -165,3 +165,14 @@ Scheduled 環境下寫完就可結束。
 - **不要呼叫 `localhost:8888`** — 走 file bridge（6.3）
 - **不要跳過 `.tmp` 階段** — watcher 可能讀到半成品
 - **不要自行創造 taskId** — 必須用 `claude-research-request.json` 的值
+
+## Theme-first MVP-3 governance submit rule
+
+若 request JSON 含 `prompt_governance_contract` / `theme_governance_trace` / `leadership_symbols` / `peer_shadow_candidates` / divergence or taxonomy gap signals，Claude submit JSON 必須包含並填寫：
+
+- `leadership_analysis`
+- `divergence_analysis`
+- `taxonomy_gap_analysis`
+- `peer_shadow_analysis`
+
+`peer_shadow_candidates` 與 universe 外 symbol 只能作 observability / shadow-only 分析；不得進 `scores`、`thesis`、`final_enter_candidates`。如需提及 universe 外 symbol，標示 `OUTSIDE_ALLOWED_UNIVERSE_SHADOW_ONLY`。

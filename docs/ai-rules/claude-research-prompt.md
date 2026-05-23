@@ -1,4 +1,4 @@
-﻿# Claude 中短線個股研究 Prompt
+# Claude 中短線個股研究 Prompt
 
 請先讀以下檔案：
 
@@ -190,3 +190,20 @@ Claude 研究輸出中需標示：
 - 每次決策必須回答 YES / NO：台積電明確趨勢、主流族群一致、強勢股續強、接近日高但未創高、洗盤轉強、爆量開高走低。
 - 每次決策必須判斷行情階段：開盤洗盤期、主升發動期、高檔震盪期、出貨/鈍化期。
 - 每日 14:00 / 15:30 / 18:00 檢討需輸出今日評分、錯誤原因與明日優化建議。
+
+## Theme-first MVP-3：AI Prompt Governance（強制）
+
+每次讀取 `D:\ai\stock\claude-research-request.json` 後，若看到 `prompt_governance_contract` 或 `theme_governance_trace`，必須照其 `mandatory_sections` 回答，並在 submit JSON 放入：
+
+- `leadership_analysis`：retained leaders、leadership only、是否過熱、是否仍代表市場主流、題材是否擴散；不得因 `tradable=false` 或高價就忽略 leader。
+- `divergence_analysis`：hot leaders / hot_stocks Top N 是否與 strong_themes 不一致、是否有 emerging theme / theme rotation、哪些 theme 退潮。
+- `taxonomy_gap_analysis`：若 OTHER / UNKNOWN / hot leader 不在 strong theme，推測 temporary theme、說明 peer scan result 與 confidence。
+- `peer_shadow_analysis`：依 `SECOND_LEADER`、`LOW_BASE_FOLLOWER`、`CHANNEL_DISTRIBUTOR`、`WATCH_ONLY` 分析哪些只可觀察、哪些是情緒股、哪些不適合追價。
+
+安全邊界：
+
+- 不得擴張 `allowed_symbols`。
+- `peer_shadow_candidates` 不得自動變成 BUY suggestion 或 ENTER candidate。
+- `leadership_symbols` 可分析市場領導性，但不代表可交易。
+- request universe 外 symbol 若被提及，必須標 `OUTSIDE_ALLOWED_UNIVERSE_SHADOW_ONLY`，且不得進 `scores`、`thesis`、`final_enter_candidates`。
+- governance 只影響研究完整性與 observability，不得 override risk gate / FinalDecision / BUY / SELL / ENTER。

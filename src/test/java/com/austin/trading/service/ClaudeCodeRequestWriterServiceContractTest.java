@@ -181,5 +181,12 @@ class ClaudeCodeRequestWriterServiceContractTest {
         assertThat(root.path("peer_shadow_contract").asText())
                 .contains("not tradable candidates")
                 .contains("must_not_expand_allowed_symbols");
+        assertThat(root.path("prompt_governance_contract").path("mandatory_sections"))
+                .extracting(JsonNode::asText)
+                .contains("leadership_analysis", "divergence_analysis", "taxonomy_gap_analysis", "peer_shadow_analysis");
+        assertThat(root.path("prompt_governance_contract").path("outside_allowed_universe_policy").asText())
+                .contains("OUTSIDE_ALLOWED_UNIVERSE_SHADOW_ONLY");
+        assertThat(root.path("theme_governance_trace").path("requires_peer_shadow_analysis").asBoolean()).isTrue();
+        assertThat(root.path("theme_governance_trace").path("requires_leadership_analysis").asBoolean()).isTrue();
     }
 }

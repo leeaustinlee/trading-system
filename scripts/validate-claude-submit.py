@@ -33,6 +33,38 @@ def load_json(path: Path) -> dict:
         sys.exit(3)
 
 
+def is_non_empty(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (list, tuple, set, dict)):
+        return len(value) > 0
+    return bool(str(value).strip())
+
+
+def is_empty_section(value) -> bool:
+    return not is_non_empty(value)
+
+
+def governance_mandatory_sections(req: dict) -> list[str]:
+    contract = req.get("prompt_governance_contract") or {}
+    sections = list(contract.get("mandatory_sections") or [])
+    trace = req.get("theme_governance_trace") or {}
+    has_governance_signal = any([
+        is_non_empty(req.get("leadership_symbols")),
+        is_non_empty(req.get("leadership_context")),
+        is_non_empty(req.get("peer_shadow_candidates")),
+        is_non_empty(req.get("divergence_flags")),
+        is_non_empty(req.get("taxonomy_gap_alerts")),
+        is_non_empty(trace) and bool(trace.get("governanceRequired", True)),
+        bool(contract.get("governance_required")),
+    ])
+    if has_governance_signal:
+        sections.extend(["leadership_analysis", "divergence_analysis", "taxonomy_gap_analysis", "peer_shadow_analysis"])
+    return sorted({str(s).strip() for s in sections if str(s).strip()})
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--request", required=True, help="Java 寫的 claude-research-request.json")
@@ -61,11 +93,17 @@ def main() -> int:
 
     scores = sub.get("scores") or {}
     thesis = sub.get("thesis") or {}
+    final_enter = sub.get("final_enter_candidates") or []
+    if isinstance(final_enter, dict):
+        final_enter_keys = list(final_enter.keys())
+    else:
+        final_enter_keys = [str(s).strip() for s in final_enter if s]
 
     invalid_score = [k for k in scores.keys() if str(k).strip() not in allowed_set]
     invalid_thesis = [k for k in thesis.keys() if str(k).strip() not in allowed_set]
+    invalid_final_enter = [k for k in final_enter_keys if str(k).strip() not in allowed_set]
 
-    if invalid_score or invalid_thesis:
+    if invalid_score or invalid_thesis or invalid_final_enter:
         print("[validate] ❌ CLAUDE_LOCAL_SYMBOL_MISMATCH")
         print(f"  taskType       = {sub.get('taskType') or req.get('taskType')}")
         print(f"  taskId         = {sub.get('taskId')}")
@@ -74,7 +112,18 @@ def main() -> int:
             print(f"  invalid scores = {invalid_score}")
         if invalid_thesis:
             print(f"  invalid thesis = {invalid_thesis}")
-        print("  ⇒ 禁止寫入 submit！請修正 scores/thesis，只保留 allowed_symbols 子集。")
+        if invalid_final_enter:
+            print(f"  invalid final_enter_candidates = {invalid_final_enter}")
+            print("  ⇒ request universe 外 symbol 必須標 OUTSIDE_ALLOWED_UNIVERSE_SHADOW_ONLY，且不得進 final_enter_candidates。")
+        print("  ⇒ 禁止寫入 submit！請修正 scores/thesis/final_enter_candidates，只保留 allowed_symbols 子集。")
+        return 2
+
+    mandatory_sections = governance_mandatory_sections(req)
+    missing_sections = [section for section in mandatory_sections if is_empty_section(sub.get(section))]
+    if missing_sections:
+        print("[validate] ❌ GOVERNANCE_INCOMPLETE")
+        print(f"  missing sections = {missing_sections}")
+        print("  ⇒ request 含 leadership/divergence/taxonomy gap/peer shadow governance context 時，submit 必須完整回答 mandatory governance sections。")
         return 2
 
     # 額外檢查：taskId / taskType / tradingDate 一致性（警告而非擋）

@@ -237,3 +237,14 @@ Java `PostmarketDataPrepJob` 已建立 POSTMARKET 任務並寫出 `claude-resear
 - 不可在 request 只有 5 檔時硬做雙五研究
 - 不要呼叫 `localhost:8888`
 - 不要跳過 `.tmp` 階段直接寫 `.json`
+
+## Theme-first MVP-3 governance submit rule
+
+若 request JSON 含 `prompt_governance_contract` / `theme_governance_trace` / `leadership_symbols` / `peer_shadow_candidates` / divergence or taxonomy gap signals，Claude submit JSON 必須包含並填寫：
+
+- `leadership_analysis`
+- `divergence_analysis`
+- `taxonomy_gap_analysis`
+- `peer_shadow_analysis`
+
+`peer_shadow_candidates` 與 universe 外 symbol 只能作 observability / shadow-only 分析；不得進 `scores`、`thesis`、`final_enter_candidates`。如需提及 universe 外 symbol，標示 `OUTSIDE_ALLOWED_UNIVERSE_SHADOW_ONLY`。

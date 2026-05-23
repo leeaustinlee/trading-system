@@ -184,3 +184,14 @@ D:/ai/stock/claude-submit/             ← Claude 寫入、Java watcher 處理
 - `docs/codex-handoff.md` — Codex 提交規則
 - `docs/workflow-correctness-ai-orchestration-spec.md` — ai_task 狀態機規格
 - `windows-task-setup.md` — 本機 Windows Task Scheduler 設定
+
+## Theme-first MVP-3 governance submit rule
+
+若 request JSON 含 `prompt_governance_contract` / `theme_governance_trace` / `leadership_symbols` / `peer_shadow_candidates` / divergence or taxonomy gap signals，Claude submit JSON 必須包含並填寫：
+
+- `leadership_analysis`
+- `divergence_analysis`
+- `taxonomy_gap_analysis`
+- `peer_shadow_analysis`
+
+`peer_shadow_candidates` 與 universe 外 symbol 只能作 observability / shadow-only 分析；不得進 `scores`、`thesis`、`final_enter_candidates`。如需提及 universe 外 symbol，標示 `OUTSIDE_ALLOWED_UNIVERSE_SHADOW_ONLY`。

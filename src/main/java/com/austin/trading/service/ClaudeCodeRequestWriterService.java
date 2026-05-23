@@ -254,6 +254,36 @@ public class ClaudeCodeRequestWriterService {
             root.put("peer_shadow_contract",
                     "peer_shadow_candidates are not tradable candidates; they must not enter ENTER/FinalDecision/ranking and must_not_expand_allowed_symbols=true keeps them disjoint from allowed_symbols/tradable_candidate_symbols.");
 
+            boolean hasLeadership = leadershipContext.size() > 0 || leadershipSymbols.size() > 0;
+            boolean hasPeerShadow = peerShadow.size() > 0;
+            boolean governanceRequired = hasLeadership || hasPeerShadow;
+            ObjectNode governance = root.putObject("prompt_governance_contract");
+            governance.put("version", "MVP-3");
+            governance.put("governance_required", governanceRequired);
+            ArrayNode mandatorySections = governance.putArray("mandatory_sections");
+            mandatorySections.add("leadership_analysis");
+            mandatorySections.add("divergence_analysis");
+            mandatorySections.add("taxonomy_gap_analysis");
+            mandatorySections.add("peer_shadow_analysis");
+            governance.put("outside_allowed_universe_policy", "OUTSIDE_ALLOWED_UNIVERSE_SHADOW_ONLY; never write outside-universe symbols into final_enter_candidates, scores, or thesis");
+            governance.put("safety_boundary", "governance/shadow-only: do not expand allowed_symbols, do not promote peer_shadow_candidates to tradable, do not override risk gates");
+            ArrayNode mandatoryQuestions = governance.putArray("mandatory_questions");
+            mandatoryQuestions.add("Identify retained leaders and leadership-only symbols; do not ignore leaders solely because tradable=false or price is high.");
+            mandatoryQuestions.add("Check hot leaders, market leadership, divergence between hot_stocks and strong_themes, emerging themes, theme rotation, and fading themes.");
+            mandatoryQuestions.add("For OTHER/UNKNOWN/hot leader outside strong themes, propose temporary theme, peer scan result, and confidence.");
+            mandatoryQuestions.add("Analyze peer_shadow_candidates by role: SECOND_LEADER, LOW_BASE_FOLLOWER, CHANNEL_DISTRIBUTOR, WATCH_ONLY; keep them out of BUY/ENTER.");
+
+            ObjectNode governanceTrace = root.putObject("theme_governance_trace");
+            governanceTrace.put("governanceRequired", governanceRequired);
+            governanceTrace.put("requires_leadership_analysis", hasLeadership);
+            governanceTrace.put("requires_divergence_analysis", governanceRequired);
+            governanceTrace.put("requires_taxonomy_gap_analysis", governanceRequired);
+            governanceTrace.put("requires_peer_shadow_analysis", hasPeerShadow);
+            governanceTrace.put("must_not_expand_allowed_symbols", true);
+            governanceTrace.put("leader_tradable_false_allowed", true);
+            governanceTrace.put("peer_shadow_tradable_false_allowed", true);
+            governanceTrace.put("violates_allowed_universe_contract", false);
+
             ArrayNode allowed = root.putArray("allowed_symbols");
             allowedUnion.forEach(allowed::add);
             root.put("leader_tradable_false_allowed", true);
