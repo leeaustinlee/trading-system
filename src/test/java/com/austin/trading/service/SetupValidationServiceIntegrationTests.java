@@ -16,6 +16,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -26,6 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("integration")
 class SetupValidationServiceIntegrationTests {
 
+    private static final AtomicInteger DATE_COUNTER = new AtomicInteger();
+
     @Autowired SetupValidationService  service;
     @Autowired SetupDecisionRepository setupRepo;
 
@@ -33,7 +36,8 @@ class SetupValidationServiceIntegrationTests {
 
     @BeforeEach
     void setUp() {
-        uniqueDate = LocalDate.of(2002, 1, 1).plusDays(System.nanoTime() % 10_000);
+        uniqueDate = LocalDate.of(2201, 1, 1).plusDays(DATE_COUNTER.getAndIncrement());
+        setupRepo.deleteAll(setupRepo.findByTradingDate(uniqueDate));
     }
 
     private RankedCandidate candidate(String symbol) {
