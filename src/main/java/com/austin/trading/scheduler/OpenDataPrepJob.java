@@ -12,8 +12,10 @@ import com.austin.trading.service.ClaudeCodeRequestWriterService;
 import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
+import com.austin.trading.service.ThemeLeaderRetentionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -46,7 +48,30 @@ public class OpenDataPrepJob {
     private final DailyOrchestrationService orchestrationService;
     private final AiTaskService            aiTaskService;
     private final ClaudeCodeRequestWriterService requestWriterService;
+    private final ThemeLeaderRetentionService themeLeaderRetentionService;
 
+    @Autowired
+    public OpenDataPrepJob(
+            TwseMisClient twseMisClient,
+            CandidateScanService candidateScanService,
+            CandidateStockRepository candidateStockRepository,
+            SchedulerLogService schedulerLogService,
+            DailyOrchestrationService orchestrationService,
+            AiTaskService aiTaskService,
+            ClaudeCodeRequestWriterService requestWriterService,
+            ThemeLeaderRetentionService themeLeaderRetentionService
+    ) {
+        this.twseMisClient           = twseMisClient;
+        this.candidateScanService    = candidateScanService;
+        this.candidateStockRepository = candidateStockRepository;
+        this.schedulerLogService     = schedulerLogService;
+        this.orchestrationService    = orchestrationService;
+        this.aiTaskService           = aiTaskService;
+        this.requestWriterService    = requestWriterService;
+        this.themeLeaderRetentionService = themeLeaderRetentionService;
+    }
+
+    /** Backward-compatible constructor for legacy tests. */
     public OpenDataPrepJob(
             TwseMisClient twseMisClient,
             CandidateScanService candidateScanService,
@@ -56,13 +81,8 @@ public class OpenDataPrepJob {
             AiTaskService aiTaskService,
             ClaudeCodeRequestWriterService requestWriterService
     ) {
-        this.twseMisClient           = twseMisClient;
-        this.candidateScanService    = candidateScanService;
-        this.candidateStockRepository = candidateStockRepository;
-        this.schedulerLogService     = schedulerLogService;
-        this.orchestrationService    = orchestrationService;
-        this.aiTaskService           = aiTaskService;
-        this.requestWriterService    = requestWriterService;
+        this(twseMisClient, candidateScanService, candidateStockRepository, schedulerLogService,
+                orchestrationService, aiTaskService, requestWriterService, null);
     }
 
     @Scheduled(cron = "${trading.scheduler.open-data-prep-cron:0 1 9 * * MON-FRI}",
@@ -136,7 +156,10 @@ public class OpenDataPrepJob {
             try {
                 String context = String.format("{\"source\":\"open_data_prep\",\"quotes\":%d,\"updated\":%d}",
                         quotes.size(), updated);
-                boolean requestWritten = requestWriterService.writeRequest(openingTaskId, "OPENING", today, symbols, context);
+                List<ClaudeCodeRequestWriterService.LeaderContext> leaders = themeLeaderRetentionService == null
+                        ? List.of()
+                        : themeLeaderRetentionService.loadLeaderContexts(today, "OPENING");
+                boolean requestWritten = requestWriterService.writeRequest(openingTaskId, "OPENING", today, symbols, leaders, context);
                 if (!requestWritten) {
                     throw new IllegalStateException("OPENING request 寫出失敗");
                 }

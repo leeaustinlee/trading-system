@@ -16,10 +16,12 @@ import com.austin.trading.service.ClaudeCodeRequestWriterService;
 import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
+import com.austin.trading.service.ThemeLeaderRetentionService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -72,8 +74,37 @@ public class PostmarketDataPrepJob {
     private final ClaudeCodeRequestWriterService  requestWriterService;
     private final DailyOrchestrationService       orchestrationService;
     private final AiTaskService                   aiTaskService;
+    private final ThemeLeaderRetentionService     themeLeaderRetentionService;
     private final ObjectMapper                    objectMapper;
 
+    @Autowired
+    public PostmarketDataPrepJob(
+            MarketBreadthClient marketBreadthClient,
+            TwseMisClient twseMisClient,
+            CandidateScanService candidateScanService,
+            CandidateStockRepository candidateStockRepository,
+            MarketSnapshotRepository marketSnapshotRepository,
+            SchedulerLogService schedulerLogService,
+            ClaudeCodeRequestWriterService requestWriterService,
+            DailyOrchestrationService orchestrationService,
+            AiTaskService aiTaskService,
+            ThemeLeaderRetentionService themeLeaderRetentionService,
+            ObjectMapper objectMapper
+    ) {
+        this.marketBreadthClient      = marketBreadthClient;
+        this.twseMisClient            = twseMisClient;
+        this.candidateScanService     = candidateScanService;
+        this.candidateStockRepository = candidateStockRepository;
+        this.marketSnapshotRepository = marketSnapshotRepository;
+        this.schedulerLogService      = schedulerLogService;
+        this.requestWriterService     = requestWriterService;
+        this.orchestrationService     = orchestrationService;
+        this.aiTaskService            = aiTaskService;
+        this.themeLeaderRetentionService = themeLeaderRetentionService;
+        this.objectMapper             = objectMapper;
+    }
+
+    /** Backward-compatible constructor for legacy tests. */
     public PostmarketDataPrepJob(
             MarketBreadthClient marketBreadthClient,
             TwseMisClient twseMisClient,
@@ -86,16 +117,9 @@ public class PostmarketDataPrepJob {
             AiTaskService aiTaskService,
             ObjectMapper objectMapper
     ) {
-        this.marketBreadthClient      = marketBreadthClient;
-        this.twseMisClient            = twseMisClient;
-        this.candidateScanService     = candidateScanService;
-        this.candidateStockRepository = candidateStockRepository;
-        this.marketSnapshotRepository = marketSnapshotRepository;
-        this.schedulerLogService      = schedulerLogService;
-        this.requestWriterService     = requestWriterService;
-        this.orchestrationService     = orchestrationService;
-        this.aiTaskService            = aiTaskService;
-        this.objectMapper             = objectMapper;
+        this(marketBreadthClient, twseMisClient, candidateScanService, candidateStockRepository,
+                marketSnapshotRepository, schedulerLogService, requestWriterService, orchestrationService,
+                aiTaskService, null, objectMapper);
     }
 
     @Scheduled(cron = "${trading.scheduler.postmarket-data-prep-cron:0 5 15 * * MON-FRI}",
@@ -158,6 +182,12 @@ public class PostmarketDataPrepJob {
             );
             Long postmarketTaskId = task.getId();
 
+            int retainedLeaders = 0;
+            if (themeLeaderRetentionService != null) {
+                retainedLeaders = themeLeaderRetentionService.retainPostmarketSuperStrong(
+                        today, selectSuperStrongLeaders(candidates, universe.superStrongSymbols()));
+            }
+
             String marketContext = buildMarketContextJson(breadth.orElse(null), marketGradeDecision, universe, symbols);
             boolean requestWritten = requestWriterService.writeRequest(postmarketTaskId, "POSTMARKET", today, symbols, marketContext);
             if (!requestWritten) {
@@ -165,12 +195,13 @@ public class PostmarketDataPrepJob {
             }
 
             String msg = String.format(
-                    "breadth=%s candidates=%d updated=%d universeSource=%s marketGrade=%s scoringSymbols=%s",
+                    "breadth=%s candidates=%d updated=%d universeSource=%s marketGrade=%s retainedLeaders=%d scoringSymbols=%s",
                     breadth.map(b -> b.advances() + "/" + b.declines()).orElse("N/A"),
                     candidates.size(),
                     updated,
                     universe.universeSource(),
                     marketGrade,
+                    retainedLeaders,
                     String.join(",", symbols)
             );
             log.info("[PostmarketDataPrepJob] {}", msg);
@@ -245,6 +276,19 @@ public class PostmarketDataPrepJob {
                     List.of()
             );
         }
+    }
+
+    private List<CandidateResponse> selectSuperStrongLeaders(List<CandidateResponse> candidates, List<String> superStrongSymbols) {
+        if (candidates == null || candidates.isEmpty() || superStrongSymbols == null || superStrongSymbols.isEmpty()) return List.of();
+        Map<String, CandidateResponse> bySymbol = candidates.stream()
+                .filter(c -> c != null && c.symbol() != null && !c.symbol().isBlank())
+                .collect(Collectors.toMap(CandidateResponse::symbol, c -> c, (a, b) -> a, LinkedHashMap::new));
+        List<CandidateResponse> leaders = new ArrayList<>();
+        for (String symbol : superStrongSymbols) {
+            CandidateResponse candidate = bySymbol.get(symbol);
+            if (candidate != null) leaders.add(candidate);
+        }
+        return leaders;
     }
 
     private Optional<Path> resolveMarketBreadthScanPath() {

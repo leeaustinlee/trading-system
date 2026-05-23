@@ -10,8 +10,10 @@ import com.austin.trading.service.ClaudeCodeRequestWriterService;
 import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
+import com.austin.trading.service.ThemeLeaderRetentionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -43,7 +45,28 @@ public class T86DataPrepJob {
     private final DailyOrchestrationService orchestrationService;
     private final AiTaskService            aiTaskService;
     private final ClaudeCodeRequestWriterService requestWriterService;
+    private final ThemeLeaderRetentionService themeLeaderRetentionService;
 
+    @Autowired
+    public T86DataPrepJob(
+            TwseInstitutionalClient institutionalClient,
+            CandidateStockRepository candidateStockRepository,
+            SchedulerLogService schedulerLogService,
+            DailyOrchestrationService orchestrationService,
+            AiTaskService aiTaskService,
+            ClaudeCodeRequestWriterService requestWriterService,
+            ThemeLeaderRetentionService themeLeaderRetentionService
+    ) {
+        this.institutionalClient      = institutionalClient;
+        this.candidateStockRepository = candidateStockRepository;
+        this.schedulerLogService      = schedulerLogService;
+        this.orchestrationService     = orchestrationService;
+        this.aiTaskService            = aiTaskService;
+        this.requestWriterService     = requestWriterService;
+        this.themeLeaderRetentionService = themeLeaderRetentionService;
+    }
+
+    /** Backward-compatible constructor for legacy tests. */
     public T86DataPrepJob(
             TwseInstitutionalClient institutionalClient,
             CandidateStockRepository candidateStockRepository,
@@ -52,12 +75,8 @@ public class T86DataPrepJob {
             AiTaskService aiTaskService,
             ClaudeCodeRequestWriterService requestWriterService
     ) {
-        this.institutionalClient      = institutionalClient;
-        this.candidateStockRepository = candidateStockRepository;
-        this.schedulerLogService      = schedulerLogService;
-        this.orchestrationService     = orchestrationService;
-        this.aiTaskService            = aiTaskService;
-        this.requestWriterService     = requestWriterService;
+        this(institutionalClient, candidateStockRepository, schedulerLogService,
+                orchestrationService, aiTaskService, requestWriterService, null);
     }
 
     @Scheduled(cron = "${trading.scheduler.t86-data-prep-cron:0 10 18 * * MON-FRI}",
@@ -131,7 +150,10 @@ public class T86DataPrepJob {
             try {
                 String context = String.format("{\"t86_rows\":%d,\"candidates_with_flow\":%d}",
                         flows.size(), updated);
-                boolean requestWritten = requestWriterService.writeRequest(t86TaskId, "T86_TOMORROW", today, symbols, context);
+                List<ClaudeCodeRequestWriterService.LeaderContext> leaders = themeLeaderRetentionService == null
+                        ? List.of()
+                        : themeLeaderRetentionService.loadLeaderContexts(today, "T86_TOMORROW");
+                boolean requestWritten = requestWriterService.writeRequest(t86TaskId, "T86_TOMORROW", today, symbols, leaders, context);
                 if (!requestWritten) {
                     throw new IllegalStateException("T86_TOMORROW request 寫出失敗");
                 }

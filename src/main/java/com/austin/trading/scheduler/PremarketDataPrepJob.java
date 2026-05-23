@@ -14,8 +14,10 @@ import com.austin.trading.service.ClaudeCodeRequestWriterService;
 import com.austin.trading.service.DailyOrchestrationService;
 import com.austin.trading.service.OrchestrationStep;
 import com.austin.trading.service.SchedulerLogService;
+import com.austin.trading.service.ThemeLeaderRetentionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -49,7 +51,32 @@ public class PremarketDataPrepJob {
     private final ClaudeCodeRequestWriterService  requestWriterService;
     private final DailyOrchestrationService       orchestrationService;
     private final AiTaskService                   aiTaskService;
+    private final ThemeLeaderRetentionService     themeLeaderRetentionService;
 
+    @Autowired
+    public PremarketDataPrepJob(
+            TaifexClient taifexClient,
+            TwseMisClient twseMisClient,
+            CandidateScanService candidateScanService,
+            MarketSnapshotRepository marketSnapshotRepository,
+            SchedulerLogService schedulerLogService,
+            ClaudeCodeRequestWriterService requestWriterService,
+            DailyOrchestrationService orchestrationService,
+            AiTaskService aiTaskService,
+            ThemeLeaderRetentionService themeLeaderRetentionService
+    ) {
+        this.taifexClient            = taifexClient;
+        this.twseMisClient           = twseMisClient;
+        this.candidateScanService    = candidateScanService;
+        this.marketSnapshotRepository = marketSnapshotRepository;
+        this.schedulerLogService     = schedulerLogService;
+        this.requestWriterService    = requestWriterService;
+        this.orchestrationService    = orchestrationService;
+        this.aiTaskService           = aiTaskService;
+        this.themeLeaderRetentionService = themeLeaderRetentionService;
+    }
+
+    /** Backward-compatible constructor for legacy tests. */
     public PremarketDataPrepJob(
             TaifexClient taifexClient,
             TwseMisClient twseMisClient,
@@ -60,14 +87,8 @@ public class PremarketDataPrepJob {
             DailyOrchestrationService orchestrationService,
             AiTaskService aiTaskService
     ) {
-        this.taifexClient            = taifexClient;
-        this.twseMisClient           = twseMisClient;
-        this.candidateScanService    = candidateScanService;
-        this.marketSnapshotRepository = marketSnapshotRepository;
-        this.schedulerLogService     = schedulerLogService;
-        this.requestWriterService    = requestWriterService;
-        this.orchestrationService    = orchestrationService;
-        this.aiTaskService           = aiTaskService;
+        this(taifexClient, twseMisClient, candidateScanService, marketSnapshotRepository,
+                schedulerLogService, requestWriterService, orchestrationService, aiTaskService, null);
     }
 
     @Scheduled(cron = "${trading.scheduler.premarket-data-prep-cron:0 10 8 * * MON-FRI}",
@@ -146,7 +167,10 @@ public class PremarketDataPrepJob {
             }
 
             // 寫出研究請求給 Claude Code 排程 Agent（08:20 執行）
-            boolean requestWritten = requestWriterService.writeRequest(premarketTaskId, "PREMARKET", today, symbols,
+            List<ClaudeCodeRequestWriterService.LeaderContext> leaders = themeLeaderRetentionService == null
+                    ? List.of()
+                    : themeLeaderRetentionService.loadLeaderContexts(today, "PREMARKET");
+            boolean requestWritten = requestWriterService.writeRequest(premarketTaskId, "PREMARKET", today, symbols, leaders,
                     buildPayload(txf.orElse(null), quoteSummary, candidateSourceDate, candidateSourcePolicy));
             if (!requestWritten) {
                 throw new IllegalStateException("PREMARKET request 寫出失敗，拒絕留下只有 task、沒有 file bridge request 的狀態");

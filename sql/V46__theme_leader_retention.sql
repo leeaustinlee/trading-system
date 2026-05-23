@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS theme_leader_retention (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    trading_date DATE NOT NULL,
+    source_phase VARCHAR(32) NOT NULL,
+    target_phase VARCHAR(32) NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    stock_name VARCHAR(120) NULL,
+    theme_tag VARCHAR(100) NULL,
+    leader_rank INT NULL,
+    score DECIMAL(8,4) NULL,
+    leader_tradable BOOLEAN NOT NULL DEFAULT FALSE,
+    retention_reason VARCHAR(500) NOT NULL,
+    use_for VARCHAR(255) NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    payload_json JSON NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_theme_leader_retention_phase_symbol (trading_date, target_phase, symbol),
+    KEY idx_theme_leader_retention_target (target_phase, active, trading_date, leader_rank),
+    KEY idx_theme_leader_retention_symbol (symbol, trading_date)
+);

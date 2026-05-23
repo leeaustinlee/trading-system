@@ -20,8 +20,10 @@ import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Claude Code 研究請求寫入服務。
@@ -148,6 +150,22 @@ public class ClaudeCodeRequestWriterService {
             List<String> candidateSymbols,
             String contextPayload
     ) {
+        return writeRequest(taskId, type, tradingDate, candidateSymbols, List.of(), contextPayload);
+    }
+
+    /**
+     * MVP-2A：leader/tradable split. tradableCandidateSymbols are still the only
+     * ENTER/scoring candidates; leadershipSymbols are read-only market-leader
+     * context and are added to allowed_symbols only so Claude can discuss them.
+     */
+    public boolean writeRequest(
+            Long taskId,
+            String type,
+            LocalDate tradingDate,
+            List<String> tradableCandidateSymbols,
+            List<LeaderContext> leadershipContexts,
+            String contextPayload
+    ) {
         String path = config.getRequestOutputPath();
         if (path == null || path.isBlank()) {
             log.debug("[ClaudeCodeRequestWriter] request-output-path not set, skip.");
@@ -165,20 +183,49 @@ public class ClaudeCodeRequestWriterService {
             root.put("trading_date", tradingDate.toString());
             root.put("tradingDate", tradingDate.toString()); // v2.7：camelCase 供 prompt / script 直接取用
 
-            // 候選股（舊鍵名 + 明確 allowed_symbols 重複一次）
+            // MVP-2A leader/tradable split：candidates/tradable_candidate_symbols are scoring/ENTER candidates only.
+            // leadership_symbols are read-only market leadership context. allowed_symbols is the union for Claude research scope.
+            Set<String> allowedUnion = new LinkedHashSet<>();
             ArrayNode candidates = root.putArray("candidates");
-            ArrayNode allowed    = root.putArray("allowed_symbols");
-            if (candidateSymbols != null) {
-                for (String s : candidateSymbols) {
+            ArrayNode tradable = root.putArray("tradable_candidate_symbols");
+            if (tradableCandidateSymbols != null) {
+                for (String s : tradableCandidateSymbols) {
                     if (s == null || s.isBlank()) continue;
-                    candidates.add(s.trim());
-                    allowed.add(s.trim());
+                    String symbol = s.trim();
+                    candidates.add(symbol);
+                    tradable.add(symbol);
+                    allowedUnion.add(symbol);
                 }
             }
+
+            ArrayNode leadershipSymbols = root.putArray("leadership_symbols");
+            ArrayNode leadershipContext = root.putArray("leadership_context");
+            if (leadershipContexts != null) {
+                for (LeaderContext leader : leadershipContexts) {
+                    if (leader == null || leader.symbol() == null || leader.symbol().isBlank()) continue;
+                    String symbol = leader.symbol().trim();
+                    leadershipSymbols.add(symbol);
+                    allowedUnion.add(symbol);
+                    ObjectNode item = leadershipContext.addObject();
+                    item.put("symbol", symbol);
+                    if (leader.stockName() != null) item.put("stockName", leader.stockName());
+                    if (leader.themeTag() != null) item.put("themeTag", leader.themeTag());
+                    if (leader.leaderRank() != null) item.put("leaderRank", leader.leaderRank());
+                    item.put("leader_tradable", leader.leaderTradable());
+                    item.put("retention_reason", leader.retentionReason());
+                    ArrayNode useFor = item.putArray("use_for");
+                    if (leader.useFor() != null) leader.useFor().forEach(useFor::add);
+                }
+            }
+            ArrayNode allowed = root.putArray("allowed_symbols");
+            allowedUnion.forEach(allowed::add);
+            root.put("leader_tradable_false_allowed", true);
+            root.put("candidate_scope_contract",
+                    "tradable_candidate_symbols/candidates 才可進入 ENTER 評估；leadership_symbols 僅供 MARKET_LEADERSHIP/THEME_VALIDATION/PEER_DISCOVERY，不得視為 ENTER candidate。" );
             root.put("contract_note",
                     "scores.keys 與 thesis.keys 必須是 allowed_symbols 的子集；"
-                            + "不在此清單的 symbol 一律丟棄。前一輪（例如 PREMARKET）的 symbols 僅可作為背景，"
-                            + "嚴禁直接複製到本輪 scores/thesis。");
+                            + "tradable_candidate_symbols/candidates 是唯一可交易候選；leadership_symbols 可出現在研究脈絡，"
+                            + "但 leader_tradable=false 時不得視為 ENTER candidate，也不得放寬 ranking 或 FinalDecisionEngine。前一輪 symbols 僅可作為背景，嚴禁直接複製到本輪 scores/thesis。");
 
             // 補充 context（由 caller 傳入，如 txf 報價、大盤漲跌家數等）
             if (contextPayload != null && !contextPayload.isBlank()) {
@@ -228,8 +275,11 @@ public class ClaudeCodeRequestWriterService {
                 Files.createDirectories(dest.getParent());
             }
             Files.writeString(dest, json, StandardCharsets.UTF_8);
-            log.info("[ClaudeCodeRequestWriter] Written taskId={} type={} candidates={} to {}",
-                    taskId, type, candidateSymbols == null ? 0 : candidateSymbols.size(), path);
+            log.info("[ClaudeCodeRequestWriter] Written taskId={} type={} tradableCandidates={} leadershipSymbols={} to {}",
+                    taskId, type,
+                    tradableCandidateSymbols == null ? 0 : tradableCandidateSymbols.size(),
+                    leadershipContexts == null ? 0 : leadershipContexts.size(),
+                    path);
             return true;
 
         } catch (Exception e) {
@@ -237,6 +287,16 @@ public class ClaudeCodeRequestWriterService {
             return false;
         }
     }
+
+    public record LeaderContext(
+            String symbol,
+            String stockName,
+            String themeTag,
+            Integer leaderRank,
+            boolean leaderTradable,
+            String retentionReason,
+            List<String> useFor
+    ) {}
 
     /**
      * 寫入即時資金 context。若無法取得（service 未注入或拋例外），改寫 warning，
