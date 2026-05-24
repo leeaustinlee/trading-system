@@ -25,8 +25,9 @@ class ThemeReplayControllerTest {
         LocalDate date = LocalDate.of(2026, 5, 22);
         var boundary = ThemeReplayTimelineResponse.SafetyBoundary.replayOnlyBoundary();
         var snapshot = new ThemeReplaySummaryResponse(
-                date, "被動元件", "REPLAY_ONLY", "2327", 1, 5, 6,
+                date, "被動元件", "MAINSTREAM", "2327", 1, 5, 6,
                 0, 0, 1, 6, 0, null,
+                new java.math.BigDecimal("0.70"), "leader is clear", List.of("LOW_BASE_FOLLOWER", "PULLBACK"), List.of("CHASE_LEADER"),
                 true, true, boundary
         );
         var timeline = new ThemeReplayTimelineResponse(
@@ -38,6 +39,7 @@ class ThemeReplayControllerTest {
                 )),
                 List.of(),
                 List.of(new ThemeReplayTimelineResponse.Event("RISK_REJECTED", "2327", "risk gate blocked", null)),
+                "MAINSTREAM", new java.math.BigDecimal("0.70"), "leader is clear", List.of("LOW_BASE_FOLLOWER", "PULLBACK"), List.of("CHASE_LEADER"),
                 boundary,
                 true,
                 true

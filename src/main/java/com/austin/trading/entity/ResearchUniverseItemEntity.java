@@ -34,6 +34,9 @@ public class ResearchUniverseItemEntity {
     @Column(name = "theme_importance_score", precision = 8, scale = 4) private BigDecimal themeImportanceScore;
     @Column(name = "tradable_score", precision = 8, scale = 4) private BigDecimal tradableScore;
     @Column(name = "narrative_density_score", precision = 8, scale = 4) private BigDecimal narrativeDensityScore;
+    @Column(name = "lifecycle_stage", length = 40) private String lifecycleStage;
+    @Column(name = "lifecycle_score", precision = 8, scale = 4) private BigDecimal lifecycleScore;
+    @Column(name = "lifecycle_advisory", length = 1000) private String lifecycleAdvisory;
     @Column(name = "governance_status", nullable = false, length = 50) private String governanceStatus = "SHADOW_ONLY";
     @Column(name = "research_universe", nullable = false) private Boolean researchUniverse = true;
     @Column(name = "tradable_universe", nullable = false) private Boolean tradableUniverse = false;
@@ -69,6 +72,12 @@ public class ResearchUniverseItemEntity {
     public void setTradableScore(BigDecimal tradableScore) { this.tradableScore = tradableScore; }
     public BigDecimal getNarrativeDensityScore() { return narrativeDensityScore; }
     public void setNarrativeDensityScore(BigDecimal narrativeDensityScore) { this.narrativeDensityScore = narrativeDensityScore; }
+    public String getLifecycleStage() { return lifecycleStage; }
+    public void setLifecycleStage(String lifecycleStage) { this.lifecycleStage = lifecycleStage; }
+    public BigDecimal getLifecycleScore() { return lifecycleScore; }
+    public void setLifecycleScore(BigDecimal lifecycleScore) { this.lifecycleScore = lifecycleScore; }
+    public String getLifecycleAdvisory() { return lifecycleAdvisory; }
+    public void setLifecycleAdvisory(String lifecycleAdvisory) { this.lifecycleAdvisory = lifecycleAdvisory; }
     public String getGovernanceStatus() { return governanceStatus; }
     public void setGovernanceStatus(String governanceStatus) { this.governanceStatus = governanceStatus; }
     public Boolean getResearchUniverse() { return researchUniverse; }

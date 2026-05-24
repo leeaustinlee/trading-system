@@ -3,6 +3,7 @@ package com.austin.trading.service;
 import com.austin.trading.dto.response.ResearchUniverseResponse;
 import com.austin.trading.entity.*;
 import com.austin.trading.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,7 @@ public class ResearchUniverseService {
     private final ThemeLeaderRetentionRepository leaderRetentionRepository;
     private final ThemePeerShadowCandidateRepository peerShadowCandidateRepository;
     private final ThemeReplayNodeRepository replayNodeRepository;
+    private final ThemeLifecycleStateRepository lifecycleStateRepository;
     private final CandidateStockRepository candidateStockRepository;
 
     public ResearchUniverseService(
@@ -35,11 +37,26 @@ public class ResearchUniverseService {
             ThemeReplayNodeRepository replayNodeRepository,
             CandidateStockRepository candidateStockRepository
     ) {
+        this(researchRepository, leadershipSnapshotRepository, leaderRetentionRepository, peerShadowCandidateRepository,
+                replayNodeRepository, null, candidateStockRepository);
+    }
+
+    @Autowired
+    public ResearchUniverseService(
+            ResearchUniverseItemRepository researchRepository,
+            ThemeLeadershipSnapshotRepository leadershipSnapshotRepository,
+            ThemeLeaderRetentionRepository leaderRetentionRepository,
+            ThemePeerShadowCandidateRepository peerShadowCandidateRepository,
+            ThemeReplayNodeRepository replayNodeRepository,
+            ThemeLifecycleStateRepository lifecycleStateRepository,
+            CandidateStockRepository candidateStockRepository
+    ) {
         this.researchRepository = researchRepository;
         this.leadershipSnapshotRepository = leadershipSnapshotRepository;
         this.leaderRetentionRepository = leaderRetentionRepository;
         this.peerShadowCandidateRepository = peerShadowCandidateRepository;
         this.replayNodeRepository = replayNodeRepository;
+        this.lifecycleStateRepository = lifecycleStateRepository;
         this.candidateStockRepository = candidateStockRepository;
     }
 
@@ -99,11 +116,13 @@ public class ResearchUniverseService {
         safeList(candidateStockRepository.findByTradingDateOrderByScoreDesc(date, Pageable.unpaged())).stream()
                 .filter(this::isResearchCandidateRole)
                 .forEach(e -> put(items, fromCandidate(e)));
-        return items.values().stream()
+        List<ResearchUniverseItemEntity> sorted = items.values().stream()
                 .sorted(Comparator.comparing(ResearchUniverseItemEntity::getThemeTag, Comparator.nullsLast(String::compareTo))
                         .thenComparing(ResearchUniverseItemEntity::getSymbol, Comparator.nullsLast(String::compareTo))
                         .thenComparing(ResearchUniverseItemEntity::getSource, Comparator.nullsLast(String::compareTo)))
                 .toList();
+        attachLifecycleAdvisory(date, sorted);
+        return sorted;
     }
 
     private ResearchUniverseItemEntity fromLeadershipSnapshot(ThemeLeadershipSnapshotEntity leader) {
@@ -236,13 +255,28 @@ public class ResearchUniverseService {
     }
 
     private ResearchUniverseResponse response(LocalDate date, List<ResearchUniverseItemEntity> items) {
+        attachLifecycleAdvisory(date, items);
         return new ResearchUniverseResponse(date, true, true, SAFETY, items.stream().map(this::toItem).toList());
+    }
+
+    private void attachLifecycleAdvisory(LocalDate date, List<ResearchUniverseItemEntity> items) {
+        if (items == null || items.isEmpty() || lifecycleStateRepository == null) return;
+        Map<String, ThemeLifecycleStateEntity> lifecycleByTheme = safeList(lifecycleStateRepository.findByTradingDateOrderByThemeTagAsc(date)).stream()
+                .collect(Collectors.toMap(ThemeLifecycleStateEntity::getThemeTag, Function.identity(), (a, b) -> a));
+        for (ResearchUniverseItemEntity item : items) {
+            ThemeLifecycleStateEntity lifecycle = lifecycleByTheme.get(item.getThemeTag());
+            if (lifecycle == null) continue;
+            item.setLifecycleStage(lifecycle.getStage());
+            item.setLifecycleScore(lifecycle.getLifecycleScore());
+            item.setLifecycleAdvisory(lifecycle.getReason() + " | advisory-only; lifecycle does not promote research universe or override risk gate");
+        }
     }
 
     private ResearchUniverseResponse.Item toItem(ResearchUniverseItemEntity e) {
         return new ResearchUniverseResponse.Item(
                 e.getSymbol(), e.getStockName(), e.getThemeTag(), e.getResearchRole(), e.getSource(), e.getResearchScore(),
-                e.getThemeImportanceScore(), e.getTradableScore(), e.getNarrativeDensityScore(), e.getGovernanceStatus(),
+                e.getThemeImportanceScore(), e.getTradableScore(), e.getNarrativeDensityScore(), e.getLifecycleStage(),
+                e.getLifecycleScore(), e.getLifecycleAdvisory(), e.getGovernanceStatus(),
                 Boolean.TRUE.equals(e.getResearchUniverse()), Boolean.TRUE.equals(e.getTradableUniverse()), Boolean.TRUE.equals(e.getPromotedToTradable()),
                 e.getPromotionReason(), e.getBlockedReason(), e.getCandidateRole(), e.getThemeLeaderSymbol(),
                 Boolean.TRUE.equals(e.getLeadershipOnly()), Boolean.TRUE.equals(e.getLeaderTradable()), e.getSafetyNote(), e.getPayloadJson(), SAFETY);
@@ -255,6 +289,9 @@ public class ResearchUniverseService {
         e.setThemeImportanceScore(i.themeImportanceScore());
         e.setTradableScore(i.tradableScore());
         e.setNarrativeDensityScore(i.narrativeDensityScore());
+        e.setLifecycleStage(i.lifecycleStage());
+        e.setLifecycleScore(i.lifecycleScore());
+        e.setLifecycleAdvisory(i.lifecycleAdvisory());
         e.setGovernanceStatus(i.governanceStatus());
         e.setResearchUniverse(i.researchUniverse());
         e.setTradableUniverse(i.tradableUniverse());

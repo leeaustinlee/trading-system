@@ -17,6 +17,10 @@ public record ThemeReplaySummaryResponse(
         int researchUniverseCount,
         int tradableUniverseCount,
         BigDecimal replayScore,
+        BigDecimal lifecycleScore,
+        String lifecycleReason,
+        java.util.List<String> recommendedPlaybook,
+        java.util.List<String> avoidPlaybook,
         boolean shadowOnly,
         boolean replayOnly,
         ThemeReplayTimelineResponse.SafetyBoundary safetyBoundary

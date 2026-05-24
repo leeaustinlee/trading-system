@@ -13,6 +13,11 @@ public record ThemeReplayTimelineResponse(
         List<Node> nodes,
         List<Edge> edges,
         List<Event> events,
+        String lifecycleStage,
+        BigDecimal lifecycleScore,
+        String lifecycleReason,
+        List<String> recommendedPlaybook,
+        List<String> avoidPlaybook,
         SafetyBoundary safetyBoundary,
         boolean shadowOnly,
         boolean replayOnly
@@ -63,10 +68,12 @@ public record ThemeReplayTimelineResponse(
             boolean doesNotAffectBuySellEnter,
             boolean researchUniverseNotTradable,
             boolean doesNotWriteCandidateStock,
-            boolean doesNotWriteProductionScore
+            boolean doesNotWriteProductionScore,
+            boolean advisoryOnly,
+            boolean lifecycleDoesNotOverrideRiskGate
     ) {
         public static SafetyBoundary replayOnlyBoundary() {
-            return new SafetyBoundary(true, true, true, true, true, true, true);
+            return new SafetyBoundary(true, true, true, true, true, true, true, true, true);
         }
     }
 }

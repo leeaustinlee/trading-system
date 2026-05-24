@@ -6,6 +6,7 @@ import com.austin.trading.entity.*;
 import com.austin.trading.repository.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ public class ThemeReplayTimelineService {
     private final ThemeLeaderRetentionRepository leaderRetentionRepository;
     private final ThemePeerShadowCandidateRepository peerShadowCandidateRepository;
     private final CandidateStockRepository candidateStockRepository;
+    private final ThemeLifecycleStateRepository lifecycleStateRepository;
     private final ObjectMapper objectMapper;
 
     public ThemeReplayTimelineService(
@@ -39,6 +41,22 @@ public class ThemeReplayTimelineService {
             CandidateStockRepository candidateStockRepository,
             ObjectMapper objectMapper
     ) {
+        this(snapshotRepository, nodeRepository, edgeRepository, leadershipSnapshotRepository, leaderRetentionRepository,
+                peerShadowCandidateRepository, candidateStockRepository, null, objectMapper);
+    }
+
+    @Autowired
+    public ThemeReplayTimelineService(
+            ThemeReplaySnapshotRepository snapshotRepository,
+            ThemeReplayNodeRepository nodeRepository,
+            ThemeReplayEdgeRepository edgeRepository,
+            ThemeLeadershipSnapshotRepository leadershipSnapshotRepository,
+            ThemeLeaderRetentionRepository leaderRetentionRepository,
+            ThemePeerShadowCandidateRepository peerShadowCandidateRepository,
+            CandidateStockRepository candidateStockRepository,
+            ThemeLifecycleStateRepository lifecycleStateRepository,
+            ObjectMapper objectMapper
+    ) {
         this.snapshotRepository = snapshotRepository;
         this.nodeRepository = nodeRepository;
         this.edgeRepository = edgeRepository;
@@ -46,6 +64,7 @@ public class ThemeReplayTimelineService {
         this.leaderRetentionRepository = leaderRetentionRepository;
         this.peerShadowCandidateRepository = peerShadowCandidateRepository;
         this.candidateStockRepository = candidateStockRepository;
+        this.lifecycleStateRepository = lifecycleStateRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -64,7 +83,7 @@ public class ThemeReplayTimelineService {
                 .map(this::toSummary)
                 .orElseGet(() -> new ThemeReplaySummaryResponse(
                         date, themeTag, "REPLAY_ONLY", null, 0, 0, 0, 0, 0, 0, 0, 0,
-                        null, true, true, SAFETY));
+                        null, null, null, List.of(), List.of(), true, true, SAFETY));
         List<ThemeReplayTimelineResponse.Node> nodes = nodeRepository
                 .findByTradingDateAndThemeTagOrderByIdAsc(date, themeTag).stream()
                 .map(this::toNode)
@@ -81,6 +100,11 @@ public class ThemeReplayTimelineService {
                 nodes,
                 edges,
                 events(nodes, edges),
+                snapshot.lifecycleStage(),
+                snapshot.lifecycleScore(),
+                snapshot.lifecycleReason(),
+                snapshot.recommendedPlaybook(),
+                snapshot.avoidPlaybook(),
                 SAFETY,
                 true,
                 true
@@ -127,7 +151,7 @@ public class ThemeReplayTimelineService {
 
         String firstTheme = snapshots.stream().map(ThemeReplaySnapshotEntity::getThemeTag).findFirst().orElse(null);
         if (firstTheme == null) {
-            return new ThemeReplayTimelineResponse(date, null, null, null, List.of(), List.of(), List.of(), SAFETY, true, true);
+            return new ThemeReplayTimelineResponse(date, null, null, null, List.of(), List.of(), List.of(), null, null, null, List.of(), List.of(), SAFETY, true, true);
         }
         ThemeReplaySummaryResponse snapshot = toSummary(snapshots.stream()
                 .filter(s -> firstTheme.equals(s.getThemeTag()))
@@ -142,7 +166,9 @@ public class ThemeReplayTimelineService {
                 .toList();
         return new ThemeReplayTimelineResponse(
                 date, firstTheme, snapshot.leaderSymbol(), snapshot,
-                responseNodes, responseEdges, events(responseNodes, responseEdges), SAFETY, true, true);
+                responseNodes, responseEdges, events(responseNodes, responseEdges),
+                snapshot.lifecycleStage(), snapshot.lifecycleScore(), snapshot.lifecycleReason(),
+                snapshot.recommendedPlaybook(), snapshot.avoidPlaybook(), SAFETY, true, true);
     }
 
     private ThemeReplayNodeEntity fromCandidate(CandidateStockEntity candidate) {
@@ -283,6 +309,15 @@ public class ThemeReplayTimelineService {
             snapshot.setResearchUniverseCount((int) nodes.stream().filter(n -> Boolean.TRUE.equals(n.getResearchUniverse())).count());
             snapshot.setTradableUniverseCount((int) nodes.stream().filter(n -> Boolean.TRUE.equals(n.getTradableUniverse())).count());
             snapshot.setReplayScore(nodes.stream().map(ThemeReplayNodeEntity::getShadowRankScore).filter(Objects::nonNull).max(BigDecimal::compareTo).orElse(null));
+            if (lifecycleStateRepository != null) {
+                lifecycleStateRepository.findByTradingDateAndThemeTag(date, theme).ifPresent(lifecycle -> {
+                    snapshot.setLifecycleStage(lifecycle.getStage());
+                    snapshot.setLifecycleScore(lifecycle.getLifecycleScore());
+                    snapshot.setLifecycleReason(lifecycle.getReason());
+                    snapshot.setRecommendedPlaybookJson(lifecycle.getRecommendedPlaybookJson());
+                    snapshot.setAvoidPlaybookJson(lifecycle.getAvoidPlaybookJson());
+                });
+            }
             snapshot.setPayloadJson(json(Map.of(
                     "shadowOnly", true,
                     "replayOnly", true,
@@ -343,10 +378,11 @@ public class ThemeReplayTimelineService {
 
     private ThemeReplaySummaryResponse toSummary(ThemeReplaySnapshotEntity e) {
         return new ThemeReplaySummaryResponse(
-                e.getTradingDate(), e.getThemeTag(), e.getLifecycleStage(), e.getLeaderSymbol(),
+                e.getTradingDate(), e.getThemeTag(), defaultString(e.getLifecycleStage(), "REPLAY_ONLY"), e.getLeaderSymbol(),
                 intValue(e.getLeaderCount()), intValue(e.getPeerCount()), intValue(e.getBreadth()),
                 intValue(e.getTaxonomyGapCount()), intValue(e.getDivergenceCount()), intValue(e.getRiskRejectedCount()),
                 intValue(e.getResearchUniverseCount()), intValue(e.getTradableUniverseCount()), e.getReplayScore(),
+                e.getLifecycleScore(), e.getLifecycleReason(), stringList(e.getRecommendedPlaybookJson()), stringList(e.getAvoidPlaybookJson()),
                 true, true, SAFETY);
     }
 
@@ -364,6 +400,18 @@ public class ThemeReplayTimelineService {
     }
 
     private int intValue(Integer value) { return value == null ? 0 : value; }
+    private List<String> stringList(String value) {
+        if (value == null || value.isBlank()) return List.of();
+        try {
+            var node = objectMapper.readTree(value);
+            if (!node.isArray()) return List.of();
+            List<String> out = new ArrayList<>();
+            node.forEach(n -> out.add(n.asText()));
+            return out;
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
     private String defaultString(String value, String fallback) { return value == null || value.isBlank() ? fallback : value; }
     private <T> List<T> safeList(List<T> list) { return list == null ? List.of() : list; }
     private String json(Object value) {
