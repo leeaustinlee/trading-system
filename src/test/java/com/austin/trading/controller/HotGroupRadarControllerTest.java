@@ -58,6 +58,11 @@ class HotGroupRadarControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.themes[0].themeTag", is("被動元件/MLCC")))
                 .andExpect(jsonPath("$.signals[0].symbol", is("2492")));
+
+        mvc.perform(get("/api/hot-groups/theme-members").param("date", DATE.toString()).param("themeTag", "被動元件/MLCC"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.themes[0].themeTag", is("被動元件/MLCC")))
+                .andExpect(jsonPath("$.signals[0].symbol", is("2492")));
     }
 
     @Test

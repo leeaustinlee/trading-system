@@ -69,7 +69,8 @@ class HotGroupRadarServiceTest {
         assertThat(signals).anySatisfy(s -> {
             assertThat(s.getSymbol()).isEqualTo("2472");
             assertThat(s.getRole()).isEqualTo("LOW_BASE_FOLLOWER");
-            assertThat(s.getCandidateAction()).isEqualTo("WATCH_ONLY");
+            assertThat(s.getCandidateAction()).isEqualTo("ADD_TO_CANDIDATE_POOL_SHADOW");
+            assertThat(s.getEvidenceJson()).contains("\"inUniverse\":true", "\"inFinalCandidate\":false", "tradable_pool");
         });
         assertThat(signals).anySatisfy(s -> {
             assertThat(s.getSymbol()).isEqualTo("3090");
@@ -97,6 +98,35 @@ class HotGroupRadarServiceTest {
         assertThat(explanation.finalCandidateFail()).isTrue();
         assertThat(explanation.hotGroupRadarWatchOnly()).isTrue();
         assertThat(explanation.reasons()).contains("limit_risk", "not_in_final_candidates_5", "radar_watch_only");
+    }
+
+    @Test
+    void candidateFeedContainsAddToCandidatePoolShadowWithoutWritingCandidateStock() {
+        service.build(DATE, "POSTMARKET", passiveFixtureJson());
+        when(signalRepo.findByTradingDateAndSourcePhaseOrderByRadarRankScoreDesc(DATE, "POSTMARKET")).thenReturn(signals);
+
+        var feed = service.candidateFeed(DATE, "POSTMARKET");
+
+        assertThat(feed.doesNotWriteCandidateStock()).isTrue();
+        assertThat(feed.safetyBoundary().doesNotAffectFinalDecision()).isTrue();
+        assertThat(feed.addToCandidatePoolShadow()).extracting("symbol").contains("2472", "6127");
+    }
+
+    @Test
+    void explainMissUsesPersistedEvidenceAfterRestart() {
+        service.build(DATE, "POSTMARKET", passiveFixtureJson());
+        HotGroupRadarService restartedService = new HotGroupRadarService(snapshotRepo, signalRepo, traceRepo);
+        when(signalRepo.findByTradingDateAndSymbolOrderByRadarRankScoreDesc(DATE, "2375"))
+                .thenReturn(signals.stream().filter(s -> "2375".equals(s.getSymbol())).toList());
+
+        var explanation = restartedService.explainMiss(DATE, "2375");
+
+        assertThat(explanation.inUniverse()).isTrue();
+        assertThat(explanation.inHotStock()).isTrue();
+        assertThat(explanation.classifiedAsOtherBeforeRadar()).isTrue();
+        assertThat(explanation.finalCandidateFail()).isTrue();
+        assertThat(explanation.hotGroupRadarWatchOnly()).isTrue();
+        assertThat(explanation.reasons()).contains("limit_risk", "not_in_final_candidates_5", "classified_as_other_before_radar", "radar_watch_only");
     }
 
     static String passiveFixtureJson() {

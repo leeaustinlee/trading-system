@@ -37,6 +37,13 @@ public class HotGroupRadarController {
         return service.byTheme(date, themeTag);
     }
 
+    @GetMapping("/theme-members")
+    public HotGroupRadarResponse themeMembers(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam String themeTag) {
+        return service.byTheme(date, themeTag);
+    }
+
     @GetMapping("/explain-miss")
     public HotGroupRadarResponse.ExplainMiss explainMiss(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,

@@ -124,14 +124,20 @@ public class HotGroupRadarService {
         Map<String, StockSignal> universe = lastUniverseByDate.getOrDefault(date, Map.of());
         StockSignal stock = universe.get(symbol);
         List<HotGroupStockSignalEntity> dbSignals = nullToEmpty(signalRepo.findByTradingDateAndSymbolOrderByRadarRankScoreDesc(date, symbol));
+        PersistedSignalEvidence evidence = dbSignals.stream()
+                .map(HotGroupStockSignalEntity::getEvidenceJson)
+                .map(this::persistedEvidence)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(PersistedSignalEvidence.empty());
         boolean radarWatch = dbSignals.stream().anyMatch(s -> "WATCH_ONLY".equals(s.getTradabilityTag()) || "REJECT_LIMIT_RISK".equals(s.getCandidateAction()));
         if (!radarWatch && stock != null && stock.radarTheme != null) radarWatch = true;
-        boolean inUniverse = stock != null || !dbSignals.isEmpty();
-        boolean inHot = lastHotByDate.getOrDefault(date, Set.of()).contains(symbol) || (stock != null && stock.inHotStock);
-        boolean inFinal = lastFinalByDate.getOrDefault(date, Set.of()).contains(symbol) || (stock != null && stock.inFinalCandidate);
+        boolean inUniverse = evidence.inUniverse() || stock != null || !dbSignals.isEmpty();
+        boolean inHot = evidence.inHotStock() || lastHotByDate.getOrDefault(date, Set.of()).contains(symbol) || (stock != null && stock.inHotStock);
+        boolean inFinal = evidence.inFinalCandidate() || lastFinalByDate.getOrDefault(date, Set.of()).contains(symbol) || (stock != null && stock.inFinalCandidate);
         boolean limitRisk = (stock != null && stock.limitRisk) || dbSignals.stream().anyMatch(s -> Boolean.TRUE.equals(s.getLimitRisk()));
         boolean affordabilityFail = stock != null && stock.boardLotCost.compareTo(new BigDecimal("160000")) > 0;
-        boolean classifiedOther = stock != null && "其他強勢股".equals(stock.originalTheme);
+        boolean classifiedOther = "其他強勢股".equals(evidence.originalTheme()) || (stock != null && "其他強勢股".equals(stock.originalTheme));
         List<String> reasons = new ArrayList<>();
         if (limitRisk) reasons.add("limit_risk");
         if (affordabilityFail) reasons.add("affordability_fail");
@@ -217,8 +223,9 @@ public class HotGroupRadarService {
         e.setRadarRankScore(stock.radarRankScore());
         if (stock.limitRisk) { e.setTradabilityTag("WATCH_ONLY"); e.setCandidateAction("REJECT_LIMIT_RISK"); e.setRejectionReason("limit_risk; shadow-only; not a tradable candidate"); }
         else if (stock.inFinalCandidate) { e.setTradabilityTag("WATCH_ONLY"); e.setCandidateAction("BOOST_EXISTING_CANDIDATE"); e.setRejectionReason("shadow boost only; no production score write"); }
+        else if (stock.hasBasicThemeVolume()) { e.setTradabilityTag("WATCH_ONLY"); e.setCandidateAction("ADD_TO_CANDIDATE_POOL_SHADOW"); e.setRejectionReason("theme radar shadow pool only; does not write candidate_stock or final decision"); }
         else { e.setTradabilityTag("WATCH_ONLY"); e.setCandidateAction("WATCH_ONLY"); e.setRejectionReason("theme radar watch-only; does not write candidate_stock"); }
-        e.setEvidenceJson("{\"originalTheme\":\"" + safe(stock.originalTheme) + "\",\"sourceLists\":\"" + String.join(",", stock.sourceLists) + "\"}");
+        e.setEvidenceJson(signalEvidenceJson(stock));
         return e;
     }
 
@@ -274,6 +281,29 @@ public class HotGroupRadarService {
         }
         try { return MAPPER.readTree(normalized); } catch (IOException e) { throw new IllegalArgumentException("Invalid market-breadth-scan JSON", e); }
     }
+    private PersistedSignalEvidence persistedEvidence(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            JsonNode node = MAPPER.readTree(json);
+            return new PersistedSignalEvidence(
+                    node.path("inUniverse").asBoolean(false),
+                    node.path("inHotStock").asBoolean(false),
+                    node.path("inFinalCandidate").asBoolean(false),
+                    node.path("originalTheme").asText(""));
+        } catch (IOException e) {
+            return null;
+        }
+    }
+    private String signalEvidenceJson(StockSignal stock) {
+        var node = MAPPER.createObjectNode();
+        node.put("originalTheme", stock.originalTheme);
+        var sourceLists = node.putArray("sourceLists");
+        stock.sourceLists.forEach(sourceLists::add);
+        node.put("inUniverse", true);
+        node.put("inHotStock", stock.inHotStock);
+        node.put("inFinalCandidate", stock.inFinalCandidate);
+        return node.toString();
+    }
     private String normalizePhase(String phase) { return (phase == null || phase.isBlank()) ? "POSTMARKET" : phase.trim().toUpperCase(Locale.ROOT); }
     private static BigDecimal nz(BigDecimal v) { return v == null ? BigDecimal.ZERO : v; }
     private static int nzi(Integer v) { return v == null ? 0 : v; }
@@ -306,7 +336,14 @@ public class HotGroupRadarService {
             BigDecimal hotBonus = BigDecimal.valueOf((inHotStock ? 2 : 0) + (inSuperStrong ? 4 : 0) + (limitRisk ? 3 : 0));
             return score.add(hotBonus).setScale(4, RoundingMode.HALF_UP);
         }
+        boolean hasBasicThemeVolume() {
+            return radarTheme != null && !limitRisk && !inFinalCandidate && turnoverYi.compareTo(new BigDecimal("10")) >= 0;
+        }
         private static BigDecimal bd(JsonNode n, String field) { return n.has(field) && n.get(field).isNumber() ? n.get(field).decimalValue() : BigDecimal.ZERO; }
         private static BigDecimal max(BigDecimal a, BigDecimal b) { return a.compareTo(b) >= 0 ? a : b; }
+    }
+
+    private record PersistedSignalEvidence(boolean inUniverse, boolean inHotStock, boolean inFinalCandidate, String originalTheme) {
+        static PersistedSignalEvidence empty() { return new PersistedSignalEvidence(false, false, false, ""); }
     }
 }
