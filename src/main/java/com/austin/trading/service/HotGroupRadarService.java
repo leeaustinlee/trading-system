@@ -268,7 +268,11 @@ public class HotGroupRadarService {
     }
 
     private JsonNode parse(String json) {
-        try { return MAPPER.readTree(json); } catch (IOException e) { throw new IllegalArgumentException("Invalid market-breadth-scan JSON", e); }
+        String normalized = json;
+        if (normalized != null && !normalized.isEmpty() && normalized.charAt(0) == '\uFEFF') {
+            normalized = normalized.substring(1);
+        }
+        try { return MAPPER.readTree(normalized); } catch (IOException e) { throw new IllegalArgumentException("Invalid market-breadth-scan JSON", e); }
     }
     private String normalizePhase(String phase) { return (phase == null || phase.isBlank()) ? "POSTMARKET" : phase.trim().toUpperCase(Locale.ROOT); }
     private static BigDecimal nz(BigDecimal v) { return v == null ? BigDecimal.ZERO : v; }

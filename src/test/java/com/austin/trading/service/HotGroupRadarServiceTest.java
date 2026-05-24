@@ -52,7 +52,7 @@ class HotGroupRadarServiceTest {
 
     @Test
     void buildFromMarketBreadthCreatesPassiveComponentGroupAndWatchOnlySignals() {
-        var result = service.build(DATE, "POSTMARKET", passiveFixtureJson());
+        var result = service.build(DATE, "POSTMARKET", "\uFEFF" + passiveFixtureJson());
 
         assertThat(result.shadowOnly()).isTrue();
         assertThat(result.observabilityOnly()).isTrue();
