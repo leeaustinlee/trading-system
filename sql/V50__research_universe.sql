@@ -1,0 +1,35 @@
+-- MVP-5B Research Universe Formalization.
+-- Safety: research/shadow aggregation only. Does not affect BUY/SELL/ENTER,
+-- FinalDecisionEngine, candidate gates, risk gates, production ranking, or production scores.
+
+CREATE TABLE IF NOT EXISTS research_universe_item (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    trading_date DATE NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    stock_name VARCHAR(120) NULL,
+    theme_tag VARCHAR(100) NOT NULL,
+    research_role VARCHAR(40) NOT NULL,
+    source VARCHAR(40) NOT NULL,
+    research_score DECIMAL(8,4) NULL,
+    theme_importance_score DECIMAL(8,4) NULL,
+    tradable_score DECIMAL(8,4) NULL,
+    narrative_density_score DECIMAL(8,4) NULL,
+    governance_status VARCHAR(50) NOT NULL DEFAULT 'SHADOW_ONLY',
+    research_universe BOOLEAN NOT NULL DEFAULT TRUE,
+    tradable_universe BOOLEAN NOT NULL DEFAULT FALSE,
+    promoted_to_tradable BOOLEAN NOT NULL DEFAULT FALSE,
+    promotion_reason VARCHAR(500) NULL,
+    blocked_reason VARCHAR(500) NULL,
+    candidate_role VARCHAR(40) NULL,
+    theme_leader_symbol VARCHAR(20) NULL,
+    leadership_only BOOLEAN NOT NULL DEFAULT FALSE,
+    leader_tradable BOOLEAN NOT NULL DEFAULT FALSE,
+    safety_note VARCHAR(500) NULL,
+    payload_json JSON NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_research_universe_date_symbol_theme_source (trading_date, symbol, theme_tag, source),
+    KEY idx_research_universe_date_theme (trading_date, theme_tag),
+    KEY idx_research_universe_date_symbol (trading_date, symbol),
+    KEY idx_research_universe_governance (trading_date, governance_status),
+    KEY idx_research_universe_role (trading_date, research_role)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
