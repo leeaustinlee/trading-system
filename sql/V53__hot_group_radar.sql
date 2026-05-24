@@ -1,0 +1,63 @@
+CREATE TABLE IF NOT EXISTS hot_group_radar_snapshot (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    trading_date DATE NOT NULL,
+    source_phase VARCHAR(40) NOT NULL,
+    theme_tag VARCHAR(120) NOT NULL,
+    theme_category VARCHAR(80),
+    hot_score DECIMAL(12,4),
+    leader_count INT NOT NULL DEFAULT 0,
+    limit_up_count INT NOT NULL DEFAULT 0,
+    near_limit_count INT NOT NULL DEFAULT 0,
+    up_stock_count INT NOT NULL DEFAULT 0,
+    avg_change_pct DECIMAL(10,4),
+    total_turnover_yi DECIMAL(14,4),
+    diffusion_score DECIMAL(10,4),
+    news_score DECIMAL(10,4) DEFAULT 0,
+    price_hike_signal BOOLEAN NOT NULL DEFAULT FALSE,
+    risk_level VARCHAR(40),
+    evidence_json JSON,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_hot_group_radar_date_phase (trading_date, source_phase),
+    INDEX idx_hot_group_radar_theme (theme_tag, trading_date)
+);
+
+CREATE TABLE IF NOT EXISTS hot_group_stock_signal (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    trading_date DATE NOT NULL,
+    source_phase VARCHAR(40) NOT NULL,
+    theme_tag VARCHAR(120) NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    stock_name VARCHAR(120),
+    role VARCHAR(40) NOT NULL,
+    change_pct DECIMAL(10,4),
+    turnover_yi DECIMAL(14,4),
+    near_high DECIMAL(10,4),
+    limit_risk BOOLEAN NOT NULL DEFAULT FALSE,
+    board_lot_cost DECIMAL(14,4),
+    tradability_tag VARCHAR(60),
+    radar_rank_score DECIMAL(12,4),
+    candidate_action VARCHAR(60),
+    rejection_reason VARCHAR(500),
+    evidence_json JSON,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_hot_group_signal_date_phase (trading_date, source_phase),
+    INDEX idx_hot_group_signal_symbol_date (symbol, trading_date),
+    INDEX idx_hot_group_signal_theme_date (theme_tag, trading_date)
+);
+
+CREATE TABLE IF NOT EXISTS candidate_theme_radar_trace (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    trading_date DATE NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    theme_tag VARCHAR(120) NOT NULL,
+    candidate_before_score DECIMAL(12,4),
+    theme_radar_boost DECIMAL(12,4),
+    candidate_after_score DECIMAL(12,4),
+    applied_to_candidate_pool BOOLEAN NOT NULL DEFAULT FALSE,
+    applied_to_final_decision BOOLEAN NOT NULL DEFAULT FALSE,
+    safety_contract_json JSON,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_candidate_theme_radar_date (trading_date),
+    INDEX idx_candidate_theme_radar_symbol (symbol, trading_date),
+    INDEX idx_candidate_theme_radar_theme (theme_tag, trading_date)
+);

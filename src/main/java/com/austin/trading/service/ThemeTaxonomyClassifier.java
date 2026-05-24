@@ -41,6 +41,34 @@ public final class ThemeTaxonomyClassifier {
     public static final String LEGACY_AI_CHIP_SEED_SOURCE = "legacy-ai-chip-seed";
     public static final String LEGACY_THEME_MAPPING_SOURCE = "legacy-theme-mapping";
 
+
+    /**
+     * Hot Group Radar symbol/name classifier. Observability-only mirror for market-breadth-scan.ps1 Get-Theme.
+     */
+    public static String classify(String code, String name) {
+        String key = ((code == null ? "" : code) + " " + (name == null ? "" : name).replace("*", "")).trim();
+        if (!hasText(key)) return null;
+        if (containsAny(key, "2327", "2492", "3026", "6173", "2478", "2456", "3357", "國巨", "華新科", "禾伸堂", "信昌電", "大毅", "奇力新", "臺慶科", "台慶科")) {
+            return "被動元件/MLCC";
+        }
+        if (containsAny(key, "2375", "2472", "6449", "8042", "凱美", "立隆電", "鈺邦", "金山電")) {
+            return "被動元件/鋁電容";
+        }
+        if (containsAny(key, "3090", "日電貿")) {
+            return "被動元件/通路代理";
+        }
+        if (containsAny(key, "6127", "3068", "3236", "九豪", "美磊", "千如")) {
+            return "被動元件/材料設備";
+        }
+        return null;
+    }
+
+    public static String categoryOf(String themeTag) {
+        if (themeTag != null && themeTag.startsWith("被動元件/")) return "被動元件";
+        int slash = themeTag == null ? -1 : themeTag.indexOf('/');
+        return slash > 0 ? themeTag.substring(0, slash) : themeTag;
+    }
+
     public static String classify(String themeTag) {
         if (!hasText(themeTag)) return UNKNOWN;
         String tag = themeTag.trim();
