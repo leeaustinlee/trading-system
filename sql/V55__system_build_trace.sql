@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS system_build_trace (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  build_type VARCHAR(40) NOT NULL,
+  trading_date DATE NOT NULL,
+  source_phase VARCHAR(40) NULL,
+  started_at DATETIME NOT NULL,
+  finished_at DATETIME NULL,
+  duration_ms BIGINT NULL,
+  status VARCHAR(20) NOT NULL,
+  deleted_count INT NOT NULL DEFAULT 0,
+  inserted_count INT NOT NULL DEFAULT 0,
+  updated_count INT NOT NULL DEFAULT 0,
+  skipped_count INT NOT NULL DEFAULT 0,
+  error_message VARCHAR(2000) NULL,
+  safety_boundary_json JSON NULL,
+  payload_json JSON NULL,
+  KEY idx_system_build_trace_date (trading_date),
+  KEY idx_system_build_trace_type_date (build_type, trading_date),
+  KEY idx_system_build_trace_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

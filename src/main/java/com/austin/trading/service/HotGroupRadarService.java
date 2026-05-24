@@ -70,8 +70,11 @@ public class HotGroupRadarService {
         lastFinalByDate.put(date, finalSymbols);
 
         snapshotRepo.deleteByTradingDateAndSourcePhase(date, sourcePhase);
+        snapshotRepo.flush();
         signalRepo.deleteByTradingDateAndSourcePhase(date, sourcePhase);
+        signalRepo.flush();
         traceRepo.deleteByTradingDate(date);
+        traceRepo.flush();
 
         Map<String, List<StockSignal>> byTheme = universe.values().stream()
                 .filter(s -> s.radarTheme != null)

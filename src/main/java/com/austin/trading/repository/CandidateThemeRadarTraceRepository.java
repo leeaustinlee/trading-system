@@ -10,6 +10,8 @@ import java.util.List;
 public interface CandidateThemeRadarTraceRepository extends JpaRepository<CandidateThemeRadarTraceEntity, Long> {
     List<CandidateThemeRadarTraceEntity> findByTradingDateAndSymbol(LocalDate tradingDate, String symbol);
 
+    long countByTradingDate(LocalDate tradingDate);
+
     @Transactional
     void deleteByTradingDate(LocalDate tradingDate);
 }

@@ -13,5 +13,6 @@ public interface ThemeLifecycleStateRepository extends JpaRepository<ThemeLifecy
     Optional<ThemeLifecycleStateEntity> findByTradingDateAndThemeTag(LocalDate tradingDate, String themeTag);
     Optional<ThemeLifecycleStateEntity> findFirstByThemeTagAndTradingDateLessThanOrderByTradingDateDesc(String themeTag, LocalDate tradingDate);
     @Transactional
+    long countByTradingDate(LocalDate tradingDate);
     void deleteByTradingDate(LocalDate tradingDate);
 }

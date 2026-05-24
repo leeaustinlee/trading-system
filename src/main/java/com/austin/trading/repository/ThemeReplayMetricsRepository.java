@@ -17,5 +17,6 @@ public interface ThemeReplayMetricsRepository extends JpaRepository<ThemeReplayM
     List<LocalDate> findDistinctTradingDatesDesc();
 
     @Transactional
+    long countByTradingDate(LocalDate tradingDate);
     void deleteByTradingDate(LocalDate tradingDate);
 }

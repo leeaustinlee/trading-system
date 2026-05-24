@@ -11,5 +11,6 @@ public interface ThemeReplayNodeRepository extends JpaRepository<ThemeReplayNode
     List<ThemeReplayNodeEntity> findByTradingDateAndThemeTagOrderByIdAsc(LocalDate tradingDate, String themeTag);
     List<ThemeReplayNodeEntity> findByTradingDateOrderByThemeTagAscSymbolAsc(LocalDate tradingDate);
     @Transactional
+    long countByTradingDate(LocalDate tradingDate);
     void deleteByTradingDate(LocalDate tradingDate);
 }

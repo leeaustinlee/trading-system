@@ -12,5 +12,6 @@ public interface HotGroupRadarSnapshotRepository extends JpaRepository<HotGroupR
     List<HotGroupRadarSnapshotEntity> findByTradingDateAndThemeTagOrderByHotScoreDesc(LocalDate tradingDate, String themeTag);
 
     @Transactional
+    long countByTradingDateAndSourcePhase(LocalDate tradingDate, String sourcePhase);
     void deleteByTradingDateAndSourcePhase(LocalDate tradingDate, String sourcePhase);
 }

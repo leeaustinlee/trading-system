@@ -1,7 +1,10 @@
 package com.austin.trading.controller;
 
+import com.austin.trading.dto.response.BuildOperationResponse;
 import com.austin.trading.dto.response.ThemeLifecycleResponse;
+import com.austin.trading.service.BuildOperationsService;
 import com.austin.trading.service.ThemeLifecycleEngine;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,9 +15,16 @@ import java.time.LocalDate;
 public class ThemeLifecycleController {
 
     private final ThemeLifecycleEngine engine;
+    private final BuildOperationsService buildOperations;
 
     public ThemeLifecycleController(ThemeLifecycleEngine engine) {
+        this(engine, null);
+    }
+
+    @Autowired
+    public ThemeLifecycleController(ThemeLifecycleEngine engine, BuildOperationsService buildOperations) {
         this.engine = engine;
+        this.buildOperations = buildOperations;
     }
 
     @GetMapping
@@ -33,9 +43,10 @@ public class ThemeLifecycleController {
     }
 
     @PostMapping("/build")
-    public ThemeLifecycleResponse.BuildResult build(
+    public BuildOperationResponse build(
             @RequestParam
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return engine.build(date);
+        if (buildOperations == null) { var r = engine.build(date); return BuildOperationResponse.builder("LIFECYCLE", date).builtCount(r.builtCount()).safetyBoundary(ThemeLifecycleResponse.SafetyBoundary.lifecycleReplayOnlyBoundary()).build(); }
+        return buildOperations.buildLifecycle(date);
     }
 }

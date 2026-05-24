@@ -1,8 +1,11 @@
 package com.austin.trading.controller;
 
 import com.austin.trading.dto.request.PromotionReviewDecisionRequest;
+import com.austin.trading.dto.response.BuildOperationResponse;
 import com.austin.trading.dto.response.PromotionReviewResponse;
+import com.austin.trading.service.BuildOperationsService;
 import com.austin.trading.service.PromotionReviewService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,15 +15,23 @@ import java.time.LocalDate;
 @RequestMapping("/api/promotion-review")
 public class PromotionReviewController {
     private final PromotionReviewService service;
+    private final BuildOperationsService buildOperations;
 
     public PromotionReviewController(PromotionReviewService service) {
+        this(service, null);
+    }
+
+    @Autowired
+    public PromotionReviewController(PromotionReviewService service, BuildOperationsService buildOperations) {
         this.service = service;
+        this.buildOperations = buildOperations;
     }
 
     @PostMapping("/build")
-    public PromotionReviewResponse build(
+    public BuildOperationResponse build(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return service.build(date);
+        if (buildOperations == null) { var r = service.rebuild(date); return BuildOperationResponse.builder("PROMOTION_REVIEW", date).builtCount(r.items().size()).safetyBoundary(PromotionReviewResponse.defaultSafetyBoundary()).build(); }
+        return buildOperations.buildPromotionReview(date);
     }
 
     @GetMapping("/queue")

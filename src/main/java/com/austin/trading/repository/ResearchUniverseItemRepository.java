@@ -13,5 +13,6 @@ public interface ResearchUniverseItemRepository extends JpaRepository<ResearchUn
     List<ResearchUniverseItemEntity> findByTradingDateAndSymbolOrderByThemeTagAscSourceAsc(LocalDate tradingDate, String symbol);
     List<ResearchUniverseItemEntity> findByTradingDateAndGovernanceStatusOrderByThemeTagAscSymbolAsc(LocalDate tradingDate, String governanceStatus);
     @Transactional
+    long countByTradingDate(LocalDate tradingDate);
     void deleteByTradingDate(LocalDate tradingDate);
 }

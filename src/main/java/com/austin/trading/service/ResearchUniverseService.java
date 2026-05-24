@@ -68,6 +68,7 @@ public class ResearchUniverseService {
     public ResearchUniverseResponse build(LocalDate date) {
         List<ResearchUniverseItemEntity> items = aggregate(date);
         researchRepository.deleteByTradingDate(date);
+        researchRepository.flush();
         researchRepository.saveAll(items);
         return response(date, items);
     }

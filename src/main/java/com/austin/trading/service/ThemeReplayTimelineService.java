@@ -148,8 +148,11 @@ public class ThemeReplayTimelineService {
         List<ThemeReplaySnapshotEntity> snapshots = buildSnapshots(date, groupedNodes, edges);
 
         edgeRepository.deleteByTradingDate(date);
+        edgeRepository.flush();
         nodeRepository.deleteByTradingDate(date);
+        nodeRepository.flush();
         snapshotRepository.deleteByTradingDate(date);
+        snapshotRepository.flush();
         snapshotRepository.saveAll(snapshots);
         nodeRepository.saveAll(nodes);
         edgeRepository.saveAll(edges);

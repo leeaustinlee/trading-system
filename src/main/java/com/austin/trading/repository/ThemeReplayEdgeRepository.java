@@ -10,5 +10,6 @@ import java.util.List;
 public interface ThemeReplayEdgeRepository extends JpaRepository<ThemeReplayEdgeEntity, Long> {
     List<ThemeReplayEdgeEntity> findByTradingDateAndThemeTagOrderByIdAsc(LocalDate tradingDate, String themeTag);
     @Transactional
+    long countByTradingDate(LocalDate tradingDate);
     void deleteByTradingDate(LocalDate tradingDate);
 }

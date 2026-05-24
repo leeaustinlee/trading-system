@@ -64,6 +64,15 @@ public class PromotionReviewService {
     }
 
     @Transactional
+    public PromotionReviewResponse rebuild(LocalDate date) {
+        auditRepo.deleteByTradingDate(date);
+        auditRepo.flush();
+        itemRepo.deleteByTradingDate(date);
+        itemRepo.flush();
+        return build(date);
+    }
+
+    @Transactional
     public PromotionReviewResponse build(LocalDate date) {
         Map<String, PromotionReviewItemEntity> existing = itemRepo.findByTradingDateOrderByThemeTagAscSymbolAscSourceAsc(date)
                 .stream().collect(Collectors.toMap(this::key, Function.identity(), (a, b) -> a, LinkedHashMap::new));

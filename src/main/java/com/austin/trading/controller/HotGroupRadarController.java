@@ -1,7 +1,10 @@
 package com.austin.trading.controller;
 
+import com.austin.trading.dto.response.BuildOperationResponse;
 import com.austin.trading.dto.response.HotGroupRadarResponse;
+import com.austin.trading.service.BuildOperationsService;
 import com.austin.trading.service.HotGroupRadarService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
@@ -11,16 +14,24 @@ import java.time.LocalDate;
 @RequestMapping("/api/hot-groups")
 public class HotGroupRadarController {
     private final HotGroupRadarService service;
+    private final BuildOperationsService buildOperations;
 
     public HotGroupRadarController(HotGroupRadarService service) {
+        this(service, null);
+    }
+
+    @Autowired
+    public HotGroupRadarController(HotGroupRadarService service, BuildOperationsService buildOperations) {
         this.service = service;
+        this.buildOperations = buildOperations;
     }
 
     @PostMapping("/build")
-    public HotGroupRadarResponse build(
+    public BuildOperationResponse build(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(defaultValue = "POSTMARKET") String phase) {
-        return service.buildFromDefaultFile(date, phase);
+        if (buildOperations == null) { var r = service.buildFromDefaultFile(date, phase); return BuildOperationResponse.builder("HOT_GROUP_RADAR", date).sourcePhase(phase).builtCount(r.themes().size() + r.signals().size()).safetyBoundary(r.safetyBoundary()).build(); }
+        return buildOperations.buildHotGroups(date, phase);
     }
 
     @GetMapping("/radar")

@@ -13,5 +13,6 @@ public interface HotGroupStockSignalRepository extends JpaRepository<HotGroupSto
     List<HotGroupStockSignalEntity> findByTradingDateAndSymbolOrderByRadarRankScoreDesc(LocalDate tradingDate, String symbol);
 
     @Transactional
+    long countByTradingDateAndSourcePhase(LocalDate tradingDate, String sourcePhase);
     void deleteByTradingDateAndSourcePhase(LocalDate tradingDate, String sourcePhase);
 }
