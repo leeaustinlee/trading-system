@@ -1,6 +1,8 @@
 package com.austin.trading.controller;
 
 import com.austin.trading.dto.response.ThemeLifecycleResponse;
+import com.austin.trading.dto.response.ThemeReplayMetricsResponse;
+import com.austin.trading.dto.response.ThemeReplayMetricsResponse;
 import com.austin.trading.service.ThemeLifecycleEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,7 +37,7 @@ class ThemeLifecycleControllerTest {
     void lifecycleListEndpointExposesReplayAdvisoryOnlyBoundary() throws Exception {
         when(engine.get(DATE)).thenReturn(new ThemeLifecycleResponse(
                 DATE, true, true, ThemeLifecycleResponse.SafetyBoundary.lifecycleReplayOnlyBoundary(),
-                List.of(item("被動元件", "MAINSTREAM"))));
+                ThemeReplayMetricsResponse.MetricsSummary.empty(), List.of(item("被動元件", "MAINSTREAM"))));
 
         mockMvc.perform(get("/api/themes/lifecycle").param("date", "2026-05-22"))
                 .andExpect(status().isOk())
@@ -54,7 +56,7 @@ class ThemeLifecycleControllerTest {
     void lifecycleThemeAndBuildEndpointsRemainReplayOnly() throws Exception {
         when(engine.getTheme(DATE, "被動元件")).thenReturn(new ThemeLifecycleResponse(
                 DATE, true, true, ThemeLifecycleResponse.SafetyBoundary.lifecycleReplayOnlyBoundary(),
-                List.of(item("被動元件", "MAINSTREAM"))));
+                ThemeReplayMetricsResponse.MetricsSummary.empty(), List.of(item("被動元件", "MAINSTREAM"))));
         when(engine.build(DATE)).thenReturn(new ThemeLifecycleResponse.BuildResult(
                 DATE, 1, true, true, ThemeLifecycleResponse.SafetyBoundary.lifecycleReplayOnlyBoundary(),
                 Map.of("被動元件", "MAINSTREAM"), List.of(item("被動元件", "MAINSTREAM"))));

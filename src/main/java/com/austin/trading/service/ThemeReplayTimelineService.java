@@ -1,5 +1,6 @@
 package com.austin.trading.service;
 
+import com.austin.trading.dto.response.ThemeReplayMetricsResponse;
 import com.austin.trading.dto.response.ThemeReplaySummaryResponse;
 import com.austin.trading.dto.response.ThemeReplayTimelineResponse;
 import com.austin.trading.entity.*;
@@ -29,6 +30,7 @@ public class ThemeReplayTimelineService {
     private final ThemePeerShadowCandidateRepository peerShadowCandidateRepository;
     private final CandidateStockRepository candidateStockRepository;
     private final ThemeLifecycleStateRepository lifecycleStateRepository;
+    private final ReplayMetricsService replayMetricsService;
     private final ObjectMapper objectMapper;
 
     public ThemeReplayTimelineService(
@@ -42,7 +44,7 @@ public class ThemeReplayTimelineService {
             ObjectMapper objectMapper
     ) {
         this(snapshotRepository, nodeRepository, edgeRepository, leadershipSnapshotRepository, leaderRetentionRepository,
-                peerShadowCandidateRepository, candidateStockRepository, null, objectMapper);
+                peerShadowCandidateRepository, candidateStockRepository, null, null, objectMapper);
     }
 
     @Autowired
@@ -55,6 +57,7 @@ public class ThemeReplayTimelineService {
             ThemePeerShadowCandidateRepository peerShadowCandidateRepository,
             CandidateStockRepository candidateStockRepository,
             ThemeLifecycleStateRepository lifecycleStateRepository,
+            ReplayMetricsService replayMetricsService,
             ObjectMapper objectMapper
     ) {
         this.snapshotRepository = snapshotRepository;
@@ -65,6 +68,7 @@ public class ThemeReplayTimelineService {
         this.peerShadowCandidateRepository = peerShadowCandidateRepository;
         this.candidateStockRepository = candidateStockRepository;
         this.lifecycleStateRepository = lifecycleStateRepository;
+        this.replayMetricsService = replayMetricsService;
         this.objectMapper = objectMapper;
     }
 
@@ -105,6 +109,7 @@ public class ThemeReplayTimelineService {
                 snapshot.lifecycleReason(),
                 snapshot.recommendedPlaybook(),
                 snapshot.avoidPlaybook(),
+                metricsSummary(date, themeTag),
                 SAFETY,
                 true,
                 true
@@ -151,7 +156,7 @@ public class ThemeReplayTimelineService {
 
         String firstTheme = snapshots.stream().map(ThemeReplaySnapshotEntity::getThemeTag).findFirst().orElse(null);
         if (firstTheme == null) {
-            return new ThemeReplayTimelineResponse(date, null, null, null, List.of(), List.of(), List.of(), null, null, null, List.of(), List.of(), SAFETY, true, true);
+            return new ThemeReplayTimelineResponse(date, null, null, null, List.of(), List.of(), List.of(), null, null, null, List.of(), List.of(), ThemeReplayMetricsResponse.MetricsSummary.empty(), SAFETY, true, true);
         }
         ThemeReplaySummaryResponse snapshot = toSummary(snapshots.stream()
                 .filter(s -> firstTheme.equals(s.getThemeTag()))
@@ -168,7 +173,7 @@ public class ThemeReplayTimelineService {
                 date, firstTheme, snapshot.leaderSymbol(), snapshot,
                 responseNodes, responseEdges, events(responseNodes, responseEdges),
                 snapshot.lifecycleStage(), snapshot.lifecycleScore(), snapshot.lifecycleReason(),
-                snapshot.recommendedPlaybook(), snapshot.avoidPlaybook(), SAFETY, true, true);
+                snapshot.recommendedPlaybook(), snapshot.avoidPlaybook(), metricsSummary(date, firstTheme), SAFETY, true, true);
     }
 
     private ThemeReplayNodeEntity fromCandidate(CandidateStockEntity candidate) {
@@ -384,6 +389,12 @@ public class ThemeReplayTimelineService {
                 intValue(e.getResearchUniverseCount()), intValue(e.getTradableUniverseCount()), e.getReplayScore(),
                 e.getLifecycleScore(), e.getLifecycleReason(), stringList(e.getRecommendedPlaybookJson()), stringList(e.getAvoidPlaybookJson()),
                 true, true, SAFETY);
+    }
+
+
+    private ThemeReplayMetricsResponse.MetricsSummary metricsSummary(LocalDate date, String themeTag) {
+        if (replayMetricsService == null || themeTag == null) return ThemeReplayMetricsResponse.MetricsSummary.empty();
+        return replayMetricsService.summary(date, themeTag);
     }
 
     private ThemeReplayTimelineResponse.Node toNode(ThemeReplayNodeEntity e) {

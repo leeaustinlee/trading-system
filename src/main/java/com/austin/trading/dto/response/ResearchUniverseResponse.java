@@ -10,6 +10,7 @@ public record ResearchUniverseResponse(
         boolean shadowOnly,
         boolean researchOnly,
         SafetyBoundary safetyBoundary,
+        ThemeReplayMetricsResponse.MetricsSummary metrics,
         List<Item> items
 ) {
     public record SafetyBoundary(

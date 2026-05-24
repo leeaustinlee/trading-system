@@ -1,6 +1,8 @@
 package com.austin.trading.controller;
 
 import com.austin.trading.dto.response.ResearchUniverseResponse;
+import com.austin.trading.dto.response.ThemeReplayMetricsResponse;
+import com.austin.trading.dto.response.ThemeReplayMetricsResponse;
 import com.austin.trading.service.ResearchUniverseService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -73,7 +75,8 @@ class ResearchUniverseControllerTest {
     }
 
     private ResearchUniverseResponse response(List<ResearchUniverseResponse.Item> items) {
-        return new ResearchUniverseResponse(DATE, true, true, ResearchUniverseResponse.SafetyBoundary.researchOnlyBoundary(), items);
+        return new ResearchUniverseResponse(DATE, true, true, ResearchUniverseResponse.SafetyBoundary.researchOnlyBoundary(),
+                ThemeReplayMetricsResponse.MetricsSummary.empty(), items);
     }
 
     private ResearchUniverseResponse.Item item(String symbol, String role) {

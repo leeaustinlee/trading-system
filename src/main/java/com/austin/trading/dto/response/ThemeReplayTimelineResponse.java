@@ -18,6 +18,7 @@ public record ThemeReplayTimelineResponse(
         String lifecycleReason,
         List<String> recommendedPlaybook,
         List<String> avoidPlaybook,
+        ThemeReplayMetricsResponse.MetricsSummary metrics,
         SafetyBoundary safetyBoundary,
         boolean shadowOnly,
         boolean replayOnly

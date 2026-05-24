@@ -10,6 +10,7 @@ public record ThemeLifecycleResponse(
         boolean replayOnly,
         boolean advisoryOnly,
         SafetyBoundary safetyBoundary,
+        ThemeReplayMetricsResponse.MetricsSummary metrics,
         List<Item> items
 ) {
     public record Item(

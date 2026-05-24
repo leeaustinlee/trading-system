@@ -1,5 +1,7 @@
 package com.austin.trading.controller;
 
+import com.austin.trading.dto.response.ThemeReplayMetricsResponse;
+import com.austin.trading.dto.response.ThemeReplayMetricsResponse;
 import com.austin.trading.dto.response.ThemeReplaySummaryResponse;
 import com.austin.trading.dto.response.ThemeReplayTimelineResponse;
 import com.austin.trading.service.ThemeReplayTimelineService;
@@ -40,6 +42,7 @@ class ThemeReplayControllerTest {
                 List.of(),
                 List.of(new ThemeReplayTimelineResponse.Event("RISK_REJECTED", "2327", "risk gate blocked", null)),
                 "MAINSTREAM", new java.math.BigDecimal("0.70"), "leader is clear", List.of("LOW_BASE_FOLLOWER", "PULLBACK"), List.of("CHASE_LEADER"),
+                ThemeReplayMetricsResponse.MetricsSummary.empty(),
                 boundary,
                 true,
                 true

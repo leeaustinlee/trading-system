@@ -1,6 +1,7 @@
 package com.austin.trading.service;
 
 import com.austin.trading.dto.response.ThemeLifecycleResponse;
+import com.austin.trading.dto.response.ThemeReplayMetricsResponse;
 import com.austin.trading.entity.ThemeLifecycleStateEntity;
 import com.austin.trading.entity.ThemeReplayNodeEntity;
 import com.austin.trading.entity.ThemeReplaySnapshotEntity;
@@ -10,6 +11,7 @@ import com.austin.trading.repository.ThemeReplaySnapshotRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,7 @@ public class ThemeLifecycleEngine {
     private final ThemeLifecycleStateRepository lifecycleRepository;
     private final ThemeReplaySnapshotRepository snapshotRepository;
     private final ThemeReplayNodeRepository nodeRepository;
+    private final ReplayMetricsService replayMetricsService;
     private final ObjectMapper objectMapper;
 
     public ThemeLifecycleEngine(
@@ -41,9 +44,21 @@ public class ThemeLifecycleEngine {
             ThemeReplayNodeRepository nodeRepository,
             ObjectMapper objectMapper
     ) {
+        this(lifecycleRepository, snapshotRepository, nodeRepository, null, objectMapper);
+    }
+
+    @Autowired
+    public ThemeLifecycleEngine(
+            ThemeLifecycleStateRepository lifecycleRepository,
+            ThemeReplaySnapshotRepository snapshotRepository,
+            ThemeReplayNodeRepository nodeRepository,
+            ReplayMetricsService replayMetricsService,
+            ObjectMapper objectMapper
+    ) {
         this.lifecycleRepository = lifecycleRepository;
         this.snapshotRepository = snapshotRepository;
         this.nodeRepository = nodeRepository;
+        this.replayMetricsService = replayMetricsService;
         this.objectMapper = objectMapper;
     }
 
@@ -204,8 +219,18 @@ public class ThemeLifecycleEngine {
                 stringList(e.getRecommendedPlaybookJson()), stringList(e.getAvoidPlaybookJson()), e.getPayloadJson(), SAFETY);
     }
 
+
+    private ThemeReplayMetricsResponse.MetricsSummary metricsSummary(LocalDate date, List<ThemeLifecycleStateEntity> states) {
+        if (replayMetricsService == null || states == null || states.isEmpty()) {
+            return ThemeReplayMetricsResponse.MetricsSummary.empty();
+        }
+        String theme = states.get(0).getThemeTag();
+        boolean singleTheme = states.stream().allMatch(s -> Objects.equals(theme, s.getThemeTag()));
+        return singleTheme ? replayMetricsService.summary(date, theme) : ThemeReplayMetricsResponse.MetricsSummary.empty();
+    }
+
     private ThemeLifecycleResponse response(LocalDate date, List<ThemeLifecycleStateEntity> states) {
-        return new ThemeLifecycleResponse(date, true, true, SAFETY, states.stream().map(this::toItem).toList());
+        return new ThemeLifecycleResponse(date, true, true, SAFETY, metricsSummary(date, states), states.stream().map(this::toItem).toList());
     }
 
     private StageDecision decision(String stage, BigDecimal score, String reason, List<String> recommended, List<String> avoid) {

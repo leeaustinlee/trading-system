@@ -1,6 +1,7 @@
 package com.austin.trading.service;
 
 import com.austin.trading.dto.response.ResearchUniverseResponse;
+import com.austin.trading.dto.response.ThemeReplayMetricsResponse;
 import com.austin.trading.entity.*;
 import com.austin.trading.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,7 @@ public class ResearchUniverseService {
     private final ThemePeerShadowCandidateRepository peerShadowCandidateRepository;
     private final ThemeReplayNodeRepository replayNodeRepository;
     private final ThemeLifecycleStateRepository lifecycleStateRepository;
+    private final ReplayMetricsService replayMetricsService;
     private final CandidateStockRepository candidateStockRepository;
 
     public ResearchUniverseService(
@@ -38,7 +40,7 @@ public class ResearchUniverseService {
             CandidateStockRepository candidateStockRepository
     ) {
         this(researchRepository, leadershipSnapshotRepository, leaderRetentionRepository, peerShadowCandidateRepository,
-                replayNodeRepository, null, candidateStockRepository);
+                replayNodeRepository, null, null, candidateStockRepository);
     }
 
     @Autowired
@@ -49,6 +51,7 @@ public class ResearchUniverseService {
             ThemePeerShadowCandidateRepository peerShadowCandidateRepository,
             ThemeReplayNodeRepository replayNodeRepository,
             ThemeLifecycleStateRepository lifecycleStateRepository,
+            ReplayMetricsService replayMetricsService,
             CandidateStockRepository candidateStockRepository
     ) {
         this.researchRepository = researchRepository;
@@ -57,6 +60,7 @@ public class ResearchUniverseService {
         this.peerShadowCandidateRepository = peerShadowCandidateRepository;
         this.replayNodeRepository = replayNodeRepository;
         this.lifecycleStateRepository = lifecycleStateRepository;
+        this.replayMetricsService = replayMetricsService;
         this.candidateStockRepository = candidateStockRepository;
     }
 
@@ -254,9 +258,19 @@ public class ResearchUniverseService {
         map.putIfAbsent(item.getTradingDate() + "|" + item.getSymbol() + "|" + item.getThemeTag() + "|" + item.getSource(), item);
     }
 
+
+    private ThemeReplayMetricsResponse.MetricsSummary metricsSummary(LocalDate date, List<ResearchUniverseItemEntity> items) {
+        if (replayMetricsService == null || items == null || items.isEmpty()) {
+            return ThemeReplayMetricsResponse.MetricsSummary.empty();
+        }
+        String theme = items.get(0).getThemeTag();
+        boolean singleTheme = items.stream().allMatch(i -> Objects.equals(theme, i.getThemeTag()));
+        return singleTheme ? replayMetricsService.summary(date, theme) : ThemeReplayMetricsResponse.MetricsSummary.empty();
+    }
+
     private ResearchUniverseResponse response(LocalDate date, List<ResearchUniverseItemEntity> items) {
         attachLifecycleAdvisory(date, items);
-        return new ResearchUniverseResponse(date, true, true, SAFETY, items.stream().map(this::toItem).toList());
+        return new ResearchUniverseResponse(date, true, true, SAFETY, metricsSummary(date, items), items.stream().map(this::toItem).toList());
     }
 
     private void attachLifecycleAdvisory(LocalDate date, List<ResearchUniverseItemEntity> items) {
