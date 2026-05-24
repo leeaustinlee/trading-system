@@ -9,16 +9,21 @@ import com.austin.trading.entity.ThemeSnapshotEntity;
 import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.StockEvaluationRepository;
 import com.austin.trading.repository.ThemeSnapshotRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Pageable;
 
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,10 +34,13 @@ import static org.mockito.Mockito.when;
 
 class CandidateThemeFirstUniverseServiceTest {
 
+    private static final String PASSIVE_COMPONENTS_FIXTURE = "replay/theme-first/passive-components-2026-05-22.json";
+
     private CandidateStockRepository candidateStockRepository;
     private StockEvaluationRepository stockEvaluationRepository;
     private ThemeSnapshotRepository themeSnapshotRepository;
     private CandidateScanService service;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
@@ -50,7 +58,7 @@ class CandidateThemeFirstUniverseServiceTest {
                 twseMisClient,
                 momentumCandidateEngine,
                 scoreConfigService,
-                new ObjectMapper()
+                objectMapper
         );
     }
 
@@ -116,6 +124,59 @@ class CandidateThemeFirstUniverseServiceTest {
         ));
     }
 
+
+
+    @Test
+    void themeFirstUniverse_canReplayPassiveComponentFixtureWithoutLiveCandidateStock() throws Exception {
+        LocalDate date = LocalDate.of(2026, 5, 22);
+        CandidateStockEntity marker = candidate(date, "9999", "marker", "1.0", "OTHER");
+        List<CandidateStockEntity> fixtureRows = passiveComponentFixtureRows();
+        List<CandidateStockEntity> baselineRows = fixtureRows.stream()
+                .map(this::baselineCopy)
+                .toList();
+
+        when(candidateStockRepository.findTopByOrderByTradingDateDesc()).thenReturn(Optional.of(marker));
+        when(candidateStockRepository.findByTradingDateOrderByScoreDesc(eq(date), any(Pageable.class)))
+                .thenReturn(fixtureRows, baselineRows);
+        when(themeSnapshotRepository.findByTradingDateOrderByRankingOrderAsc(date)).thenReturn(List.of(
+                theme(date, "被動元件", 1, "9.8")
+        ));
+
+        List<CandidateResponse> universe = service.getThemeFirstCurrentCandidates(10);
+        Map<String, Object> replay = service.buildThemeFirstReplay(date, universe);
+
+        assertThat(universe).hasSize(6);
+        assertThat(universe).extracting(CandidateResponse::symbol)
+                .containsExactly("2327", "2492", "3026", "3090", "6173", "2375");
+
+        CandidateResponse leader = universe.get(0);
+        assertThat(leader.symbol()).isEqualTo("2327");
+        assertThat(leader.candidateRole()).isEqualTo("THEME_LEADER");
+        assertThat(leader.isThemeLeader()).isTrue();
+        assertThat(leader.leaderTradable()).isFalse();
+        assertThat(leader.themeLeaderSymbol()).isEqualTo("2327");
+        assertThat(leader.themeImportanceScore()).isEqualByComparingTo(new BigDecimal("9.9"));
+        assertThat(leader.tradableScore()).isEqualByComparingTo(new BigDecimal("1.8"));
+        assertThat(leader.shadowRankScore()).isEqualByComparingTo(new BigDecimal("9.7"));
+
+        assertThat(universe).allSatisfy(c -> {
+            assertThat(c.themeImportanceScore()).isNotNull();
+            assertThat(c.tradableScore()).isNotNull();
+            assertThat(c.shadowRankScore()).isNotNull();
+            assertThat(c.themeLeaderSymbol()).isEqualTo("2327");
+        });
+        assertThat(universe.stream().skip(1).map(CandidateResponse::candidateRole).collect(Collectors.toSet()))
+                .containsExactly("PEER_SHADOW_CONTEXT");
+
+        long baselineDiversification = baselineRows.stream()
+                .map(CandidateStockEntity::getCandidateRole)
+                .distinct()
+                .count();
+        assertThat((Long) replay.get("candidateDiversification")).isGreaterThan(baselineDiversification);
+        assertThat((BigDecimal) replay.get("leaderRetentionRate")).isGreaterThan(BigDecimal.ZERO);
+        assertThat((BigDecimal) replay.get("peerDiscoveryHitRate")).isGreaterThan(BigDecimal.ZERO);
+    }
+
     private CandidateStockEntity candidate(LocalDate date, String symbol, String name, String score, String theme) {
         CandidateStockEntity entity = new CandidateStockEntity();
         entity.setTradingDate(date);
@@ -124,6 +185,56 @@ class CandidateThemeFirstUniverseServiceTest {
         entity.setScore(new BigDecimal(score));
         entity.setReason("test");
         entity.setThemeTag(theme);
+        return entity;
+    }
+
+
+
+    private List<CandidateStockEntity> passiveComponentFixtureRows() throws Exception {
+        try (InputStream in = getClass().getClassLoader().getResourceAsStream(PASSIVE_COMPONENTS_FIXTURE)) {
+            assertThat(in).as("fixture " + PASSIVE_COMPONENTS_FIXTURE).isNotNull();
+            JsonNode root = objectMapper.readTree(in);
+            return StreamSupport.stream(root.path("candidates").spliterator(), false)
+                    .map(node -> fixtureCandidate(root.path("tradingDate").asText(), node))
+                    .toList();
+        }
+    }
+
+    private CandidateStockEntity fixtureCandidate(String tradingDate, JsonNode node) {
+        CandidateStockEntity entity = candidate(
+                LocalDate.parse(tradingDate),
+                node.path("symbol").asText(),
+                node.path("stockName").asText(),
+                node.path("score").asText(),
+                node.path("themeTag").asText()
+        );
+        entity.setSector(node.path("sector").asText(null));
+        entity.setCandidateRole(node.path("candidateRole").asText(null));
+        entity.setThemeImportanceScore(node.path("themeImportanceScore").decimalValue());
+        entity.setTradableScore(node.path("tradableScore").decimalValue());
+        entity.setShadowRankScore(node.path("shadowRankScore").decimalValue());
+        entity.setThemeLeaderSymbol(node.path("themeLeaderSymbol").asText(null));
+        entity.setIsThemeLeader(node.path("isThemeLeader").asBoolean(false));
+        entity.setLeaderTradable(node.path("leaderTradable").asBoolean(false));
+        entity.setLeaderRetentionReason(node.path("rejectionReason").asText(null));
+        entity.setThemeTraceId("passive-components-2026-05-22");
+        entity.setReason(node.path("rejectionReason").asText());
+        entity.setPayloadJson(node.toString());
+        return entity;
+    }
+
+    private CandidateStockEntity baselineCopy(CandidateStockEntity source) {
+        CandidateStockEntity entity = candidate(
+                source.getTradingDate(),
+                source.getSymbol(),
+                source.getStockName(),
+                source.getScore().toPlainString(),
+                source.getThemeTag()
+        );
+        entity.setCandidateRole("BASELINE_CURRENT_CANDIDATE");
+        entity.setThemeImportanceScore(source.getThemeImportanceScore());
+        entity.setTradableScore(source.getTradableScore());
+        entity.setShadowRankScore(source.getShadowRankScore());
         return entity;
     }
 

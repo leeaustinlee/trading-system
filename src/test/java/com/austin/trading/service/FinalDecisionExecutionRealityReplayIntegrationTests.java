@@ -7,6 +7,7 @@ import com.austin.trading.dto.internal.PortfolioRiskDecision;
 import com.austin.trading.dto.internal.RankedCandidate;
 import com.austin.trading.dto.internal.ThemeStrengthDecision;
 import com.austin.trading.dto.request.CodexResultPayloadRequest;
+import com.austin.trading.dto.request.CodexReviewedSymbolRequest;
 import com.austin.trading.dto.request.FinalDecisionCandidateRequest;
 import com.austin.trading.dto.request.MarketSnapshotCreateRequest;
 import com.austin.trading.dto.request.TradingStateUpsertRequest;
@@ -31,6 +32,7 @@ import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -50,7 +52,9 @@ import static org.mockito.Mockito.when;
 @Import(FixedLiveTradingClockTestConfig.class)
 class FinalDecisionExecutionRealityReplayIntegrationTests {
 
-    private static final AtomicInteger DATE_SEQ = new AtomicInteger(0);
+    private static final AtomicInteger DATE_SEQ = new AtomicInteger();
+    private static final LocalDate RUN_BASE_DATE = LocalDate.of(2090, 1, 1)
+            .plusDays(System.currentTimeMillis() % 10_000);
 
     @Autowired private FinalDecisionService finalDecisionService;
     @Autowired private FinalDecisionRepository finalDecisionRepository;
@@ -298,13 +302,103 @@ class FinalDecisionExecutionRealityReplayIntegrationTests {
         assertThat(trace.path("finalReason").asText()).contains("THEME_OVER_EXPOSED");
     }
 
+
+    @Test
+    void opening_themeLeaderWithHighThemeScore_doesNotBypassRiskGateOrEnter() throws Exception {
+        LocalDate tradingDate = uniqueTradingDate();
+        seedAiTask(tradingDate, "OPENING", new CodexResultPayloadRequest(
+                "OPENING",
+                "LIVE_TRADING",
+                "2026-05-22T09:30:00+08:00",
+                "BULLISH",
+                "BULL_TREND",
+                false,
+                List.of(new CodexReviewedSymbolRequest(
+                        "2327", "SELECT_BUY_NOW", 950.0, 930.0, 870.0, 960.0, 928.0,
+                        30000L, 28500000000.0, 920.0, 950.0, 900.0, 1010.0, 1.8, true,
+                        List.of("被動元件主流題材 leader", "themeImportanceScore=9.9"),
+                        List.of("leadership-only", "leaderTradable=false"),
+                        "BUY_NOW", "A", 25000L
+                )),
+                List.of(new CodexReviewedSymbolRequest(
+                        "2492", "SELECT_WAIT_PULLBACK", 116.0, 113.0, 108.0, 118.0, 112.5,
+                        12000L, 1392000000.0, 112.0, 116.0, 108.0, 124.0, 1.4, true,
+                        List.of("peer shadow"), List.of("shadow/replay context only"),
+                        "WAIT_PULLBACK", "WATCH", 10000L
+                )),
+                List.of()
+        ));
+
+        when(candidateScanService.loadFinalDecisionCandidates(eq(tradingDate), anyInt()))
+                .thenReturn(List.of(
+                        candidate("2327", "國巨", true, 1.8, new BigDecimal("9.9"),
+                                "leadership-only; leaderTradable=false; not FinalDecision tradable candidate"),
+                        candidate("2492", "華新科", false, 1.4, new BigDecimal("8.9"),
+                                "peer shadow/replay context only"),
+                        candidate("3026", "禾伸堂", false, 1.3, new BigDecimal("8.6"),
+                                "peer shadow/replay context only")
+                ));
+        when(marketRegimeService.getLatestForToday()).thenReturn(Optional.of(bullRegime(tradingDate)));
+        when(marketRegimeService.getLatest()).thenReturn(Optional.of(bullRegime(tradingDate)));
+        when(portfolioRiskService.evaluatePortfolioGate(anyList(), eq(tradingDate)))
+                .thenReturn(gateDecision(tradingDate, true, null));
+        when(stockRankingService.rank(anyList(), eq(tradingDate), any(), any()))
+                .thenReturn(List.of(
+                        ranked(tradingDate, "2327", false, true, "RISK_GATE_REQUIRED", "被動元件"),
+                        ranked(tradingDate, "2492", false, false, "PEER_SHADOW_ONLY", "被動元件"),
+                        ranked(tradingDate, "3026", false, false, "PEER_SHADOW_ONLY", "被動元件")
+                ));
+        when(executionTimingService.evaluateAll(anyList(), eq(tradingDate)))
+                .thenReturn(List.of(new ExecutionTimingDecision(
+                        tradingDate, "2327", "BREAKOUT_CONTINUATION", true, "BREAKOUT_READY", "HIGH",
+                        false, 0, 0, null, "{}")));
+        when(portfolioRiskService.evaluateCandidates(anyList(), anyList(), eq(tradingDate)))
+                .thenReturn(List.of(
+                        candidateRisk(tradingDate, "2327", false,
+                                "leader_retained_for_theme_context_only; risk gate not bypassed"),
+                        candidateRisk(tradingDate, "2492", false, "peer_shadow_not_tradable_candidate"),
+                        candidateRisk(tradingDate, "3026", false, "peer_shadow_not_tradable_candidate")
+                ));
+
+        FinalDecisionResponse response = finalDecisionService.evaluateAndPersist(tradingDate);
+        JsonNode payload = latestDecisionPayload(tradingDate);
+        JsonNode trace = payload.path("planning").path("decisionTrace");
+
+        assertThat(response.decision()).isEqualTo("REST");
+        assertThat(response.selectedStocks()).isEmpty();
+        assertThat(response.selectedStocks()).extracting("stockCode")
+                .doesNotContain("2327", "2492", "3026");
+        assertThat(trace.path("codexBucket").asText()).isEqualTo("SELECT_BUY_NOW");
+        assertThat(trace.path("hardRiskBlocked").asBoolean()).isTrue();
+        assertThat(trace.path("finalAction").asText()).isEqualTo("BLOCKED");
+        assertThat(payload.toString())
+                .contains("leader_retained_for_theme_context_only")
+                .contains("risk gate not bypassed");
+    }
+
+
     private LocalDate uniqueTradingDate() {
-        return LocalDate.of(2035, 1, 1).plusDays(DATE_SEQ.incrementAndGet());
+        return RUN_BASE_DATE.plusDays(DATE_SEQ.incrementAndGet());
     }
 
     private void seedAiTask(LocalDate tradingDate, String taskType, String fixturePath) throws Exception {
         CodexResultPayloadRequest payload = readFixture(fixturePath);
 
+        AiTaskEntity task = new AiTaskEntity();
+        task.setTradingDate(tradingDate);
+        task.setTaskType(taskType);
+        task.setStatus(AiTaskService.STATUS_CODEX_DONE);
+        task.setPromptSummary("replay");
+        task.setCodexResultMarkdown("replay");
+        task.setCodexPayloadJson(objectMapper.writeValueAsString(payload));
+        task.setClaudeDoneAt(LocalDateTime.now().minusMinutes(5));
+        task.setCodexDoneAt(LocalDateTime.now().minusMinutes(1));
+        task.setLastTransitionReason("replay-seed");
+        aiTaskRepository.save(task);
+    }
+
+
+    private void seedAiTask(LocalDate tradingDate, String taskType, CodexResultPayloadRequest payload) throws Exception {
         AiTaskEntity task = new AiTaskEntity();
         task.setTradingDate(tradingDate);
         task.setTaskType(taskType);
@@ -328,7 +422,7 @@ class FinalDecisionExecutionRealityReplayIntegrationTests {
     private JsonNode latestDecisionPayload(LocalDate tradingDate) throws Exception {
         FinalDecisionEntity entity = finalDecisionRepository.findAll().stream()
                 .filter(it -> tradingDate.equals(it.getTradingDate()))
-                .reduce((first, second) -> second)
+                .max(Comparator.comparing(FinalDecisionEntity::getId))
                 .orElseThrow();
         return objectMapper.readTree(entity.getPayloadJson());
     }
@@ -361,6 +455,45 @@ class FinalDecisionExecutionRealityReplayIntegrationTests {
                 true,
                 1,
                 new BigDecimal("9.0"),
+                null,
+                null,
+                false,
+                false,
+                false,
+                false
+        );
+    }
+
+
+    private FinalDecisionCandidateRequest candidate(String symbol, String stockName, boolean includeInFinalPlan,
+                                                    double rr, BigDecimal finalThemeScore, String rationale) {
+        return new FinalDecisionCandidateRequest(
+                symbol,
+                stockName,
+                "VALUE_FAIR",
+                "BREAKOUT",
+                rr,
+                includeInFinalPlan,
+                true,
+                false,
+                false,
+                false,
+                true,
+                true,
+                rationale,
+                "920-950",
+                900.0,
+                1010.0,
+                1060.0,
+                null,
+                new BigDecimal("9.5"),
+                null,
+                null,
+                false,
+                new BigDecimal("9.3"),
+                true,
+                1,
+                finalThemeScore,
                 null,
                 null,
                 false,
