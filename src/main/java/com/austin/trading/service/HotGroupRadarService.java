@@ -62,6 +62,7 @@ public class HotGroupRadarService {
         String sourcePhase = normalizePhase(phase);
         JsonNode root = parse(marketBreadthJson);
         Map<String, StockSignal> universe = collectUniverse(root);
+        addPassivePeerSeedsIfThemeDetected(universe);
         Set<String> hotSymbols = symbols(root, "hot_stocks");
         Set<String> finalSymbols = symbols(root, "final_candidates_5");
         lastUniverseByDate.put(date, universe);
@@ -171,6 +172,26 @@ public class HotGroupRadarService {
         return StreamSupport.stream(arr.spliterator(), false).map(n -> n.path("Code").asText(null)).filter(Objects::nonNull).collect(Collectors.toSet());
     }
 
+    private void addPassivePeerSeedsIfThemeDetected(Map<String, StockSignal> universe) {
+        boolean hasPassiveLeader = universe.values().stream().anyMatch(s -> s.radarTheme != null && s.radarTheme.startsWith("被動元件/"));
+        if (!hasPassiveLeader) return;
+        passiveSeed("2327", "國巨*", universe);
+        passiveSeed("2492", "華新科", universe);
+        passiveSeed("2375", "凱美", universe);
+        passiveSeed("3090", "日電貿", universe);
+        passiveSeed("2472", "立隆電", universe);
+        passiveSeed("6127", "九豪", universe);
+    }
+
+    private void passiveSeed(String symbol, String name, Map<String, StockSignal> universe) {
+        if (universe.containsKey(symbol)) return;
+        String theme = ThemeTaxonomyClassifier.classify(symbol, name);
+        if (theme == null) return;
+        universe.put(symbol, new StockSignal(symbol, name, "HOT_GROUP_RADAR_SEED", theme,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, false,
+                false, false, false, new LinkedHashSet<>(Set.of("taxonomy_peer_seed"))));
+    }
+
     private HotGroupRadarSnapshotEntity snapshotEntity(LocalDate date, String phase, String theme, List<StockSignal> stocks) {
         int leaderCount = (int) stocks.stream().filter(s -> s.limitRisk || s.inSuperStrong || s.inHotStock).count();
         int limitUp = (int) stocks.stream().filter(s -> s.limitRisk || s.changePct.compareTo(new BigDecimal("9.2")) >= 0).count();
@@ -212,6 +233,7 @@ public class HotGroupRadarService {
 
     private String role(StockSignal s, boolean firstInTheme) {
         if ("被動元件/通路代理".equals(s.radarTheme)) return "CHANNEL_DISTRIBUTOR";
+        if (s.sourceLists.contains("taxonomy_peer_seed") && s.changePct.compareTo(BigDecimal.ZERO) == 0) return "WATCH_ONLY";
         if (!s.limitRisk && s.changePct.compareTo(new BigDecimal("5")) < 0) return "LOW_BASE_FOLLOWER";
         if (firstInTheme && (s.limitRisk || s.inSuperStrong || s.turnoverYi.compareTo(new BigDecimal("50")) >= 0)) return "THEME_LEADER";
         if (s.limitRisk || s.changePct.compareTo(new BigDecimal("7")) >= 0) return "SECOND_LEADER";
