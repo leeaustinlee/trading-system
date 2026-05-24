@@ -8,7 +8,7 @@
  *
  * 升版：改 CACHE_VERSION，舊 cache 自動清空。
  */
-const CACHE_VERSION = 'tt-v5-2026-04-28-paper-trade';
+const CACHE_VERSION = 'tt-v6-2026-05-24-themeops-tab';
 const STATIC_CACHE  = `static-${CACHE_VERSION}`;
 const PRECACHE_URLS = [
   '/mobile.html',

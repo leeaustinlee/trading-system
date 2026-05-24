@@ -465,6 +465,7 @@
     <a class="tab" data-r="pnl"       href="#/pnl"><span class="ico">$</span><span>損益</span></a>
     <a class="tab" data-r="decisions" href="#/decisions"><span class="ico">∿</span><span>決策</span></a>
     <a class="tab" data-r="research"  href="#/research"><span class="ico">⌬</span><span>AI</span></a>
+    <a class="tab" data-r="themeops"  href="#/themeops"><span class="ico">◆</span><span>題材</span></a>
     <a class="tab" data-r="scheduler" href="#/scheduler"><span class="ico">◷</span><span>排程</span></a>
     <a class="tab" data-r="advanced"  href="#/advanced"><span class="ico">⚙</span><span>進階</span></a>
   </div>
@@ -516,6 +517,7 @@ const S = {
   decisionsHistory:null, hourlyHistory:null, monitorHistory:null,
   notifications:null, schedulerJobs:null, scheduledTasks:null,
   migrationHealth:null, themeMappings:null,
+  themeOpsDate:new Date().toISOString().slice(0,10), themeOps:null,
   filter:'all',
   lastFetchAt:null,
 };
@@ -1045,6 +1047,33 @@ async function fetchResearchTab(){
   const notes = await safeFetch('/api/notifications?limit=20');
   S.notifications = Array.isArray(notes) ? notes : [];
 }
+function asRows(x){
+  if (Array.isArray(x)) return x;
+  if (!x || typeof x !== 'object') return [];
+  for (const k of ['items','rows','themes','states','traces','candidates','queue','signals','snapshots']){
+    if (Array.isArray(x[k])) return x[k];
+  }
+  return [];
+}
+async function fetchThemeOpsTab(date){
+  const d = date || S.themeOpsDate || new Date().toISOString().slice(0,10);
+  S.themeOpsDate = d;
+  const [meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision] = await Promise.all([
+    safeFetch('/api/dashboard/theme-first?date='+encodeURIComponent(d)),
+    safeFetch('/api/ops/daily-summary?date='+encodeURIComponent(d)),
+    safeFetch('/api/replay-metrics/safety-summary?date='+encodeURIComponent(d)),
+    safeFetch('/api/ops/build-traces?date='+encodeURIComponent(d)),
+    safeFetch('/api/hot-groups/radar?date='+encodeURIComponent(d)+'&phase=POSTMARKET'),
+    safeFetch('/api/hot-groups/candidate-feed?date='+encodeURIComponent(d)+'&phase=POSTMARKET'),
+    safeFetch('/api/promotion-review/queue?date='+encodeURIComponent(d)),
+    safeFetch('/api/theme-replay?date='+encodeURIComponent(d)),
+    safeFetch('/api/themes/lifecycle?date='+encodeURIComponent(d)),
+    safeFetch('/api/research-universe?date='+encodeURIComponent(d)),
+    safeFetch('/api/candidates/current'),
+    safeFetch('/api/decisions/current')
+  ]);
+  S.themeOps = {meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision};
+}
 async function fetchSchedulerTab(){
   const [jobs, tasks, today] = await Promise.all([
     safeFetch('/api/scheduler/jobs'),
@@ -1440,7 +1469,115 @@ Views.research = async () => {
   }
 };
 
-/* 7. scheduler */
+function themeMetricCard(label, value, sub, cls){
+  return el('div',{class:'metric'},[
+    el('div',{class:'k',text:label}),
+    el('div',{class:'v '+(cls||''),text:String(value ?? '—')}),
+    el('div',{class:'sub',text:sub || ''})
+  ]);
+}
+function themeCard(title, kv, badge){
+  const card = el('div',{class:'card a-card'});
+  card.append(el('div',{class:'row1'},[
+    el('div',{},[el('span',{class:'sym',text:title || '—'}), badge ? el('span',{class:'badge watch',style:'margin-left:8px',text:badge}) : null])
+  ]));
+  const data = el('div',{class:'data'});
+  Object.entries(kv||{}).forEach(([k,v]) => { data.append(el('span',{class:'k',text:k})); data.append(el('span',{class:'v',text:String(v ?? '—')})); });
+  card.append(data);
+  return card;
+}
+function appendThemeSection(app, title, rows, render, emptyText){
+  const sec = el('section',{class:'section'});
+  sec.append(el('div',{class:'section-title',html:`${title} <span class="count">${rows.length}</span>`}));
+  if (!rows.length) sec.append(el('div',{class:'empty',text:emptyText || '目前無資料'}));
+  else rows.slice(0,20).forEach(r => sec.append(render(r)));
+  app.append(sec);
+}
+
+/* 7. theme-first ops */
+Views.themeops = async () => {
+  setHeader('題材 Ops');
+  const app = $('app'); app.innerHTML = '';
+  await fetchCommon(); await fetchThemeOpsTab();
+  const t = S.themeOps || {};
+  const date = S.themeOpsDate;
+
+  const ctrl = el('section',{class:'section'});
+  const input = el('input',{type:'date',value:date,style:'min-height:44px;border:1px solid var(--line);background:var(--bg-card);color:var(--ink);border-radius:12px;padding:0 12px;font:700 14px var(--f-mono)'});
+  const refresh = el('button',{class:'refresh',style:'min-height:44px;width:auto;padding:0 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg-card)',text:'重新整理'});
+  refresh.addEventListener('click', async () => { S.themeOpsDate = input.value || date; await Views.themeops(); });
+  input.addEventListener('change', async () => { S.themeOpsDate = input.value || date; await Views.themeops(); });
+  ctrl.append(el('div',{class:'card',style:'display:flex;gap:10px;align-items:center;position:sticky;top:56px;z-index:20'},[
+    el('div',{style:'font-weight:800;flex:1',text:'Theme-first Ops / Research'}), input, refresh
+  ]));
+  ctrl.append(el('div',{class:'empty',style:'margin-top:8px',text:'Read-only：只看題材雷達、Research Universe、Promotion Review 與 build trace；不提供交易或 review 寫入按鈕。'}));
+  app.append(ctrl);
+
+  const safetyVals = Object.values(t.safety || {}).filter(v => typeof v === 'number');
+  const warning = safetyVals.some(v => v > 0);
+  const hotRows = asRows(t.hot);
+  const promoRows = asRows(t.promo);
+  const lifecycleRows = asRows(t.lifecycle).length ? asRows(t.lifecycle) : asRows(t.replay);
+  const traceRows = asRows(t.traces);
+  const researchRows = asRows(t.research);
+  const candidateRows = asRows(t.candidates);
+
+  app.append(el('div',{class:'metrics'},[
+    themeMetricCard('Safety', warning ? 'WARN' : 'SAFE', warning ? 'forbidden counters > 0' : 'forbidden counters = 0', warning ? 'dn' : 'up'),
+    themeMetricCard('Hot Themes', hotRows.length, 'POSTMARKET radar'),
+    themeMetricCard('Promotion Queue', promoRows.length, 'review-only'),
+    themeMetricCard('Build Trace', traceRows.length, 'SUCCESS / FAILED / PARTIAL')
+  ]));
+
+  appendThemeSection(app, 'Hot Group Radar', hotRows, r => themeCard(r.themeTag || r.theme || 'Theme', {
+    hotScore: r.hotScore ?? r.radarScore,
+    leaderCount: r.leaderCount,
+    limitUpCount: r.limitUpCount,
+    watchOnly: r.watchOnlyCount,
+    signals: truncate(String(r.topSignals || r.topSymbols || r.leaderSymbols || ''), 40)
+  }, 'RADAR'));
+
+  appendThemeSection(app, 'Promotion Review Queue', promoRows, r => themeCard(`${r.symbol || '—'} ${r.stockName || ''}`.trim(), {
+    theme: r.themeTag,
+    source: r.source,
+    role: r.researchRole,
+    status: r.currentStatus,
+    riskBlocker: r.riskBlocker,
+    evidence: r.evidenceScore
+  }, 'READ'));
+
+  appendThemeSection(app, 'Lifecycle', lifecycleRows, r => themeCard(r.themeTag || r.theme || 'Theme', {
+    stage: r.lifecycleStage || r.stage,
+    reason: truncate(r.reason || r.lifecycleReason || '', 32),
+    playbook: truncate(String(r.recommendedPlaybook || r.recommendedPlaybookJson || ''), 32),
+    avoid: truncate(String(r.avoidPlaybook || r.avoidPlaybookJson || ''), 32)
+  }, 'LIFE'));
+
+  appendThemeSection(app, 'Research Universe', researchRows, r => themeCard(`${r.symbol || '—'} ${r.stockName || ''}`.trim(), {
+    theme: r.themeTag,
+    role: r.researchRole,
+    governance: r.governanceStatus,
+    lifecycle: r.lifecycleStage,
+    score: r.evidenceScore ?? r.researchScore
+  }, 'SHADOW'));
+
+  const cd = el('div');
+  cd.append(themeCard('Candidate / Decision', {
+    candidates: candidateRows.length,
+    decision: t.decision?.decision || t.decision?.status || '—',
+    productionPath: 'unchanged / read-only'
+  }, 'SAFE'));
+  app.append(CollapsibleSection('Candidate / FinalDecision 摘要', cd, {open:true}));
+
+  appendThemeSection(app, 'Build Trace', traceRows, r => themeCard(r.buildType || r.operation || 'BUILD', {
+    status: r.status,
+    started: HHmmss(r.startedAt),
+    finished: HHmmss(r.finishedAt),
+    count: r.builtCount ?? r.rowCount
+  }, r.status || 'TRACE'));
+};
+
+/* 8. scheduler */
 Views.scheduler = async () => {
   setHeader('排程');
   const app = $('app'); app.innerHTML = '';
