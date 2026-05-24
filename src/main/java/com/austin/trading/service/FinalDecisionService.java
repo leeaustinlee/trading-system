@@ -1566,7 +1566,7 @@ public class FinalDecisionService {
         if (rawCandidates == null || rawCandidates.isEmpty() || context == null || context.reviewedBySymbol().isEmpty()) {
             return rawCandidates;
         }
-        LocalTime now = LocalTime.now(MARKET_ZONE);
+        LocalTime now = currentMarketTime();
         return rawCandidates.stream()
                 .filter(c -> !context.rejectedSymbols().contains(c.stockCode()))
                 .map(c -> {
