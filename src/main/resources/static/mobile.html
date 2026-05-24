@@ -496,7 +496,14 @@ const fmtPrice = n => n==null||!isFinite(+n) ? '—' : Number(n).toLocaleString(
 const truncate = (s,n)=> !s?'': (String(s).length>n ? String(s).slice(0,n)+'…' : String(s));
 const HHmm   = iso => { if(!iso) return '--:--'; try{return new Date(iso).toTimeString().slice(0,5);}catch(e){return '--:--';} };
 const HHmmss = iso => { if(!iso) return '--:--:--'; try{return new Date(iso).toTimeString().slice(0,8);}catch(e){return '--:--:--';} };
-const yyyymmdd = iso => { if(!iso) return ''; try{return new Date(iso).toISOString().slice(0,10);}catch(e){return '';} };
+const localYmd = (date=new Date()) => {
+  const d = date instanceof Date ? date : new Date(date);
+  if (!isFinite(d.getTime())) return '';
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+};
+const yyyymmdd = iso => { if(!iso) return ''; try{return localYmd(iso);}catch(e){return '';} };
 const safeJson = s => { try{ return s?JSON.parse(s):{}; }catch(e){ return {}; } };
 
 async function safeFetch(url){
@@ -517,7 +524,7 @@ const S = {
   decisionsHistory:null, hourlyHistory:null, monitorHistory:null,
   notifications:null, schedulerJobs:null, scheduledTasks:null,
   migrationHealth:null, themeMappings:null,
-  themeOpsDate:new Date().toISOString().slice(0,10), themeOps:null,
+  themeOpsDate:localYmd(), themeOps:null,
   filter:'all',
   lastFetchAt:null,
 };
@@ -525,7 +532,7 @@ S.filter = (localStorage.getItem('mobile.filter') || 'all');
 
 function updateCandidateMeta(items){
   const date = (items||[]).find(c => c && c.tradingDate)?.tradingDate || null;
-  const today = new Date().toISOString().slice(0,10);
+  const today = localYmd();
   let label='最新候選', cls='watch';
   if (date){
     if (date > today){ label='明日候選'; cls='wait'; }
@@ -1056,7 +1063,7 @@ function asRows(x){
   return [];
 }
 async function fetchThemeOpsTab(date){
-  const d = date || S.themeOpsDate || new Date().toISOString().slice(0,10);
+  const d = date || S.themeOpsDate || localYmd();
   S.themeOpsDate = d;
   const [meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision] = await Promise.all([
     safeFetch('/api/dashboard/theme-first?date='+encodeURIComponent(d)),
