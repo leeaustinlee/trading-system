@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -111,6 +112,102 @@ class PromotionReviewServiceTest {
     }
 
     @Test
+    void rebuildPreservesManualWatchOnlyItemAndMergesEvidenceWithoutOverwritingDecision() {
+        PromotionReviewItemEntity manual = manualItem("2492", "華新科", "被動元件/MLCC", "PEER_SHADOW", "WATCH_ONLY");
+        manual.setRadarScore(new BigDecimal("3"));
+        manual.setPayloadJson("{\"manual\":true}");
+        ResearchUniverseItemEntity refreshed = research("2492", "華新科", "被動元件/MLCC", "PEER_SHADOW");
+        refreshed.setThemeImportanceScore(new BigDecimal("9"));
+        when(itemRepo.findManualItemsByDate(DATE)).thenReturn(List.of(manual));
+        when(itemRepo.findByTradingDateOrderByThemeTagAscSymbolAscSourceAsc(DATE)).thenReturn(List.of(manual));
+        when(itemRepo.countManualItemsByDate(DATE)).thenReturn(1L);
+        when(auditRepo.countManualAuditsByDate(DATE)).thenReturn(1L);
+        when(itemRepo.deleteSystemGeneratedByDate(DATE)).thenReturn(2);
+        when(auditRepo.deleteSystemBuildAuditsByDate(DATE)).thenReturn(3);
+        when(researchRepo.findByTradingDateOrderByThemeTagAscSymbolAscSourceAsc(DATE)).thenReturn(List.of(refreshed));
+        when(hotGroupRepo.findByTradingDateAndSourcePhaseOrderByRadarRankScoreDesc(DATE, "POSTMARKET")).thenReturn(List.of());
+        when(replayNodeRepo.findByTradingDateOrderByThemeTagAscSymbolAsc(DATE)).thenReturn(List.of());
+
+        var response = service.rebuild(DATE);
+
+        assertThat(response.manualReviewPreserved()).isTrue();
+        assertThat(response.preservedManualCount()).isEqualTo(1);
+        assertThat(response.mergedManualCount()).isEqualTo(1);
+        assertThat(response.deletedSystemCount()).isEqualTo(2);
+        assertThat(response.items()).hasSize(1);
+        var item = response.items().get(0);
+        assertThat(item.currentStatus()).isEqualTo("WATCH_ONLY");
+        assertThat(item.reviewer()).isEqualTo("manual-preservation-test");
+        assertThat(item.decisionReason()).isEqualTo("manual decision must survive rebuild");
+        assertThat(item.themeImportanceScore()).isEqualByComparingTo("9");
+        assertThat(item.payloadJson()).contains("manualPreserved", "mergedEvidencePayload");
+        assertThat(savedAudits).anySatisfy(a -> {
+            assertThat(a.getAction()).isEqualTo("MERGE_EVIDENCE");
+            assertThat(a.getActor()).isEqualTo("system/build");
+        });
+        verify(auditRepo).deleteSystemBuildAuditsByDate(DATE);
+        verify(itemRepo).deleteSystemGeneratedByDate(DATE);
+        verify(auditRepo, never()).deleteByTradingDate(DATE);
+        verify(itemRepo, never()).deleteByTradingDate(DATE);
+    }
+
+    @Test
+    void rebuildPreservesCandidatePoolShadowDecisionAndManualAudit() {
+        PromotionReviewItemEntity manual = manualItem("2327", "國巨", "被動元件/MLCC", "RETAINED_LEADER", "CANDIDATE_POOL_SHADOW");
+        manual.setReviewer(null);
+        manual.setDecisionReason(null);
+        manual.setReviewedAt(null);
+        when(itemRepo.findManualItemsByDate(DATE)).thenReturn(List.of(manual));
+        when(itemRepo.findByTradingDateOrderByThemeTagAscSymbolAscSourceAsc(DATE)).thenReturn(List.of(manual));
+        when(itemRepo.countManualItemsByDate(DATE)).thenReturn(1L);
+        when(auditRepo.countManualAuditsByDate(DATE)).thenReturn(1L);
+        when(itemRepo.deleteSystemGeneratedByDate(DATE)).thenReturn(4);
+        when(auditRepo.deleteSystemBuildAuditsByDate(DATE)).thenReturn(5);
+        when(researchRepo.findByTradingDateOrderByThemeTagAscSymbolAscSourceAsc(DATE)).thenReturn(List.of());
+        when(hotGroupRepo.findByTradingDateAndSourcePhaseOrderByRadarRankScoreDesc(DATE, "POSTMARKET")).thenReturn(List.of(
+                hot("2327", "國巨", "被動元件/MLCC", "THEME_LEADER", true, new BigDecimal("30"), "REJECT_LIMIT_RISK")
+        ));
+        when(replayNodeRepo.findByTradingDateOrderByThemeTagAscSymbolAsc(DATE)).thenReturn(List.of());
+
+        var response = service.rebuild(DATE);
+
+        assertThat(response.manualReviewPreserved()).isTrue();
+        assertThat(response.preservedManualCount()).isEqualTo(1);
+        assertThat(response.mergedManualCount()).isEqualTo(1);
+        assertThat(response.items()).filteredOn(i -> i.symbol().equals("2327") && i.source().equals("RETAINED_LEADER"))
+                .singleElement().satisfies(i -> {
+                    assertThat(i.currentStatus()).isEqualTo("CANDIDATE_POOL_SHADOW");
+                    assertThat(i.tradable()).isFalse();
+                    assertThat(i.notFinalDecisionEligible()).isTrue();
+                });
+        verify(auditRepo).deleteSystemBuildAuditsByDate(DATE);
+        verify(itemRepo).deleteSystemGeneratedByDate(DATE);
+    }
+
+    @Test
+    void rebuildDeletesOnlySystemGeneratedRowsAndBuildAudits() {
+        when(itemRepo.findManualItemsByDate(DATE)).thenReturn(List.of());
+        when(itemRepo.findByTradingDateOrderByThemeTagAscSymbolAscSourceAsc(DATE)).thenReturn(List.of());
+        when(itemRepo.countManualItemsByDate(DATE)).thenReturn(0L);
+        when(auditRepo.countManualAuditsByDate(DATE)).thenReturn(2L);
+        when(itemRepo.deleteSystemGeneratedByDate(DATE)).thenReturn(7);
+        when(auditRepo.deleteSystemBuildAuditsByDate(DATE)).thenReturn(9);
+        when(researchRepo.findByTradingDateOrderByThemeTagAscSymbolAscSourceAsc(DATE)).thenReturn(List.of());
+        when(hotGroupRepo.findByTradingDateAndSourcePhaseOrderByRadarRankScoreDesc(DATE, "POSTMARKET")).thenReturn(List.of());
+        when(replayNodeRepo.findByTradingDateOrderByThemeTagAscSymbolAsc(DATE)).thenReturn(List.of());
+
+        var response = service.rebuild(DATE);
+
+        assertThat(response.preservedManualCount()).isZero();
+        assertThat(response.mergedManualCount()).isZero();
+        assertThat(response.deletedSystemCount()).isEqualTo(7);
+        verify(auditRepo).deleteSystemBuildAuditsByDate(DATE);
+        verify(itemRepo).deleteSystemGeneratedByDate(DATE);
+        verify(auditRepo, never()).deleteByTradingDate(DATE);
+        verify(itemRepo, never()).deleteByTradingDate(DATE);
+    }
+
+    @Test
     void decisionWritesAuditAndKeepsCandidatePoolShadowNonTradable() {
         PromotionReviewItemEntity item = new PromotionReviewItemEntity();
         item.setId(42L);
@@ -136,6 +233,23 @@ class PromotionReviewServiceTest {
             assertThat(a.getFromStatus()).isEqualTo("PENDING_REVIEW");
             assertThat(a.getToStatus()).isEqualTo("CANDIDATE_POOL_SHADOW");
         });
+    }
+
+    private PromotionReviewItemEntity manualItem(String symbol, String name, String theme, String source, String status) {
+        PromotionReviewItemEntity e = new PromotionReviewItemEntity();
+        e.setId(ids.getAndIncrement());
+        e.setTradingDate(DATE);
+        e.setSymbol(symbol);
+        e.setStockName(name);
+        e.setThemeTag(theme);
+        e.setSource(source);
+        e.setResearchRole("PEER_SHADOW");
+        e.setCurrentStatus(status);
+        e.setReviewer("manual-preservation-test");
+        e.setReviewedAt(LocalDateTime.of(2026, 5, 22, 12, 30));
+        e.setDecisionReason("manual decision must survive rebuild");
+        e.setPayloadJson("{\"manual\":true}");
+        return e;
     }
 
     private ResearchUniverseItemEntity research(String symbol, String name, String theme, String source) {

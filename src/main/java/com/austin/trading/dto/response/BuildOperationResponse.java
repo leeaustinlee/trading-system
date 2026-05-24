@@ -25,7 +25,11 @@ public record BuildOperationResponse(
         boolean noAutoPromotion,
         Long traceId,
         String status,
-        Map<String, Object> payload
+        Map<String, Object> payload,
+        int preservedManualCount,
+        int mergedManualCount,
+        int deletedSystemCount,
+        boolean manualReviewPreserved
 ) {
     @JsonProperty("shadowOnly")
     public boolean shadowOnly() { return true; }
@@ -45,6 +49,26 @@ public record BuildOperationResponse(
     @JsonProperty("metrics")
     public Object metrics() { return payload == null ? Map.of() : payload.getOrDefault("metrics", Map.of()); }
 
+
+    public Builder toBuilder() {
+        return builder(buildType, tradingDate)
+                .sourcePhase(sourcePhase)
+                .builtCount(builtCount)
+                .deletedCount(deletedCount)
+                .insertedCount(insertedCount)
+                .updatedCount(updatedCount)
+                .skippedCount(skippedCount)
+                .rebuild(rebuild)
+                .safetyBoundary(safetyBoundary)
+                .traceId(traceId)
+                .status(status)
+                .payload(payload)
+                .preservedManualCount(preservedManualCount)
+                .mergedManualCount(mergedManualCount)
+                .deletedSystemCount(deletedSystemCount)
+                .manualReviewPreserved(manualReviewPreserved);
+    }
+
     public static Builder builder(String buildType, LocalDate tradingDate) {
         return new Builder(buildType, tradingDate);
     }
@@ -63,6 +87,10 @@ public record BuildOperationResponse(
         private Long traceId;
         private String status = "SUCCESS";
         private Map<String, Object> payload = Map.of();
+        private int preservedManualCount;
+        private int mergedManualCount;
+        private int deletedSystemCount;
+        private boolean manualReviewPreserved = false;
 
         private Builder(String buildType, LocalDate tradingDate) {
             this.buildType = buildType;
@@ -80,11 +108,16 @@ public record BuildOperationResponse(
         public Builder traceId(Long traceId) { this.traceId = traceId; return this; }
         public Builder status(String status) { this.status = status; return this; }
         public Builder payload(Map<String, Object> payload) { this.payload = payload == null ? Map.of() : payload; return this; }
+        public Builder preservedManualCount(int preservedManualCount) { this.preservedManualCount = preservedManualCount; return this; }
+        public Builder mergedManualCount(int mergedManualCount) { this.mergedManualCount = mergedManualCount; return this; }
+        public Builder deletedSystemCount(int deletedSystemCount) { this.deletedSystemCount = deletedSystemCount; return this; }
+        public Builder manualReviewPreserved(boolean manualReviewPreserved) { this.manualReviewPreserved = manualReviewPreserved; return this; }
 
         public BuildOperationResponse build() {
             return new BuildOperationResponse(buildType, tradingDate, sourcePhase, builtCount, deletedCount, insertedCount,
                     updatedCount, skippedCount, rebuild, safetyBoundary,
-                    true, true, true, true, true, true, true, traceId, status, payload);
+                    true, true, true, true, true, true, true, traceId, status, payload,
+                    preservedManualCount, mergedManualCount, deletedSystemCount, manualReviewPreserved);
         }
     }
 }

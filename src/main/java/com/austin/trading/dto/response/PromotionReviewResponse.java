@@ -18,15 +18,27 @@ public record PromotionReviewResponse(
         boolean promotionRequiresSeparateRiskGate,
         SafetyBoundary safetyBoundary,
         int itemCount,
-        List<Item> items
+        List<Item> items,
+        int preservedManualCount,
+        int mergedManualCount,
+        int deletedSystemCount,
+        boolean manualReviewPreserved
 ) {
     public static SafetyBoundary defaultSafetyBoundary() {
         return new SafetyBoundary(true, true, true, true, true, true, true, true);
     }
 
     public static PromotionReviewResponse of(LocalDate date, List<Item> items) {
+        return of(date, items, 0, 0, 0);
+    }
+
+    public static PromotionReviewResponse of(LocalDate date, List<Item> items,
+                                             int preservedManualCount,
+                                             int mergedManualCount,
+                                             int deletedSystemCount) {
         return new PromotionReviewResponse(date, true, true, true, true, true, true, true, true,
-                defaultSafetyBoundary(), items.size(), items);
+                defaultSafetyBoundary(), items.size(), items,
+                preservedManualCount, mergedManualCount, deletedSystemCount, true);
     }
 
     public record SafetyBoundary(

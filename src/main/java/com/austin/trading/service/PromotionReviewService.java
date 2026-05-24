@@ -65,15 +65,22 @@ public class PromotionReviewService {
 
     @Transactional
     public PromotionReviewResponse rebuild(LocalDate date) {
-        auditRepo.deleteByTradingDate(date);
+        int preservedManualCount = safeInt(itemRepo.countManualItemsByDate(date));
+        int preservedManualAuditCount = safeInt(auditRepo.countManualAuditsByDate(date));
+        int deletedSystemAuditCount = auditRepo.deleteSystemBuildAuditsByDate(date);
         auditRepo.flush();
-        itemRepo.deleteByTradingDate(date);
+        int deletedSystemCount = itemRepo.deleteSystemGeneratedByDate(date);
         itemRepo.flush();
-        return build(date);
+        BuildContext context = new BuildContext(preservedManualCount, preservedManualAuditCount, deletedSystemCount, deletedSystemAuditCount);
+        return buildInternal(date, context);
     }
 
     @Transactional
     public PromotionReviewResponse build(LocalDate date) {
+        return buildInternal(date, new BuildContext(0, 0, 0, 0));
+    }
+
+    private PromotionReviewResponse buildInternal(LocalDate date, BuildContext context) {
         Map<String, PromotionReviewItemEntity> existing = itemRepo.findByTradingDateOrderByThemeTagAscSymbolAscSourceAsc(date)
                 .stream().collect(Collectors.toMap(this::key, Function.identity(), (a, b) -> a, LinkedHashMap::new));
         Map<String, ThemeLifecycleStateEntity> lifecycleByTheme = lifecycleRepo.findByTradingDateOrderByThemeTagAsc(date)
@@ -83,23 +90,24 @@ public class PromotionReviewService {
 
         List<PromotionReviewItemEntity> built = new ArrayList<>();
         for (ResearchUniverseItemEntity r : researchRepo.findByTradingDateOrderByThemeTagAscSymbolAscSourceAsc(date)) {
-            built.add(upsert(existing, fromResearch(r, lifecycleByTheme, metricsByTheme), "CREATE", "system/build"));
+            built.add(upsert(existing, fromResearch(r, lifecycleByTheme, metricsByTheme), "CREATE", "system/build", context));
         }
         for (HotGroupStockSignalEntity h : hotGroupRepo.findByTradingDateAndSourcePhaseOrderByRadarRankScoreDesc(date, "POSTMARKET")) {
-            built.add(upsert(existing, fromHotGroup(h, "HOT_GROUP_RADAR", lifecycleByTheme, metricsByTheme), "CREATE", "system/build"));
+            built.add(upsert(existing, fromHotGroup(h, "HOT_GROUP_RADAR", lifecycleByTheme, metricsByTheme), "CREATE", "system/build", context));
             if (isLeader(h.getRole())) {
-                built.add(upsert(existing, fromHotGroup(h, "RETAINED_LEADER", lifecycleByTheme, metricsByTheme), "CREATE", "system/build"));
+                built.add(upsert(existing, fromHotGroup(h, "RETAINED_LEADER", lifecycleByTheme, metricsByTheme), "CREATE", "system/build", context));
             } else {
-                built.add(upsert(existing, fromHotGroup(h, "PEER_SHADOW", lifecycleByTheme, metricsByTheme), "CREATE", "system/build"));
+                built.add(upsert(existing, fromHotGroup(h, "PEER_SHADOW", lifecycleByTheme, metricsByTheme), "CREATE", "system/build", context));
             }
             if (hasText(h.getCandidateAction()) || hasText(h.getRejectionReason()) || Boolean.TRUE.equals(h.getLimitRisk())) {
-                built.add(upsert(existing, fromHotGroup(h, "EXPLAIN_MISS", lifecycleByTheme, metricsByTheme), "CREATE", "system/build"));
+                built.add(upsert(existing, fromHotGroup(h, "EXPLAIN_MISS", lifecycleByTheme, metricsByTheme), "CREATE", "system/build", context));
             }
         }
         for (ThemeReplayNodeEntity n : replayNodeRepo.findByTradingDateOrderByThemeTagAscSymbolAsc(date)) {
-            built.add(upsert(existing, fromReplayNode(n, lifecycleByTheme, metricsByTheme), "CREATE", "system/build"));
+            built.add(upsert(existing, fromReplayNode(n, lifecycleByTheme, metricsByTheme), "CREATE", "system/build", context));
         }
-        return PromotionReviewResponse.of(date, built.stream().map(this::toItem).toList());
+        return PromotionReviewResponse.of(date, built.stream().map(this::toItem).toList(),
+                context.preservedManualCount(), context.mergedManualCount(), context.deletedSystemCount());
     }
 
     @Transactional(readOnly = true)
@@ -177,17 +185,77 @@ public class PromotionReviewService {
     private PromotionReviewItemEntity upsert(Map<String, PromotionReviewItemEntity> existing,
                                              PromotionReviewItemEntity next,
                                              String action,
-                                             String actor) {
+                                             String actor,
+                                             BuildContext context) {
         PromotionReviewItemEntity target = existing.get(key(next));
+        boolean mergeManual = target != null && isManualPreserved(target);
         if (target == null) {
             target = next;
         } else {
+            String manualPayload = target.getPayloadJson();
             copyMutable(next, target);
+            if (mergeManual) {
+                target.setPayloadJson(mergeManualEvidencePayload(manualPayload, next.getPayloadJson()));
+                context.incrementMergedManualCount();
+            }
         }
         PromotionReviewItemEntity saved = itemRepo.save(target);
         existing.put(key(saved), saved);
-        writeAudit(saved, null, saved.getCurrentStatus(), action, actor, saved.getReviewReason(), saved.getPayloadJson());
+        writeAudit(saved, null, saved.getCurrentStatus(), mergeManual ? "MERGE_EVIDENCE" : action, actor,
+                mergeManual ? "Merged system evidence into preserved manual promotion review decision." : saved.getReviewReason(),
+                saved.getPayloadJson());
         return saved;
+    }
+
+
+    private boolean isManualPreserved(PromotionReviewItemEntity item) {
+        return hasText(item.getReviewer())
+                || item.getReviewedAt() != null
+                || hasText(item.getDecisionReason())
+                || ALLOWED_DECISION_STATUSES.contains(norm(item.getCurrentStatus()));
+    }
+
+    private String mergeManualEvidencePayload(String manualPayload, String systemPayload) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("manualPreserved", true);
+        payload.put("manualEvidencePayload", manualPayload);
+        payload.put("mergedEvidencePayload", systemPayload);
+        payload.put("safetyBoundary", Map.of(
+                "reviewOnly", true,
+                "doesNotAffectFinalDecision", true,
+                "doesNotAffectBuySellEnter", true,
+                "doesNotWriteCandidateStock", true,
+                "doesNotWriteProductionScore", true,
+                "candidatePoolShadowIsNotTradable", true,
+                "noAutoPromotion", true,
+                "promotionRequiresSeparateRiskGate", true));
+        return toJson(payload);
+    }
+
+    private int safeInt(long value) {
+        return value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
+    }
+
+    private static final class BuildContext {
+        private final int preservedManualCount;
+        private final int preservedManualAuditCount;
+        private final int deletedSystemCount;
+        private final int deletedSystemAuditCount;
+        private int mergedManualCount;
+
+        private BuildContext(int preservedManualCount, int preservedManualAuditCount, int deletedSystemCount, int deletedSystemAuditCount) {
+            this.preservedManualCount = preservedManualCount;
+            this.preservedManualAuditCount = preservedManualAuditCount;
+            this.deletedSystemCount = deletedSystemCount;
+            this.deletedSystemAuditCount = deletedSystemAuditCount;
+        }
+
+        private int preservedManualCount() { return preservedManualCount; }
+        private int preservedManualAuditCount() { return preservedManualAuditCount; }
+        private int deletedSystemCount() { return deletedSystemCount; }
+        private int deletedSystemAuditCount() { return deletedSystemAuditCount; }
+        private int mergedManualCount() { return mergedManualCount; }
+        private void incrementMergedManualCount() { mergedManualCount++; }
     }
 
     private void copyMutable(PromotionReviewItemEntity from, PromotionReviewItemEntity to) {

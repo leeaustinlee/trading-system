@@ -145,7 +145,19 @@ public class BuildOperationsService {
         try {
             PromotionReviewResponse response = promotionReview.rebuild(date);
             int built = response.items().size();
-            return success("PROMOTION_REVIEW", date, null, deleted, built, safety, traceId, Map.of("items", built));
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("items", built);
+            payload.put("manualReviewPreserved", response.manualReviewPreserved());
+            payload.put("preservedManualCount", response.preservedManualCount());
+            payload.put("mergedManualCount", response.mergedManualCount());
+            payload.put("deletedSystemCount", response.deletedSystemCount());
+            return success("PROMOTION_REVIEW", date, null, deleted, built, safety, traceId, payload)
+                    .toBuilder()
+                    .preservedManualCount(response.preservedManualCount())
+                    .mergedManualCount(response.mergedManualCount())
+                    .deletedSystemCount(response.deletedSystemCount())
+                    .manualReviewPreserved(response.manualReviewPreserved())
+                    .build();
         } catch (RuntimeException e) {
             traceService.failed(traceId, deleted, 0, 0, e, Map.of("stage", "promotionReview.build"));
             throw e;
