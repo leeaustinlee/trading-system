@@ -26,3 +26,7 @@ secrets/D:/
 
 # Claude agent worktrees
 .claude/worktrees/
+
+# Local agent/codegraph runtime artifacts
+.ai-flow/
+.codegraph/
