@@ -7,6 +7,7 @@ import com.austin.trading.dto.response.NarrativeDashboardResponse;
 import com.austin.trading.service.KolSignalIngestionService;
 import com.austin.trading.service.KolSignalShadowModeService;
 import com.austin.trading.service.NarrativeDashboardService;
+import com.austin.trading.service.NarrativeShadowReviewService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
@@ -27,7 +28,8 @@ class NarrativeControllerTests {
         KolSignalIngestionService ingestion = mock(KolSignalIngestionService.class);
         NarrativeDashboardService dashboard = mock(NarrativeDashboardService.class);
         KolSignalShadowModeService shadow = mock(KolSignalShadowModeService.class);
-        NarrativeController controller = new NarrativeController(ingestion, dashboard, shadow);
+        NarrativeShadowReviewService review = mock(NarrativeShadowReviewService.class);
+        NarrativeController controller = new NarrativeController(ingestion, dashboard, shadow, review);
         LocalDate date = LocalDate.of(2026, 5, 21);
         KolSignalCreateRequest request = new KolSignalCreateRequest(
                 date, "gooaye", "PODCAST", "股癌 transcript", "被動元件 transcript", Map.of());
@@ -46,9 +48,11 @@ class NarrativeControllerTests {
         KolSignalIngestionService ingestion = mock(KolSignalIngestionService.class);
         NarrativeDashboardService dashboard = mock(NarrativeDashboardService.class);
         KolSignalShadowModeService shadow = mock(KolSignalShadowModeService.class);
-        NarrativeController controller = new NarrativeController(ingestion, dashboard, shadow);
+        NarrativeShadowReviewService review = mock(NarrativeShadowReviewService.class);
+        NarrativeController controller = new NarrativeController(ingestion, dashboard, shadow, review);
         LocalDate date = LocalDate.of(2026, 5, 21);
-        var expected = new NarrativeDashboardResponse(date, true, "weak", List.of());
+        var expected = new NarrativeDashboardResponse(date, true, "weak", List.of(),
+                Map.of(), List.of(), List.of(), List.of(), 0L);
         when(dashboard.dashboard(date)).thenReturn(expected);
 
         assertThat(controller.dashboard(date)).isEqualTo(expected);
@@ -59,7 +63,8 @@ class NarrativeControllerTests {
         KolSignalIngestionService ingestion = mock(KolSignalIngestionService.class);
         NarrativeDashboardService dashboard = mock(NarrativeDashboardService.class);
         KolSignalShadowModeService shadow = mock(KolSignalShadowModeService.class);
-        NarrativeController controller = new NarrativeController(ingestion, dashboard, shadow);
+        NarrativeShadowReviewService review = mock(NarrativeShadowReviewService.class);
+        NarrativeController controller = new NarrativeController(ingestion, dashboard, shadow, review);
         LocalDate date = LocalDate.of(2026, 5, 21);
         var report = new KolShadowReportResponse(date, 1, List.of(
                 new KolShadowReportResponse.Item("2382", "廣達", "AI伺服器",

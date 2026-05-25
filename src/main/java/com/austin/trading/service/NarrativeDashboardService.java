@@ -26,7 +26,19 @@ public class NarrativeDashboardService {
                 date,
                 true,
                 KolSignalContextService.WEAK_SIGNAL_GUARDRAIL,
-                rows
+                rows,
+                rows.stream().collect(java.util.stream.Collectors.groupingBy(
+                        NarrativeDashboardResponse.Row::lifecycle,
+                        java.util.LinkedHashMap::new,
+                        java.util.stream.Collectors.counting())),
+                rows.stream().filter(r -> "CROWDED".equals(r.lifecycle()) || "EXHAUSTED".equals(r.lifecycle()))
+                        .map(NarrativeDashboardResponse.Row::theme).toList(),
+                rows.stream().filter(r -> "EMERGING".equals(r.lifecycle()))
+                        .map(NarrativeDashboardResponse.Row::theme).toList(),
+                rows.stream().sorted(java.util.Comparator.comparing(NarrativeDashboardResponse.Row::attention).reversed())
+                        .limit(5).map(NarrativeDashboardResponse.Row::theme).toList(),
+                rows.stream().filter(r -> "CROWDED".equals(r.lifecycle()) || "EXHAUSTED".equals(r.lifecycle())
+                        || r.crowding().compareTo(new BigDecimal("8.0")) >= 0).count()
         );
     }
 

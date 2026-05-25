@@ -1,0 +1,41 @@
+CREATE TABLE IF NOT EXISTS narrative_shadow_review (
+    id                           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    trading_date                 DATE         NOT NULL,
+    theme_summary_json           JSON         NULL,
+    lifecycle_board_json         JSON         NULL,
+    candidate_impact_json        JSON         NULL,
+    warnings_json                JSON         NULL,
+    rotation_analysis_json       JSON         NULL,
+    metrics_json                 JSON         NULL,
+    guardrail                    VARCHAR(1000) NULL,
+    weak_signal_only             BOOLEAN      NOT NULL DEFAULT TRUE,
+    shadow_only                  BOOLEAN      NOT NULL DEFAULT TRUE,
+    observability_only           BOOLEAN      NOT NULL DEFAULT TRUE,
+    production_decision_allowed  BOOLEAN      NOT NULL DEFAULT FALSE,
+    note                         VARCHAR(1000) NULL,
+    generated_at                 TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_narrative_shadow_review_date (trading_date),
+    KEY idx_narrative_shadow_review_generated (generated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS narrative_candidate_tracking_seed (
+    id                           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    decision_date                DATE         NOT NULL,
+    symbol                       VARCHAR(20)  NOT NULL,
+    stock_name                   VARCHAR(120) NULL,
+    related_theme                VARCHAR(120) NOT NULL,
+    lifecycle_at_detection       VARCHAR(40)  NOT NULL,
+    attention_score              DECIMAL(8,4) NULL,
+    crowding_score               DECIMAL(8,4) NULL,
+    shadow_delta                 DECIMAL(8,4) NULL,
+    base_score                   DECIMAL(8,4) NULL,
+    risk_flags_json              JSON         NULL,
+    payload_json                 JSON         NULL,
+    weak_signal_only             BOOLEAN      NOT NULL DEFAULT TRUE,
+    production_decision_allowed  BOOLEAN      NOT NULL DEFAULT FALSE,
+    created_at                   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_narrative_tracking_seed (decision_date, symbol, related_theme),
+    KEY idx_narrative_tracking_theme (related_theme, decision_date),
+    KEY idx_narrative_tracking_lifecycle (decision_date, lifecycle_at_detection),
+    KEY idx_narrative_tracking_crowding (decision_date, crowding_score)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
