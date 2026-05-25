@@ -32,6 +32,7 @@ class ThemeFirstDashboardServiceTest {
         String html = service.renderHtml(LocalDate.of(2026, 5, 25));
 
         assertThat(html).contains("fetch(", "/api/ops/daily-summary?date=", "/api/hot-groups/radar?date=");
+        assertThat(html).contains("safetyViolationDetected", "riskGateBypassCount", "researchVsTradableSeparationViolationCount");
         assertThat(html).doesNotContain("method=\"post\"", "method='post'", "fetchPost", "POST /api");
         assertThat(html).doesNotContain("candidate_stock", "final_decision", "production score");
     }
