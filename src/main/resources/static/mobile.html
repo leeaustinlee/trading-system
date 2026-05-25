@@ -1520,8 +1520,17 @@ Views.themeops = async () => {
   ctrl.append(el('div',{class:'empty',style:'margin-top:8px',text:'Read-only：只看題材雷達、Research Universe、Promotion Review 與 build trace；不提供交易或 review 寫入按鈕。'}));
   app.append(ctrl);
 
-  const safetyVals = Object.values(t.safety || {}).filter(v => typeof v === 'number');
-  const warning = safetyVals.some(v => v > 0);
+  const forbiddenSafetyKeys = [
+    'riskGateBypassCount',
+    'leadershipOnlyEnteredCount',
+    'leaderTradableFalseEnterCount',
+    'peerShadowDirectPromotionCount',
+    'narrativeDirectEnterCount',
+    'researchVsTradableSeparationViolationCount'
+  ];
+  const safetyPayload = t.safety || {};
+  const warning = safetyPayload.safetyViolationDetected === true
+    || forbiddenSafetyKeys.some(k => Number(safetyPayload[k] || 0) > 0);
   const hotRows = asRows(t.hot);
   const promoRows = asRows(t.promo);
   const lifecycleRows = asRows(t.lifecycle).length ? asRows(t.lifecycle) : asRows(t.replay);

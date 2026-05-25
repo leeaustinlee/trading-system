@@ -970,6 +970,7 @@
       box-shadow:0 8px 24px rgba(18,35,62,.12); padding:6px; min-width:130px;
       margin-top:4px;
     ">
+      <button class="nav-tab" id="navThemeOpsBtn" style="display:block;width:100%;text-align:left">題材 Ops</button>
       <button class="nav-tab" data-page="pageSystem"     style="display:block;width:100%;text-align:left">系統</button>
       <button class="nav-tab" data-page="pageSettings"   style="display:block;width:100%;text-align:left">設定</button>
     </div>
@@ -2290,6 +2291,17 @@ function clearErr(boxId) {
   const navBrand = document.querySelector(".nav-brand");
   if (navBrand) {
     navBrand.addEventListener("click", () => activatePage("pageDashboard"));
+  }
+
+  const navThemeOpsBtn = $("navThemeOpsBtn");
+  if (navThemeOpsBtn) {
+    navThemeOpsBtn.addEventListener("click", () => {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      window.location.href = `/dashboard/theme-first?date=${y}-${m}-${day}`;
+    });
   }
 
   window.toggleNavMore = function() {

@@ -28,6 +28,7 @@ class MobileThemeOpsTabTest {
         String sw = Files.readString(Path.of("src/main/resources/static/sw.js"));
 
         assertThat(html).contains("Read-only：只看題材雷達");
+        assertThat(html).contains("forbiddenSafetyKeys", "safetyViolationDetected", "riskGateBypassCount");
         assertThat(html).doesNotContain("method=\"post\"", "method='post'", "approve button", "reject button");
         assertThat(sw).contains("tt-v7-2026-05-25-themeops-local-date");
     }
