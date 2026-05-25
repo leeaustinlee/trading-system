@@ -1,0 +1,29 @@
+{
+  "tradingDate": "2026-05-09",
+  "sourceKey": "gooaye-ep660-2026-05-09-validation",
+  "sourceType": "PODCAST",
+  "sourceTitle": "Gooaye 股癌 EP660 | 🍄‍🟫 narrative validation sample",
+  "rawContent": "台股站上四萬二且部分標的估值已交易 2028、2029 年 50 到 100 倍，選股要避開太貴者。市場討論 NVIDIA 晶片散熱 TIM 或材料調整，部分台股 components、散熱或材料相關個股大跌，主持人不想猜短底。新聞段回到 CPU、被動元件與新方向：CPU 比例變化延伸到 socket、載板、記憶體應用；被動元件終於噴發，除了 MLCC，也要看 Nichicon、Nippon Chemi-Con、Vishay、VPG。",
+  "payload": {
+    "validationSample": true,
+    "sourceName": "Gooaye 股癌",
+    "weakSignalOnly": true,
+    "productionDecisionAllowed": false,
+    "allowedUses": [
+      "dashboard context",
+      "candidate narrativeContext",
+      "shadow report",
+      "theme rotation awareness"
+    ],
+    "blockedUses": [
+      "BUY_SIGNAL",
+      "FINAL_DECISION_OVERRIDE",
+      "PRICE_GATE_OVERRIDE",
+      "CHASED_HIGH_OVERRIDE",
+      "VETO_OVERRIDE",
+      "MARKET_GRADE_OVERRIDE",
+      "AUTO_TRADING"
+    ],
+    "sourceNote": "Public Gooaye notes / transcript summary manually整理 for Narrative Validation Engineer task."
+  }
+}

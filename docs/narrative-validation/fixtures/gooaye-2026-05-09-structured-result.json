@@ -1,0 +1,94 @@
+{
+  "themes": [
+    {
+      "themeTag": "被動元件",
+      "direction": "POSITIVE",
+      "confidence": 0.78,
+      "summary": "被動元件已從早期缺貨敘事進入噴發與國際供應鏈同步階段。",
+      "stocks": [
+        {
+          "symbol": "2327",
+          "stockName": "國巨",
+          "confidence": 0.62,
+          "payload": {
+            "role": "leader_watch"
+          }
+        },
+        {
+          "symbol": "2492",
+          "stockName": "華新科",
+          "confidence": 0.6,
+          "payload": {
+            "role": "peer_watch"
+          }
+        }
+      ],
+      "evidence": [
+        {
+          "evidenceType": "REASONED_ANALYSIS",
+          "direction": "POSITIVE",
+          "evidenceText": "被動元件終於噴發，除了 MLCC，也要看 Nichicon、Nippon Chemi-Con、美股 Vishay、VPG。",
+          "confidence": 0.78,
+          "payload": {
+            "sourceWindow": "EP660 27:00-30:00"
+          }
+        }
+      ],
+      "payload": {
+        "lifecycleHint": "EXPANDING",
+        "freshnessScore": 0.9,
+        "noveltyScore": 0.55,
+        "uncertaintyScore": 0.4,
+        "crowdingScore": 0.55
+      }
+    },
+    {
+      "themeTag": "散熱",
+      "direction": "NEGATIVE",
+      "confidence": 0.72,
+      "summary": "NVIDIA 散熱材料傳言已擴散，台股散熱相關大跌；這是 anti-FOMO / crowded risk，不是 bullish signal。",
+      "stocks": [
+        {
+          "symbol": "3017",
+          "stockName": "奇鋐",
+          "confidence": 0.55,
+          "payload": {
+            "role": "risk_reference"
+          }
+        },
+        {
+          "symbol": "3653",
+          "stockName": "健策",
+          "confidence": 0.55,
+          "payload": {
+            "role": "risk_reference"
+          }
+        }
+      ],
+      "evidence": [
+        {
+          "evidenceType": "SECOND_HAND",
+          "direction": "NEGATIVE",
+          "evidenceText": "NVIDIA 晶片散熱 TIM 或材料調整傳言已在 X 傳開，部分散熱或材料個股大跌。",
+          "confidence": 0.72,
+          "payload": {
+            "sourceWindow": "EP660 10:48-15:33"
+          }
+        }
+      ],
+      "payload": {
+        "lifecycleHint": "CROWDED",
+        "freshnessScore": 0.85,
+        "noveltyScore": 0.25,
+        "uncertaintyScore": 0.65,
+        "crowdingScore": 0.9
+      }
+    }
+  ],
+  "payload": {
+    "weakSignalOnly": true,
+    "productionDecisionAllowed": false,
+    "validationSample": true,
+    "extractionVersion": "manual-validation-v1"
+  }
+}

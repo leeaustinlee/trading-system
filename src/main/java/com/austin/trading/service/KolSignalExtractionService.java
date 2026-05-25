@@ -9,6 +9,8 @@ import com.austin.trading.repository.KolThemeSignalRepository;
 import com.austin.trading.repository.KolThemeStockMappingRepository;
 import com.austin.trading.repository.ThemeSignalEvidenceRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,17 +27,29 @@ public class KolSignalExtractionService {
     private final ThemeSignalEvidenceRepository evidenceRepo;
     private final KolSignalTraceService traceService;
     private final ObjectMapper objectMapper;
+    private final NarrativeMirrorService narrativeMirrorService;
 
     public KolSignalExtractionService(KolThemeSignalRepository signalRepo,
                                       KolThemeStockMappingRepository mappingRepo,
                                       ThemeSignalEvidenceRepository evidenceRepo,
                                       KolSignalTraceService traceService,
                                       ObjectMapper objectMapper) {
+        this(signalRepo, mappingRepo, evidenceRepo, traceService, objectMapper, null);
+    }
+
+    @Autowired
+    public KolSignalExtractionService(KolThemeSignalRepository signalRepo,
+                                      KolThemeStockMappingRepository mappingRepo,
+                                      ThemeSignalEvidenceRepository evidenceRepo,
+                                      KolSignalTraceService traceService,
+                                      ObjectMapper objectMapper,
+                                      ObjectProvider<NarrativeMirrorService> narrativeMirrorProvider) {
         this.signalRepo = signalRepo;
         this.mappingRepo = mappingRepo;
         this.evidenceRepo = evidenceRepo;
         this.traceService = traceService;
         this.objectMapper = objectMapper;
+        this.narrativeMirrorService = narrativeMirrorProvider == null ? null : narrativeMirrorProvider.getIfAvailable();
     }
 
     @Transactional
@@ -48,6 +62,11 @@ public class KolSignalExtractionService {
         long oldEvidenceCount = evidenceRepo.countBySignalId(signalId);
         mappingRepo.deleteBySignalId(signalId);
         evidenceRepo.deleteBySignalId(signalId);
+        // Force derived DELETEs to hit DB before re-inserting the same unique keys
+        // in this transaction. Otherwise Hibernate may batch INSERTs first and
+        // trip unique constraints during structured-result replacement.
+        mappingRepo.flush();
+        evidenceRepo.flush();
         boolean replacedExisting = oldMappingCount > 0 || oldEvidenceCount > 0;
 
         int mappingCount = 0;
@@ -102,6 +121,9 @@ public class KolSignalExtractionService {
                 "oldEvidenceCount", oldEvidenceCount,
                 "weakSignalOnly", true
         ));
+        if (narrativeMirrorService != null) {
+            narrativeMirrorService.mirrorStructuredResult(saved, themes);
+        }
         return saved;
     }
 

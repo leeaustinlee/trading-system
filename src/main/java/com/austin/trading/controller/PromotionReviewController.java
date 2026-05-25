@@ -10,6 +10,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/promotion-review")
@@ -30,7 +31,7 @@ public class PromotionReviewController {
     @PostMapping("/build")
     public BuildOperationResponse build(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        if (buildOperations == null) { var r = service.rebuild(date); return BuildOperationResponse.builder("PROMOTION_REVIEW", date).builtCount(r.items().size()).safetyBoundary(PromotionReviewResponse.defaultSafetyBoundary()).build(); }
+        if (buildOperations == null) { var r = service.build(date); return BuildOperationResponse.builder("PROMOTION_REVIEW", date).builtCount(r.items().size()).safetyBoundary(PromotionReviewResponse.defaultSafetyBoundary()).payload(Map.of("items", r.items())).build(); }
         return buildOperations.buildPromotionReview(date);
     }
 

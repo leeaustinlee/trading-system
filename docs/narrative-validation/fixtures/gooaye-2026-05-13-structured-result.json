@@ -1,0 +1,110 @@
+{
+  "themes": [
+    {
+      "themeTag": "被動元件",
+      "direction": "POSITIVE",
+      "confidence": 0.86,
+      "summary": "國際被動元件先強、台灣補上；MLCC 與鋁電容排擠效應、漲價與產品組合改善成為主線。",
+      "stocks": [
+        {
+          "symbol": "2327",
+          "stockName": "國巨",
+          "confidence": 0.82,
+          "payload": {
+            "role": "leader"
+          }
+        },
+        {
+          "symbol": "2492",
+          "stockName": "華新科",
+          "confidence": 0.78,
+          "payload": {
+            "role": "peer"
+          }
+        },
+        {
+          "symbol": "6173",
+          "stockName": "信昌電",
+          "confidence": 0.75,
+          "payload": {
+            "role": "momentum_peer"
+          }
+        },
+        {
+          "symbol": "2472",
+          "stockName": "立隆電",
+          "confidence": 0.7,
+          "payload": {
+            "role": "aluminum_capacitor"
+          }
+        }
+      ],
+      "evidence": [
+        {
+          "evidenceType": "REASONED_ANALYSIS",
+          "direction": "POSITIVE",
+          "evidenceText": "MLCC 47uF、SEMCO/Murata、國巨 22uF、鋁電容 Nichicon/Nippon Chemi-Con 與台系供應鏈被點出。",
+          "confidence": 0.86,
+          "payload": {
+            "sourceWindow": "EP661 14:04-18:40"
+          }
+        }
+      ],
+      "payload": {
+        "lifecycleHint": "EXPANDING",
+        "freshnessScore": 0.9,
+        "noveltyScore": 0.6,
+        "uncertaintyScore": 0.35,
+        "crowdingScore": 0.65
+      }
+    },
+    {
+      "themeTag": "光通訊",
+      "direction": "POSITIVE",
+      "confidence": 0.58,
+      "summary": "美股光通若持續好，台股光通後續可能醒，但主持人明確保留台股同步性。",
+      "stocks": [
+        {
+          "symbol": "6442",
+          "stockName": "光聖",
+          "confidence": 0.45,
+          "payload": {
+            "role": "watch_only"
+          }
+        },
+        {
+          "symbol": "3363",
+          "stockName": "上詮",
+          "confidence": 0.45,
+          "payload": {
+            "role": "watch_only"
+          }
+        }
+      ],
+      "evidence": [
+        {
+          "evidenceType": "REASONED_ANALYSIS",
+          "direction": "POSITIVE",
+          "evidenceText": "台股題材太多、資金有限，台股光通不一定跟美股同步；若美股持續好，台股相關族群後面再醒也可能。",
+          "confidence": 0.58,
+          "payload": {
+            "sourceWindow": "EP661 29:27-34:24"
+          }
+        }
+      ],
+      "payload": {
+        "lifecycleHint": "EARLY",
+        "freshnessScore": 0.65,
+        "noveltyScore": 0.5,
+        "uncertaintyScore": 0.65,
+        "crowdingScore": 0.45
+      }
+    }
+  ],
+  "payload": {
+    "weakSignalOnly": true,
+    "productionDecisionAllowed": false,
+    "validationSample": true,
+    "extractionVersion": "manual-validation-v1"
+  }
+}

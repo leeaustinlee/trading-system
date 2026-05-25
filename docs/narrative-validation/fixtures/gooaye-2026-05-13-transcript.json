@@ -1,0 +1,29 @@
+{
+  "tradingDate": "2026-05-13",
+  "sourceKey": "gooaye-ep661-2026-05-13-validation",
+  "sourceType": "PODCAST",
+  "sourceTitle": "Gooaye 股癌 EP661 | 🚲 narrative validation sample",
+  "rawContent": "被動元件成為盤面主線，台灣一開始落後日本、美國、韓國，後來全部醒過來。MLCC 最缺 47uF，SEMCO、Murata 供應，國巨提到 22uF；台系 MLCC 故事偏向高規格料被日韓大廠吃掉後，低規格與標準品產能被排擠。鋁電容方面，Nichicon、Nippon Chemi-Con 股價與獲利改善，台灣立榮電、金山、裕邦、國巨、華新科、信昌、利隆電也跟上國際情勢。對光通，主持人表示台股題材多、資金有限，不一定與美股同步；若美股光通持續好，台股相關族群後面再醒也有可能。",
+  "payload": {
+    "validationSample": true,
+    "sourceName": "Gooaye 股癌",
+    "weakSignalOnly": true,
+    "productionDecisionAllowed": false,
+    "allowedUses": [
+      "dashboard context",
+      "candidate narrativeContext",
+      "shadow report",
+      "theme rotation awareness"
+    ],
+    "blockedUses": [
+      "BUY_SIGNAL",
+      "FINAL_DECISION_OVERRIDE",
+      "PRICE_GATE_OVERRIDE",
+      "CHASED_HIGH_OVERRIDE",
+      "VETO_OVERRIDE",
+      "MARKET_GRADE_OVERRIDE",
+      "AUTO_TRADING"
+    ],
+    "sourceNote": "Public Gooaye notes / transcript summary manually整理 for Narrative Validation Engineer task."
+  }
+}

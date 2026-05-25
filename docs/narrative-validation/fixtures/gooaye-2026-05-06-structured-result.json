@@ -1,0 +1,94 @@
+{
+  "themes": [
+    {
+      "themeTag": "被動元件",
+      "direction": "POSITIVE",
+      "confidence": 0.82,
+      "summary": "交期拉長、供需變緊與 AI 伺服器排擠效應，使被動元件從早期觀察轉向主流題材。",
+      "stocks": [
+        {
+          "symbol": "2327",
+          "stockName": "國巨",
+          "confidence": 0.78,
+          "payload": {
+            "role": "leader"
+          }
+        },
+        {
+          "symbol": "6173",
+          "stockName": "信昌電",
+          "confidence": 0.76,
+          "payload": {
+            "role": "leadership_evidence"
+          }
+        }
+      ],
+      "evidence": [
+        {
+          "evidenceType": "REASONED_ANALYSIS",
+          "direction": "POSITIVE",
+          "evidenceText": "過去數集已提醒被動元件後面會缺貨；信昌電交期拉長，MLCC、鋁電容、高階貨變緊。",
+          "confidence": 0.82,
+          "payload": {
+            "sourceWindow": "EP659 09:50-12:40"
+          }
+        }
+      ],
+      "payload": {
+        "lifecycleHint": "EMERGING",
+        "freshnessScore": 0.9,
+        "noveltyScore": 0.75,
+        "uncertaintyScore": 0.35,
+        "crowdingScore": 0.35
+      }
+    },
+    {
+      "themeTag": "AI infrastructure",
+      "direction": "POSITIVE",
+      "confidence": 0.72,
+      "summary": "資金從 GPU 外溢到 CPU、ASIC、server components，呈現 AI infrastructure 輪動。",
+      "stocks": [
+        {
+          "symbol": "3443",
+          "stockName": "創意",
+          "confidence": 0.65,
+          "payload": {
+            "role": "ASIC"
+          }
+        },
+        {
+          "symbol": "3661",
+          "stockName": "世芯-KY",
+          "confidence": 0.65,
+          "payload": {
+            "role": "ASIC"
+          }
+        }
+      ],
+      "evidence": [
+        {
+          "evidenceType": "REASONED_ANALYSIS",
+          "direction": "POSITIVE",
+          "evidenceText": "AMD server AI、Agentic workflow、CPU、ASIC、AI Data Center 成為市場焦點。",
+          "confidence": 0.72,
+          "payload": {
+            "sourceWindow": "EP659 12:00-15:00"
+          }
+        }
+      ],
+      "payload": {
+        "lifecycleHint": "EXPANDING",
+        "freshnessScore": 0.85,
+        "noveltyScore": 0.45,
+        "uncertaintyScore": 0.4,
+        "crowdingScore": 0.55
+      }
+    }
+  ],
+  "payload": {
+    "weakSignalOnly": true,
+    "productionDecisionAllowed": false,
+    "validationSample": true,
+    "extractionVersion": "manual-validation-v1"
+  }
+}

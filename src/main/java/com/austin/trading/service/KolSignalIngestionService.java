@@ -5,6 +5,8 @@ import com.austin.trading.dto.response.KolSignalResponse;
 import com.austin.trading.entity.KolThemeSignalEntity;
 import com.austin.trading.repository.KolThemeSignalRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,13 +24,23 @@ public class KolSignalIngestionService {
     private final KolThemeSignalRepository signalRepo;
     private final KolSignalTraceService traceService;
     private final ObjectMapper objectMapper;
+    private final NarrativeMirrorService narrativeMirrorService;
 
     public KolSignalIngestionService(KolThemeSignalRepository signalRepo,
                                      KolSignalTraceService traceService,
                                      ObjectMapper objectMapper) {
+        this(signalRepo, traceService, objectMapper, null);
+    }
+
+    @Autowired
+    public KolSignalIngestionService(KolThemeSignalRepository signalRepo,
+                                     KolSignalTraceService traceService,
+                                     ObjectMapper objectMapper,
+                                     ObjectProvider<NarrativeMirrorService> narrativeMirrorProvider) {
         this.signalRepo = signalRepo;
         this.traceService = traceService;
         this.objectMapper = objectMapper;
+        this.narrativeMirrorService = narrativeMirrorProvider == null ? null : narrativeMirrorProvider.getIfAvailable();
     }
 
     @Transactional
@@ -65,6 +77,9 @@ public class KolSignalIngestionService {
                 "rawContentTruncated", truncated,
                 "weakSignalOnly", true
         ));
+        if (narrativeMirrorService != null) {
+            narrativeMirrorService.mirrorRawSignal(saved);
+        }
         return toResponse(saved, false, truncated);
     }
 

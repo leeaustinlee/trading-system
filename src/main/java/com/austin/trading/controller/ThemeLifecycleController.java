@@ -9,6 +9,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/themes/lifecycle")
@@ -46,7 +47,7 @@ public class ThemeLifecycleController {
     public BuildOperationResponse build(
             @RequestParam
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        if (buildOperations == null) { var r = engine.build(date); return BuildOperationResponse.builder("LIFECYCLE", date).builtCount(r.builtCount()).safetyBoundary(ThemeLifecycleResponse.SafetyBoundary.lifecycleReplayOnlyBoundary()).build(); }
+        if (buildOperations == null) { var r = engine.build(date); return BuildOperationResponse.builder("LIFECYCLE", date).builtCount(r.builtCount()).safetyBoundary(ThemeLifecycleResponse.SafetyBoundary.lifecycleReplayOnlyBoundary()).payload(Map.of("stages", r.stages())).build(); }
         return buildOperations.buildLifecycle(date);
     }
 }

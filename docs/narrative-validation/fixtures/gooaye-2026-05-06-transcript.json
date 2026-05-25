@@ -1,0 +1,29 @@
+{
+  "tradingDate": "2026-05-06",
+  "sourceKey": "gooaye-ep659-2026-05-06-validation",
+  "sourceType": "PODCAST",
+  "sourceTitle": "Gooaye 股癌 EP659 | 🦤 narrative validation sample",
+  "rawContent": "市場段從被動元件開始。主委說過去數集已提醒被動元件後面會缺貨，只是時間點不好抓；國巨 AI 誓師大會後，國巨與相關被動元件轉強，信昌電發出交期拉長通知。鉭電容、鋁電容、MLCC 都看到供需變緊，尤其高階貨非常緊；台系受惠故事偏向切入部分 AI 伺服器，以及高階產能被占用後的訂單排擠效應。接著談 CPU、ASIC 與伺服器資金輪動，AMD server AI、Agentic workflow、CPU、ASIC 與 AI Data Center 都成為市場焦點。",
+  "payload": {
+    "validationSample": true,
+    "sourceName": "Gooaye 股癌",
+    "weakSignalOnly": true,
+    "productionDecisionAllowed": false,
+    "allowedUses": [
+      "dashboard context",
+      "candidate narrativeContext",
+      "shadow report",
+      "theme rotation awareness"
+    ],
+    "blockedUses": [
+      "BUY_SIGNAL",
+      "FINAL_DECISION_OVERRIDE",
+      "PRICE_GATE_OVERRIDE",
+      "CHASED_HIGH_OVERRIDE",
+      "VETO_OVERRIDE",
+      "MARKET_GRADE_OVERRIDE",
+      "AUTO_TRADING"
+    ],
+    "sourceNote": "Public Gooaye notes / transcript summary manually整理 for Narrative Validation Engineer task."
+  }
+}

@@ -10,6 +10,8 @@ import com.austin.trading.repository.KolThemeSignalDailySnapshotRepository;
 import com.austin.trading.repository.KolThemeSignalRepository;
 import com.austin.trading.repository.ThemeSignalEvidenceRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +32,7 @@ public class KolSignalAggregationService {
     private final KolThemeSignalDailySnapshotRepository snapshotRepo;
     private final KolSignalTraceService traceService;
     private final ObjectMapper objectMapper;
+    private final NarrativeMirrorService narrativeMirrorService;
 
     public KolSignalAggregationService(KolThemeSignalEngine engine,
                                        ThemeSignalEvidenceRepository evidenceRepo,
@@ -38,6 +41,18 @@ public class KolSignalAggregationService {
                                        KolThemeSignalDailySnapshotRepository snapshotRepo,
                                        KolSignalTraceService traceService,
                                        ObjectMapper objectMapper) {
+        this(engine, evidenceRepo, signalRepo, sourceProfileRepo, snapshotRepo, traceService, objectMapper, null);
+    }
+
+    @Autowired
+    public KolSignalAggregationService(KolThemeSignalEngine engine,
+                                       ThemeSignalEvidenceRepository evidenceRepo,
+                                       KolThemeSignalRepository signalRepo,
+                                       KolSourceProfileRepository sourceProfileRepo,
+                                       KolThemeSignalDailySnapshotRepository snapshotRepo,
+                                       KolSignalTraceService traceService,
+                                       ObjectMapper objectMapper,
+                                       ObjectProvider<NarrativeMirrorService> narrativeMirrorProvider) {
         this.engine = engine;
         this.evidenceRepo = evidenceRepo;
         this.signalRepo = signalRepo;
@@ -45,6 +60,7 @@ public class KolSignalAggregationService {
         this.snapshotRepo = snapshotRepo;
         this.traceService = traceService;
         this.objectMapper = objectMapper;
+        this.narrativeMirrorService = narrativeMirrorProvider == null ? null : narrativeMirrorProvider.getIfAvailable();
     }
 
     @Transactional
@@ -56,6 +72,9 @@ public class KolSignalAggregationService {
         // may batch INSERTs before the derived delete is executed, causing a
         // duplicate-key failure on rebuild.
         snapshotRepo.flush();
+        if (narrativeMirrorService != null) {
+            narrativeMirrorService.clearDailySnapshots(date);
+        }
         Map<Long, KolThemeSignalEntity> signals = signalRepo.findByTradingDateOrderByCreatedAtDesc(date).stream()
                 .collect(Collectors.toMap(KolThemeSignalEntity::getId, Function.identity(), (a, b) -> a));
         Map<String, BigDecimal> sourceWeights = sourceProfileRepo.findAll().stream()
@@ -94,7 +113,11 @@ public class KolSignalAggregationService {
             snapshot.setCrowdingRisk(calc.crowdingRisk());
             snapshot.setTopSourcesJson(toJson(calc.topSources()));
             snapshot.setPayloadJson(toJson(calc.trace()));
-            responses.add(toResponse(snapshotRepo.save(snapshot)));
+            KolThemeSignalDailySnapshotEntity savedSnapshot = snapshotRepo.save(snapshot);
+            responses.add(toResponse(savedSnapshot));
+            if (narrativeMirrorService != null) {
+                narrativeMirrorService.mirrorDailySnapshot(savedSnapshot);
+            }
         }
         List<KolThemeSnapshotResponse> sorted = responses.stream()
                 .sorted(Comparator.comparing(KolThemeSnapshotResponse::netShadowBoost).reversed())

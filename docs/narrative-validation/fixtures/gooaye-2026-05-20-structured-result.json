@@ -1,0 +1,136 @@
+{
+  "themes": [
+    {
+      "themeTag": "被動元件",
+      "direction": "POSITIVE",
+      "confidence": 0.9,
+      "summary": "Panasonic 漲價函、現貨掃貨、高階料斷供與交期拉長，使被動元件產業面更確認；但股價已漲，應判斷為擁擠風險上升。",
+      "stocks": [
+        {
+          "symbol": "2327",
+          "stockName": "國巨",
+          "confidence": 0.82,
+          "payload": {
+            "role": "leader"
+          }
+        },
+        {
+          "symbol": "2492",
+          "stockName": "華新科",
+          "confidence": 0.78,
+          "payload": {
+            "role": "peer"
+          }
+        },
+        {
+          "symbol": "2472",
+          "stockName": "立隆電",
+          "confidence": 0.72,
+          "payload": {
+            "role": "aluminum_capacitor"
+          }
+        }
+      ],
+      "evidence": [
+        {
+          "evidenceType": "DIRECT_CLAIM",
+          "direction": "POSITIVE",
+          "evidenceText": "Panasonic 漲價函流出、廠商掃現貨、高階料斷供/報價不出/交期拉長；主持人強調產業面確認但股價已漲不少。",
+          "confidence": 0.9,
+          "payload": {
+            "sourceWindow": "EP663 11:07-18:25"
+          }
+        }
+      ],
+      "payload": {
+        "lifecycleHint": "CROWDED",
+        "freshnessScore": 0.95,
+        "noveltyScore": 0.35,
+        "uncertaintyScore": 0.45,
+        "crowdingScore": 0.9
+      }
+    },
+    {
+      "themeTag": "AI infrastructure",
+      "direction": "POSITIVE",
+      "confidence": 0.62,
+      "summary": "Broadcom / Sfish / 載板線索顯示老 AI 產品線仍有新故事，但屬 watch/research，不是直接進場。",
+      "stocks": [
+        {
+          "symbol": "3231",
+          "stockName": "緯創",
+          "confidence": 0.4,
+          "payload": {
+            "role": "ai_server_reference"
+          }
+        },
+        {
+          "symbol": "3645",
+          "stockName": "達邁",
+          "confidence": 0.45,
+          "payload": {
+            "role": "pcb_material_reference"
+          }
+        }
+      ],
+      "evidence": [
+        {
+          "evidenceType": "REASONED_ANALYSIS",
+          "direction": "POSITIVE",
+          "evidenceText": "SemiAnalysis / Broadcom / Sfish 與載板相關線索，顯示老 AI 產品線仍有新故事。",
+          "confidence": 0.62,
+          "payload": {
+            "sourceWindow": "EP663 18:25-24:11"
+          }
+        }
+      ],
+      "payload": {
+        "lifecycleHint": "EARLY",
+        "freshnessScore": 0.7,
+        "noveltyScore": 0.55,
+        "uncertaintyScore": 0.6,
+        "crowdingScore": 0.55
+      }
+    },
+    {
+      "themeTag": "光通訊",
+      "direction": "NEUTRAL",
+      "confidence": 0.5,
+      "summary": "台積電技術論壇與光通回檔被討論，較像長線觀察與回檔解讀，不是 early bullish signal。",
+      "stocks": [
+        {
+          "symbol": "6442",
+          "stockName": "光聖",
+          "confidence": 0.38,
+          "payload": {
+            "role": "watch_only"
+          }
+        }
+      ],
+      "evidence": [
+        {
+          "evidenceType": "UNKNOWN",
+          "direction": "NEUTRAL",
+          "evidenceText": "聽眾問台積電技術論壇三層蛋糕與光通，為何未帶動光通股；需防止利多出盡解讀。",
+          "confidence": 0.5,
+          "payload": {
+            "sourceWindow": "EP663 28:27-31:54"
+          }
+        }
+      ],
+      "payload": {
+        "lifecycleHint": "CROWDED",
+        "freshnessScore": 0.55,
+        "noveltyScore": 0.25,
+        "uncertaintyScore": 0.7,
+        "crowdingScore": 0.75
+      }
+    }
+  ],
+  "payload": {
+    "weakSignalOnly": true,
+    "productionDecisionAllowed": false,
+    "validationSample": true,
+    "extractionVersion": "manual-validation-v1"
+  }
+}

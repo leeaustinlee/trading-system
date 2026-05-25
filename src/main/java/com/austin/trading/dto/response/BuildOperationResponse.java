@@ -34,6 +34,9 @@ public record BuildOperationResponse(
     @JsonProperty("shadowOnly")
     public boolean shadowOnly() { return true; }
 
+    @JsonProperty("observabilityOnly")
+    public boolean observabilityOnly() { return true; }
+
     @JsonProperty("reviewOnly")
     public boolean reviewOnly() { return true; }
 
@@ -48,6 +51,12 @@ public record BuildOperationResponse(
 
     @JsonProperty("metrics")
     public Object metrics() { return payload == null ? Map.of() : payload.getOrDefault("metrics", Map.of()); }
+
+    @JsonProperty("stages")
+    public Object stages() { return payload == null ? Map.of() : payload.getOrDefault("stages", Map.of()); }
+
+    @JsonProperty("items")
+    public Object items() { return payload == null ? java.util.List.of() : payload.getOrDefault("items", java.util.List.of()); }
 
 
     public Builder toBuilder() {

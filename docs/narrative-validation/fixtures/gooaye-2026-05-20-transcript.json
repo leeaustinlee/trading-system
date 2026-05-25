@@ -1,0 +1,29 @@
+{
+  "tradingDate": "2026-05-20",
+  "sourceKey": "gooaye-ep663-2026-05-20-validation",
+  "sourceType": "PODCAST",
+  "sourceTitle": "Gooaye 股癌 EP663 | 🦘 narrative validation sample",
+  "rawContent": "主持人表示過去看很多被動元件，包括 MLCC 與鋁電容，帶來非常好的報酬。上集提 Panasonic 漲價，現在漲價函已流出；市場也出現廠商掃現貨行為，Digitimes 通路商提到高階被動元件料號已斷供、報價不出或交期拉長。主持人不再討論估值，因為被動元件已漲不少，怕聽眾只記得山頂還在提；產業面非常確認，但風險是 AI 投資停止或大廠一起擴產。另談 SemiAnalysis / Broadcom / Sfish 與載板線索，以及台積電技術論壇與光通回檔。",
+  "payload": {
+    "validationSample": true,
+    "sourceName": "Gooaye 股癌",
+    "weakSignalOnly": true,
+    "productionDecisionAllowed": false,
+    "allowedUses": [
+      "dashboard context",
+      "candidate narrativeContext",
+      "shadow report",
+      "theme rotation awareness"
+    ],
+    "blockedUses": [
+      "BUY_SIGNAL",
+      "FINAL_DECISION_OVERRIDE",
+      "PRICE_GATE_OVERRIDE",
+      "CHASED_HIGH_OVERRIDE",
+      "VETO_OVERRIDE",
+      "MARKET_GRADE_OVERRIDE",
+      "AUTO_TRADING"
+    ],
+    "sourceNote": "Public Gooaye notes / transcript summary manually整理 for Narrative Validation Engineer task."
+  }
+}

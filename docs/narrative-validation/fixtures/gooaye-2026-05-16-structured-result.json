@@ -1,0 +1,102 @@
+{
+  "themes": [
+    {
+      "themeTag": "被動元件",
+      "direction": "POSITIVE",
+      "confidence": 0.88,
+      "summary": "電阻、電容、電感、MLCC、鋁電容漲價壓力擴散，Panasonic SP-Cap 三成漲價與停止接單/控貨風險提高。",
+      "stocks": [
+        {
+          "symbol": "2327",
+          "stockName": "國巨",
+          "confidence": 0.8,
+          "payload": {
+            "role": "leader"
+          }
+        },
+        {
+          "symbol": "2492",
+          "stockName": "華新科",
+          "confidence": 0.78,
+          "payload": {
+            "role": "peer"
+          }
+        },
+        {
+          "symbol": "2472",
+          "stockName": "立隆電",
+          "confidence": 0.7,
+          "payload": {
+            "role": "aluminum_capacitor"
+          }
+        }
+      ],
+      "evidence": [
+        {
+          "evidenceType": "REASONED_ANALYSIS",
+          "direction": "POSITIVE",
+          "evidenceText": "Panasonic SP-Cap 漲價可能三成；電容、電感、MLCC、鋁電容壓力更大。",
+          "confidence": 0.88,
+          "payload": {
+            "sourceWindow": "EP662 22:56-28:03"
+          }
+        }
+      ],
+      "payload": {
+        "lifecycleHint": "EXPANDING",
+        "freshnessScore": 0.92,
+        "noveltyScore": 0.55,
+        "uncertaintyScore": 0.35,
+        "crowdingScore": 0.72
+      }
+    },
+    {
+      "themeTag": "AI power",
+      "direction": "POSITIVE",
+      "confidence": 0.7,
+      "summary": "新電源櫃大量使用 power components，PMIC / 離散功率元件漲價可作為 AI power / server power 輪動線索。",
+      "stocks": [
+        {
+          "symbol": "2308",
+          "stockName": "台達電",
+          "confidence": 0.5,
+          "payload": {
+            "role": "server_power_reference"
+          }
+        },
+        {
+          "symbol": "4931",
+          "stockName": "新盛力",
+          "confidence": 0.45,
+          "payload": {
+            "role": "bbu_reference"
+          }
+        }
+      ],
+      "evidence": [
+        {
+          "evidenceType": "REASONED_ANALYSIS",
+          "direction": "POSITIVE",
+          "evidenceText": "PMIC 受新電源櫃使用大量 power components 帶動，美系大廠持續漲價，羅姆也可能跟進。",
+          "confidence": 0.7,
+          "payload": {
+            "sourceWindow": "EP662 28:03-29:53"
+          }
+        }
+      ],
+      "payload": {
+        "lifecycleHint": "EMERGING",
+        "freshnessScore": 0.8,
+        "noveltyScore": 0.65,
+        "uncertaintyScore": 0.5,
+        "crowdingScore": 0.45
+      }
+    }
+  ],
+  "payload": {
+    "weakSignalOnly": true,
+    "productionDecisionAllowed": false,
+    "validationSample": true,
+    "extractionVersion": "manual-validation-v1"
+  }
+}

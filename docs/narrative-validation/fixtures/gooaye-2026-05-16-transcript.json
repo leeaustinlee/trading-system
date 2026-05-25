@@ -1,0 +1,29 @@
+{
+  "tradingDate": "2026-05-16",
+  "sourceKey": "gooaye-ep662-2026-05-16-validation",
+  "sourceType": "PODCAST",
+  "sourceTitle": "Gooaye 股癌 EP662 | ⛑️ narrative validation sample",
+  "rawContent": "被動元件是本集重點之一。電阻因大量用銀出現漲價，若電阻漲價順利，缺得更嚴重的電容、電感、MLCC 與鋁電容壓力更大。Panasonic 數月前提過 phase out OS-CON，可靠 source 提到 SP-Cap 要漲價，幅度可能三成。主持人補充一兩個月前與產業人士討論已看到 passive 缺口，市場原先低估擴產時間。除被動元件外，仍喜歡光與成熟製程中的 PMIC；新電源櫃用大量 power components，美系大廠持續漲價，羅姆可能跟進。",
+  "payload": {
+    "validationSample": true,
+    "sourceName": "Gooaye 股癌",
+    "weakSignalOnly": true,
+    "productionDecisionAllowed": false,
+    "allowedUses": [
+      "dashboard context",
+      "candidate narrativeContext",
+      "shadow report",
+      "theme rotation awareness"
+    ],
+    "blockedUses": [
+      "BUY_SIGNAL",
+      "FINAL_DECISION_OVERRIDE",
+      "PRICE_GATE_OVERRIDE",
+      "CHASED_HIGH_OVERRIDE",
+      "VETO_OVERRIDE",
+      "MARKET_GRADE_OVERRIDE",
+      "AUTO_TRADING"
+    ],
+    "sourceNote": "Public Gooaye notes / transcript summary manually整理 for Narrative Validation Engineer task."
+  }
+}
