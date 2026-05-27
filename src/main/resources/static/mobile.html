@@ -418,6 +418,144 @@
   }
   .tab.active .ico{color:var(--c-buy);text-shadow:0 0 14px var(--c-buy-glow)}
 
+
+
+  /* ─── intelligence terminal P1 (war room) ───────────────────── */
+  .it-header{position:relative;overflow:hidden;margin:14px 0 10px;padding:18px 18px 16px;border-radius:18px;
+    background:radial-gradient(420px 180px at 0% 0%, rgba(96,165,250,.18), transparent 62%),
+      radial-gradient(420px 220px at 100% 0%, rgba(20,184,166,.14), transparent 62%), var(--bg-card);
+    box-shadow:var(--card-edge);border:1px solid rgba(255,255,255,.07)}
+  .it-header .eyebrow{font:900 10px/1 var(--f-mono);letter-spacing:1.2px;color:#93C5FD;text-transform:uppercase}
+  .it-header .title{margin-top:7px;font:900 24px/1.12 var(--f-sans);letter-spacing:.5px;color:var(--ink)}
+  .it-header .sub{margin-top:8px;color:var(--muted);font:700 13px/1.45 var(--f-mono)}
+  .it-warning{display:flex;align-items:center;gap:9px;margin:10px 0 12px;padding:11px 13px;border-radius:14px;
+    background:var(--c-wait-bg);border:1px solid var(--c-wait-border);color:#FDE68A;font:900 12px/1.35 var(--f-mono);letter-spacing:.25px}
+  .it-warning.stop{background:var(--c-stop-bg);border-color:var(--c-stop-border);color:#FDA4AF}
+  .it-board{margin-top:14px}
+  .it-board-title{display:flex;justify-content:space-between;align-items:center;margin:0 0 9px;color:var(--muted);
+    font:900 11px/1 var(--f-mono);letter-spacing:.9px;text-transform:uppercase}
+  .it-board-title .right{color:var(--dim);font-weight:800}
+  .market-board{padding:16px;border-radius:18px;background:linear-gradient(135deg, rgba(15,23,42,.96), rgba(17,24,39,.98));
+    box-shadow:var(--card-edge);border:1px solid rgba(255,255,255,.07)}
+  .market-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+  .risk-word{font:900 31px/1 var(--f-mono);letter-spacing:.8px;color:var(--ink)}
+  .risk-word.on{color:#7BF1AB;text-shadow:0 0 18px rgba(34,221,122,.22)}
+  .risk-word.off{color:#FDA4AF;text-shadow:0 0 18px rgba(244,63,94,.20)}
+  .market-subline{margin-top:7px;color:var(--ink-2);font:800 13px/1.45 var(--f-sans)}
+  .market-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:14px}
+  .market-cell{min-width:0;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035);border-radius:13px;padding:10px 10px}
+  .market-cell .k{font:900 10px/1 var(--f-sans);color:var(--muted);letter-spacing:.65px;text-transform:uppercase}
+  .market-cell .v{margin-top:6px;font:900 15px/1.2 var(--f-mono);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .market-rotation{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font:800 12px/1.45 var(--f-sans);color:var(--ink-2)}
+  .theme-radar-list{display:grid;grid-template-columns:1fr;gap:10px}
+  .theme-card{position:relative;overflow:hidden;padding:14px;border-radius:17px;background:var(--bg-card);box-shadow:var(--card-edge);border:1px solid rgba(255,255,255,.06)}
+  .theme-card::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:4px;border-radius:0 4px 4px 0;background:var(--theme-color,var(--c-rest));box-shadow:0 0 14px var(--theme-glow,rgba(100,116,139,.2))}
+  .theme-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding-left:4px}
+  .theme-name{font:900 18px/1.2 var(--f-sans);color:var(--ink);letter-spacing:.2px;min-width:0}
+  .theme-dir{font:900 20px/1 var(--f-mono);color:var(--theme-color,var(--ink))}
+  .life-badge{display:inline-flex;margin-top:7px;padding:5px 9px;border-radius:999px;border:1px solid var(--theme-color,var(--c-rest));
+    color:var(--theme-color,var(--ink-2));background:rgba(255,255,255,.035);font:900 10px/1 var(--f-mono);letter-spacing:.55px;text-transform:uppercase}
+  .theme-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;margin-top:12px}
+  .theme-meter .label{display:flex;justify-content:space-between;color:var(--muted);font:800 10px/1 var(--f-sans);letter-spacing:.5px;text-transform:uppercase}
+  .theme-meter .bar{height:7px;margin-top:5px;border-radius:999px;background:rgba(148,163,184,.14);overflow:hidden;border:1px solid rgba(148,163,184,.10)}
+  .theme-meter .bar span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--theme-color,var(--c-watch)),rgba(255,255,255,.62));box-shadow:0 0 10px var(--theme-glow,rgba(96,165,250,.22))}
+  .theme-foot{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px;color:var(--muted);font:800 10px/1.25 var(--f-mono)}
+  .mini-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 7px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:var(--ink-2)}
+  .mini-chip.warn{background:var(--c-wait-bg);border-color:var(--c-wait-border);color:#FDE68A}
+  .mini-chip.stop{background:var(--c-stop-bg);border-color:var(--c-stop-border);color:#FDA4AF}
+  .fresh-list{display:grid;grid-template-columns:1fr;gap:8px}
+  .fresh-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start;padding:12px 13px;border-radius:14px;background:var(--bg-card);box-shadow:var(--card-edge);border-left:4px solid var(--c-rest)}
+  .fresh-row.live{border-left-color:var(--c-buy)} .fresh-row.stale{border-left-color:var(--c-wait)} .fresh-row.empty,.fresh-row.error{border-left-color:var(--c-stop)}
+  .fresh-row .layer{font:900 14px/1.25 var(--f-sans);color:var(--ink)}
+  .fresh-row .meta{margin-top:5px;color:var(--muted);font:800 10px/1.45 var(--f-mono)}
+  .fresh-row .status{font:900 10px/1 var(--f-mono);letter-spacing:.6px;border-radius:999px;padding:6px 8px;border:1px solid rgba(255,255,255,.10);white-space:nowrap}
+  .fresh-row.live .status{color:#7BF1AB;background:var(--c-buy-bg);border-color:var(--c-buy-border)}
+  .fresh-row.stale .status{color:#FDE68A;background:var(--c-wait-bg);border-color:var(--c-wait-border)}
+  .fresh-row.empty .status,.fresh-row.error .status{color:#FDA4AF;background:var(--c-stop-bg);border-color:var(--c-stop-border)}
+
+  .narrative-board,.thesis-board{border-radius:18px;background:linear-gradient(135deg,rgba(17,24,39,.98),rgba(15,23,42,.96));box-shadow:var(--card-edge);border:1px solid rgba(255,255,255,.07);padding:14px}
+  .narrative-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:12px}
+  .narrative-title{font:900 18px/1.15 var(--f-sans);color:var(--ink)}
+  .narrative-sub{margin-top:5px;font:800 11px/1.45 var(--f-mono);color:var(--muted)}
+  .narrative-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0 12px}
+  .narrative-kpi{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035);border-radius:12px;padding:9px}
+  .narrative-kpi .k{font:900 10px/1 var(--f-sans);color:var(--muted);letter-spacing:.6px;text-transform:uppercase}
+  .narrative-kpi .v{margin-top:5px;font:900 16px/1.1 var(--f-mono);color:var(--ink)}
+  .narrative-items{display:grid;grid-template-columns:1fr;gap:8px}
+  .narrative-item{padding:10px 11px;border-radius:13px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08)}
+  .narrative-item .name{font:900 14px/1.25 var(--f-sans);color:var(--ink)}
+  .narrative-item .meta{margin-top:5px;font:800 10px/1.45 var(--f-mono);color:var(--muted)}
+  .thesis-list{display:grid;grid-template-columns:1fr;gap:10px}
+  .thesis-card{position:relative;overflow:hidden;padding:14px;border-radius:17px;background:var(--bg-card);box-shadow:var(--card-edge);border:1px solid rgba(255,255,255,.06);border-left:4px solid var(--c-rest)}
+  .thesis-card.active{border-left-color:var(--c-buy)} .thesis-card.review{border-left-color:var(--c-wait)} .thesis-card.weak{border-left-color:#FB923C} .thesis-card.invalid{border-left-color:var(--c-stop)}
+  .thesis-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+  .thesis-symbol{font:900 20px/1.1 var(--f-mono);color:var(--ink)}
+  .thesis-name{margin-left:6px;font:800 13px/1.1 var(--f-sans);color:var(--ink-2)}
+  .thesis-price{margin-top:5px;font:800 12px/1.35 var(--f-mono);color:var(--muted)}
+  .thesis-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px 10px;margin-top:11px}
+  .thesis-cell .k{font:900 10px/1 var(--f-sans);color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
+  .thesis-cell .v{margin-top:4px;font:900 13px/1.25 var(--f-mono);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .thesis-reason{margin-top:10px;padding-top:9px;border-top:1px solid var(--line);font:700 12px/1.45 var(--f-sans);color:var(--ink-2)}
+  .thesis-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+  .thesis-badge{display:inline-flex;align-items:center;border-radius:999px;padding:6px 9px;font:900 10px/1 var(--f-mono);letter-spacing:.55px;border:1px solid rgba(255,255,255,.10);white-space:nowrap}
+  .thesis-badge.active{background:var(--c-buy-bg);border-color:var(--c-buy-border);color:#7BF1AB}
+  .thesis-badge.review{background:var(--c-wait-bg);border-color:var(--c-wait-border);color:#FDE68A}
+  .thesis-badge.weak{background:rgba(251,146,60,.14);border-color:rgba(251,146,60,.55);color:#FDBA74}
+  .thesis-badge.invalid{background:var(--c-stop-bg);border-color:var(--c-stop-border);color:#FDA4AF}
+  .thesis-badge.unknown{background:var(--c-rest-bg);border-color:var(--c-rest-border);color:#CBD5E1}
+
+  .market-pulse{border-radius:22px;padding:20px 18px;background:radial-gradient(520px 220px at 0% 0%,rgba(34,211,238,.14),transparent 62%),linear-gradient(135deg,#0B1220,#111827);box-shadow:var(--card-edge);border:1px solid rgba(255,255,255,.08)}
+  .pulse-risk{font:950 28px/1.08 var(--f-sans);letter-spacing:-.8px;color:#E5E7EB;margin-bottom:10px}.pulse-risk.on{color:#7BF1AB}.pulse-risk.off{color:#FDA4AF}
+  .pulse-main{font:900 17px/1.4 var(--f-sans);color:var(--ink)}.pulse-main b{color:#A7F3D0}.pulse-rotation{display:flex;gap:8px;overflow-x:auto;padding:12px 0 2px;margin-top:8px}.pulse-chip{flex:0 0 auto;border-radius:999px;padding:8px 11px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);font:900 12px/1 var(--f-sans);color:var(--ink-2)}
+  .theme-strip{display:flex;gap:10px;overflow-x:auto;padding:2px 0 4px;scroll-snap-type:x proximity}.theme-mini{flex:0 0 168px;scroll-snap-align:start;border-radius:16px;background:var(--bg-card);border:1px solid rgba(255,255,255,.08);box-shadow:var(--card-edge);padding:12px;border-left:4px solid var(--theme-color)}
+  .theme-mini .name{font:950 15px/1.2 var(--f-sans);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.theme-mini .row{display:flex;align-items:center;justify-content:space-between;margin-top:8px}.theme-mini .arrow{font:950 24px/1 var(--f-mono);color:var(--theme-color)}.mini-meter{height:6px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:7px}.mini-meter span{display:block;height:100%;border-radius:999px;background:var(--theme-color)}
+  .home-warning{margin:8px 0 10px;border-radius:14px;padding:10px 12px;background:rgba(250,204,21,.12);border:1px solid rgba(250,204,21,.28);color:#FDE68A;font:900 13px/1.35 var(--f-sans)}
+  .holding-focus-list{display:grid;grid-template-columns:1fr;gap:10px}.holding-focus{border-radius:17px;background:var(--bg-card);border:1px solid rgba(255,255,255,.08);box-shadow:var(--card-edge);padding:14px;border-left:4px solid var(--c-rest)}.holding-focus.review{border-left-color:var(--c-wait)}.holding-focus.weak{border-left-color:#FB923C}.holding-focus.active{border-left-color:var(--c-buy)}.holding-focus.invalid{border-left-color:var(--c-stop)}
+  .holding-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.holding-sym{font:950 19px/1.1 var(--f-mono);color:var(--ink)}.holding-name{font:850 13px/1.1 var(--f-sans);color:var(--ink-2);margin-left:6px}.holding-pnl{font:950 15px/1 var(--f-mono)}.holding-reason{margin-top:9px;font:800 13px/1.5 var(--f-sans);color:var(--ink-2)}.holding-theme{margin-top:8px;font:800 11px/1.2 var(--f-sans);color:var(--muted)}
+  .ops-detail{margin-top:10px}
+
+  .trading-detail{margin:12px 0 0}.trading-detail .head{border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);padding:13px 14px}.trading-detail .head .label{font:950 15px/1.2 var(--f-sans);color:var(--ink)}.trading-detail .body{padding:10px 0 0}
+  @media (min-width: 760px){
+    main{max-width:1180px;margin:0 auto}
+    .market-grid{grid-template-columns:repeat(4,1fr)}
+    .theme-radar-list{grid-template-columns:repeat(2,1fr)}
+    .fresh-list{grid-template-columns:repeat(2,1fr)}
+    .narrative-items{grid-template-columns:repeat(3,1fr)}
+    .thesis-list{grid-template-columns:repeat(2,1fr)}
+  }
+
+
+  /* ─── P1 read-only intelligence widgets ─────────────────────── */
+  .p1-note{font-size:11px;color:var(--muted);line-height:1.45;margin-top:6px}
+  .p1-error{font-size:12px;color:#FDA4AF;background:var(--c-stop-bg);border:1px solid var(--c-stop-border);border-radius:12px;padding:10px 12px;margin:8px 0}
+  .p1-kv{display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:12px;margin-top:8px}
+  .p1-kv .k{color:var(--muted);font-weight:700}
+  .p1-kv .v{color:var(--ink-2);min-width:0;word-break:break-word}
+  .p1-chiprow{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .p1-chip{font:800 10px/1 var(--f-sans);letter-spacing:.4px;padding:5px 8px;border-radius:var(--r-pill);background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--ink-2)}
+  .p1-card-title{font-size:12px;font-weight:900;letter-spacing:.3px;color:var(--ink);display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .p1-mini{font-size:11px;color:var(--muted)}
+
+  /* ─── P2.1 Market Command Center ───────────────────────────── */
+  .mcc-hero{position:relative;border-radius:var(--r);padding:18px;margin:12px 0 10px;background:linear-gradient(135deg,rgba(96,165,250,.12),rgba(34,221,122,.05) 58%,rgba(15,23,42,.98)),var(--bg-card);box-shadow:var(--card-edge);border-left:5px solid var(--c-rest)}
+  .mcc-hero.success{border-left-color:var(--c-buy)} .mcc-hero.warning{border-left-color:var(--c-wait)} .mcc-hero.danger{border-left-color:var(--c-stop)} .mcc-hero.info{border-left-color:var(--c-watch)}
+  .mcc-eyebrow{font:900 10px/1 var(--f-sans);letter-spacing:.8px;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .mcc-state{margin-top:9px;font:900 28px/1.05 var(--f-sans);letter-spacing:.4px;color:var(--ink)}
+  .mcc-reason{margin-top:8px;font-size:14px;font-weight:700;color:var(--ink-2);line-height:1.35}
+  .mcc-action{margin-top:10px;display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:7px 11px;font:900 12px/1 var(--f-sans);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10)}
+  .mcc-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:13px}
+  .mcc-kpi{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:8px 6px;text-align:center;min-width:0}
+  .mcc-kpi .k{font:800 9px/1 var(--f-sans);letter-spacing:.45px;text-transform:uppercase;color:var(--muted)}
+  .mcc-kpi .v{margin-top:4px;font:900 12px/1.15 var(--f-mono);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .urgency-strip{display:grid;gap:8px;margin:10px 0 12px}
+  .urgency-item{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;border-radius:14px;padding:10px 12px;background:var(--bg-card);box-shadow:var(--card-edge);border-left:4px solid var(--c-watch)}
+  .urgency-item.danger{border-left-color:var(--c-stop)} .urgency-item.warning{border-left-color:var(--c-wait)} .urgency-item.success{border-left-color:var(--c-buy)} .urgency-item.muted{border-left-color:var(--c-rest)}
+  .urgency-item .u-icon{font-size:16px}.urgency-item .u-title{font-size:13px;font-weight:900;color:var(--ink)}.urgency-item .u-sub{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.25}.urgency-item .u-score{font:900 10px/1 var(--f-mono);color:var(--muted)}
+  .mcc-card{background:var(--bg-card);border-radius:var(--r);padding:14px;margin-bottom:10px;box-shadow:var(--card-edge)}
+  .mcc-card-title{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:9px;font:900 12px/1 var(--f-sans);letter-spacing:.65px;text-transform:uppercase;color:var(--muted)}
+  .mcc-list{display:grid;gap:8px}.mcc-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)}
+  .mcc-row .name{font-size:14px;font-weight:900;color:var(--ink)}.mcc-row .meta{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.25}.mcc-row .val{font:900 12px/1 var(--f-mono);text-align:right}.mcc-row.danger{border-left:3px solid var(--c-stop)}.mcc-row.warning{border-left:3px solid var(--c-wait)}.mcc-row.success{border-left:3px solid var(--c-buy)}.mcc-row.info{border-left:3px solid var(--c-watch)}
+
   /* ─── shared: error / loading helpers ───────────────────────── */
   .err{color:var(--c-stop);font-size:11px;margin-top:4px}
   .truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
@@ -459,15 +597,12 @@
 
 <nav class="tabbar" aria-label="主選單">
   <div class="tabbar-scroll" id="tabbarScroll">
-    <a class="tab" data-r="overview"  href="#/overview"><span class="ico">⊙</span><span>總覽</span></a>
-    <a class="tab" data-r="candidates" href="#/candidates"><span class="ico">★</span><span>候選</span></a>
-    <a class="tab" data-r="positions" href="#/positions"><span class="ico">▣</span><span>持倉</span></a>
-    <a class="tab" data-r="pnl"       href="#/pnl"><span class="ico">$</span><span>損益</span></a>
+    <a class="tab" data-r="overview"  href="#/overview"><span class="ico">⊙</span><span>市場</span></a>
+    <a class="tab" data-r="positions" href="#/positions"><span class="ico">▣</span><span>持股</span></a>
     <a class="tab" data-r="decisions" href="#/decisions"><span class="ico">∿</span><span>決策</span></a>
-    <a class="tab" data-r="research"  href="#/research"><span class="ico">⌬</span><span>AI</span></a>
     <a class="tab" data-r="themeops"  href="#/themeops"><span class="ico">◆</span><span>題材</span></a>
-    <a class="tab" data-r="scheduler" href="#/scheduler"><span class="ico">◷</span><span>排程</span></a>
-    <a class="tab" data-r="advanced"  href="#/advanced"><span class="ico">⚙</span><span>進階</span></a>
+    <a class="tab" data-r="review"  href="#/review"><span class="ico">◎</span><span>回顧</span></a>
+    <a class="tab" data-r="system"  href="#/system"><span class="ico">⚙</span><span>系統</span></a>
   </div>
 </nav>
 
@@ -506,12 +641,37 @@ const localYmd = (date=new Date()) => {
 const yyyymmdd = iso => { if(!iso) return ''; try{return localYmd(iso);}catch(e){return '';} };
 const safeJson = s => { try{ return s?JSON.parse(s):{}; }catch(e){ return {}; } };
 
-async function safeFetch(url){
+function normalizeFetchError(e){
+  if (e?.name === 'AbortError') return 'TIMEOUT';
+  return 'API_ERROR '+(e?.message||e||'UNKNOWN');
+}
+async function apiFetch(url, {timeoutMs=8000, signal=null, quiet=false}={}){
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const abortFromParent = () => ctrl.abort();
+  if (signal) {
+    if (signal.aborted) ctrl.abort();
+    else signal.addEventListener('abort', abortFromParent, {once:true});
+  }
   try{
-    const r = await fetch(url,{cache:'no-store'});
+    const r = await fetch(url,{cache:'no-store', signal:ctrl.signal});
     if(!r.ok) throw new Error('HTTP '+r.status);
-    return await r.json();
-  }catch(e){ console.warn('fetch fail',url,e.message); return null; }
+    return {ok:true, data:await r.json(), error:null};
+  }catch(e){
+    const err = normalizeFetchError(e);
+    if (!quiet) console.warn('fetch fail', url, err);
+    return {ok:false, data:null, error:err};
+  } finally {
+    clearTimeout(timer);
+    if (signal) signal.removeEventListener('abort', abortFromParent);
+  }
+}
+async function safeFetch(url, timeoutMs=8000, opts={}){
+  const res = await apiFetch(url, {timeoutMs, signal:opts.signal, quiet:opts.quiet});
+  return res.ok ? res.data : null;
+}
+async function p1Fetch(url, timeoutMs=8000, opts={}){
+  return await apiFetch(url, {timeoutMs, signal:opts.signal, quiet:opts.quiet});
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -519,14 +679,15 @@ async function safeFetch(url){
 ════════════════════════════════════════════════════════════════ */
 const S = {
   dashboard:null, candidates:[], positions:[], capital:null, quotes:{}, portfolioHealth:null, healthBySymbol:{},
+  adaptiveExitReview:null, adaptiveExitBySymbol:{}, healthDataGaps:null,
   candidateMeta:{date:null,label:'最新候選',cls:'watch'},
   pnlDaily:null, pnl20:null, pnl90:null,
-  decisionsHistory:null, hourlyHistory:null, monitorHistory:null,
+  decisionsHistory:null, hourlyHistory:null, monitorHistory:null, decisionSnapshots:null,
   notifications:null, schedulerJobs:null, scheduledTasks:null,
-  migrationHealth:null, themeMappings:null,
-  themeOpsDate:localYmd(), themeOps:null,
+  migrationHealth:null, themeMappings:null, featureModesSummary:null, featureModes:null,
+  themeOpsDate:localYmd(), themeOps:null, intelligence:null, intelThemes:[],
   filter:'all',
-  lastFetchAt:null,
+  lastFetchAt:null, routeSeq:0, routeAbort:null, activeRoute:'overview', isRendering:false,
 };
 S.filter = (localStorage.getItem('mobile.filter') || 'all');
 
@@ -554,12 +715,23 @@ function candidateMetaBadge(){
 /* ════════════════════════════════════════════════════════════════
    classification helpers
 ════════════════════════════════════════════════════════════════ */
+function rawCandidateScore(c){
+  const v = c?.finalRankScore ?? c?.consensusScore ?? c?.aiWeightedScore ?? c?.score ?? 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+function normalizeCandidateScore(score){
+  const n = Number(score);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  // P2.1 Fix Gate: score > 10 means legacy 0-30 scale; normalize to 0-10 before BUY/WAIT/WATCH.
+  return n > 10 ? Math.max(0, Math.min(10, n / 3)) : Math.max(0, Math.min(10, n));
+}
 function classifyCandidate(c, quote){
   if (c.isVetoed) return {cls:'skip', label:'⚫ 排除', code:'SKIP'};
-  const score = Number(c.finalRankScore ?? c.score ?? 0);
+  const normalizedScore = normalizeCandidateScore(rawCandidateScore(c));
   const include = c.includeInFinalPlan === true;
-  if ((include && score >= 8.8) || (include && score >= 22)) return {cls:'buy', label:'🟢 BUY', code:'BUY'};
-  if (score >= 7.4 || score >= 18) return {cls:'wait', label:'🟡 WAIT', code:'WAIT'};
+  if (include && normalizedScore >= 8.8) return {cls:'buy', label:'🟢 BUY', code:'BUY'};
+  if (normalizedScore >= 7.4) return {cls:'wait', label:'🟡 WAIT', code:'WAIT'};
   if (quote && quote.changePercent > 6) return {cls:'wait', label:'🟡 過熱', code:'WAIT'};
   return {cls:'watch', label:'🔵 WATCH', code:'WATCH'};
 }
@@ -569,6 +741,133 @@ function distToStop(currentPrice, stopLossPrice){
   const pct = (cp - sl) / cp * 100;
   const cls = pct < 2 ? 'danger' : pct < 5 ? 'warn' : 'safe';
   return {pct, cls, text:fmtPct(pct,1)};
+}
+function toneForUrgency(score){
+  if (score >= 90) return 'danger';
+  if (score >= 60) return 'warning';
+  if (score >= 25) return 'info';
+  if (score > 0) return 'success';
+  return 'muted';
+}
+function dataQualityMeta(){
+  const warnCount = freshnessWarningCount();
+  const gaps = S.healthDataGaps?.data || S.healthDataGaps || {};
+  const gapRows = asRows(gaps);
+  const gapCount = Number(gaps.totalGaps ?? gaps.gapCount ?? gapRows.length ?? 0) || 0;
+  const critical = Number(gaps.criticalCount ?? gaps.blockingCount ?? gapRows.filter(r => /CRITICAL|BLOCK|HIGH/.test(String(r.severity||r.level||'').toUpperCase())).length) || 0;
+  return {warnCount,gapCount,critical,hasIssue:warnCount>0 || gapCount>0 || critical>0};
+}
+function aiReadinessMeta(fd){
+  const s = String(fd?.aiStatus || '').toUpperCase();
+  const fb = String(fd?.fallbackReason || '').toUpperCase();
+  if (s === 'FULL_AI_READY' && !fb) return {label:'AI Ready', tone:'success', score:0};
+  if (s === 'AI_NOT_READY' || fb === 'AI_NOT_READY' || fb === 'AI_TIMEOUT') return {label:'AI 未就緒', tone:'danger', score:90};
+  if (s === 'PARTIAL_AI_READY' || fb) return {label:'AI 降級', tone:'warning', score:65};
+  return {label:'AI 未知', tone:'warning', score:50};
+}
+function aiTrustMeta(fd){
+  const ai = aiReadinessMeta(fd);
+  const dq = dataQualityMeta();
+  const fb = String(fd?.fallbackReason || '').trim();
+  if (ai.score >= 90) return {...ai, dataQuality:dq, label:'AI 未就緒 / 只可人工觀察', trust:'manual_only'};
+  if (ai.score >= 60 || fb) return {...ai, dataQuality:dq, label:'AI 降級 / 禁止直接採信', trust:'degraded'};
+  if (dq.hasIssue) return {...ai, tone:dq.critical>0?'danger':'warning', score:dq.critical>0?88:62, dataQuality:dq, label:'AI 可用 / 資料有缺口', trust:'data_gap'};
+  return {...ai, dataQuality:dq, label:'AI 可用 / 資料可信', trust:'trusted'};
+}
+function commandActionText(state, topRisk){
+  if (topRisk && topRisk.score >= 80) return `先處理 ${topRisk.symbol} 風險，再看新倉。`;
+  if (state === 'REST') return '休息，不開新倉。';
+  if (state === 'CAUTION') return '只觀察，等回測或下一次 gate，不追價。';
+  if (state === 'CAN_TRADE') return '可小量，只看 Action Queue Top 1，人工確認後再進。';
+  return '資料不足，先不採取交易動作。';
+}
+function getMarketCommandState(){
+  const dash = S.dashboard || {}, fd = dash.finalDecision || {};
+  const market = S.intelligence?.market?.data || dash.market || {};
+  const mon = S.intelligence?.monitor?.data || dash.tradingState || {};
+  const grade = String(market.marketGrade || mon.marketGrade || dash.market?.marketGrade || 'UNKNOWN').toUpperCase();
+  const decision = String(fd.decision || market.decision || dash.tradeDecision || '').toUpperCase();
+  const riskRaw = String(market.riskLevel || mon.riskLevel || dash.marketState || '').toUpperCase();
+  const ai = aiTrustMeta(fd);
+  let state='UNKNOWN', tone='info';
+  if (decision === 'REST' || grade === 'C' || riskRaw.includes('HIGH') || riskRaw.includes('OFF')) { state='REST'; tone='danger'; }
+  else if (decision === 'ENTER' || decision === 'BUY') { state='CAN_TRADE'; tone='success'; }
+  else if (decision === 'WAIT' || decision === 'WATCH' || grade === 'B' || ai.score >= 60) { state='CAUTION'; tone='warning'; }
+  const topRisk = topPositionRisks(1)[0];
+  if (topRisk && topRisk.score >= 80 && state !== 'REST') { state='POSITION_FIRST'; tone='danger'; }
+  const action = commandActionText(state, topRisk);
+  const phase = market.marketPhase || mon.timeDecayStage || dash.tradingState?.timeDecayStage || 'UNKNOWN';
+  const reason = fd.summary || market.summary || action;
+  return {state,tone,phase,grade,risk:riskRaw || (grade==='C'?'HIGH':grade==='A'?'LOW':'MEDIUM'),ai,reason:truncate(uiReason(reason),72),action};
+}
+function adaptiveMetaForSymbol(symbol){
+  const a = S.adaptiveExitBySymbol?.[symbol] || null;
+  const rec = String(a?.recommendation || '').toUpperCase();
+  let score=0;
+  if (/HARD_EXIT|EXIT/.test(rec)) score=95;
+  else if (rec.includes('REDUCE')) score=80;
+  else if (rec.includes('REVIEW') || rec.includes('WATCH')) score=55;
+  return {item:a, rec: a?.recommendation || '—', score};
+}
+function positionUrgency(p){
+  const q = S.quotes?.[p.symbol] || {};
+  const h = S.healthBySymbol?.[p.symbol] || {};
+  const ad = adaptiveMetaForSymbol(p.symbol);
+  const cur = q.currentPrice ?? p.currentPrice;
+  const dist = distToStop(cur, p.stopLossPrice);
+  const pnl = cur && p.avgCost ? ((Number(cur)-Number(p.avgCost))/Number(p.avgCost)*100) : Number(p.unrealizedPnlPct);
+  let score = 0, reasons=[];
+  const rs = String(p.reviewStatus || '').toUpperCase();
+  const tier = String(h.actionTier || '').toUpperCase();
+  if (/HARD_EXIT|EXIT/.test(rs)) { score=Math.max(score,100); reasons.push('出場警報'); }
+  if (ad.score) { score=Math.max(score,ad.score); reasons.push(`Adaptive ${ad.rec}`); }
+  if (tier === 'HARD_EXIT_ALERT') { score=Math.max(score,98); reasons.push('health 硬性警報'); }
+  else if (tier === 'EXIT_REVIEW') { score=Math.max(score,88); reasons.push('health 出場檢查'); }
+  else if (tier === 'REDUCE_REVIEW') { score=Math.max(score,72); reasons.push('health 減碼檢查'); }
+  if (dist.pct != null && dist.pct < 2) { score=Math.max(score,86); reasons.push(`距停損 ${dist.text}`); }
+  else if (dist.pct != null && dist.pct < 5) { score=Math.max(score,55); reasons.push(`距停損 ${dist.text}`); }
+  if (isFinite(pnl) && pnl < -3) { score=Math.max(score,45); reasons.push(`損益 ${fmtPct(pnl,1)}`); }
+  const stale = Number(ad.item?.themeStaleDays);
+  if (isFinite(stale) && stale >= 2) { score=Math.max(score,35); reasons.push(`題材延遲 ${stale}d`); }
+  if (String(ad.item?.crowdingRisk||'').toUpperCase().includes('HIGH')) { score=Math.max(score,50); reasons.push('題材擁擠'); }
+  return {symbol:p.symbol, name:p.stockName||'', score, tone:toneForUrgency(score), pnl, dist, tier:tier||rs||'HOLD', adaptive:ad.rec, reason:reasons[0] || '持股狀態正常', position:p};
+}
+function topPositionRisks(limit=3){
+  return (S.positions||[]).map(positionUrgency).sort((a,b)=>b.score-a.score || String(a.symbol).localeCompare(String(b.symbol))).slice(0,limit);
+}
+function marketUrgencyItems(){
+  const cmd = getMarketCommandState(), fd = S.dashboard?.finalDecision || {}, items=[];
+  if (cmd.state === 'REST') items.push({type:'market', tone:'danger', score:100, title:'市場不宜進場', sub:cmd.reason, icon:'⛔'});
+  else if (cmd.state === 'CAUTION') items.push({type:'market', tone:'warning', score:65, title:'市場需保守', sub:cmd.action, icon:'⚠'});
+  if (cmd.ai.score >= 60) items.push({type:'ai', tone:cmd.ai.tone, score:cmd.ai.score, title:cmd.ai.label, sub:fd.fallbackReason || 'AI readiness 非完整狀態', icon:'AI'});
+  const warnCount = freshnessWarningCount();
+  if (warnCount > 0) items.push({type:'data', tone:'warning', score:58, title:'資料品質警示', sub:`${warnCount} 個資料層需檢查`, icon:'↻'});
+  const gaps = S.healthDataGaps?.data || S.healthDataGaps || {}; const gapRows = asRows(gaps);
+  const critical = gaps.criticalCount ?? gaps.blockingCount ?? gapRows.filter(r => /CRITICAL|BLOCK|HIGH/.test(String(r.severity||r.level||'').toUpperCase())).length;
+  if (critical > 0) items.push({type:'data', tone:'danger', score:92, title:'持股資料缺口', sub:`${critical} 個高風險缺口`, icon:'!'});
+  return items;
+}
+function decisionSummaryMeta(){
+  const fd = S.dashboard?.finalDecision || {}, payload = safeJson(fd.payloadJson);
+  const decision = String(fd.decision || 'UNKNOWN').toUpperCase();
+  const selected = payload.selected_count ?? payload.selected_stocks?.length ?? 0;
+  const rejected = payload.rejected_count ?? payload.rejected_reasons?.length ?? 0;
+  const topSel = payload.selected_stocks?.[0]?.symbol || payload.selected_symbols?.[0] || '';
+  const topRej = pickTopReasons(payload.rejected_reasons || [], 1)[0] || fd.fallbackReason || '';
+  const ai = aiTrustMeta(fd);
+  let score=0; if (fd.fallbackReason) score=80; if (ai.score>=90) score=95; else if (ai.score>=60) score=Math.max(score,65); if (!selected && (decision==='WAIT'||decision==='WATCH')) score=Math.max(score,45);
+  return {decision, selected, rejected, topSel, topRej, ai, score, tone:toneForUrgency(score), summary:fd.summary||''};
+}
+function buildUrgencyStrip(){
+  const items=[];
+  const pos = topPositionRisks(1)[0];
+  if (pos && pos.score>0) items.push({type:'position', tone:pos.tone, score:pos.score, title:`${pos.symbol} ${pos.tier}`, sub:pos.reason, icon:'▣'});
+  const topTheme = (S.intelThemes||[])[0];
+  if (topTheme) items.push({type:'theme', tone:String(topTheme.hotRiskLevel||topTheme.crowding||'').toUpperCase().includes('HIGH')?'warning':'info', score:Number(topTheme.heat)||20, title:`主流 ${topTheme.themeName}`, sub:`熱度 ${heatLabel(topTheme.heat)} · 擁擠 ${crowdLabel(topTheme.crowding)} · ${topTheme.direction||'→'}`, icon:'◆'});
+  const dec = decisionSummaryMeta();
+  items.push({type:'decision', tone:dec.tone, score:dec.score||30, title:`決策 ${dec.decision}`, sub:dec.topSel?`首選 ${dec.topSel}`:(dec.topRej?truncate(dec.topRej,38):`${dec.selected} 選 / ${dec.rejected} 排`), icon:'∿'});
+  items.push(...marketUrgencyItems());
+  return items.sort((a,b)=>b.score-a.score).slice(0,3);
 }
 /** v2 style upgrade：距停損 8 段 segment bar
  *  - 0–10% 線性映射；超過 10% 視為滿
@@ -618,6 +917,386 @@ function zhHealthGap(raw){
   if (g.includes('institutional net')) return '法人買賣超資料不足';
   return g.replaceAll('_',' ');
 }
+
+function p1Val(v, fallback='UNKNOWN'){
+  if (v === null || v === undefined || v === '') return fallback;
+  if (typeof v === 'number' && !isFinite(v)) return fallback;
+  return v;
+}
+
+function uiText(v, kind='data'){
+  const s = String(v ?? '').trim().toUpperCase();
+  const map = {
+    LIVE:'正常更新', STALE:'資料延遲', EMPTY:'尚無資料', FUTURE_DATA_DETECTED:'資料異常', DATA_MISSING:'資料不足', API_ERROR:'讀取失敗', TIMEOUT:'連線逾時', UNKNOWN:'未判定',
+    ACTIVE:'續強', NEEDS_REVIEW:'觀察中', WEAKENING:'動能轉弱', INVALIDATED:'結構失效',
+    HOLD:'續抱', OBSERVE_1D:'觀察一天', REDUCE_REVIEW:'減碼評估', EXIT_REVIEW:'出場評估', HARD_EXIT:'建議出場', HARD_EXIT_ALERT:'建議出場',
+    EARLY:'初期', EMERGING:'發酵中', MAINSTREAM:'主流', CROWDED:'過熱', OVERHEATED:'過熱', FADING:'退潮', DEAD:'結束',
+    NO_RECENT_SIGNAL:'近期無新訊號', MANUAL_INPUT_REQUIRED:'需手動更新', BUILD_WARNING:'系統資料警示', MISSING_THEME_CONTEXT:'題材資料整理中', STALE_THEME_CONTEXT:'題材資料延遲', HIGH_RISK:'高風險', STRONG_THEME:'強勢題材', FULL_AI_READY:'AI 正常', PARTIAL_AI_READY:'AI 部分完成', AI_NOT_READY:'AI 未就緒', SUCCESS:'成功', FAILED:'失敗', PARTIAL:'部分完成', PENDING:'等待中'
+  };
+  if (kind==='theme' && s==='ACTIVE') return '主升段';
+  if (kind==='thesis' && s==='ACTIVE') return '續強';
+  return map[s] || (v == null || v === '' ? '資料不足' : String(v));
+}
+function uiData(v){ return uiText(v,'data'); }
+function uiTheme(v){ return uiText(v,'theme'); }
+function uiThesis(v){ return uiText(v,'thesis'); }
+function uiReason(txt){
+  const s = String(txt || '').trim();
+  if (!s) return '原因整理中';
+  return s.replaceAll('MISSING_THEME_CONTEXT','題材資料整理中').replaceAll('DATA_MISSING','資料不足').replaceAll('UNKNOWN','未判定').replaceAll('NEEDS_REVIEW','觀察中').replaceAll('WEAKENING','動能轉弱').replaceAll('ACTIVE','續強').replaceAll('thesis','論點').replaceAll('evidence','依據').replaceAll('price_broken','價格轉弱').replaceAll('structure_intact','結構仍在');
+}
+
+function p1Rows(payload, keys=['items','themes','rows','layers','signals','builds','candidates']){
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return [];
+  for (const k of keys) if (Array.isArray(payload[k])) return payload[k];
+  return [];
+}
+function p1StatusClass(status){
+  const s = String(status||'DATA_MISSING').toUpperCase();
+  if (s === 'LIVE' || s === 'SUCCESS') return 'live';
+  if (s === 'STALE' || s === 'PARTIAL') return 'stale';
+  if (s === 'EMPTY' || s.includes('ERROR') || s.includes('MISSING') || s.includes('FUTURE')) return 'empty';
+  return 'error';
+}
+function lifecycleMeta(stageRaw){
+  let s = String(stageRaw||'UNKNOWN').toUpperCase();
+  if (s === 'OVERHEATED') s = 'CROWDED';
+  const map = {
+    EARLY:['#60A5FA','rgba(96,165,250,.35)'], EMERGING:['#22D3EE','rgba(34,211,238,.35)'],
+    ACTIVE:['#22DD7A','rgba(34,221,122,.35)'], MAINSTREAM:['#FACC15','rgba(250,204,21,.35)'],
+    CROWDED:['#FB923C','rgba(251,146,60,.35)'], FADING:['#F43F5E','rgba(244,63,94,.35)'],
+    DEAD:['#64748B','rgba(100,116,139,.25)'], UNKNOWN:['#64748B','rgba(100,116,139,.25)']
+  };
+  const [color, glow] = map[s] || map.UNKNOWN;
+  return {stage:s, color, glow};
+}
+function scoreToPct(v, max=10){
+  const n = Number(v);
+  if (!isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, n / max * 100));
+}
+function normalizeThemeKey(t){ return String(t||'UNKNOWN').trim() || 'UNKNOWN'; }
+function buildP1Themes(){
+  const intel = S.intelligence || {};
+  const freshness = p1Rows(intel.themeFreshness?.data, ['layers']);
+  const statusByLayer = new Map(freshness.map(x => [x.layer, x]));
+  const map = new Map();
+  function get(name){
+    const k = normalizeThemeKey(name);
+    if (!map.has(k)) map.set(k, {themeName:k, warnings:[], sources:[]});
+    return map.get(k);
+  }
+  p1Rows(intel.themeIntelligence?.data).forEach(r => {
+    const t = get(r.themeName || r.themeTag || r.theme);
+    Object.assign(t, {lifecycle:r.themeLifecycle||t.lifecycle, heat:r.themeHeat??t.heat, rotation:r.rotationStrength??t.rotation,
+      narrative:r.narrativeHeat??t.narrative, wave:r.waveStrength??t.wave, crowding:r.crowdingScore??r.retailCrowding??t.crowding,
+      leader:r.sectorLeadership||r.marketContext?.leadingStockSymbol||t.leader, latestDataDate:r.latestDataDate||r.tradingDate||t.latestDataDate,
+      dataFreshnessStatus:r.dataFreshnessStatus||r.dataStatus||t.dataFreshnessStatus});
+    if (r.futureDataDetected || r.dataStatus === 'FUTURE_DATA_DETECTED') t.warnings.push('FUTURE_DATA_DETECTED');
+    t.sources.push('INTEL');
+  });
+  p1Rows(intel.themeReplay?.data, ['themes']).forEach(r => {
+    const t = get(r.themeTag || r.theme || r.themeName);
+    Object.assign(t, {lifecycle:t.lifecycle||r.lifecycleStage, heat:Math.max(Number(t.heat)||0, Number(r.replayScore)||0),
+      rotation:t.rotation??r.lifecycleScore, leader:t.leader||r.leaderSymbol, breadth:t.breadth??r.breadth,
+      crowding:t.crowding??r.riskRejectedCount, latestDataDate:t.latestDataDate||r.tradingDate, reason:t.reason||r.lifecycleReason});
+    t.sources.push('REPLAY');
+  });
+  p1Rows(intel.lifecycle?.data, ['items']).forEach(r => {
+    const t = get(r.themeTag || r.theme || r.themeName);
+    Object.assign(t, {lifecycle:r.stage||t.lifecycle, previousStage:r.previousStage, stageChanged:r.stageChanged,
+      heat:Math.max(Number(t.heat)||0, Number(r.lifecycleScore)*10 || 0), rotation:r.rotationScore??t.rotation,
+      crowding:r.crowdingScore??t.crowding, narrative:r.narrativeDensity!=null?Number(r.narrativeDensity)*10:t.narrative,
+      breadth:r.breadth??t.breadth, latestDataDate:t.latestDataDate||r.tradingDate, reason:t.reason||r.reason});
+    t.sources.push('LIFE');
+  });
+  p1Rows(intel.hotGroups?.data, ['themes']).forEach(r => {
+    const t = get(r.themeTag || r.theme || r.themeName);
+    Object.assign(t, {heat:Math.max(Number(t.heat)||0, Number(r.hotScore)||0), crowding:t.crowding??r.riskLevel,
+      leaderCount:r.leaderCount??t.leaderCount, avgChangePct:r.avgChangePct??t.avgChangePct, hotRiskLevel:r.riskLevel||t.hotRiskLevel,
+      latestDataDate:t.latestDataDate||intel.hotGroups?.data?.tradingDate});
+    if (String(r.riskLevel||'').toUpperCase()==='HIGH') t.warnings.push('HIGH_RISK');
+    t.sources.push('HOT');
+  });
+  const radarLayer = statusByLayer.get('ThemeReplay') || statusByLayer.get('HotGroupRadar') || {};
+  return [...map.values()].map(t => {
+    const meta = lifecycleMeta(t.lifecycle);
+    const life = meta.stage;
+    const dir = ['FADING','DEAD','CROWDED'].includes(life) ? '↓' : (t.stageChanged ? '↑' : (Number(t.rotation)>0.7 ? '↑' : '→'));
+    return {...t, lifecycle:life, color:meta.color, glow:meta.glow, direction:dir,
+      dataFreshnessStatus:t.dataFreshnessStatus || radarLayer.dataFreshnessStatus || radarLayer.dataFreshness || 'DATA_MISSING',
+      latestDataDate:t.latestDataDate || radarLayer.latestDataDate || 'DATA_MISSING'};
+  }).sort((a,b)=>(Number(b.heat)||0)-(Number(a.heat)||0)).slice(0,6);
+}
+function freshnessWarningCount(){
+  const sr = S.intelligence?.staleReport;
+  const n = Number(sr?.data?.staleLayerCount);
+  if (isFinite(n)) return n;
+  return p1Rows(sr?.data, ['staleLayers']).length;
+}
+function IntelligenceWarRoomHeader(){
+  const themes = S.intelThemes || [], top = themes[0], warnCount = freshnessWarningCount();
+  return el('section',{class:'it-header'},[
+    el('div',{class:'eyebrow',text:'Narrative-aware · Theme-aware · Adaptive Swing Intelligence'}),
+    el('div',{class:'title',text:'Intelligence War Room'}),
+    el('div',{class:'sub',text:`主流 ${uiData(top?.themeName || 'UNKNOWN')} ${top?.direction || ''} · ${warnCount>0?'資料警示':'資料正常'} · ${HHmmss(new Date().toISOString())}`})
+  ]);
+}
+function DataWarningBanner(){
+  const warnCount = freshnessWarningCount();
+  const future = (S.intelThemes||[]).some(t => (t.warnings||[]).includes('FUTURE_DATA_DETECTED'));
+  if (!warnCount && !future) return null;
+  return el('div',{class:'it-warning '+(future?'stop':''),text: future ? `資料更新異常：偵測到資料異常，${warnCount} 個資料層需檢查` : `資料更新異常：${warnCount} 個資料層需檢查`});
+}
+
+function MarketPulseHero(){
+  const intel = S.intelligence || {}, dash = intel.dashboard?.data || S.dashboard || {}, market = intel.market?.data || dash.market || {};
+  const mon = intel.monitor?.data || dash.tradingState || {}, themes = S.intelThemes || [];
+  const grade = p1Val(market.marketGrade || mon.marketGrade || dash.market?.marketGrade, 'UNKNOWN');
+  const riskOff = String(grade).toUpperCase()==='C' || dash.marketState === 'RISK_OFF';
+  const riskOn = ['A','B'].includes(String(grade).toUpperCase()) && !riskOff;
+  const riskText = riskOff ? '風險偏高' : (riskOn ? '風險可控' : '風險未判定');
+  const top = themes[0];
+  const board = el('section',{class:'market-pulse'});
+  board.append(el('div',{class:'pulse-risk '+(riskOn?'on':riskOff?'off':''),text:riskText}));
+  board.append(el('div',{class:'pulse-main',html:`主流：<b>${uiData(top?.themeName || '題材整理中')}</b><br>市場階段：${uiData(market.marketPhase || mon.timeDecayStage || 'UNKNOWN')}`}));
+  const strip = el('div',{class:'pulse-rotation'});
+  (themes.length?themes.slice(0,4):[{themeName:'題材整理中',direction:'→'}]).forEach(t => strip.append(el('span',{class:'pulse-chip',text:`${uiData(t.themeName)} ${t.direction||'→'}`})));
+  board.append(strip); return board;
+}
+
+function heatLabel(v){ const n=Number(v); if(!isFinite(n)) return '整理中'; if(n>=22) return '熱'; if(n>=10) return '中'; return '低'; }
+function crowdLabel(v){ const n=Number(v); if(!isFinite(n)) return '整理中'; if(n>=2.2) return '擁擠'; if(n>=1) return '偏擠'; return '正常'; }
+
+function ThemeRadarCompact(limit=3){
+  const themes = (S.intelThemes || []).slice(0, limit), board = el('section',{class:'mcc-card'});
+  board.append(el('div',{class:'mcc-card-title',html:`Theme Radar <span>${themes.length}/3</span>`}));
+  if (!themes.length){ board.append(el('div',{class:'empty',text:'題材資料整理中'})); return board; }
+  const list = el('div',{class:'mcc-list'});
+  themes.forEach(t => {
+    const heat = Number(t.heat)||0;
+    const row = el('div',{class:'mcc-row '+(String(t.hotRiskLevel||t.crowding||'').toUpperCase().includes('HIGH')?'warning':'info')});
+    row.append(el('div',{},[
+      el('div',{class:'name',text:`${uiData(t.themeName)} ${t.direction||'→'}`}),
+      el('div',{class:'meta',text:`${uiTheme(t.lifecycle)} · heat ${heatLabel(heat)} · rotation ${t.rotation!=null?Number(t.rotation).toFixed(2):'—'} · crowd ${crowdLabel(t.crowding)}`})
+    ]));
+    row.append(el('div',{class:'val',text:String(Math.round(Math.min(100, Math.max(0, heat))))}));
+    list.append(row);
+  });
+  board.append(list); return board;
+}
+function MarketCommandHeroMobile(){
+  const cmd = getMarketCommandState();
+  const hero = el('section',{class:`mcc-hero ${cmd.tone}`});
+  hero.append(el('div',{class:'mcc-eyebrow'},[el('span',{text:'Market Command Center'}), el('span',{class:'mono',text:HHmmss(new Date().toISOString())})]));
+  hero.append(el('div',{class:'mcc-state',text:cmd.state}));
+  hero.append(el('div',{class:'mcc-reason',text:cmd.reason}));
+  hero.append(el('div',{class:'mcc-action',text:`→ ${cmd.action}`}));
+  const kpis = el('div',{class:'mcc-kpis'});
+  [['階段',uiData(cmd.phase)],['風險',uiData(cmd.risk)],['Grade',cmd.grade],['AI Trust',cmd.ai.label]].forEach(([k,v]) => kpis.append(el('div',{class:'mcc-kpi'},[el('div',{class:'k',text:k}), el('div',{class:'v',text:String(v)})])));
+  hero.append(kpis); return hero;
+}
+function UrgencyStripMobile(){
+  const items = buildUrgencyStrip();
+  const wrap = el('section',{class:'urgency-strip'});
+  if (!items.length) { wrap.append(el('div',{class:'urgency-item success'},[el('div',{class:'u-icon',text:'✓'}), el('div',{},[el('div',{class:'u-title',text:'無立即警示'}), el('div',{class:'u-sub',text:'市場、持股與資料品質無高急迫事件'})]), el('div',{class:'u-score',text:'OK'})])); return wrap; }
+  items.forEach(it => wrap.append(el('div',{class:`urgency-item ${it.tone}`},[el('div',{class:'u-icon',text:it.icon}), el('div',{},[el('div',{class:'u-title',text:it.title}), el('div',{class:'u-sub',text:it.sub})]), el('div',{class:'u-score',text:String(Math.round(it.score||0))})])));
+  return wrap;
+}
+function PositionRiskCompactMobile(limit=3){
+  const rows = topPositionRisks(limit);
+  const board = el('section',{class:'mcc-card'});
+  board.append(el('div',{class:'mcc-card-title',html:`Position Risk <span>${rows.length}/${S.positions?.length||0}</span>`}));
+  if (!rows.length){ board.append(el('div',{class:'empty',text:'目前無持股風險'})); return board; }
+  const list = el('div',{class:'mcc-list'});
+  rows.forEach(r => {
+    const row = el('div',{class:`mcc-row ${r.tone}`});
+    row.append(el('div',{},[el('div',{class:'name',text:`${r.symbol} ${r.name}`.trim()}), el('div',{class:'meta',text:`${uiData(r.tier)} · Adaptive ${r.adaptive} · ${r.reason}`})]));
+    row.append(el('div',{class:'val '+(r.pnl>=0?'up':'dn'),text:isFinite(r.pnl)?fmtPct(r.pnl,1):'—'}));
+    list.append(row);
+  });
+  board.append(list); return board;
+}
+function EffectiveDecisionCompactMobile(){
+  const d = decisionSummaryMeta();
+  const board = el('section',{class:'mcc-card'});
+  board.append(el('div',{class:'mcc-card-title',html:`Effective Decision <span>${d.ai.label}</span>`}));
+  const cmd = getMarketCommandState();
+  const list = el('div',{class:'mcc-list'});
+  list.append(el('div',{class:`mcc-row ${d.tone}`},[el('div',{},[el('div',{class:'name',text:`${d.decision} · ${cmd.action}`}), el('div',{class:'meta',text:d.topSel?`Top selected: ${d.topSel}`:(d.topRej?`Top blocker: ${truncate(d.topRej,56)}`:'等待正式決策資料')})]), el('div',{class:'val',text:d.ai.trust==='trusted'?'TRUST':'CHECK'})]));
+  if (S.dashboard?.finalDecision?.fallbackReason) list.append(el('div',{class:'mcc-row warning'},[el('div',{},[el('div',{class:'name',text:'Fallback reason'}), el('div',{class:'meta',text:S.dashboard.finalDecision.fallbackReason})]), el('div',{class:'val',text:'FB'})]));
+  board.append(list); return board;
+}
+function PositionFocusBoard(){
+  return PositionRiskCompactMobile(3);
+}
+
+function MarketContextBoard(){
+  const intel = S.intelligence || {}, dash = intel.dashboard?.data || S.dashboard || {}, market = intel.market?.data || dash.market || {};
+  const mon = intel.monitor?.data || dash.tradingState || {}, md = intel.monitorDecision?.data || dash.monitorDecision || {};
+  const cap = intel.capital?.data || S.capital || {}, themes = S.intelThemes || [];
+  const grade = p1Val(market.marketGrade || mon.marketGrade || dash.market?.marketGrade, 'UNKNOWN');
+  const decision = String(market.decision || dash.tradeDecision || dash.finalDecisionCode || '').toUpperCase();
+  const riskOff = grade === 'C' || decision === 'REST' || dash.marketState === 'RISK_OFF';
+  const riskOn = ['A','B'].includes(String(grade).toUpperCase()) && !riskOff;
+  const risk = riskOff ? 'OFF' : (riskOn ? 'ON' : 'UNKNOWN');
+  const exposurePct = cap.investedValue!=null && cap.totalAssets ? (Number(cap.investedValue)/Number(cap.totalAssets)*100) : (cap.cashRatio!=null ? (100-Number(cap.cashRatio)*100) : null);
+  const cash = cap.availableCash ?? cap.cashBalance;
+  const rotation = themes.length ? themes.slice(0,3).map(t => `${t.themeName} ${t.direction}`).join(' → ') : 'DATA_MISSING';
+  const board = el('section',{class:'it-board'});
+  board.append(el('div',{class:'it-board-title',html:'Market Context Board <span class="right">P1</span>'}));
+  const card = el('div',{class:'market-board'});
+  card.append(el('div',{class:'market-top'},[
+    el('div',{},[el('div',{class:'risk-word '+(risk==='ON'?'on':risk==='OFF'?'off':''),text:`RISK ${risk}`}),
+      el('div',{class:'market-subline',text:`Grade ${grade} · ${p1Val(market.marketPhase || mon.timeDecayStage, 'DATA_MISSING')} · Monitor ${p1Val(md.monitorMode || mon.monitorMode || dash.monitorState, 'UNKNOWN')}`})]),
+    StatusBadge(risk==='ON'?'SUCCESS':risk==='OFF'?'FAILED':'UNKNOWN', risk)
+  ]));
+  const grid = el('div',{class:'market-grid'});
+  [['Leadership',themes[0]?.themeName||'DATA_MISSING'],['Rotation',themes.length?`${themes[0]?.direction||'→'} ${themes[0]?.lifecycle||'UNKNOWN'}`:'DATA_MISSING'],['Open Pos',cap.openPositionCount??'DATA_MISSING'],['Exposure',exposurePct==null?'DATA_MISSING':Number(exposurePct).toFixed(0)+'%'],['Cash',cash==null?'DATA_MISSING':fmt(cash,0)],['Cash Ratio',cap.cashRatio==null?'DATA_MISSING':Math.round(Number(cap.cashRatio)*100)+'%']]
+    .forEach(([k,v]) => grid.append(el('div',{class:'market-cell'},[el('div',{class:'k',text:k}), el('div',{class:'v',text:String(v)})])));
+  card.append(grid); card.append(el('div',{class:'market-rotation',text:`Rotation Summary: ${rotation}`})); board.append(card); return board;
+}
+function ThemeMeter(label, value, max){
+  const pct = typeof value === 'string' ? 0 : scoreToPct(value, max||10);
+  return el('div',{class:'theme-meter'},[el('div',{class:'label'},[el('span',{text:label}), el('span',{class:'mono',text:value==null?'資料不足':(typeof value==='number'?Number(value).toFixed(1):String(value))})]), el('div',{class:'bar'},[el('span',{style:`width:${pct}%`})])]);
+}
+function ThemeRadarBoard(){
+  const themes = S.intelThemes || [], board = el('section',{class:'it-board'});
+  board.append(el('div',{class:'it-board-title',html:`題材雷達明細 <span class="right">${themes.length || 0} 筆</span>`}));
+  if (!themes.length){ board.append(el('div',{class:'empty',text:'題材資料讀取失敗 / 資料不足'})); return board; }
+  const list = el('div',{class:'theme-radar-list'});
+  themes.forEach(t => {
+    const card = el('div',{class:'theme-card',style:`--theme-color:${t.color};--theme-glow:${t.glow}`});
+    card.append(el('div',{class:'theme-head'},[el('div',{class:'grow'},[el('div',{class:'theme-name truncate',text:t.themeName}), el('span',{class:'life-badge',text:uiTheme(t.lifecycle)})]), el('div',{class:'theme-dir',text:t.direction || '→'})]));
+    card.append(el('div',{class:'theme-metrics'},[ThemeMeter('熱度', Number(t.heat)||0, Math.max(10, Number(t.heat)||10)), ThemeMeter('擁擠', typeof t.crowding==='number'?t.crowding:uiData(t.crowding||'DATA_MISSING'), 10), ThemeMeter('輪動', Number(t.rotation)||0, 1), ThemeMeter('敘事', Number(t.narrative)||0, 10)]));
+    const foot = el('div',{class:'theme-foot'});
+    foot.append(el('span',{class:'mini-chip',text:`波段 ${t.wave!=null?Number(t.wave).toFixed(1):'資料不足'}`}));
+    foot.append(el('span',{class:'mini-chip',text:`領漲 ${uiData(t.leader || t.leaderCount || 'DATA_MISSING')}`}));
+    foot.append(el('span',{class:'mini-chip '+(p1StatusClass(t.dataFreshnessStatus)==='live'?'':'warn'),text:`${uiData(t.dataFreshnessStatus || 'DATA_MISSING')} · ${t.latestDataDate || '資料不足'}`}));
+    [...new Set(t.warnings||[])].slice(0,2).forEach(w => foot.append(el('span',{class:'mini-chip stop',text:uiData(w)})));
+    card.append(foot); list.append(card);
+  });
+  board.append(list); return board;
+}
+function FreshnessBoard(){
+  const expected = ['ThemeReplay','ThemeLifecycle','ReplayMetrics','HotGroupRadar','ResearchUniverse','ThemeIntelligenceSnapshot','KOLManualSignals','NarrativeDailySnapshot'];
+  const layerLabel = {ThemeReplay:'題材回放',ThemeLifecycle:'題材生命週期',ReplayMetrics:'回放指標',HotGroupRadar:'強勢族群雷達',ResearchUniverse:'研究池',ThemeIntelligenceSnapshot:'題材情報快照',KOLManualSignals:'KOL 手動訊號',NarrativeDailySnapshot:'敘事每日快照'};
+  const layers = p1Rows(S.intelligence?.themeFreshness?.data, ['layers']);
+  const byLayer = new Map(layers.map(x => [x.layer, x]));
+  const warnCount = freshnessWarningCount();
+  const board = el('section',{class:'it-board'});
+  board.append(el('div',{class:'it-board-title',html:`資料更新與系統健康 <span class="right">${warnCount} 個警示</span>`}));
+  const list = el('div',{class:'fresh-list'});
+  expected.forEach(name => {
+    const r = byLayer.get(name) || {layer:name, dataFreshnessStatus:'DATA_MISSING'};
+    const status = r.dataFreshnessStatus || r.dataFreshness || 'DATA_MISSING';
+    const row = el('div',{class:`fresh-row ${p1StatusClass(status)}`},[el('div',{},[el('div',{class:'layer',text:layerLabel[name] || name}), el('div',{class:'meta',text:`延遲天數=${r.staleDays ?? '資料不足'} · 資料日=${r.latestDataDate ?? '資料不足'} · 建置=${uiData(r.latestBuildStatus ?? 'DATA_MISSING')} · 耗時=${r.latestBuildDurationMs ?? '資料不足'}ms`})]), el('span',{class:'status',text:uiData(status)})]);
+    list.append(row);
+  });
+  board.append(list); return board;
+}
+
+
+function freshnessBadgeClass(status){
+  const c = p1StatusClass(status);
+  return c === 'live' ? 'active' : (c === 'stale' ? 'review' : (c === 'empty' ? 'invalid' : 'unknown'));
+}
+function thesisStatusMeta(status){
+  const s = String(status||'UNKNOWN').toUpperCase();
+  if (s === 'ACTIVE') return {cls:'active', label:'ACTIVE'};
+  if (s === 'NEEDS_REVIEW') return {cls:'review', label:'NEEDS_REVIEW'};
+  if (s === 'WEAKENING') return {cls:'weak', label:'WEAKENING'};
+  if (s === 'INVALIDATED') return {cls:'invalid', label:'INVALIDATED'};
+  return {cls:'unknown', label:s || 'UNKNOWN'};
+}
+function narrativeItems(){
+  const intel = S.intelligence || {};
+  const out = [];
+  const kol = intel.kolDashboard?.data || {};
+  const nd = intel.narrativeDashboard?.data || {};
+  p1Rows(kol, ['themes']).forEach(t => out.push({source:'KOL', theme:t.themeTag||t.theme||t.themeName||'UNKNOWN', heat:t.signalCount||t.signalCount7d||t.count||0, meta:t.lifecycleStage||t.dataFreshnessStatus||kol.dataFreshnessStatus||'DATA_MISSING'}));
+  ['hottestThemes','emergingThemes','crowdedThemes'].forEach(key => p1Rows(nd?.[key]).forEach(t => out.push({source:key.replace('Themes','').toUpperCase(), theme:t.themeTag||t.theme||t.themeName||String(t), heat:t.narrativeHeat||t.signalCount||0, meta:t.lifecycleStage||nd.dataFreshnessStatus||'DATA_MISSING'})));
+  p1Rows(nd, ['rows']).forEach(r => out.push({source:'NARRATIVE', theme:r.themeTag||r.theme||r.themeName||'UNKNOWN', heat:r.narrativeHeat||r.signalCount||0, meta:r.lifecycleStage||r.warning||nd.dataFreshnessStatus||'DATA_MISSING'}));
+  const seen = new Set();
+  return out.filter(x => { const k=x.source+'|'+x.theme; if(seen.has(k)) return false; seen.add(k); return true; }).slice(0,3);
+}
+function NarrativeCenterBoard(){
+  const intel = S.intelligence || {}, kol = intel.kolDashboard?.data || {}, nd = intel.narrativeDashboard?.data || {}, nt = intel.narrativeThesis?.data || {};
+  const latest = nd.latestSignalDate || kol.latestSignalDate || '資料不足';
+  const stale = nd.staleDays ?? kol.staleDays ?? '資料不足';
+  const status = nd.dataFreshnessStatus || kol.dataFreshnessStatus || 'DATA_MISSING';
+  const warning = nd.warning || kol.warning || (status !== 'LIVE' ? 'MANUAL_INPUT_REQUIRED' : '');
+  const items = narrativeItems();
+  const board = el('section',{class:'it-board'});
+  board.append(el('div',{class:'it-board-title',html:'敘事訊號 <span class="right">AI / 系統</span>'}));
+  const card = el('div',{class:'narrative-board'});
+  card.append(el('div',{class:'narrative-top'},[
+    el('div',{},[el('div',{class:'narrative-title',text: uiData(warning || '敘事訊號')}), el('div',{class:'narrative-sub',text:`最近更新 ${stale} 天前 · 最新日期 ${latest}`})]),
+    el('span',{class:`thesis-badge ${freshnessBadgeClass(status)}`,text:uiData(status)})
+  ]));
+  const chips = el('div',{class:'thesis-tags'});
+  if (warning) chips.append(el('span',{class:'thesis-badge review',text:uiData(warning)}));
+  if (!items.length) chips.append(el('span',{class:'thesis-badge unknown',text:'近期無新訊號'}));
+  card.append(chips);
+  const kpis = el('div',{class:'narrative-kpis'});
+  [['今日訊號', nd.signalCountToday ?? kol.signalCountToday ?? '資料不足'], ['近 7 日', nd.signalCount7d ?? kol.signalCount7d ?? '資料不足'], ['KOL 題材', kol.themeCount ?? '資料不足'], ['持股論點', nt.positionCount ?? '資料不足']]
+    .forEach(([k,v]) => kpis.append(el('div',{class:'narrative-kpi'},[el('div',{class:'k',text:k}), el('div',{class:'v',text:String(v)})])));
+  card.append(kpis);
+  const list = el('div',{class:'narrative-items'});
+  if (!items.length) {
+    list.append(el('div',{class:'narrative-item'},[el('div',{class:'name',text:'近期無新訊號'}), el('div',{class:'meta',text:`最近更新 ${stale} 天前 · 需手動更新`})]));
+  } else items.forEach(it => list.append(el('div',{class:'narrative-item'},[el('div',{class:'name',text:it.theme}), el('div',{class:'meta',text:`${it.source} · 熱度 ${it.heat ?? '資料不足'} · ${uiData(it.meta)}`})])));
+  p1Rows(nt, ['items']).slice(0,3).forEach(it => list.append(el('div',{class:'narrative-item'},[el('div',{class:'name',text:`${it.symbol} ${it.stockName||''}`.trim()}), el('div',{class:'meta',text:`論點 ${uiThesis(it.thesisStatus)} · 敘事 ${it.narrativeHeat ?? '資料不足'} · ${uiData(it.themeContextStatus)}`})])));
+  card.append(list); board.append(card); return board;
+}
+function buildThesisRows(){
+  const thesis = p1Rows(S.intelligence?.positionThesis?.data, ['items']);
+  const narr = new Map(p1Rows(S.intelligence?.narrativeThesis?.data, ['items']).map(x => [String(x.symbol), x]));
+  const pos = new Map((S.positions||[]).map(x => [String(x.symbol), x]));
+  const q = S.quotes || {};
+  const syms = new Set([...thesis.map(x=>String(x.symbol)), ...(S.positions||[]).map(x=>String(x.symbol))]);
+  return [...syms].filter(Boolean).map(sym => {
+    const t = thesis.find(x => String(x.symbol)===sym) || {};
+    const n = narr.get(sym) || {};
+    const p = pos.get(sym) || {};
+    const quote = q[sym] || {};
+    const avg = t.avgCost ?? p.avgCost;
+    const cur = quote.currentPrice ?? p.currentPrice;
+    const pnlPct = cur!=null && avg ? ((Number(cur)-Number(avg))/Number(avg)*100) : p.unrealizedPnlPct;
+    return {...p, ...t, narrativeHeat:n.narrativeHeat ?? t.narrativeHeat, currentPrice:cur, avgCost:avg, unrealizedPnlPct:pnlPct, stockName:t.stockName||p.stockName||quote.stockName};
+  });
+}
+function PortfolioThesisBoard(){
+  const rows = buildThesisRows();
+  const board = el('section',{class:'it-board'});
+  board.append(el('div',{class:'it-board-title',html:`持股論點檢視 <span class="right">${rows.length} 檔</span>`}));
+  if (!rows.length){ board.append(el('div',{class:'empty',text:'持股論點資料讀取失敗 / 資料不足'})); return board; }
+  const list = el('div',{class:'thesis-list'});
+  rows.forEach(r => {
+    const meta = thesisStatusMeta(r.thesisStatus);
+    const missingTheme = !r.primaryTheme;
+    const staleTheme = String(r.themeContextStatus||'').toUpperCase()==='STALE';
+    const card = el('div',{class:`thesis-card ${meta.cls}`});
+    card.append(el('div',{class:'thesis-head'},[
+      el('div',{},[el('div',{},[el('span',{class:'thesis-symbol',text:r.symbol||'UNKNOWN'}), el('span',{class:'thesis-name',text:r.stockName||''})]), el('div',{class:'thesis-price',text:`px ${fmtPrice(r.currentPrice)} · cost ${fmtPrice(r.avgCost)} · pnl ${r.unrealizedPnlPct==null?'DATA_MISSING':fmtPct(r.unrealizedPnlPct,2)}`})]),
+      el('span',{class:`thesis-badge ${meta.cls}`,text:uiThesis(meta.label)})
+    ]));
+    const grid = el('div',{class:'thesis-grid'});
+    [['題材', r.primaryTheme || '題材資料整理中'], ['生命週期', uiTheme(r.themeLifecycle || 'UNKNOWN')], ['波段', uiData(r.wavePhase || 'UNKNOWN')], ['信心', r.thesisConfidence!=null?Number(r.thesisConfidence).toFixed(2):'資料不足'], ['敘事', r.narrativeHeat!=null?Number(r.narrativeHeat).toFixed(1):'資料不足'], ['延遲天數', r.themeStaleDays ?? '資料不足']]
+      .forEach(([k,v]) => grid.append(el('div',{class:'thesis-cell'},[el('div',{class:'k',text:k}), el('div',{class:'v',text:String(v)})])));
+    card.append(grid);
+    const tags = el('div',{class:'thesis-tags'});
+    tags.append(el('span',{class:`thesis-badge ${freshnessBadgeClass(r.themeContextStatus)}`,text:uiData(r.themeContextStatus||'DATA_MISSING')}));
+    if (missingTheme) tags.append(el('span',{class:'thesis-badge invalid',text:'題材資料整理中'}));
+    if (staleTheme) tags.append(el('span',{class:'thesis-badge review',text:'題材資料延遲'}));
+    card.append(tags);
+    card.append(el('div',{class:'thesis-reason',text:truncate(uiReason(r.latestReviewReason || r.reviewReason || r.thesisSummary || '資料不足'), 150)}));
+    list.append(card);
+  });
+  board.append(list); return board;
+}
+
 function HealthPill(tier){
   const m = tierMeta(tier);
   return `<span class="health-pill ${m.cls}">${m.label}</span>`;
@@ -627,6 +1306,128 @@ function buildHealthIndexes(payload){
   S.healthBySymbol = {};
   (payload?.positions || []).forEach(h => { if (h?.symbol) S.healthBySymbol[h.symbol] = h; });
 }
+function setAdaptiveExitState(resp){
+  S.adaptiveExitReview = resp || null;
+  S.adaptiveExitBySymbol = {};
+  if (resp?.ok === true && Array.isArray(resp.data?.items)) {
+    resp.data.items.forEach(it => { if (it?.symbol) S.adaptiveExitBySymbol[it.symbol] = it; });
+  }
+}
+function p1ErrBox(resp, label){
+  if (resp?.ok === false) return el('div',{class:'p1-error',text:`${label} 載入失敗：${resp.error || 'API_ERROR'}`});
+  return null;
+}
+function renderHealthDataGapsMobile(){
+  const resp = S.healthDataGaps;
+  if (resp?.ok === false) return p1ErrBox(resp, 'Health Data Gaps');
+  const d = resp?.data || resp;
+  if (!d) return null;
+  const rows = asRows(d);
+  const total = d.totalGaps ?? d.gapCount ?? rows.length ?? 0;
+  const critical = d.criticalCount ?? d.blockingCount ?? rows.filter(r => /CRITICAL|BLOCK|HIGH/.test(String(r.severity||r.level||'').toUpperCase())).length;
+  const card = el('div',{class:'card'});
+  card.append(el('div',{class:'p1-card-title'},[
+    el('span',{text:'Health Data Gaps'}),
+    el('span',{class:'badge '+(critical>0?'stop':total>0?'wait':'buy'),text: critical>0?'DATA RISK':total>0?'GAPS':'OK'})
+  ]));
+  card.append(MetricStrip([
+    {label:'缺口', value:String(total)},
+    {label:'高風險', value:String(critical), cls:critical>0?'dn':'up'},
+    {label:'模式', value:d.mode || d.status || d.healthMode || 'health-v2', mono:false},
+  ]));
+  if (rows.length) {
+    const body = el('div');
+    rows.slice(0,6).forEach(r => body.append(themeCard(r.symbol || r.field || r.key || 'DATA GAP', {
+      type:r.gapType || r.issueType || r.type, severity:r.severity || r.level, reason:truncate(r.reason || r.message || r.description || '', 56)
+    }, r.severity || 'GAP')));
+    card.append(CollapsibleSection('缺資料明細', body, {open:false}));
+  } else {
+    card.append(el('div',{class:'p1-note',text:d.summary || d.safetyNote || 'health-v2 未回報資料缺口。'}));
+  }
+  return card;
+}
+function AdaptiveExitBlock(item){
+  if (!item) return null;
+  const body = el('div');
+  body.append(el('div',{class:'p1-kv'},[
+    el('span',{class:'k',text:'Thesis'}), el('span',{class:'v',text:`${item.thesisStatus || '—'} · ${truncate(item.thesisSummary || '', 70)}`}),
+    el('span',{class:'k',text:'Invalid'}), el('span',{class:'v',text:truncate(item.invalidationCondition || '', 70) || '—'}),
+    el('span',{class:'k',text:'Theme'}), el('span',{class:'v',text:`${item.themeLifecycle || '—'} · stale ${item.themeStaleDays ?? '—'}d`}),
+    el('span',{class:'k',text:'Heat/Risk'}), el('span',{class:'v',text:`heat ${item.narrativeHeat ?? '—'} · crowding ${item.crowdingRisk || '—'}`}),
+    el('span',{class:'k',text:'Wave'}), el('span',{class:'v',text:`${item.wavePhase || '—'} · rotation ${item.rotationStrength ?? '—'}`}),
+    el('span',{class:'k',text:'Inst/Sector'}), el('span',{class:'v',text:`${item.institutionalAlignment || '—'} · ${item.sectorLeadership || '—'}`}),
+  ]));
+  body.append(el('div',{class:'p1-note',text:item.safetyNote || 'Read-only / manual-confirm only.'}));
+  return CollapsibleSection(`Adaptive Exit Review · ${item.recommendation || '—'}`, body, {open:false});
+}
+function DecisionSnapshotCard(snap){
+  const gate = safeJson(snap.gateTraceJson);
+  const trace = safeJson(snap.decisionTraceJson);
+  const selected = summarizeSymbols(snap.selectedSymbolsJson);
+  const rejected = summarizeSymbols(snap.rejectedSymbolsJson);
+  const watch = summarizeSymbols(snap.watchSymbolsJson);
+  const card = el('div',{class:'card a-card'});
+  card.append(el('div',{class:'row1'},[el('div',{},[el('span',{class:'sym',text:snap.tradingDate || 'Decision Snapshot'}), el('span',{class:'badge watch',style:'margin-left:8px',text:snap.aiReadinessMode || snap.aiStatus || 'SNAP'})]) ]));
+  card.append(el('div',{class:'p1-kv'},[
+    el('span',{class:'k',text:'AI'}), el('span',{class:'v',text:`${snap.aiStatus || '—'} · ${snap.aiReadinessMode || '—'}`}),
+    el('span',{class:'k',text:'Task'}), el('span',{class:'v',text:`${snap.sourceTaskType || '—'} → ${snap.preferTaskType || '—'}`}),
+    el('span',{class:'k',text:'Fallback'}), el('span',{class:'v',text:snap.fallbackReason || '—'}),
+    el('span',{class:'k',text:'Symbols'}), el('span',{class:'v',text:`選 ${selected}｜排 ${rejected}｜看 ${watch}`}),
+    el('span',{class:'k',text:'Gate'}), el('span',{class:'v',text:summarizeObj(gate)}),
+    el('span',{class:'k',text:'Trace'}), el('span',{class:'v',text:summarizeObj(trace)}),
+  ]));
+  return card;
+}
+function summarizeSymbols(raw){
+  const v = safeJson(raw);
+  const arr = Array.isArray(v) ? v : (Array.isArray(v?.symbols) ? v.symbols : asRows(v));
+  if (!arr.length) return '0';
+  return arr.slice(0,5).map(x => typeof x === 'string' ? x : (x.symbol || x.code || JSON.stringify(x).slice(0,16))).join(', ') + (arr.length>5?` +${arr.length-5}`:'');
+}
+function summarizeObj(o){
+  if (!o || typeof o !== 'object' || !Object.keys(o).length) return '—';
+  return Object.entries(o).slice(0,4).map(([k,v]) => `${k}:${typeof v==='object'?JSON.stringify(v).slice(0,24):String(v).slice(0,24)}`).join(' · ');
+}
+function FeatureModePanelMobile(){
+  const sr = S.featureModesSummary, fr = S.featureModes;
+  if (sr?.ok === false) return p1ErrBox(sr, 'Feature Mode Summary');
+  const s = sr?.data || sr; const modes = fr?.ok === true ? (Array.isArray(fr.data)?fr.data:asRows(fr.data)) : (Array.isArray(fr)?fr:[]);
+  if (!s && !modes.length) return null;
+  const counts = s?.counts || {};
+  const live = modes.filter(m => m.canAffectLiveDecision || m.liveDecisionAffecting || m.mode === 'LIVE');
+  const card = el('div',{class:'card'});
+  card.append(el('div',{class:'p1-card-title'},[el('span',{text:'Feature Mode Safety'}), el('span',{class:'badge '+((s?.liveDecisionAffecting||live.length)>0?'wait':'buy'),text:`LIVE ${s?.liveDecisionAffecting ?? live.length}`})]));
+  card.append(MetricStrip([
+    {label:'READ_ONLY', value:String(counts.READ_ONLY ?? counts.readOnly ?? modes.filter(m=>m.mode==='READ_ONLY').length)},
+    {label:'SHADOW', value:String(counts.SHADOW ?? modes.filter(m=>m.mode==='SHADOW').length)},
+    {label:'LIVE', value:String(counts.LIVE ?? modes.filter(m=>m.mode==='LIVE').length), cls:(s?.liveDecisionAffecting||live.length)>0?'dn':''},
+  ]));
+  card.append(el('div',{class:'p1-note',text:s?.safetyNote || '顯示哪些模組會影響正式 BUY / SELL / HOLD。'}));
+  const body = el('div');
+  live.slice(0,12).forEach(m => body.append(themeCard(m.displayName || m.featureKey, {mode:m.mode, affects:m.canAffectLiveDecision, impact:truncate(m.decisionImpact || '', 50)}, m.mode)));
+  card.append(CollapsibleSection(`影響正式決策 (${live.length})`, body, {open:false}));
+  return card;
+}
+function MappingQualityPanelMobile(obsResp, qResp){
+  if (obsResp?.ok === false) return p1ErrBox(obsResp, 'Mapping Quality');
+  const o = obsResp?.data || obsResp; const q = qResp?.data || qResp;
+  if (!o) return null;
+  const byPri = q?.byReviewPriority || {};
+  const card = el('div',{class:'card'});
+  card.append(el('div',{class:'p1-card-title'},[el('span',{text:'Mapping Quality'}), el('span',{class:'badge '+(String(o.taxonomyQualityStatus||'').includes('WARN')?'wait':'buy'),text:o.taxonomyQualityStatus || 'QUALITY'})]));
+  card.append(MetricStrip([
+    {label:'缺分類', value:String(o.missingCategoryCount ?? '—'), cls:o.missingCategoryCount>0?'dn':''},
+    {label:'低信心', value:String(o.lowConfidenceCount ?? '—'), cls:o.lowConfidenceCount>0?'dn':''},
+    {label:'歧義代號', value:String(o.ambiguousSymbolCount ?? '—'), cls:o.ambiguousSymbolCount>0?'dn':''},
+    {label:'Other%', value:o.otherCategoryRatio!=null?Number(o.otherCategoryRatio).toFixed(1)+'%':'—'},
+    {label:'待審', value:String(q?.totalReviewItems ?? '—')},
+  ]));
+  const warns = Array.isArray(o.qualityWarnings) ? o.qualityWarnings : [];
+  card.append(el('div',{class:'p1-note',text:warns.length ? warns.slice(0,3).join(' / ') : (o.taxonomyQualitySummary || o.safetyNote || '題材 mapping 無重大警示。')}));
+  card.append(el('div',{class:'p1-chiprow'}, Object.entries(byPri).map(([k,v]) => el('span',{class:'p1-chip',text:`${k} ${v}`}))));
+  return card;
+}
+
 function PositionHealthHero(){
   const h = S.portfolioHealth || {};
   const rows = h.positions || [];
@@ -766,14 +1567,14 @@ function AIStatusPill(fd){
   const ready = (fd?.aiStatus || '').toUpperCase();
   const fb = (fd?.fallbackReason || '').toUpperCase();
   let readyCls='warn', readyTxt='AI 未知';
-  if (ready==='FULL_AI_READY'){ readyCls='ok'; readyTxt='AI READY'; }
-  else if (ready==='PARTIAL_AI_READY'){ readyCls='warn'; readyTxt='AI PARTIAL'; }
+  if (ready==='FULL_AI_READY'){ readyCls='ok'; readyTxt='AI 正常'; }
+  else if (ready==='PARTIAL_AI_READY'){ readyCls='warn'; readyTxt='AI 部分完成'; }
   else if (ready==='AI_NOT_READY'){ readyCls='alert'; readyTxt='AI 未就緒'; }
-  let claudeCls='ok', claudeTxt='Claude OK';
-  let codexCls='ok', codexTxt='Codex OK';
+  let claudeCls='ok', claudeTxt='Claude 正常';
+  let codexCls='ok', codexTxt='Codex 正常';
   if (fb==='CODEX_MISSING' || ready==='PARTIAL_AI_READY'){ codexCls='alert'; codexTxt='Codex 未完成'; }
   if (fb==='AI_NOT_READY' || ready==='AI_NOT_READY'){ claudeCls='alert'; claudeTxt='Claude 未完成'; codexCls='alert'; codexTxt='Codex 未完成'; }
-  if (fb==='AI_TIMEOUT'){ claudeCls='alert'; claudeTxt='AI Timeout'; codexCls='alert'; codexTxt='AI Timeout'; }
+  if (fb==='AI_TIMEOUT'){ claudeCls='alert'; claudeTxt='AI 逾時'; codexCls='alert'; codexTxt='AI 逾時'; }
   pills.append(el('span',{class:'ai-pill '+readyCls,text:readyTxt}));
   pills.append(el('span',{class:'ai-pill '+claudeCls,text:claudeTxt}));
   pills.append(el('span',{class:'ai-pill '+codexCls,text:codexTxt}));
@@ -901,6 +1702,8 @@ function PositionCard(p, quote){
 
   const hb = PositionHealthBlock(hraw);
   if (hb) card.append(hb);
+  const ab = AdaptiveExitBlock(S.adaptiveExitBySymbol[p.symbol]);
+  if (ab) card.append(ab);
 
   const acts = el('div',{class:'actions'});
   ['hold','add','reduce','exit'].forEach(act => {
@@ -981,77 +1784,117 @@ function CollapsibleSection(title, bodyNode, opts={}){
 /* ════════════════════════════════════════════════════════════════
    data load — split into per-tab fetchers + global
 ════════════════════════════════════════════════════════════════ */
-async function fetchCommon(){
+async function fetchCommon(opts={}){
   /* always-needed: dashboard + capital so AI status / hero sticky on every tab */
   const [dashboard, capital] = await Promise.all([
-    safeFetch('/api/dashboard/current'),
-    safeFetch('/api/capital/summary')
+    safeFetch('/api/dashboard/current', 8000, opts),
+    safeFetch('/api/capital/summary', 8000, opts)
   ]);
+  if (!isRouteCurrent(opts.token)) return;
   S.dashboard = dashboard;
   S.capital   = capital;
 }
-async function fetchOverview(){
-  const [candidates, positions, health] = await Promise.all([
-    safeFetch('/api/candidates/latest'),
-    safeFetch('/api/positions/open?size=10'),
-    safeFetch('/api/portfolio/health-v2'),
+async function fetchIntelligenceP1(opts={}){
+  const d = localYmd();
+  const urls = {
+    market:'/api/market/current?preferToday=true', monitor:'/api/monitor/current',
+    monitorDecision:'/api/monitor/decisions/current',
+    themeIntelligence:'/api/theme-intelligence/summary', themeReplay:'/api/theme-replay?date='+encodeURIComponent(d),
+    lifecycle:'/api/themes/lifecycle?date='+encodeURIComponent(d), hotGroups:'/api/hot-groups/radar?date='+encodeURIComponent(d)+'&phase=POSTMARKET',
+    themeFreshness:'/api/ops/theme-freshness', buildStatus:'/api/ops/build-status', staleReport:'/api/ops/stale-data-report',
+    kolDashboard:'/api/kol-signals/dashboard', narrativeDashboard:'/api/narrative/dashboard', narrativeThesis:'/api/narrative-thesis/open-positions',
+    positionThesis:'/api/position-thesis-ledger/open'
+  };
+  const entries = await Promise.all(Object.entries(urls).map(async ([k,u]) => [k, await p1Fetch(u, 8000, opts)]));
+  if (!isRouteCurrent(opts.token)) return;
+  const intelligence = Object.fromEntries(entries);
+  if (!intelligence.dashboard) intelligence.dashboard = {ok:!!S.dashboard, data:S.dashboard, error:S.dashboard?null:'API_ERROR missing dashboard'};
+  if (!intelligence.capital) intelligence.capital = {ok:!!S.capital, data:S.capital, error:S.capital?null:'API_ERROR missing capital'};
+  S.intelligence = intelligence;
+  S.intelThemes = buildP1Themes();
+}
+
+async function fetchOverview(opts={}){
+  const [candidates, positions, health, adaptive, gaps] = await Promise.all([
+    safeFetch('/api/candidates/latest', 8000, opts),
+    safeFetch('/api/positions/open?size=10', 8000, opts),
+    safeFetch('/api/portfolio/health-v2', 8000, opts),
+    p1Fetch('/api/adaptive-exit-review/open-positions', 8000, opts),
+    p1Fetch('/api/portfolio/health-v2/data-gaps', 8000, opts),
   ]);
+  if (!isRouteCurrent(opts.token)) return;
   S.candidates = Array.isArray(candidates) ? candidates : [];
   updateCandidateMeta(S.candidates);
   S.positions  = Array.isArray(positions) ? positions : [];
   buildHealthIndexes(health);
-  await fetchQuotes();
+  setAdaptiveExitState(adaptive);
+  S.healthDataGaps = gaps;
+  await fetchQuotes(null, opts);
 }
-async function fetchQuotes(){
-  const syms = new Set();
-  S.candidates?.forEach(c => c.symbol && syms.add(c.symbol));
-  S.positions?.forEach(p => p.symbol && syms.add(p.symbol));
+async function fetchQuotes(symbols=null, opts={}){
+  const syms = new Set(symbols || []);
+  if (!symbols) {
+    S.candidates?.forEach(c => c.symbol && syms.add(c.symbol));
+    S.positions?.forEach(p => p.symbol && syms.add(p.symbol));
+  }
   if (!syms.size){ S.quotes = {}; return; }
   const csv = [...syms].join(',');
   // mobile 持倉頁需要查任意 symbol；candidate endpoint 只回今日候選股，像 00631L 這類持倉不一定會回。
-  const quotes = await safeFetch('/api/positions/live-quotes?symbols='+encodeURIComponent(csv));
+  const quotes = await safeFetch('/api/positions/live-quotes?symbols='+encodeURIComponent(csv), 8000, opts);
+  if (!isRouteCurrent(opts.token)) return;
   S.quotes = {};
   if (Array.isArray(quotes)) for (const q of quotes) if (q?.symbol) S.quotes[q.symbol] = q;
 }
-async function fetchCandidatesTab(){
-  const cands = await safeFetch('/api/candidates/latest');
+async function fetchCandidatesTab(opts={}){
+  const cands = await safeFetch('/api/candidates/latest', 8000, opts);
+  if (!isRouteCurrent(opts.token)) return;
   S.candidates = Array.isArray(cands) ? cands : [];
   updateCandidateMeta(S.candidates);
-  await fetchQuotes();
+  await fetchQuotes(S.candidates.map(c => c.symbol).filter(Boolean), opts);
 }
-async function fetchPositionsTab(){
-  const [ps, health] = await Promise.all([
-    safeFetch('/api/positions/open?size=20'),
-    safeFetch('/api/portfolio/health-v2')
+async function fetchPositionsTab(opts={}){
+  const [ps, health, adaptive, gaps] = await Promise.all([
+    safeFetch('/api/positions/open?size=20', 8000, opts),
+    safeFetch('/api/portfolio/health-v2', 8000, opts),
+    p1Fetch('/api/adaptive-exit-review/open-positions', 8000, opts),
+    p1Fetch('/api/portfolio/health-v2/data-gaps', 8000, opts)
   ]);
+  if (!isRouteCurrent(opts.token)) return;
   S.positions = Array.isArray(ps) ? ps : [];
   buildHealthIndexes(health);
-  await fetchQuotes();
+  setAdaptiveExitState(adaptive);
+  S.healthDataGaps = gaps;
+  await fetchQuotes(S.positions.map(p => p.symbol).filter(Boolean), opts);
 }
-async function fetchPnlTab(){
+async function fetchPnlTab(opts={}){
   const [daily, p20, p90, drawdown, paperStats, paperRecent] = await Promise.all([
-    safeFetch('/api/pnl/daily'),
-    safeFetch('/api/pnl/summary?days=20'),
-    safeFetch('/api/pnl/summary?days=90'),
-    safeFetch('/api/pnl/drawdown?days=90'),
-    safeFetch('/api/paper/stats?days=30'),
-    safeFetch('/api/paper/recent?limit=5'),
+    safeFetch('/api/pnl/daily', 8000, opts),
+    safeFetch('/api/pnl/summary?days=20', 8000, opts),
+    safeFetch('/api/pnl/summary?days=90', 8000, opts),
+    safeFetch('/api/pnl/drawdown?days=90', 8000, opts),
+    safeFetch('/api/paper/stats?days=30', 8000, opts),
+    safeFetch('/api/paper/recent?limit=5', 8000, opts),
   ]);
+  if (!isRouteCurrent(opts.token)) return;
   S.pnlDaily = daily; S.pnl20 = p20; S.pnl90 = p90; S.drawdown = drawdown;
   S.paperStats = paperStats; S.paperRecent = Array.isArray(paperRecent) ? paperRecent : [];
 }
-async function fetchDecisionsTab(){
-  const [hist, hourly, monitor] = await Promise.all([
-    safeFetch('/api/decisions/history?limit=30'),
-    safeFetch('/api/decisions/hourly-gate/history?limit=20'),
-    safeFetch('/api/monitor/decisions/history?limit=30'),
+async function fetchDecisionsTab(opts={}){
+  const [hist, hourly, monitor, snapshots] = await Promise.all([
+    safeFetch('/api/decisions/history?limit=30', 8000, opts),
+    safeFetch('/api/decisions/hourly-gate/history?limit=20', 8000, opts),
+    safeFetch('/api/monitor/decisions/history?limit=30', 8000, opts),
+    p1Fetch('/api/decision-snapshots/recent', 8000, opts),
   ]);
+  if (!isRouteCurrent(opts.token)) return;
   S.decisionsHistory = Array.isArray(hist) ? hist : [];
   S.hourlyHistory    = Array.isArray(hourly) ? hourly : [];
   S.monitorHistory   = Array.isArray(monitor) ? monitor : [];
+  S.decisionSnapshots = snapshots;
 }
-async function fetchResearchTab(){
-  const notes = await safeFetch('/api/notifications?limit=20');
+async function fetchResearchTab(opts={}){
+  const notes = await safeFetch('/api/notifications?limit=20', 8000, opts);
+  if (!isRouteCurrent(opts.token)) return;
   S.notifications = Array.isArray(notes) ? notes : [];
 }
 function asRows(x){
@@ -1062,42 +1905,51 @@ function asRows(x){
   }
   return [];
 }
-async function fetchThemeOpsTab(date){
+async function fetchThemeOpsTab(date, opts={}){
   const d = date || S.themeOpsDate || localYmd();
   S.themeOpsDate = d;
-  const [meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision] = await Promise.all([
-    safeFetch('/api/dashboard/theme-first?date='+encodeURIComponent(d)),
-    safeFetch('/api/ops/daily-summary?date='+encodeURIComponent(d)),
-    safeFetch('/api/replay-metrics/safety-summary?date='+encodeURIComponent(d)),
-    safeFetch('/api/ops/build-traces?date='+encodeURIComponent(d)),
-    safeFetch('/api/hot-groups/radar?date='+encodeURIComponent(d)+'&phase=POSTMARKET'),
-    safeFetch('/api/hot-groups/candidate-feed?date='+encodeURIComponent(d)+'&phase=POSTMARKET'),
-    safeFetch('/api/promotion-review/queue?date='+encodeURIComponent(d)),
-    safeFetch('/api/theme-replay?date='+encodeURIComponent(d)),
-    safeFetch('/api/themes/lifecycle?date='+encodeURIComponent(d)),
-    safeFetch('/api/research-universe?date='+encodeURIComponent(d)),
-    safeFetch('/api/candidates/current'),
-    safeFetch('/api/decisions/current')
+  const [meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision, mappingObs, reviewQueue] = await Promise.all([
+    safeFetch('/api/dashboard/theme-first?date='+encodeURIComponent(d), 8000, opts),
+    safeFetch('/api/ops/daily-summary?date='+encodeURIComponent(d), 8000, opts),
+    safeFetch('/api/replay-metrics/safety-summary?date='+encodeURIComponent(d), 8000, opts),
+    safeFetch('/api/ops/build-traces?date='+encodeURIComponent(d), 8000, opts),
+    safeFetch('/api/hot-groups/radar?date='+encodeURIComponent(d)+'&phase=POSTMARKET', 8000, opts),
+    safeFetch('/api/hot-groups/candidate-feed?date='+encodeURIComponent(d)+'&phase=POSTMARKET', 8000, opts),
+    safeFetch('/api/promotion-review/queue?date='+encodeURIComponent(d), 8000, opts),
+    safeFetch('/api/theme-replay?date='+encodeURIComponent(d), 8000, opts),
+    safeFetch('/api/themes/lifecycle?date='+encodeURIComponent(d), 8000, opts),
+    safeFetch('/api/research-universe?date='+encodeURIComponent(d), 8000, opts),
+    safeFetch('/api/candidates/current', 8000, opts),
+    safeFetch('/api/decisions/current', 8000, opts),
+    p1Fetch('/api/themes/mappings/observability', 8000, opts),
+    p1Fetch('/api/themes/mappings/manual-review-queue', 8000, opts)
   ]);
-  S.themeOps = {meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision};
+  if (!isRouteCurrent(opts.token)) return;
+  S.themeOps = {meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision, mappingObs, reviewQueue};
 }
-async function fetchSchedulerTab(){
+async function fetchSchedulerTab(opts={}){
   const [jobs, tasks, today] = await Promise.all([
-    safeFetch('/api/scheduler/jobs'),
-    safeFetch('/actuator/scheduledtasks'),
-    safeFetch('/api/orchestration/tasks/today'),
+    safeFetch('/api/scheduler/jobs', 8000, opts),
+    safeFetch('/actuator/scheduledtasks', 8000, opts),
+    safeFetch('/api/orchestration/tasks/today', 8000, opts),
   ]);
+  if (!isRouteCurrent(opts.token)) return;
   S.schedulerJobs   = Array.isArray(jobs) ? jobs : [];
   S.scheduledTasks  = tasks;
   S.orchestrationToday = Array.isArray(today) ? today : [];
 }
-async function fetchAdvancedTab(){
-  const [health, themes] = await Promise.all([
-    safeFetch('/api/system/migration/health'),
-    safeFetch('/api/themes/mappings'),
+async function fetchAdvancedTab(opts={}){
+  const [health, themes, featureSummary, featureModes] = await Promise.all([
+    safeFetch('/api/system/migration/health', 8000, opts),
+    safeFetch('/api/themes/mappings', 8000, opts),
+    p1Fetch('/api/feature-modes/summary', 8000, opts),
+    p1Fetch('/api/feature-modes', 8000, opts),
   ]);
+  if (!isRouteCurrent(opts.token)) return;
   S.migrationHealth = health;
   S.themeMappings = Array.isArray(themes) ? themes : [];
+  S.featureModesSummary = featureSummary;
+  S.featureModes = featureModes;
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -1106,80 +1958,53 @@ async function fetchAdvancedTab(){
 const Views = {};
 
 /* 1. overview */
-Views.overview = async () => {
-  setHeader('總覽');
+Views.overview = async (ctx={}) => {
+  setHeader('市場');
   const app = $('app'); app.innerHTML = '';
-  await fetchCommon(); await fetchOverview();
+  await fetchCommon(ctx); if (!isRouteCurrent(ctx.token)) return;
+  await fetchIntelligenceP1(ctx); if (!isRouteCurrent(ctx.token)) return;
+  await fetchOverview(ctx); if (!isRouteCurrent(ctx.token)) return;
 
-  const fd = S.dashboard?.finalDecision;
-  app.append(DecisionHero(fd));
-  app.append(AIStatusPill(fd));
+  app.append(MarketCommandHeroMobile());
+  app.append(UrgencyStripMobile());
+  app.append(ThemeRadarCompact(3));
+  app.append(PositionRiskCompactMobile(3));
+  app.append(EffectiveDecisionCompactMobile());
 
-  // quick filter chips
-  const chips = el('div',{class:'chips',id:'filters'});
-  ['all','buy','wait','position'].forEach(f => {
-    const labels = {all:'全部', buy:'可買', wait:'等待', position:'持倉'};
-    const ch = el('button',{class:'chip'+(S.filter===f?' active':''), dataset:{f}, html:`${labels[f]}<span class="badge-num" id="bg-${f}">·</span>`});
-    ch.addEventListener('click', () => {
-      S.filter = f; localStorage.setItem('mobile.filter', f);
-      Views.overview(); // re-render lightweight
-    });
-    chips.append(ch);
-  });
-  app.append(chips);
-
-  // action list
-  const showActions = S.filter !== 'position';
-  const showPositions = S.filter === 'all' || S.filter === 'position';
-  if (showActions){
-    const actSec = el('section',{class:'section'});
-    actSec.append(el('div',{class:'section-title',html:`${candidateTitle('行動清單')} ${candidateMetaBadge()} <span class="count">${S.candidates?.length||0}</span>`}));
-    if (!S.candidates?.length){
-      actSec.append(el('div',{class:'empty',text:'目前無候選股'}));
-    } else {
-      let nBuy=0, nWait=0;
-      S.candidates.forEach(c => {
-        const q = S.quotes[c.symbol];
-        const hint = classifyCandidate(c, q);
-        if (S.filter==='buy' && hint.cls!=='buy') return;
-        if (S.filter==='wait' && hint.cls!=='wait' && hint.cls!=='watch') return;
-        actSec.append(StockActionCard(c, q));
-        if (hint.cls==='buy') nBuy++;
-        else if (hint.cls==='wait') nWait++;
-      });
-      const bgB = $('bg-buy'), bgW = $('bg-wait'), bgP = $('bg-position');
-      if (bgB) bgB.textContent = String(nBuy);
-      if (bgW) bgW.textContent = String(nWait);
-      if (bgP) bgP.textContent = String(S.positions?.length||0);
-    }
-    app.append(actSec);
-  }
-  if (showPositions){
-    app.append(PositionHealthHero());
-    const posSec = el('section',{class:'section'});
-    posSec.append(el('div',{class:'section-title',html:`持倉 <span class="count">${S.positions?.length||0} 檔</span>`}));
-    if (!S.positions?.length) posSec.append(el('div',{class:'empty',text:'目前無持倉，等待下一個高品質 setup'}));
-    else S.positions.forEach(p => posSec.append(PositionCard(p, S.quotes[p.symbol])));
-    app.append(posSec);
-  }
-
-  // capital strip
-  app.append(buildCapitalStrip());
+  const detail = el('div');
+  const warn = DataWarningBanner(); if (warn) detail.append(warn);
+  detail.append(AIStatusPill(S.dashboard?.finalDecision));
+  detail.append(MarketPulseHero());
+  const actSec = el('section',{class:'section'});
+  actSec.append(el('div',{class:'section-title',html:`${candidateTitle('候選股完整清單')} ${candidateMetaBadge()} <span class="count">${S.candidates?.length||0}</span>`}));
+  if (!S.candidates?.length) actSec.append(el('div',{class:'empty',text:'目前無候選股'}));
+  else S.candidates.forEach(c => actSec.append(StockActionCard(c, S.quotes[c.symbol])));
+  detail.append(actSec);
+  const gaps = renderHealthDataGapsMobile(); if (gaps) detail.append(gaps);
+  detail.append(PositionHealthHero());
+  const posSec = el('section',{class:'section'});
+  posSec.append(el('div',{class:'section-title',html:`持倉完整卡 <span class="count">${S.positions?.length||0} 檔</span>`}));
+  if (!S.positions?.length) posSec.append(el('div',{class:'empty',text:'目前無持倉'}));
+  else S.positions.forEach(p => posSec.append(PositionCard(p, S.quotes[p.symbol])));
+  detail.append(posSec);
+  detail.append(buildCapitalStrip());
+  app.append(CollapsibleSection('Drilldown：交易細節 / P1 widgets', detail, {open:false}));
 };
 
 /* 2. candidates */
-Views.candidates = async () => {
+Views.candidates = async (ctx={}) => {
   setHeader('候選股');
   const app = $('app'); app.innerHTML = '';
-  await fetchCommon(); await fetchCandidatesTab();
+  await fetchCommon(ctx); if (!isRouteCurrent(ctx.token)) return;
+  await fetchCandidatesTab(ctx); if (!isRouteCurrent(ctx.token)) return;
   app.append(AIStatusPill(S.dashboard?.finalDecision));
 
   const filterRow = el('div',{class:'chips'});
   const filters = [
     {k:'all',  label:'全部'},
-    {k:'buy',  label:'BUY'},
-    {k:'wait', label:'WAIT'},
-    {k:'watch',label:'WATCH'},
+    {k:'buy',  label:'可買'},
+    {k:'wait', label:'等待'},
+    {k:'watch',label:'觀察'},
     {k:'skip', label:'排除'},
   ];
   let activeFilter = localStorage.getItem('mobile.candFilter') || 'all';
@@ -1212,12 +2037,14 @@ Views.candidates = async () => {
 };
 
 /* 3. positions */
-Views.positions = async () => {
-  setHeader('持倉');
+Views.positions = async (ctx={}) => {
+  setHeader('持股');
   const app = $('app'); app.innerHTML = '';
-  await fetchCommon(); await fetchPositionsTab();
+  await fetchCommon(ctx); if (!isRouteCurrent(ctx.token)) return;
+  await fetchPositionsTab(ctx); if (!isRouteCurrent(ctx.token)) return;
   app.append(AIStatusPill(S.dashboard?.finalDecision));
   app.append(PositionHealthHero());
+  const gaps = renderHealthDataGapsMobile(); if (gaps) app.append(gaps);
 
   const cap = S.capital;
   app.append(MetricStrip([
@@ -1239,10 +2066,12 @@ Views.positions = async () => {
 };
 
 /* 4. pnl */
-Views.pnl = async () => {
+Views.pnl = async (ctx={}) => {
   setHeader('損益');
   const app = $('app'); app.innerHTML = '';
-  await fetchCommon(); await fetchPnlTab(); await fetchPositionsTab();
+  await fetchCommon(ctx); if (!isRouteCurrent(ctx.token)) return;
+  await fetchPnlTab(ctx); if (!isRouteCurrent(ctx.token)) return;
+  await fetchPositionsTab(ctx); if (!isRouteCurrent(ctx.token)) return;
 
   const cap = S.capital, today = S.pnlDaily;
   app.append(MetricStrip([
@@ -1354,11 +2183,20 @@ Views.pnl = async () => {
 };
 
 /* 5. decisions */
-Views.decisions = async () => {
+Views.decisions = async (ctx={}) => {
   setHeader('決策歷史');
   const app = $('app'); app.innerHTML = '';
-  await fetchCommon(); await fetchDecisionsTab();
+  await fetchCommon(ctx); if (!isRouteCurrent(ctx.token)) return;
+  await fetchDecisionsTab(ctx); if (!isRouteCurrent(ctx.token)) return;
   app.append(AIStatusPill(S.dashboard?.finalDecision));
+  const snapErr = p1ErrBox(S.decisionSnapshots, 'Decision Snapshot'); if (snapErr) app.append(snapErr);
+  const snapRows = S.decisionSnapshots?.ok === true ? (Array.isArray(S.decisionSnapshots.data) ? S.decisionSnapshots.data : asRows(S.decisionSnapshots.data)) : [];
+  if (snapRows.length){
+    const sec = el('section',{class:'section'});
+    sec.append(el('div',{class:'section-title',html:`Decision Snapshot <span class="count">${snapRows.length}</span>`}));
+    snapRows.slice(0,5).forEach(x => sec.append(DecisionSnapshotCard(x)));
+    app.append(sec);
+  }
 
   // 切換 chips
   const tabs = [
@@ -1422,12 +2260,57 @@ Views.decisions = async () => {
   render();
 };
 
-/* 6. research */
-Views.research = async () => {
+/* 6. review */
+Views.review = async (ctx={}) => {
+  setHeader('回顧');
+  const app = $('app'); app.innerHTML = '';
+  await fetchCommon(ctx); if (!isRouteCurrent(ctx.token)) return;
+  await fetchDecisionsTab(ctx); if (!isRouteCurrent(ctx.token)) return;
+  await fetchThemeOpsTab(null, ctx); if (!isRouteCurrent(ctx.token)) return;
+  await fetchAdvancedTab(ctx); if (!isRouteCurrent(ctx.token)) return;
+  app.append(EffectiveDecisionCompactMobile());
+  const snapRows = S.decisionSnapshots?.ok === true ? (Array.isArray(S.decisionSnapshots.data) ? S.decisionSnapshots.data : asRows(S.decisionSnapshots.data)) : [];
+  const snap = el('div');
+  if (!snapRows.length) snap.append(el('div',{class:'empty',text:'無 Decision Snapshot'}));
+  else snapRows.slice(0,5).forEach(x => snap.append(DecisionSnapshotCard(x)));
+  app.append(CollapsibleSection(`Decision Snapshots (${snapRows.length})`, snap, {open:true}));
+  const mq = MappingQualityPanelMobile(S.themeOps?.mappingObs, S.themeOps?.reviewQueue); if (mq) app.append(mq);
+  const fmp = FeatureModePanelMobile(); if (fmp) app.append(fmp);
+  const notes = el('div');
+  await fetchResearchTab(ctx); if (!isRouteCurrent(ctx.token)) return;
+  (S.notifications||[]).slice(0,12).forEach(n => notes.append(el('div',{class:'tl-item',html:`<div class="head"><span class="badge watch">${n.notificationType||'LOG'}</span><span class="ts">${HHmmss(n.eventTime)}</span></div><div class="body">${truncate(n.title||'',80)}</div>`})));
+  app.append(CollapsibleSection('Logs / History', notes, {open:false}));
+};
+
+/* 7. system */
+Views.system = async (ctx={}) => {
+  setHeader('系統');
+  const app = $('app'); app.innerHTML = '';
+  await fetchCommon(ctx); if (!isRouteCurrent(ctx.token)) return;
+  await fetchPositionsTab(ctx); if (!isRouteCurrent(ctx.token)) return;
+  await fetchAdvancedTab(ctx); if (!isRouteCurrent(ctx.token)) return;
+  await fetchSchedulerTab(ctx); if (!isRouteCurrent(ctx.token)) return;
+  app.append(AIStatusPill(S.dashboard?.finalDecision));
+  const gaps = renderHealthDataGapsMobile(); if (gaps) app.append(gaps);
+  const fmp = FeatureModePanelMobile(); if (fmp) app.append(fmp);
+  const h = S.migrationHealth;
+  if (h) app.append(MetricStrip([{label:'系統健康',value:h.ok?'OK':'WARN',cls:h.ok?'up':'dn',sub:`${(h.checks||[]).filter(c=>c.ok).length}/${(h.checks||[]).length} checks`},{label:'檢查時間',value:HHmm(h.checkedAt),sub:yyyymmdd(h.checkedAt),mono:false},{label:'Scheduler jobs',value:String((S.schedulerJobs||[]).length)},{label:'失敗',value:String((S.schedulerJobs||[]).filter(j=>(j.lastStatus||'').toUpperCase()==='FAILED').length),cls:(S.schedulerJobs||[]).some(j=>(j.lastStatus||'').toUpperCase()==='FAILED')?'dn':'up'}]));
+  const jobs = el('div');
+  (S.schedulerJobs||[]).slice(0,12).forEach(j => jobs.append(el('div',{class:'tl-item',html:`<div class="head"><span class="badge ${String(j.lastStatus||'').toUpperCase()==='FAILED'?'stop':'buy'}">${j.lastStatus||'PENDING'}</span><span class="ts">${HHmmss(j.lastRunAt)}</span></div><div class="body">${j.display||j.jobName}</div><div class="sub">${j.cron||''}</div>`})));
+  app.append(CollapsibleSection(`Scheduler Status (${(S.schedulerJobs||[]).length})`, jobs, {open:false}));
+};
+
+/* 8. research */
+Views.research = async (ctx={}) => {
   setHeader('AI 研究');
   const app = $('app'); app.innerHTML = '';
-  await fetchCommon(); await fetchResearchTab();
+  await fetchCommon(ctx); if (!isRouteCurrent(ctx.token)) return;
+  await fetchResearchTab(ctx); if (!isRouteCurrent(ctx.token)) return;
   app.append(AIStatusPill(S.dashboard?.finalDecision));
+  await fetchIntelligenceP1(ctx); if (!isRouteCurrent(ctx.token)) return;
+  app.append(FreshnessBoard());
+  app.append(NarrativeCenterBoard());
+  app.append(ThemeRadarBoard());
 
   const fd = S.dashboard?.finalDecision;
   const payload = safeJson(fd?.payloadJson);
@@ -1502,18 +2385,19 @@ function appendThemeSection(app, title, rows, render, emptyText){
 }
 
 /* 7. theme-first ops */
-Views.themeops = async () => {
+Views.themeops = async (ctx={}) => {
   setHeader('題材 Ops');
   const app = $('app'); app.innerHTML = '';
-  await fetchCommon(); await fetchThemeOpsTab();
+  await fetchCommon(ctx); if (!isRouteCurrent(ctx.token)) return;
+  await fetchThemeOpsTab(null, ctx); if (!isRouteCurrent(ctx.token)) return;
   const t = S.themeOps || {};
   const date = S.themeOpsDate;
 
   const ctrl = el('section',{class:'section'});
   const input = el('input',{type:'date',value:date,style:'min-height:44px;border:1px solid var(--line);background:var(--bg-card);color:var(--ink);border-radius:12px;padding:0 12px;font:700 14px var(--f-mono)'});
   const refresh = el('button',{class:'refresh',style:'min-height:44px;width:auto;padding:0 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg-card)',text:'重新整理'});
-  refresh.addEventListener('click', async () => { S.themeOpsDate = input.value || date; await Views.themeops(); });
-  input.addEventListener('change', async () => { S.themeOpsDate = input.value || date; await Views.themeops(); });
+  refresh.addEventListener('click', async () => { S.themeOpsDate = input.value || date; await navigate('manual'); });
+  input.addEventListener('change', async () => { S.themeOpsDate = input.value || date; await navigate('manual'); });
   ctrl.append(el('div',{class:'card',style:'display:flex;gap:10px;align-items:center;position:sticky;top:56px;z-index:20'},[
     el('div',{style:'font-weight:800;flex:1',text:'Theme-first Ops / Research'}), input, refresh
   ]));
@@ -1544,6 +2428,7 @@ Views.themeops = async () => {
     themeMetricCard('Promotion Queue', promoRows.length, 'review-only'),
     themeMetricCard('Build Trace', traceRows.length, 'SUCCESS / FAILED / PARTIAL')
   ]));
+  const mq = MappingQualityPanelMobile(t.mappingObs, t.reviewQueue); if (mq) app.append(mq);
 
   appendThemeSection(app, 'Hot Group Radar', hotRows, r => themeCard(r.themeTag || r.theme || 'Theme', {
     hotScore: r.hotScore ?? r.radarScore,
@@ -1594,10 +2479,10 @@ Views.themeops = async () => {
 };
 
 /* 8. scheduler */
-Views.scheduler = async () => {
+Views.scheduler = async (ctx={}) => {
   setHeader('排程');
   const app = $('app'); app.innerHTML = '';
-  await fetchSchedulerTab();
+  await fetchSchedulerTab(ctx); if (!isRouteCurrent(ctx.token)) return;
 
   // Top metrics
   const jobs = S.schedulerJobs || [];
@@ -1661,11 +2546,13 @@ Views.scheduler = async () => {
 };
 
 /* 8. advanced */
-Views.advanced = async () => {
+Views.advanced = async (ctx={}) => {
   setHeader('進階');
   const app = $('app'); app.innerHTML = '';
-  await fetchCommon(); await fetchAdvancedTab();
+  await fetchCommon(ctx); if (!isRouteCurrent(ctx.token)) return;
+  await fetchAdvancedTab(ctx); if (!isRouteCurrent(ctx.token)) return;
   app.append(AIStatusPill(S.dashboard?.finalDecision));
+  const fmp = FeatureModePanelMobile(); if (fmp) app.append(fmp);
 
   // System health
   const h = S.migrationHealth;
@@ -1707,7 +2594,9 @@ Views.advanced = async () => {
     grid.append(el('span',{class:'mono',style:'color:var(--muted);font-size:11px',text:k}));
     const v = el('span',{class:'mono',style:'font-weight:700',text:'…'});
     grid.append(v);
-    const r = await safeFetch('/api/config/score/'+encodeURIComponent(k));
+    const token = ctx.token;
+    const r = await safeFetch('/api/config/score/'+encodeURIComponent(k), 8000, {signal:ctx.signal});
+    if (!isRouteCurrent(token) || !v.isConnected) return;
     v.textContent = r?.configValue ?? '—';
   });
   app.append(cfgCard);
@@ -1748,8 +2637,10 @@ function buildCapitalStrip(){
     `<div class="theme-exposure" id="themeExposure"></div>`;
   // v2.16 Batch C：優先呼叫後端 /api/themes/exposure（含 limit/status），缺資料 fallback 前端聚合
   (async () => {
+    const token = S.routeSeq;
     const tw = wrap.querySelector('#themeExposure'); if (!tw) return;
-    const apiResp = await safeFetch('/api/themes/exposure');
+    const apiResp = await safeFetch('/api/themes/exposure', 8000, {signal:S.routeAbort?.signal});
+    if (!isRouteCurrent(token) || !tw.isConnected) return;
     if (apiResp && Array.isArray(apiResp.exposures) && apiResp.exposures.length){
       const top = apiResp.exposures.slice(0, 3);
       const limit = apiResp.limitPct != null ? Number(apiResp.limitPct).toFixed(0) : '30';
@@ -1789,28 +2680,60 @@ function currentRoute(){
   const h = (location.hash||'').replace(/^#\/?/, '').split('?')[0] || 'overview';
   return Views[h] ? h : 'overview';
 }
-async function navigate(){
+function isRouteCurrent(token){
+  return token == null || token === S.routeSeq;
+}
+function newRouteContext(){
+  if (S.routeAbort) S.routeAbort.abort();
+  const ctrl = new AbortController();
+  const token = ++S.routeSeq;
+  S.routeAbort = ctrl;
+  return {token, signal:ctrl.signal};
+}
+async function navigate(reason='route'){
+  const ctx = newRouteContext();
   const r = currentRoute();
+  S.activeRoute = r;
+  S.isRendering = true;
   highlightTab(r);
-  $('app').innerHTML = '<div class="card skel" style="height:80px;margin:12px 16px"></div><div class="card skel" style="height:120px;margin:0 16px"></div>';
+  const app = $('app');
+  app.innerHTML = '<div class="card skel" style="height:80px;margin:12px 16px"></div><div class="card skel" style="height:120px;margin:0 16px"></div>';
   try {
-    await Views[r]();
+    await Views[r](ctx);
+    if (!isRouteCurrent(ctx.token) || !app.isConnected) return;
     $('hdrTime').textContent = HHmmss(new Date().toISOString());
     S.lastFetchAt = Date.now();
   } catch(e){
+    if (!isRouteCurrent(ctx.token)) return;
     console.error('view error', r, e);
-    $('app').innerHTML = `<div class="empty" style="margin:20px 16px">載入失敗：${e.message||e}</div>`;
+    app.innerHTML = `<div class="empty" style="margin:20px 16px">載入失敗：${e.message||e}</div>`;
+  } finally {
+    if (isRouteCurrent(ctx.token)) S.isRendering = false;
   }
 }
-window.addEventListener('hashchange', navigate);
-$('btnRefresh').addEventListener('click', navigate);
+async function refreshActiveView(reason='poll'){
+  if (document.hidden || S.isRendering) return;
+  const r = currentRoute();
+  if (r === 'themeops') {
+    if (Date.now() - (S.lastFetchAt||0) < 5*60*1000) return;
+    await navigate(reason);
+    return;
+  }
+  await navigate(reason);
+}
+window.addEventListener('hashchange', () => navigate('hashchange'));
+$('btnRefresh').addEventListener('click', () => navigate('manual'));
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && Date.now() - (S.lastFetchAt||0) > 25000) navigate();
+  if (document.hidden) {
+    if (S.routeAbort) S.routeAbort.abort();
+    return;
+  }
+  if (Date.now() - (S.lastFetchAt||0) > 25000) refreshActiveView('visible');
 });
 
-/* polling: 30s */
+/* polling: per-view refresh, no overlapping full-route rerender */
 let _pollTimer = setInterval(() => {
-  if (!document.hidden) navigate();
+  refreshActiveView('poll');
 }, 30000);
 
 /* boot: ensure default route */
