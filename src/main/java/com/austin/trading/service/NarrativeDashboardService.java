@@ -3,6 +3,8 @@ package com.austin.trading.service;
 import com.austin.trading.dto.response.NarrativeDashboardResponse;
 import com.austin.trading.entity.KolThemeSignalDailySnapshotEntity;
 import com.austin.trading.repository.KolThemeSignalDailySnapshotRepository;
+import com.austin.trading.repository.KolThemeSignalRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -13,15 +15,30 @@ import java.time.LocalDate;
 public class NarrativeDashboardService {
 
     private final KolThemeSignalDailySnapshotRepository snapshotRepo;
+    private final KolThemeSignalRepository signalRepo;
+    private final DataFreshnessService freshnessService;
 
     public NarrativeDashboardService(KolThemeSignalDailySnapshotRepository snapshotRepo) {
+        this(snapshotRepo, null, new DataFreshnessService());
+    }
+
+    @Autowired
+    public NarrativeDashboardService(KolThemeSignalDailySnapshotRepository snapshotRepo,
+                                     KolThemeSignalRepository signalRepo,
+                                     DataFreshnessService freshnessService) {
         this.snapshotRepo = snapshotRepo;
+        this.signalRepo = signalRepo;
+        this.freshnessService = freshnessService;
     }
 
     public NarrativeDashboardResponse dashboard(LocalDate date) {
         var rows = snapshotRepo.findByTradingDateOrderByNetShadowBoostDesc(date).stream()
                 .map(this::toRow)
                 .toList();
+        LocalDate latestSignalDate = snapshotRepo.findLatestTradingDate();
+        var freshness = freshnessService.evaluate(latestSignalDate, false);
+        long signalCountToday = signalRepo == null ? 0 : signalRepo.countByTradingDate(date);
+        long signalCount7d = signalRepo == null ? 0 : signalRepo.countByTradingDateBetween(date.minusDays(6), date);
         return new NarrativeDashboardResponse(
                 date,
                 true,
@@ -38,7 +55,14 @@ public class NarrativeDashboardService {
                 rows.stream().sorted(java.util.Comparator.comparing(NarrativeDashboardResponse.Row::attention).reversed())
                         .limit(5).map(NarrativeDashboardResponse.Row::theme).toList(),
                 rows.stream().filter(r -> "CROWDED".equals(r.lifecycle()) || "EXHAUSTED".equals(r.lifecycle())
-                        || r.crowding().compareTo(new BigDecimal("8.0")) >= 0).count()
+                        || r.crowding().compareTo(new BigDecimal("8.0")) >= 0).count(),
+                latestSignalDate,
+                freshness.staleDays(),
+                freshness.dataFreshnessStatus().name(),
+                latestSignalDate,
+                signalCountToday,
+                signalCount7d,
+                rows.isEmpty() ? "NO_RECENT_SIGNAL" : freshness.warning()
         );
     }
 
@@ -73,8 +97,6 @@ public class NarrativeDashboardService {
             case "MEDIUM" -> new BigDecimal("5.2");
             default -> new BigDecimal("3.1");
         };
-        // Keep MVP transparent and conservative: risk bucket dominates, while counts/attention are
-        // available in the row for audit. Do not turn this into a BUY/ENTER score.
         return base.setScale(1, RoundingMode.HALF_UP);
     }
 

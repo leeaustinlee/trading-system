@@ -75,7 +75,7 @@ public class ClaudeCodeRequestWriterService {
             "【契約必讀】執行前務必讀 " + CONTRACT_FILE
             + "；rename .tmp → .json 前必跑 "
             + VALIDATOR_PY + "（或 " + VALIDATOR_MJS + "）本地驗證；"
-            + "scores/thesis keys 必須 ⊆ allowed_symbols，違反 Java 會 400。";
+            + "scores/thesis keys 必須 ⊆ scoring_allowed_symbols/tradable_candidate_symbols/candidates，違反 Java 會 400。";
 
     private final AiClaudeConfig config;
     private final ObjectMapper   objectMapper;
@@ -133,9 +133,12 @@ public class ClaudeCodeRequestWriterService {
      *   "taskType": "OPENING",
      *   "type": "OPENING",                    // 舊鍵名保留，= taskType
      *   "trading_date": "2026-04-21",
-     *   "candidates": ["3189","4958",...],     // 舊鍵名保留
-     *   "allowed_symbols": ["3189","4958",...], // v2.5 明確契約：score/thesis keys 必須 ⊆ 此 set
-     *   "contract_note": "scores.keys 與 thesis.keys 必須是 allowed_symbols 子集；其他 symbol 一律丟棄",
+     *   "candidates": ["3189","4958",...],     // 舊鍵名保留，正式 scoring candidates
+     *   "tradable_candidate_symbols": ["3189","4958",...],
+     *   "scoring_allowed_symbols": ["3189","4958",...],
+     *   "allowed_symbols": ["3189","4958",...], // 向下相容，語意同 scoring_allowed_symbols
+     *   "research_scope_symbols": ["3189","4958","2327",...], // 可含 leadership/shadow-only 背景
+     *   "contract_note": "scores.keys 與 thesis.keys 必須是 scoring_allowed_symbols 子集；其他 symbol 一律丟棄",
      *   "market_context": "...",
      *   "rules_files": [...],
      *   "output_path": ".../claude-research-latest.md",
@@ -199,9 +202,11 @@ public class ClaudeCodeRequestWriterService {
             root.put("trading_date", tradingDate.toString());
             root.put("tradingDate", tradingDate.toString()); // v2.7：camelCase 供 prompt / script 直接取用
 
-            // MVP-2A leader/tradable split：candidates/tradable_candidate_symbols are scoring/ENTER candidates only.
-            // leadership_symbols are read-only market leadership context. allowed_symbols is the union for Claude research scope.
-            Set<String> allowedUnion = new LinkedHashSet<>();
+            // MVP-3A universe split：
+            // - candidates/tradable_candidate_symbols/scoring_allowed_symbols/allowed_symbols are scoring/ENTER candidates only.
+            // - leadership_symbols are read-only market leadership context and only join research_scope_symbols.
+            Set<String> scoringAllowedSymbols = new LinkedHashSet<>();
+            Set<String> researchScopeSymbols = new LinkedHashSet<>();
             ArrayNode candidates = root.putArray("candidates");
             ArrayNode tradable = root.putArray("tradable_candidate_symbols");
             if (tradableCandidateSymbols != null) {
@@ -210,7 +215,8 @@ public class ClaudeCodeRequestWriterService {
                     String symbol = s.trim();
                     candidates.add(symbol);
                     tradable.add(symbol);
-                    allowedUnion.add(symbol);
+                    scoringAllowedSymbols.add(symbol);
+                    researchScopeSymbols.add(symbol);
                 }
             }
 
@@ -223,7 +229,7 @@ public class ClaudeCodeRequestWriterService {
                     String symbol = leader.symbol().trim();
                     leadershipSymbols.add(symbol);
                     leadershipSymbolSet.add(symbol);
-                    allowedUnion.add(symbol);
+                    researchScopeSymbols.add(symbol);
                     ObjectNode item = leadershipContext.addObject();
                     item.put("symbol", symbol);
                     if (leader.stockName() != null) item.put("stockName", leader.stockName());
@@ -241,7 +247,7 @@ public class ClaudeCodeRequestWriterService {
                 for (PeerShadowContext peer : peerShadowContexts) {
                     if (peer == null || peer.symbol() == null || peer.symbol().isBlank()) continue;
                     String symbol = peer.symbol().trim();
-                    if (allowedUnion.contains(symbol) || !emittedPeerShadowSymbols.add(symbol)) continue;
+                    if (researchScopeSymbols.contains(symbol) || !emittedPeerShadowSymbols.add(symbol)) continue;
                     ObjectNode item = peerShadow.addObject();
                     item.put("symbol", symbol);
                     if (peer.role() != null) item.put("role", peer.role());
@@ -296,15 +302,19 @@ public class ClaudeCodeRequestWriterService {
             governanceTrace.put("peer_shadow_tradable_false_allowed", true);
             governanceTrace.put("violates_allowed_universe_contract", false);
 
+            ArrayNode scoringAllowed = root.putArray("scoring_allowed_symbols");
+            scoringAllowedSymbols.forEach(scoringAllowed::add);
             ArrayNode allowed = root.putArray("allowed_symbols");
-            allowedUnion.forEach(allowed::add);
+            scoringAllowedSymbols.forEach(allowed::add);
+            ArrayNode researchScope = root.putArray("research_scope_symbols");
+            researchScopeSymbols.forEach(researchScope::add);
             root.put("leader_tradable_false_allowed", true);
             root.put("must_not_expand_allowed_symbols", true);
             root.put("candidate_scope_contract",
-                    "tradable_candidate_symbols/candidates 才可進入 ENTER 評估；leadership_symbols 僅供 MARKET_LEADERSHIP/THEME_VALIDATION/PEER_DISCOVERY，不得視為 ENTER candidate。" );
+                    "scoring_allowed_symbols/tradable_candidate_symbols/candidates 才可進入 scores/thesis/ENTER 評估；leadership_symbols 僅供 MARKET_LEADERSHIP/THEME_VALIDATION/PEER_DISCOVERY，不得視為 ENTER candidate。" );
             root.put("contract_note",
-                    "scores.keys 與 thesis.keys 必須是 allowed_symbols 的子集；"
-                            + "tradable_candidate_symbols/candidates 是唯一可交易候選；leadership_symbols 可出現在研究脈絡，"
+                    "scores.keys、thesis.keys、final_enter_candidates 必須是 scoring_allowed_symbols/tradable_candidate_symbols/candidates 的子集；"
+                            + "allowed_symbols 為向下相容欄位，語意同 scoring_allowed_symbols；research_scope_symbols 可包含 leadership_symbols 供研究脈絡，"
                             + "但 leader_tradable=false 時不得視為 ENTER candidate，也不得放寬 ranking 或 FinalDecisionEngine。前一輪 symbols 僅可作為背景，嚴禁直接複製到本輪 scores/thesis。");
 
             // 補充 context（由 caller 傳入，如 txf 報價、大盤漲跌家數等）

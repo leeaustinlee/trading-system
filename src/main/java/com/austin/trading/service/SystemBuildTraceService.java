@@ -61,6 +61,9 @@ public class SystemBuildTraceService {
 
     private void finish(SystemBuildTraceEntity e, String status) {
         LocalDateTime finished = LocalDateTime.now();
+        if (finished.isBefore(e.getStartedAt())) {
+            finished = e.getStartedAt();
+        }
         e.setFinishedAt(finished);
         e.setDurationMs(Duration.between(e.getStartedAt(), finished).toMillis());
         e.setStatus(status);

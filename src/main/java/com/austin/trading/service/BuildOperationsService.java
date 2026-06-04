@@ -2,6 +2,7 @@ package com.austin.trading.service;
 
 import com.austin.trading.dto.response.*;
 import com.austin.trading.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -17,6 +18,8 @@ public class BuildOperationsService {
     private final HotGroupRadarService hotGroup;
     private final PromotionReviewService promotionReview;
     private final SystemBuildTraceService traceService;
+    private final ThemeIntelligenceService themeIntelligenceService;
+    private final ThemeSnapshotRepository themeSnapshotRepo;
     private final ThemeReplaySnapshotRepository snapshotRepo;
     private final ThemeReplayNodeRepository nodeRepo;
     private final ThemeReplayEdgeRepository edgeRepo;
@@ -47,6 +50,32 @@ public class BuildOperationsService {
                                   CandidateThemeRadarTraceRepository radarTraceRepo,
                                   PromotionReviewItemRepository promotionItemRepo,
                                   PromotionReviewAuditRepository promotionAuditRepo) {
+        this(themeReplay, researchUniverse, lifecycle, metrics, hotGroup, promotionReview, traceService,
+                null, null, snapshotRepo, nodeRepo, edgeRepo, researchRepo, lifecycleRepo, metricsRepo,
+                hotSnapshotRepo, hotSignalRepo, radarTraceRepo, promotionItemRepo, promotionAuditRepo);
+    }
+
+    @Autowired
+    public BuildOperationsService(ThemeReplayTimelineService themeReplay,
+                                  ResearchUniverseService researchUniverse,
+                                  ThemeLifecycleEngine lifecycle,
+                                  ReplayMetricsService metrics,
+                                  HotGroupRadarService hotGroup,
+                                  PromotionReviewService promotionReview,
+                                  SystemBuildTraceService traceService,
+                                  ThemeIntelligenceService themeIntelligenceService,
+                                  ThemeSnapshotRepository themeSnapshotRepo,
+                                  ThemeReplaySnapshotRepository snapshotRepo,
+                                  ThemeReplayNodeRepository nodeRepo,
+                                  ThemeReplayEdgeRepository edgeRepo,
+                                  ResearchUniverseItemRepository researchRepo,
+                                  ThemeLifecycleStateRepository lifecycleRepo,
+                                  ThemeReplayMetricsRepository metricsRepo,
+                                  HotGroupRadarSnapshotRepository hotSnapshotRepo,
+                                  HotGroupStockSignalRepository hotSignalRepo,
+                                  CandidateThemeRadarTraceRepository radarTraceRepo,
+                                  PromotionReviewItemRepository promotionItemRepo,
+                                  PromotionReviewAuditRepository promotionAuditRepo) {
         this.themeReplay = themeReplay;
         this.researchUniverse = researchUniverse;
         this.lifecycle = lifecycle;
@@ -54,6 +83,8 @@ public class BuildOperationsService {
         this.hotGroup = hotGroup;
         this.promotionReview = promotionReview;
         this.traceService = traceService;
+        this.themeIntelligenceService = themeIntelligenceService;
+        this.themeSnapshotRepo = themeSnapshotRepo;
         this.snapshotRepo = snapshotRepo;
         this.nodeRepo = nodeRepo;
         this.edgeRepo = edgeRepo;
@@ -136,6 +167,50 @@ public class BuildOperationsService {
             traceService.failed(traceId, deleted, 0, 0, e, Map.of("stage", "hotGroup.build"));
             throw e;
         }
+    }
+
+    public BuildOperationResponse buildThemeIntelligenceSnapshot(LocalDate date) {
+        Object safety = Map.of(
+                "observabilityOnly", true,
+                "productionDecisionAllowed", false,
+                "manualConfirmRequired", true,
+                "doesNotAffectBuySellEnter", true);
+        Long traceId = traceService.start("THEME_INTELLIGENCE_SNAPSHOT", date, null, safety).getId();
+        try {
+            int rowCount = safe(themeSnapshotRepo.countByTradingDate(date));
+            var freshness = themeIntelligenceService.themeSnapshotFreshness();
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("rowCount", rowCount);
+            payload.put("dataFreshness", freshness.dataFreshnessStatus().name());
+            payload.put("latestDataDate", freshness.latestDataDate());
+            payload.put("staleDays", freshness.staleDays());
+            payload.put("futureDataDetected", freshness.futureDataDetected());
+            payload.put("warning", freshness.warning());
+            traceService.success(traceId, 0, rowCount, 0, 0, payload);
+            return BuildOperationResponse.builder("THEME_INTELLIGENCE_SNAPSHOT", date)
+                    .builtCount(rowCount)
+                    .safetyBoundary(safety)
+                    .traceId(traceId)
+                    .status("SUCCESS")
+                    .payload(payload)
+                    .build();
+        } catch (RuntimeException e) {
+            traceService.failed(traceId, 0, 0, 0, e, Map.of("stage", "themeIntelligenceSnapshot.freshness"));
+            throw e;
+        }
+    }
+
+    public Map<String, Object> buildDailyThemeOps(LocalDate date) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("tradingDate", date);
+        out.put("themeReplay", buildThemeReplay(date));
+        out.put("themeLifecycle", buildLifecycle(date));
+        out.put("replayMetrics", buildReplayMetrics(date));
+        out.put("hotGroupRadar", buildHotGroups(date, "POSTMARKET"));
+        out.put("researchUniverse", buildResearchUniverse(date));
+        out.put("promotionReview", buildPromotionReview(date));
+        out.put("themeIntelligenceSnapshot", buildThemeIntelligenceSnapshot(date));
+        return out;
     }
 
     public BuildOperationResponse buildPromotionReview(LocalDate date) {

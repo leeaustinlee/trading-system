@@ -255,7 +255,69 @@ class CandidateControllerMomentumGateTests {
         verify(candidateStockRepository, times(3)).save(any(CandidateStockEntity.class));
     }
 
-    /** Test 5：payload 全空（最小資訊）→ engine 採寬鬆 fallback，多數應該通過。 */
+    /** Test 5：changePct hard gate 只擋正式進場候選；非 final-plan 題材 leader 要保留為 shadow/leadership context。 */
+    @Test
+    void changePctHardGate_preservesNonFinalPlanThemeLeader_rejectsFinalPlanChase() {
+        when(scoreConfigService.getBoolean(eq("candidate.momentum_gate.enabled"), anyBoolean()))
+                .thenReturn(false);
+        when(scoreConfigService.getBoolean(eq("candidate.changepct_hard_gate.enabled"), anyBoolean()))
+                .thenReturn(true);
+        when(scoreConfigService.getDecimal(eq("candidate.changepct_hard_gate.max_pct"), any(BigDecimal.class)))
+                .thenReturn(new BigDecimal("9.0"));
+
+        LocalDate date = LocalDate.of(2026, 5, 26);
+        var leader = new CandidateBatchItemRequest(
+                date, "2327", "國巨", new BigDecimal("9.8"), "被動元件 leader，鎖漲停只保留題材證據",
+                "被動元件/MLCC", null,
+                "{\"changePct\":9.8,\"source\":\"codex-v2-postmarket\",\"retentionOnly\":true}",
+                "VALUE_STORY", "900-930", new BigDecimal("850"), new BigDecimal("980"), new BigDecimal("1030"),
+                new BigDecimal("1.5"), false,
+                "THEME_LEADER", new BigDecimal("9.5"), BigDecimal.ZERO, new BigDecimal("9.8"),
+                "2327", true, false,
+                "changePct hard gate bypass is retention-only; not allowed for FinalDecision entry",
+                "trace-leader-2327"
+        );
+        var chase = new CandidateBatchItemRequest(
+                date, "9998", "追價股", new BigDecimal("9.8"), "正式候選漲幅過大應被擋",
+                "被動元件/MLCC", null,
+                "{\"changePct\":9.8,\"source\":\"codex-v2-postmarket\"}",
+                "VALUE_FAIR", "90-95", new BigDecimal("85"), new BigDecimal("100"), new BigDecimal("105"),
+                new BigDecimal("1.5"), true,
+                "BREAKOUT_CANDIDATE", new BigDecimal("8.0"), new BigDecimal("7.0"), new BigDecimal("8.0"),
+                null, false, true, null, "trace-chase-9998"
+        );
+
+        ResponseEntity<Map<String, Object>> resp = controller.saveBatch(List.of(leader, chase));
+
+        Map<String, Object> body = resp.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body).containsEntry("received", 2);
+        assertThat(body).containsEntry("accepted", 1);
+        assertThat(body).containsEntry("rejected", 1);
+
+        @SuppressWarnings("unchecked")
+        List<CandidateBatchSaveResponse.Rejection> rejections =
+                (List<CandidateBatchSaveResponse.Rejection>) body.get("rejections");
+        assertThat(rejections).hasSize(1);
+        assertThat(rejections.get(0).symbol()).isEqualTo("9998");
+        assertThat(rejections.get(0).reason()).isEqualTo("CHANGEPCT_HARD_GATE");
+
+        ArgumentCaptor<CandidateStockEntity> captor = ArgumentCaptor.forClass(CandidateStockEntity.class);
+        verify(candidateStockRepository).save(captor.capture());
+        CandidateStockEntity saved = captor.getValue();
+        assertThat(saved.getSymbol()).isEqualTo("2327");
+        assertThat(saved.getCandidateRole()).isEqualTo("THEME_LEADER");
+        assertThat(saved.getLeaderTradable()).isFalse();
+        assertThat(saved.getThemeLeaderSymbol()).isEqualTo("2327");
+
+        ArgumentCaptor<com.austin.trading.entity.StockEvaluationEntity> evalCaptor =
+                ArgumentCaptor.forClass(com.austin.trading.entity.StockEvaluationEntity.class);
+        verify(stockEvaluationRepository).save(evalCaptor.capture());
+        assertThat(evalCaptor.getValue().getSymbol()).isEqualTo("2327");
+        assertThat(evalCaptor.getValue().getIncludeInFinalPlan()).isFalse();
+    }
+
+    /** Test 6：payload 全空（最小資訊）→ engine 採寬鬆 fallback，多數應該通過。 */
     @Test
     void missingFields_useFallbacks_majorityPass() {
         LocalDate date = LocalDate.of(2026, 4, 28);

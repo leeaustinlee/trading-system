@@ -102,6 +102,10 @@ class ClaudeCodeRequestWriterServiceContractTest {
         assertThat(root.path("leadership_symbols")).extracting(JsonNode::asText)
                 .containsExactly("2327");
         assertThat(root.path("allowed_symbols")).extracting(JsonNode::asText)
+                .containsExactly("2458", "8926");
+        assertThat(root.path("scoring_allowed_symbols")).extracting(JsonNode::asText)
+                .containsExactly("2458", "8926");
+        assertThat(root.path("research_scope_symbols")).extracting(JsonNode::asText)
                 .containsExactly("2458", "8926", "2327");
         assertThat(root.path("candidates")).extracting(JsonNode::asText)
                 .containsExactly("2458", "8926");
@@ -170,6 +174,10 @@ class ClaudeCodeRequestWriterServiceContractTest {
         assertThat(root.path("tradable_candidate_symbols")).extracting(JsonNode::asText)
                 .containsExactly("2458");
         assertThat(root.path("allowed_symbols")).extracting(JsonNode::asText)
+                .containsExactly("2458");
+        assertThat(root.path("scoring_allowed_symbols")).extracting(JsonNode::asText)
+                .containsExactly("2458");
+        assertThat(root.path("research_scope_symbols")).extracting(JsonNode::asText)
                 .containsExactly("2458", "2327");
         assertThat(root.path("allowed_symbols")).extracting(JsonNode::asText)
                 .doesNotContain("2492");

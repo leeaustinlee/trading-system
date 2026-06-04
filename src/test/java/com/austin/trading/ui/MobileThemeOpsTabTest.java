@@ -30,6 +30,6 @@ class MobileThemeOpsTabTest {
         assertThat(html).contains("Read-only：只看題材雷達");
         assertThat(html).contains("forbiddenSafetyKeys", "safetyViolationDetected", "riskGateBypassCount");
         assertThat(html).doesNotContain("method=\"post\"", "method='post'", "approve button", "reject button");
-        assertThat(sw).contains("tt-v7-2026-05-25-themeops-local-date");
+        assertThat(sw).contains("tt-v9-2026-06-04-themeops-ai-trust");
     }
 }

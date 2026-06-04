@@ -15,6 +15,7 @@ import com.austin.trading.scheduler.OpenDataPrepJob;
 import com.austin.trading.scheduler.PostmarketDataPrepJob;
 import com.austin.trading.scheduler.PremarketDataPrepJob;
 import com.austin.trading.scheduler.T86DataPrepJob;
+import com.austin.trading.scheduler.ThemeOpsDailyBuildJob;
 import com.austin.trading.scheduler.TomorrowPlan1800Job;
 import com.austin.trading.workflow.HourlyGateWorkflowService;
 import com.austin.trading.workflow.IntradayDecisionWorkflowService;
@@ -69,12 +70,13 @@ public class SchedulerController {
     @Autowired(required = false) private ExternalProbeHealthJob externalProbeHealthJob;
     @Autowired(required = false) private DailyHealthCheckJob dailyHealthCheckJob;
     @Autowired(required = false) private PremarketDataPrepJob premarketDataPrepJob;
+    @Autowired(required = false) private ThemeOpsDailyBuildJob themeOpsDailyBuildJob;
 
     /** 這些 trigger 會直接呼叫 Job.run()，Job 內部自己做 markRunning（orchestration）。 */
     private static final java.util.Set<String> JOB_TRIGGERS = java.util.Set.of(
             "premarket-data-prep", "open-data-prep", "midday-review",
             "aftermarket-review", "postmarket-data-prep", "t86-data-prep",
-            "tomorrow-plan", "external-probe-health", "daily-health-check"
+            "tomorrow-plan", "external-probe-health", "daily-health-check", "theme-ops-daily-build"
     );
 
     // ── scheduler enabled flags (從 application.yml 注入) ───────────────
@@ -94,6 +96,7 @@ public class SchedulerController {
     @Value("${trading.scheduler.external-probe-health.enabled:false}")   boolean externalProbeHealthEnabled;
     @Value("${trading.scheduler.weekly-trade-review.enabled:false}")     boolean weeklyTradeReviewEnabled;
     @Value("${trading.scheduler.daily-health-check.enabled:false}")      boolean dailyHealthCheckEnabled;
+    @Value("${trading.scheduler.theme-ops-daily-build.enabled:false}")   boolean themeOpsDailyBuildEnabled;
 
     @Value("${trading.scheduler.premarket-notify-cron:}")        String premarketNotifyCron;
     @Value("${trading.scheduler.premarket-data-prep-cron:}")     String premarketDataPrepCron;
@@ -111,6 +114,7 @@ public class SchedulerController {
     @Value("${trading.scheduler.external-probe-health-cron:}")   String externalProbeHealthCron;
     @Value("${trading.scheduler.weekly-trade-review-cron:}")     String weeklyTradeReviewCron;
     @Value("${trading.scheduler.daily-health-check-cron:}")      String dailyHealthCheckCron;
+    @Value("${trading.scheduler.theme-ops-daily-build-cron:}")   String themeOpsDailyBuildCron;
 
     public SchedulerController(
             SchedulerExecutionLogRepository logRepository,
@@ -157,6 +161,7 @@ public class SchedulerController {
         jobs.add(job("ExternalProbeHealthJob", "外部服務健康", externalProbeHealthCron, externalProbeHealthEnabled, "external-probe-health"));
         jobs.add(job("WeeklyTradeReviewJob",   "週五交易檢討+建議",weeklyTradeReviewCron, weeklyTradeReviewEnabled,   "weekly-review"));
         jobs.add(job("DailyHealthCheckJob",    "每日健康檢查",  dailyHealthCheckCron,    dailyHealthCheckEnabled,    "daily-health-check"));
+        jobs.add(job("ThemeOpsDailyBuildJob",  "題材 Ops 每日建置", themeOpsDailyBuildCron, themeOpsDailyBuildEnabled, "theme-ops-daily-build"));
         return jobs;
     }
 
@@ -235,6 +240,7 @@ public class SchedulerController {
                 case "tomorrow-plan"     -> { requireJob(tomorrowPlan1800Job, "tomorrow-plan"); tomorrowPlan1800Job.run(); yield "tomorrow-plan done"; }
                 case "external-probe-health" -> { requireJob(externalProbeHealthJob, "external-probe-health"); externalProbeHealthJob.run(); yield "external-probe-health done"; }
                 case "daily-health-check" -> { requireJob(dailyHealthCheckJob, "daily-health-check"); dailyHealthCheckJob.run(); yield "daily-health-check done"; }
+                case "theme-ops-daily-build" -> { requireJob(themeOpsDailyBuildJob, "theme-ops-daily-build"); themeOpsDailyBuildJob.run(); yield "theme-ops-daily-build done"; }
                 default -> throw new IllegalArgumentException("Unknown triggerKey: " + triggerKey);
             };
             schedulerLogService.success(jobName, trigger, LocalDateTime.now(), result.toString());
@@ -286,6 +292,7 @@ public class SchedulerController {
             case "tomorrow-plan"       -> "TomorrowPlan1800Job";
             case "external-probe-health" -> "ExternalProbeHealthJob";
             case "daily-health-check"  -> "DailyHealthCheckJob";
+            case "theme-ops-daily-build" -> "ThemeOpsDailyBuildJob";
             case "weekly-review"       -> "WeeklyTradeReviewJob";
             default                    -> triggerKey;
         };

@@ -4,6 +4,8 @@ import com.austin.trading.client.MarketBreadthClient;
 import com.austin.trading.client.TwseMisClient;
 import com.austin.trading.client.dto.MarketBreadth;
 import com.austin.trading.dto.request.AiTaskCandidateRef;
+import com.austin.trading.dto.request.CandidateBatchItemRequest;
+import com.austin.trading.dto.response.CandidateBatchSaveResponse;
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.entity.AiTaskEntity;
 import com.austin.trading.entity.MarketSnapshotEntity;
@@ -67,6 +69,8 @@ class PostmarketDataPrepJobUnifiedUniverseTest {
         when(candidateStockRepository.findByTradingDateOrderByScoreDesc(any(LocalDate.class), any(PageRequest.class)))
                 .thenReturn(List.of());
         when(twseMisClient.getQuotesWithOtcFallback(anyList())).thenReturn(List.of());
+        when(candidateScanService.saveBatchWithGate(anyList())).thenReturn(
+                new CandidateBatchSaveResponse(3, 3, 0, List.of(), List.of()));
         when(requestWriterService.writeRequest(any(), anyString(), any(LocalDate.class), anyList(), anyString()))
                 .thenReturn(true);
 
@@ -130,6 +134,15 @@ class PostmarketDataPrepJobUnifiedUniverseTest {
         ArgumentCaptor<String> ctxCap = ArgumentCaptor.forClass(String.class);
         verify(requestWriterService).writeRequest(eq(172L), eq("POSTMARKET"), any(LocalDate.class), symbolsCap.capture(), ctxCap.capture());
         assertThat(symbolsCap.getValue()).containsExactly("1216", "2458", "8926");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<CandidateBatchItemRequest>> batchCap = ArgumentCaptor.forClass(List.class);
+        verify(candidateScanService).saveBatchWithGate(batchCap.capture());
+        assertThat(batchCap.getValue()).hasSize(3);
+        assertThat(batchCap.getValue()).extracting(CandidateBatchItemRequest::symbol)
+                .containsExactly("1216", "2458", "8926");
+        assertThat(batchCap.getValue()).allSatisfy(item ->
+                assertThat(item.tradingDate()).isAfter(LocalDate.now()));
 
         JsonNode ctx = objectMapper.readTree(ctxCap.getValue());
         assertThat(ctx.path("universeSource").asText()).isEqualTo("FRESH_SCAN");

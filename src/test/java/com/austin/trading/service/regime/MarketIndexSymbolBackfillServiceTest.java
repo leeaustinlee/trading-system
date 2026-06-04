@@ -5,10 +5,12 @@ import com.austin.trading.client.TwseHistoryClient.DailyBar;
 import com.austin.trading.entity.CandidateForwardTrackingEntity;
 import com.austin.trading.entity.MarketIndexDailyEntity;
 import com.austin.trading.entity.PaperTradeEntity;
+import com.austin.trading.entity.PositionEntity;
 import com.austin.trading.repository.CandidateForwardTrackingRepository;
 import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.MarketIndexDailyRepository;
 import com.austin.trading.repository.PaperTradeRepository;
+import com.austin.trading.repository.PositionRepository;
 import com.austin.trading.service.ScoreConfigService;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -41,7 +43,7 @@ class MarketIndexSymbolBackfillServiceTest {
 
         MarketIndexBackfillService base = new MarketIndexBackfillService(client, marketRepo, cfg);
         MarketIndexSymbolBackfillService service = new MarketIndexSymbolBackfillService(
-                client, base, paperRepo, forwardRepo, candidateRepo, cfg);
+                client, base, paperRepo, forwardRepo, candidateRepo, mock(PositionRepository.class), cfg);
 
         var result = service.backfillSymbols(30, "2330,2303");
 
@@ -73,12 +75,38 @@ class MarketIndexSymbolBackfillServiceTest {
         when(base.upsertBars(anyList(), any(), any())).thenReturn(1);
 
         MarketIndexSymbolBackfillService service = new MarketIndexSymbolBackfillService(
-                client, base, paperRepo, forwardRepo, candidateRepo, cfg);
+                client, base, paperRepo, forwardRepo, candidateRepo, mock(PositionRepository.class), cfg);
 
         var result = service.backfillSymbols(30, null, true, true, 2);
 
         assertThat(result.get("resolvedSymbols")).asList().containsExactly("2330", "2303");
         assertThat(result.get("symbolStats").toString()).contains("2330").contains("2303");
+    }
+
+
+    @Test
+    void autoCollectsOpenPositionSymbolsForDailyPortfolioRefresh() {
+        TwseHistoryClient client = mock(TwseHistoryClient.class);
+        MarketIndexBackfillService base = mock(MarketIndexBackfillService.class);
+        PaperTradeRepository paperRepo = mock(PaperTradeRepository.class);
+        CandidateForwardTrackingRepository forwardRepo = mock(CandidateForwardTrackingRepository.class);
+        CandidateStockRepository candidateRepo = mock(CandidateStockRepository.class);
+        PositionRepository positionRepo = mock(PositionRepository.class);
+        ScoreConfigService cfg = mock(ScoreConfigService.class);
+        when(cfg.getInt(eq(MarketIndexBackfillService.CFG_THROTTLE_MS), anyInt())).thenReturn(0);
+        when(positionRepo.findByStatus("OPEN")).thenReturn(List.of(position("4938")));
+        when(client.fetchTaiexMonth(any(YearMonth.class))).thenReturn(List.of(bar("t00", LocalDate.now().minusDays(3))));
+        when(client.fetchStockMonth(anyString(), any(YearMonth.class))).thenAnswer(inv ->
+                List.of(bar(inv.getArgument(0), LocalDate.now().minusDays(3))));
+        when(base.upsertBars(anyList(), any(), any())).thenReturn(1);
+
+        MarketIndexSymbolBackfillService service = new MarketIndexSymbolBackfillService(
+                client, base, paperRepo, forwardRepo, candidateRepo, positionRepo, cfg);
+
+        var result = service.backfillSymbols(30, null, false, false, 10);
+
+        assertThat(result.get("resolvedSymbols")).asList().containsExactly("4938");
+        verify(client, atLeastOnce()).fetchStockMonth(eq("4938"), any(YearMonth.class));
     }
 
     @Test
@@ -96,7 +124,7 @@ class MarketIndexSymbolBackfillServiceTest {
         when(base.upsertBars(anyList(), any(), any())).thenReturn(1);
 
         MarketIndexSymbolBackfillService service = new MarketIndexSymbolBackfillService(
-                client, base, paperRepo, forwardRepo, candidateRepo, cfg);
+                client, base, paperRepo, forwardRepo, candidateRepo, mock(PositionRepository.class), cfg);
 
         var result = service.backfillSymbols(30, "2330", true, true, 50);
 
@@ -119,7 +147,7 @@ class MarketIndexSymbolBackfillServiceTest {
                 new MarketIndexDailyEntity("2330", LocalDate.now().minusDays(2), BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, 1L)));
 
         MarketIndexSymbolBackfillService service = new MarketIndexSymbolBackfillService(
-                client, base, paperRepo, forwardRepo, candidateRepo, cfg);
+                client, base, paperRepo, forwardRepo, candidateRepo, mock(PositionRepository.class), cfg);
 
         var result = service.coverage(30, "2330", false, false, 10);
 
@@ -156,6 +184,13 @@ class MarketIndexSymbolBackfillServiceTest {
         PaperTradeEntity entity = new PaperTradeEntity();
         entity.setEntryDate(LocalDate.now().minusDays(5));
         entity.setSymbol(symbol);
+        return entity;
+    }
+
+    private PositionEntity position(String symbol) {
+        PositionEntity entity = new PositionEntity();
+        entity.setSymbol(symbol);
+        entity.setStatus("OPEN");
         return entity;
     }
 

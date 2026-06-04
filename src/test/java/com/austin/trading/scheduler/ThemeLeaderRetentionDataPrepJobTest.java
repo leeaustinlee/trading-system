@@ -84,6 +84,11 @@ class ThemeLeaderRetentionDataPrepJobTest {
             when(twseMisClient.getQuotesWithOtcFallback(anyList())).thenReturn(List.of());
             when(repository.findByTradingDateOrderByScoreDesc(eq(today), any(PageRequest.class))).thenReturn(List.of());
             when(aiTaskService.createTask(eq(today), eq("POSTMARKET"), eq(null), anyList(), anyString(), anyString())).thenReturn(task);
+            when(scanService.saveBatchWithGate(anyList()))
+                    .thenAnswer(invocation -> {
+                        List<?> batch = invocation.getArgument(0);
+                        return new com.austin.trading.dto.response.CandidateBatchSaveResponse(batch.size(), batch.size(), 0, List.of(), List.of());
+                    });
             when(requestWriterService.writeRequest(any(), anyString(), any(LocalDate.class), anyList(), anyString())).thenReturn(true);
             when(retentionService.retainPostmarketSuperStrong(any(LocalDate.class), anyList())).thenReturn(3);
 

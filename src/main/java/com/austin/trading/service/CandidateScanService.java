@@ -238,6 +238,15 @@ public class CandidateScanService {
             if (changePctGateEnabled) {
                 Double changePct = readDouble(parsePayload(item.payloadJson()), "changePct");
                 if (changePct != null && changePct >= changePctMax.doubleValue()) {
+                    if (isRetentionOnlyLeaderOrShadow(item)) {
+                        // Theme-first contract: near-limit-up leaders are preserved only as
+                        // leadership/shadow evidence so POSTMARKET/T86 can keep a 10-symbol
+                        // research universe. They remain includeInFinalPlan=false and must not
+                        // become FinalDecision entry candidates through this bypass.
+                        accepted.add(item);
+                        decisions.add(null);
+                        continue;
+                    }
                     rejections.add(new CandidateBatchSaveResponse.Rejection(
                             item.symbol(),
                             "CHANGEPCT_HARD_GATE",
@@ -353,6 +362,16 @@ public class CandidateScanService {
                 claudeRiskFlags,
                 codexVetoed
         );
+    }
+
+    private boolean isRetentionOnlyLeaderOrShadow(CandidateBatchItemRequest item) {
+        if (item == null || Boolean.TRUE.equals(item.includeInFinalPlan())) return false;
+        String role = item.candidateRole() == null ? "" : item.candidateRole().trim();
+        return Boolean.TRUE.equals(item.isThemeLeader())
+                || Boolean.FALSE.equals(item.leaderTradable())
+                || "THEME_LEADER".equals(role)
+                || "SECOND_LEADER".equals(role)
+                || "WATCH_ONLY".equals(role);
     }
 
     private CandidateBatchSaveResponse.Rejection buildRejection(

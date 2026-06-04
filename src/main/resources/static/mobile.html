@@ -771,7 +771,7 @@ function aiTrustMeta(fd){
   const fb = String(fd?.fallbackReason || '').trim();
   if (ai.score >= 90) return {...ai, dataQuality:dq, label:'AI 未就緒 / 只可人工觀察', trust:'manual_only'};
   if (ai.score >= 60 || fb) return {...ai, dataQuality:dq, label:'AI 降級 / 禁止直接採信', trust:'degraded'};
-  if (dq.hasIssue) return {...ai, tone:dq.critical>0?'danger':'warning', score:dq.critical>0?88:62, dataQuality:dq, label:'AI 可用 / 資料有缺口', trust:'data_gap'};
+  if (dq.hasIssue) return {...ai, tone:dq.critical>0?'danger':'warning', score:dq.critical>0?88:62, dataQuality:dq, label:dq.warnCount>0?'AI 可用 / 進階題材研究未更新':'AI 可用 / 持股資料有缺口', trust:'data_gap'};
   return {...ai, dataQuality:dq, label:'AI 可用 / 資料可信', trust:'trusted'};
 }
 function commandActionText(state, topRisk){

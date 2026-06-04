@@ -97,7 +97,13 @@ public class KolSignalController {
         LocalDate target = date != null ? date : LocalDate.now();
         var themes = aggregationService.getSnapshots(target);
         int signalCount = signalRepo.findByTradingDateOrderByCreatedAtDesc(target).size();
-        return new KolDashboardResponse(target, signalCount, themes.size(), themes);
+        LocalDate latestSignalDate = signalRepo.findLatestTradingDate();
+        var freshness = new DataFreshnessService().evaluate(latestSignalDate, false);
+        long signalCount7d = signalRepo.countByTradingDateBetween(target.minusDays(6), target);
+        String warning = signalCount == 0 ? "NO_RECENT_SIGNAL" : freshness.warning();
+        return new KolDashboardResponse(target, signalCount, themes.size(), themes,
+                latestSignalDate, freshness.staleDays(), freshness.dataFreshnessStatus().name(),
+                latestSignalDate, signalCount, signalCount7d, warning);
     }
 
     @GetMapping("/themes")

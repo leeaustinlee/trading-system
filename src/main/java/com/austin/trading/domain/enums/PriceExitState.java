@@ -1,0 +1,14 @@
+package com.austin.trading.domain.enums;
+
+public enum PriceExitState {
+    NO_TRIGGER,
+    EFFECTIVE_STOP_TOUCH,
+    TRAILING_STOP_TOUCH,
+    DRAWDOWN_THRESHOLD_TOUCH,
+    MOMENTUM_EXIT_SIGNAL,
+    PREVIOUS_LOW_BREAK,
+    ATR_STOP_TOUCH,
+    HYBRID_STOP_TOUCH,
+    HARD_STOP_BREACH,
+    DATA_GAP
+}

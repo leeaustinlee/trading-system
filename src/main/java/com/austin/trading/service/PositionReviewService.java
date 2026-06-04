@@ -4,6 +4,7 @@ import com.austin.trading.dto.internal.MarketRegimeDecision;
 import com.austin.trading.dto.internal.ThemeStrengthDecision;
 import com.austin.trading.dto.request.PositionCloseRequest;
 import com.austin.trading.dto.response.LiveQuoteResponse;
+import com.austin.trading.engine.ExitArbiterInput;
 import com.austin.trading.engine.ExitRegimeIntegrationEngine;
 import com.austin.trading.engine.PositionDecisionEngine;
 import com.austin.trading.engine.PositionDecisionEngine.*;
@@ -12,6 +13,8 @@ import com.austin.trading.engine.PositionHealthInput;
 import com.austin.trading.engine.PositionHealthResult;
 import com.austin.trading.engine.ShadowExitRuleEngine;
 import com.austin.trading.engine.StopLossTakeProfitEngine;
+import com.austin.trading.engine.StructureAwareExitArbiter;
+import com.austin.trading.engine.StructureAwareExitDecision;
 import com.austin.trading.entity.PaperTradeEntity;
 import com.austin.trading.entity.PositionHealthLogEntity;
 import com.austin.trading.entity.PositionEntity;
@@ -71,6 +74,8 @@ public class PositionReviewService {
     private ObjectProvider<DailyTechnicalService> dailyTechnicalServiceProvider;
     private ObjectProvider<PositionHealthEngine> positionHealthEngineProvider;
     private ObjectProvider<ShadowExitRuleEngine> shadowExitRuleEngineProvider;
+    private ObjectProvider<StructureAwareExitArbiter> structureAwareExitArbiterProvider;
+    private ObjectProvider<StructuralExitDecisionLogService> structuralExitDecisionLogServiceProvider;
     private final ObjectMapper shadowObjectMapper = new ObjectMapper();
 
     public PositionReviewService(
@@ -128,18 +133,33 @@ public class PositionReviewService {
         this.positionServiceProvider      = positionServiceProvider;
     }
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setShadowDiagnosisCollaborators(
             ObjectProvider<PositionHealthLogRepository> positionHealthLogRepositoryProvider,
             ObjectProvider<ShadowExitComparisonRepository> shadowExitComparisonRepositoryProvider,
             ObjectProvider<DailyTechnicalService> dailyTechnicalServiceProvider,
             ObjectProvider<PositionHealthEngine> positionHealthEngineProvider,
             ObjectProvider<ShadowExitRuleEngine> shadowExitRuleEngineProvider) {
+        setShadowDiagnosisCollaborators(positionHealthLogRepositoryProvider, shadowExitComparisonRepositoryProvider,
+                dailyTechnicalServiceProvider, positionHealthEngineProvider, shadowExitRuleEngineProvider,
+                null, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setShadowDiagnosisCollaborators(
+            ObjectProvider<PositionHealthLogRepository> positionHealthLogRepositoryProvider,
+            ObjectProvider<ShadowExitComparisonRepository> shadowExitComparisonRepositoryProvider,
+            ObjectProvider<DailyTechnicalService> dailyTechnicalServiceProvider,
+            ObjectProvider<PositionHealthEngine> positionHealthEngineProvider,
+            ObjectProvider<ShadowExitRuleEngine> shadowExitRuleEngineProvider,
+            ObjectProvider<StructureAwareExitArbiter> structureAwareExitArbiterProvider,
+            ObjectProvider<StructuralExitDecisionLogService> structuralExitDecisionLogServiceProvider) {
         this.positionHealthLogRepositoryProvider = positionHealthLogRepositoryProvider;
         this.shadowExitComparisonRepositoryProvider = shadowExitComparisonRepositoryProvider;
         this.dailyTechnicalServiceProvider = dailyTechnicalServiceProvider;
         this.positionHealthEngineProvider = positionHealthEngineProvider;
         this.shadowExitRuleEngineProvider = shadowExitRuleEngineProvider;
+        this.structureAwareExitArbiterProvider = structureAwareExitArbiterProvider;
+        this.structuralExitDecisionLogServiceProvider = structuralExitDecisionLogServiceProvider;
     }
 
     /**
@@ -642,10 +662,11 @@ public class PositionReviewService {
                     ? techSvc.snapshot("t00", LocalDate.now())
                     : DailyTechnicalService.TechnicalSnapshot.empty(List.of("DATA_GAP: benchmark daily data unavailable"));
 
+            PositionHealthResult health = null;
             PositionHealthEngine healthEngine = positionHealthEngineProvider != null
                     ? positionHealthEngineProvider.getIfAvailable() : null;
             if (healthEngine != null) {
-                PositionHealthResult health = healthEngine.evaluate(new PositionHealthInput(
+                health = healthEngine.evaluate(new PositionHealthInput(
                         pos.getSymbol(), pos.getAvgCost(), currentPrice,
                         tech.ma5(), tech.ma10(), tech.ma20(), tech.ma5Previous(),
                         tech.previousLow(), tech.recentHigh(), tech.atr(), tech.volumeRatio(),
@@ -653,6 +674,8 @@ public class PositionReviewService {
                         null, null, "UNKNOWN"));
                 savePositionHealth(pos, currentPrice, health);
             }
+
+            writeStructureAwareExitShadowLog(pos, decision, currentPrice, tech, benchmark, health);
 
             ShadowExitRuleEngine shadowEngine = shadowExitRuleEngineProvider != null
                     ? shadowExitRuleEngineProvider.getIfAvailable() : null;
@@ -671,6 +694,84 @@ public class PositionReviewService {
         if (pos.getTrailingStopPrice() == null) return pos.getStopLossPrice();
         if (pos.getStopLossPrice() == null) return pos.getTrailingStopPrice();
         return pos.getTrailingStopPrice().max(pos.getStopLossPrice());
+    }
+
+    private void writeStructureAwareExitShadowLog(PositionEntity pos,
+                                                  PositionDecisionResult decision,
+                                                  BigDecimal currentPrice,
+                                                  DailyTechnicalService.TechnicalSnapshot tech,
+                                                  DailyTechnicalService.TechnicalSnapshot benchmark,
+                                                  PositionHealthResult health) {
+        try {
+            StructureAwareExitArbiter arbiter = structureAwareExitArbiterProvider != null
+                    ? structureAwareExitArbiterProvider.getIfAvailable() : null;
+            StructuralExitDecisionLogService logService = structuralExitDecisionLogServiceProvider != null
+                    ? structuralExitDecisionLogServiceProvider.getIfAvailable() : null;
+            if (arbiter == null || logService == null) return;
+
+            ThemeStrengthDecision theme = themeStrengthService != null
+                    ? themeStrengthService.findForSymbol(pos.getSymbol(), LocalDate.now()).orElse(null)
+                    : null;
+
+            BigDecimal entry = pos.getAvgCost();
+            BigDecimal drawdownPct = BigDecimal.ZERO;
+            if (entry != null && entry.signum() > 0 && currentPrice != null) {
+                drawdownPct = entry.subtract(currentPrice)
+                        .divide(entry, 6, RoundingMode.HALF_UP)
+                        .multiply(new BigDecimal("100"));
+            }
+
+            ExitArbiterInput input = ExitArbiterInput.builder()
+                    .position(pos)
+                    .tradeRefType("POSITION")
+                    .tradeRefId(pos.getId())
+                    .sourceDecision(decision)
+                    .entryPrice(entry)
+                    .currentPrice(currentPrice)
+                    .hardStopPrice(pos.getStopLossPrice())
+                    .trailingStopPrice(pos.getTrailingStopPrice())
+                    .dynamicStopPrice(effectiveStop(pos))
+                    .ma5(tech != null ? tech.ma5() : null)
+                    .ma10(tech != null ? tech.ma10() : null)
+                    .ma20(tech != null ? tech.ma20() : null)
+                    .previousLow(tech != null ? tech.previousLow() : null)
+                    .recentHigh(tech != null ? tech.recentHigh() : null)
+                    .atr(tech != null ? tech.atr() : null)
+                    .volumeRatio(tech != null ? tech.volumeRatio() : null)
+                    .return5d(tech != null ? tech.return5d() : null)
+                    .benchmarkReturn5d(benchmark != null ? benchmark.return5d() : null)
+                    .return10d(tech != null ? tech.return10d() : null)
+                    .benchmarkReturn10d(benchmark != null ? benchmark.return10d() : null)
+                    .healthScore(health != null ? health.healthScore() : null)
+                    .structureStatus(health != null ? health.structureStatus() : null)
+                    .volumeStatus(health != null ? health.volumeStatus() : null)
+                    .relativeStrengthStatus(health != null ? health.relativeStrengthStatus() : null)
+                    .chipStatus(health != null ? health.chipStatus() : null)
+                    .themeStage(theme != null ? theme.themeStage() : null)
+                    .themeScore(theme != null ? theme.strengthScore() : null)
+                    .mainstreamTheme(theme != null && isMainstreamThemeStage(theme.themeStage()))
+                    .drawdownPct(drawdownPct)
+                    .momentumExitSignal(decision != null && decision.reason() != null
+                            && decision.reason().toUpperCase().contains("MOMENTUM"))
+                    .build();
+            StructureAwareExitDecision shadowDecision = arbiter.evaluate(input);
+            logService.saveShadowLog(input, shadowDecision);
+        } catch (Exception e) {
+            log.debug("[PositionReview] structure-aware exit shadow log skipped symbol={} reason={}",
+                    pos.getSymbol(), e.getMessage());
+        }
+    }
+
+    private boolean isMainstreamThemeStage(String stage) {
+        if (stage == null || stage.isBlank()) return false;
+        String s = stage.trim().toUpperCase(java.util.Locale.ROOT);
+        if (s.contains("DECAY") || s.contains("DEAD") || s.contains("BROKEN") || s.contains("DISTRIBUTION")) return false;
+        return s.contains("MAINSTREAM")
+                || s.contains("EXPAND")
+                || s.contains("EMERGING")
+                || s.contains("MID_TREND")
+                || s.contains("STABLE")
+                || s.contains("LEADERSHIP");
     }
 
     private void savePositionHealth(PositionEntity pos, BigDecimal currentPrice, PositionHealthResult health) throws Exception {

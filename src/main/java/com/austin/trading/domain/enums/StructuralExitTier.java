@@ -5,10 +5,12 @@ package com.austin.trading.domain.enums;
  * Does not trigger automatic sell/order actions.
  */
 public enum StructuralExitTier {
-    HOLD,
-    OBSERVE_1D,
-    REDUCE_REVIEW,
-    EXIT_REVIEW,
     HARD_EXIT_ALERT,
+    EXIT_REVIEW,
+    REDUCE_REVIEW,
+    OBSERVE_1D,
+    HOLD_THESIS,
+    /** Backward-compatible alias for older health-v2 structural engine users. */
+    HOLD,
     DATA_GAP
 }

@@ -78,7 +78,15 @@ public class TomorrowPlan1800Job {
 
         try {
             MarketCurrentResponse market = marketDataService.getCurrentMarket().orElse(null);
-            List<CandidateResponse> candidates = candidateScanService.getCurrentCandidates(10);
+            List<CandidateResponse> candidates = candidateScanService.getNextCandidates(10);
+            if (candidates.isEmpty()) {
+                candidates = candidateScanService.getLatestCandidates(10);
+                log.warn("[TomorrowPlan1800Job] next candidates empty; fallback to latest candidates.");
+            }
+            if (candidates.isEmpty()) {
+                candidates = candidateScanService.getCurrentCandidates(10);
+                log.warn("[TomorrowPlan1800Job] latest candidates empty; fallback to current candidates.");
+            }
             List<PositionResponse> openPositionsBeforeReview = positionService.getOpenPositions(20);
             int reviewedCount = 0;
             if (!openPositionsBeforeReview.isEmpty()) {

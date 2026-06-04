@@ -99,6 +99,10 @@ trading:
     market-index-data-prep:
       enabled: ${MARKET_INDEX_DATA_PREP_ENABLED:true}
     market-index-data-prep-cron: "0 40 15 * * MON-FRI"
+    # 盤後補齊 OPEN 持股個股日線，供 health-v2 計算 MA/量比/相對強弱。
+    portfolio-daily-bars-backfill:
+      enabled: ${PORTFOLIO_DAILY_BARS_BACKFILL_ENABLED:true}
+    portfolio-daily-bars-backfill-cron: "0 50 15 * * MON-FRI"
   paper-trade:
     enabled: ${PAPER_TRADE_ENABLED:true}
 

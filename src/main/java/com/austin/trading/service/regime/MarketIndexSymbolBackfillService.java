@@ -5,9 +5,11 @@ import com.austin.trading.client.TwseHistoryClient.DailyBar;
 import com.austin.trading.entity.CandidateForwardTrackingEntity;
 import com.austin.trading.entity.CandidateStockEntity;
 import com.austin.trading.entity.PaperTradeEntity;
+import com.austin.trading.entity.PositionEntity;
 import com.austin.trading.repository.CandidateForwardTrackingRepository;
 import com.austin.trading.repository.CandidateStockRepository;
 import com.austin.trading.repository.PaperTradeRepository;
+import com.austin.trading.repository.PositionRepository;
 import com.austin.trading.service.ScoreConfigService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +34,7 @@ public class MarketIndexSymbolBackfillService {
     private final PaperTradeRepository paperTradeRepository;
     private final CandidateForwardTrackingRepository forwardTrackingRepository;
     private final CandidateStockRepository candidateStockRepository;
+    private final PositionRepository positionRepository;
     private final ScoreConfigService scoreConfigService;
 
     public MarketIndexSymbolBackfillService(TwseHistoryClient twseHistoryClient,
@@ -39,12 +42,14 @@ public class MarketIndexSymbolBackfillService {
                                             PaperTradeRepository paperTradeRepository,
                                             CandidateForwardTrackingRepository forwardTrackingRepository,
                                             CandidateStockRepository candidateStockRepository,
+                                            PositionRepository positionRepository,
                                             ScoreConfigService scoreConfigService) {
         this.twseHistoryClient = twseHistoryClient;
         this.marketIndexBackfillService = marketIndexBackfillService;
         this.paperTradeRepository = paperTradeRepository;
         this.forwardTrackingRepository = forwardTrackingRepository;
         this.candidateStockRepository = candidateStockRepository;
+        this.positionRepository = positionRepository;
         this.scoreConfigService = scoreConfigService;
     }
 
@@ -244,6 +249,11 @@ public class MarketIndexSymbolBackfillService {
                                               boolean includeCandidates,
                                               int limit) {
         LinkedHashSet<String> symbols = new LinkedHashSet<>();
+        if (positionRepository != null) {
+            for (PositionEntity position : positionRepository.findByStatus("OPEN")) {
+                addSymbol(symbols, position.getSymbol(), limit);
+            }
+        }
         if (includePaperTrades) {
             for (PaperTradeEntity trade : paperTradeRepository.findByEntryDateBetweenOrderByEntryDateAscIdAsc(from, to)) {
                 addSymbol(symbols, trade.getSymbol(), limit);

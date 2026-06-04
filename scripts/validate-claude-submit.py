@@ -3,7 +3,7 @@
 Claude submit 本地驗證（v2.5）。
 
 給 Claude Code Agent 在寫 `claude-submit/*.json` 前 run 一次，
-檢查 scores.keys / thesis.keys ⊆ request.allowed_symbols。
+檢查 scores.keys / thesis.keys ⊆ request.scoring_allowed_symbols / tradable_candidate_symbols / candidates。
 
 用法：
   python3 validate-claude-submit.py \
@@ -83,8 +83,9 @@ def main() -> int:
     req = load_json(req_path)
     sub = load_json(sub_path)
 
-    # allowed_symbols 優先用 v2.5 明確欄位，fallback 到舊 candidates
-    allowed = req.get("allowed_symbols") or req.get("candidates") or []
+    # scoring_allowed_symbols / tradable_candidate_symbols / candidates 是 score/thesis/ENTER 的唯一合法 universe。
+    # allowed_symbols 舊版相容；若 request 已提供更精確欄位，不可用 unioned allowed_symbols 放寬 scoring universe。
+    allowed = req.get("scoring_allowed_symbols") or req.get("tradable_candidate_symbols") or req.get("candidates") or req.get("allowed_symbols") or []
     allowed_set = {str(s).strip() for s in allowed if s}
 
     if not allowed_set:

@@ -30,4 +30,22 @@ public class OpsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return service.buildTraces(date);
     }
+
+    @GetMapping("/theme-freshness")
+    public Map<String, Object> themeFreshness(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return service.themeFreshness(date);
+    }
+
+    @GetMapping("/build-status")
+    public Map<String, Object> buildStatus(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return service.buildStatus(date);
+    }
+
+    @GetMapping("/stale-data-report")
+    public Map<String, Object> staleDataReport(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return service.staleDataReport(date);
+    }
 }

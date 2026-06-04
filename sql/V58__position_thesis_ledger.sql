@@ -1,0 +1,42 @@
+-- V58: Position Thesis Ledger
+-- Read-only/manual-confirm evidence ledger for open-position buy thesis,
+-- theme thesis, expected wave, and invalidation conditions.
+
+CREATE TABLE IF NOT EXISTS position_thesis_ledger (
+    id                         BIGINT        NOT NULL AUTO_INCREMENT,
+    symbol                     VARCHAR(20)   NOT NULL,
+    stock_name                  VARCHAR(120)  NULL,
+    position_id                 BIGINT        NULL,
+    paper_trade_id              BIGINT        NULL,
+    entry_date                  DATE          NULL,
+    avg_cost                    DECIMAL(12,4) NULL,
+    entry_source                VARCHAR(40)   NULL,
+    entry_decision_id           BIGINT        NULL,
+    primary_theme               VARCHAR(120)  NULL,
+    secondary_themes            JSON          NULL,
+    thesis_summary              TEXT          NULL,
+    entry_reason                TEXT          NULL,
+    expected_holding_days       INT           NULL,
+    invalidation_condition      TEXT          NULL,
+    stop_type                   VARCHAR(60)   NULL,
+    target_wave                 VARCHAR(120)  NULL,
+    thesis_status               VARCHAR(30)   NOT NULL DEFAULT 'UNKNOWN',
+    thesis_confidence           DECIMAL(5,2)  NULL,
+    latest_review_date          TIMESTAMP     NULL,
+    latest_review_reason        TEXT          NULL,
+    open_position               BOOLEAN       NOT NULL DEFAULT TRUE,
+    evidence_json               JSON          NULL,
+    production_decision_allowed BOOLEAN       NOT NULL DEFAULT FALSE,
+    auto_sell_enabled           BOOLEAN       NOT NULL DEFAULT FALSE,
+    manual_confirm_required     BOOLEAN       NOT NULL DEFAULT TRUE,
+    created_at                  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at                  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (id),
+    KEY idx_position_thesis_symbol_open (symbol, open_position),
+    KEY idx_position_thesis_symbol_review (symbol, latest_review_date),
+    KEY idx_position_thesis_status (thesis_status),
+    KEY idx_position_thesis_entry_decision (entry_decision_id),
+    KEY idx_position_thesis_position (position_id),
+    KEY idx_position_thesis_paper_trade (paper_trade_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -5,6 +5,8 @@ import com.austin.trading.client.TwseMisClient;
 import com.austin.trading.client.dto.MarketBreadth;
 import com.austin.trading.client.dto.StockQuote;
 import com.austin.trading.dto.request.AiTaskCandidateRef;
+import com.austin.trading.dto.request.CandidateBatchItemRequest;
+import com.austin.trading.dto.response.CandidateBatchSaveResponse;
 import com.austin.trading.dto.response.CandidateResponse;
 import com.austin.trading.entity.CandidateStockEntity;
 import com.austin.trading.entity.MarketSnapshotEntity;
@@ -191,6 +193,10 @@ public class PostmarketDataPrepJob {
             String marketGrade = marketGradeDecision.grade();
             breadth.ifPresent(b -> saveCloseSnapshot(today, b, marketGradeDecision));
 
+            LocalDate tomorrow = nextTradingDate(today);
+            CandidateBatchSaveResponse tomorrowSave = candidateScanService.saveBatchWithGate(
+                    toTomorrowCandidateBatch(candidates, tomorrow));
+
             List<AiTaskCandidateRef> refs = candidates.stream()
                     .map(c -> new AiTaskCandidateRef(
                             c.symbol(), c.stockName(), c.themeTag(), c.javaStructureScore()))
@@ -232,10 +238,13 @@ public class PostmarketDataPrepJob {
             }
 
             String msg = String.format(
-                    "breadth=%s candidates=%d updated=%d universeSource=%s marketGrade=%s retainedLeaders=%d scoringSymbols=%s",
+                    "breadth=%s candidates=%d updated=%d tomorrowDate=%s tomorrowAccepted=%d tomorrowRejected=%d universeSource=%s marketGrade=%s retainedLeaders=%d scoringSymbols=%s",
                     breadth.map(b -> b.advances() + "/" + b.declines()).orElse("N/A"),
                     candidates.size(),
                     updated,
+                    tomorrow,
+                    tomorrowSave.accepted(),
+                    tomorrowSave.rejected(),
                     universe.universeSource(),
                     marketGrade,
                     retainedLeaders,
@@ -337,6 +346,48 @@ public class PostmarketDataPrepJob {
         return MARKET_BREADTH_SCAN_PATHS.stream()
                 .filter(Files::exists)
                 .findFirst();
+    }
+
+    private List<CandidateBatchItemRequest> toTomorrowCandidateBatch(List<CandidateResponse> candidates, LocalDate tomorrow) {
+        if (candidates == null || candidates.isEmpty()) return List.of();
+        return candidates.stream()
+                .filter(c -> c != null && c.symbol() != null && !c.symbol().isBlank())
+                .map(c -> new CandidateBatchItemRequest(
+                        tomorrow,
+                        c.symbol(),
+                        c.stockName(),
+                        c.score(),
+                        c.reason(),
+                        c.themeTag(),
+                        c.sector(),
+                        null,
+                        c.valuationMode(),
+                        c.entryPriceZone(),
+                        c.stopLossPrice(),
+                        c.takeProfit1(),
+                        c.takeProfit2(),
+                        c.riskRewardRatio(),
+                        c.includeInFinalPlan(),
+                        c.candidateRole(),
+                        c.themeImportanceScore(),
+                        c.tradableScore(),
+                        c.shadowRankScore(),
+                        c.themeLeaderSymbol(),
+                        c.isThemeLeader(),
+                        c.leaderTradable(),
+                        c.leaderRetentionReason(),
+                        c.themeTraceId()
+                ))
+                .toList();
+    }
+
+    private LocalDate nextTradingDate(LocalDate date) {
+        LocalDate next = date.plusDays(1);
+        while (next.getDayOfWeek() == java.time.DayOfWeek.SATURDAY
+                || next.getDayOfWeek() == java.time.DayOfWeek.SUNDAY) {
+            next = next.plusDays(1);
+        }
+        return next;
     }
 
     private List<String> extractSymbols(JsonNode arrayNode) {

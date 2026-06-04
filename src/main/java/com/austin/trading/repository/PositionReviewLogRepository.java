@@ -11,6 +11,8 @@ public interface PositionReviewLogRepository extends JpaRepository<PositionRevie
 
     List<PositionReviewLogEntity> findByReviewDateOrderByCreatedAtDesc(LocalDate reviewDate);
 
+    List<PositionReviewLogEntity> findByReviewDateBetweenOrderByReviewDateAscIdAsc(LocalDate from, LocalDate to);
+
     /**
      * Latest review for a position.
      *

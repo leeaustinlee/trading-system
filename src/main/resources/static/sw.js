@@ -8,7 +8,7 @@
  *
  * 升版：改 CACHE_VERSION，舊 cache 自動清空。
  */
-const CACHE_VERSION = 'tt-v7-2026-05-25-themeops-local-date';
+const CACHE_VERSION = 'tt-v9-2026-06-04-themeops-ai-trust';
 const STATIC_CACHE  = `static-${CACHE_VERSION}`;
 const PRECACHE_URLS = [
   '/mobile.html',
