@@ -251,6 +251,7 @@
     #pageSettings .toolbar { min-width: 520px; }
     #pageLifecycle .card { overflow-x: auto; }
     #pageLifecycle table { min-width: 760px; }
+    #pageLifecycle .annotation-table { min-width: 1120px; }
     #pageLifecycle .toolbar { min-width: 520px; }
     .lifecycle-safety-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
     .lifecycle-warning { border:1px solid var(--c-wait-bd); border-left:3px solid var(--c-wait); background:var(--c-wait-bg); border-radius:var(--radius-sm); padding:9px 11px; font-size:12px; color:#6f4a00; margin-bottom:8px; }
@@ -258,6 +259,22 @@
     .lifecycle-map-list { display:grid; gap:6px; }
     .lifecycle-map-row { display:flex; justify-content:space-between; gap:10px; border:1px solid var(--line); border-radius:var(--radius-sm); padding:7px 9px; background:#f8fafd; }
     .lifecycle-map-row span:first-child { color:var(--muted); font-weight:700; overflow-wrap:anywhere; }
+    .lifecycle-annotation-title { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .lifecycle-annotation-note { color:var(--muted); font-size:12px; font-weight:700; }
+    .lifecycle-badge { display:inline-flex; align-items:center; max-width:180px; padding:2px 7px; border-radius:999px; font-size:11px; font-weight:800; border:1px solid var(--line); background:#f6f8fb; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .lifecycle-badge.stage-mainstream { background:#eaf6ff; color:#0f5594; border-color:#b9def8; }
+    .lifecycle-badge.stage-overheated { background:#fff3d6; color:#8a4a00; border-color:#f3d28b; }
+    .lifecycle-badge.stage-emerging { background:#eaf8ef; color:#17633a; border-color:#b8e2c7; }
+    .lifecycle-badge.stage-fading,
+    .lifecycle-badge.stage-cooling,
+    .lifecycle-badge.stage-distribution,
+    .lifecycle-badge.stage-dead { background:#f1f3f7; color:#596476; border-color:#d8dee8; }
+    .lifecycle-badge.action-data-gap-review,
+    .lifecycle-badge.action-hold-thesis-or-priority-review { background:#eaf6ff; color:#0f5594; border-color:#b9def8; }
+    .lifecycle-badge.action-watch-research-only,
+    .lifecycle-badge.action-no-chase-wait-pullback { background:#fff3d6; color:#8a4a00; border-color:#f3d28b; }
+    .lifecycle-badge.action-tighten-review,
+    .lifecycle-badge.action-avoid-or-exit-review { background:#fde8ec; color:#9f1d36; border-color:#f4bac6; }
 
     /* ── Misc ── */
     .mono { font-family: var(--mono); font-size: 12.5px; font-feature-settings: "tnum" 1; }
@@ -1483,6 +1500,73 @@
         <div id="lc-dataGapsPanel"></div>
       </section>
 
+      <section class="card span-12">
+        <h2 class="lifecycle-annotation-title">
+          Lifecycle Annotation
+          <span class="lifecycle-annotation-note">Annotation only · 不影響 BUY / SELL</span>
+          <span class="lifecycle-annotation-note">Review labels, not trading commands</span>
+        </h2>
+        <div class="toolbar">
+          <label>Date <input type="date" id="lc-anno-date" /></label>
+          <button class="btn" id="lc-anno-refresh">重新整理</button>
+          <span class="small" style="color:var(--muted);font-weight:700">annotation only · advisory only · review only</span>
+        </div>
+        <div class="lifecycle-safety-row" id="lc-anno-safety">
+          <span class="pill muted">annotationOnly</span>
+          <span class="pill muted">advisoryOnly</span>
+          <span class="pill muted">doesNotAffectBuySell</span>
+        </div>
+        <div class="stat-row" id="lc-anno-summary"></div>
+      </section>
+
+      <section class="card span-12">
+        <h2>Candidates Annotation</h2>
+        <table class="annotation-table">
+          <thead><tr>
+            <th>symbol</th><th>stockName</th><th>themeTag</th><th>stage</th>
+            <th class="num">lifecycleScore</th><th class="num">continuationDays</th><th class="num">breadth</th>
+            <th class="num">crowdingScore</th><th>advisoryAction</th><th>dataGapReason</th>
+          </tr></thead>
+          <tbody id="lc-anno-candidatesBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-12">
+        <h2>Watchlist Annotation</h2>
+        <table class="annotation-table">
+          <thead><tr>
+            <th>symbol</th><th>stockName</th><th>themeTag</th><th>stage</th>
+            <th class="num">lifecycleScore</th><th class="num">continuationDays</th><th class="num">breadth</th>
+            <th class="num">crowdingScore</th><th>advisoryAction</th><th>dataGapReason</th>
+          </tr></thead>
+          <tbody id="lc-anno-watchlistBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-12">
+        <h2>Ranking Annotation</h2>
+        <table class="annotation-table">
+          <thead><tr>
+            <th>symbol</th><th>stockName</th><th>themeTag</th><th>stage</th>
+            <th class="num">lifecycleScore</th><th class="num">continuationDays</th><th class="num">breadth</th>
+            <th class="num">crowdingScore</th><th>advisoryAction</th><th>dataGapReason</th>
+          </tr></thead>
+          <tbody id="lc-anno-rankingBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-12">
+        <h2>Positions Annotation</h2>
+        <table class="annotation-table">
+          <thead><tr>
+            <th>symbol</th><th>stockName</th><th>themeTag</th><th>stage</th>
+            <th class="num">lifecycleScore</th><th class="num">continuationDays</th><th class="num">breadth</th>
+            <th class="num">crowdingScore</th><th>advisoryAction</th><th>dataGapReason</th>
+          </tr></thead>
+          <tbody id="lc-anno-positionsBody"></tbody>
+        </table>
+      </section>
+
     </div>
   </div>
 </div>
@@ -2659,6 +2743,107 @@ function clearErr(boxId) {
     } catch(e) {
       showErr("errBoxLifecycle", e.message || "Lifecycle calibration 載入失敗");
     }
+  }
+
+  function lifecycleAnnotationDateParam() {
+    const el = $("lc-anno-date");
+    if (el && !el.value) el.value = new Date().toLocaleDateString("sv-SE");
+    return el?.value || new Date().toLocaleDateString("sv-SE");
+  }
+
+  function lcBadgeClass(prefix, value) {
+    return `${prefix}-${String(value || "gap").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+  }
+
+  function lcStageBadge(stage) {
+    const label = stage || "DATA_GAP";
+    return `<span class="lifecycle-badge ${lcBadgeClass("stage", label)}">${esc(label)}</span>`;
+  }
+
+  function lcAdvisoryLabel(action) {
+    const a = String(action || "").toUpperCase();
+    if (a === "NO_CHASE_WAIT_PULLBACK") return "no chase · review pullback";
+    if (a === "TIGHTEN_REVIEW") return "tighten review";
+    if (a === "HOLD_THESIS_OR_PRIORITY_REVIEW") return "thesis / priority review";
+    if (a === "WATCH_RESEARCH_ONLY") return "watch research only";
+    if (a === "AVOID_OR_EXIT_REVIEW") return "risk review only";
+    if (a === "DATA_GAP_REVIEW") return "data gap review";
+    return action || "review only";
+  }
+
+  function lcAdvisoryBadge(action) {
+    const label = lcAdvisoryLabel(action);
+    return `<span class="lifecycle-badge ${lcBadgeClass("action", action || label)}">${esc(label)}</span>`;
+  }
+
+  function renderLifecycleAnnotationRows(rows, bodyId) {
+    const items = Array.isArray(rows) ? rows : [];
+    const body = $(bodyId);
+    if (!body) return;
+    body.innerHTML = items.length ? items.map(r => `<tr>
+      <td class="mono">${esc(r.symbol)}</td>
+      <td>${esc(r.stockName)}</td>
+      <td>${esc(r.themeTag)}</td>
+      <td>${lcStageBadge(r.stage)}</td>
+      <td class="num">${lcNum(r.lifecycleScore, 4)}</td>
+      <td class="num">${esc(r.continuationDays ?? "-")}</td>
+      <td class="num">${esc(r.breadth ?? "-")}</td>
+      <td class="num">${lcNum(r.crowdingScore, 4)}</td>
+      <td>${lcAdvisoryBadge(r.advisoryAction)}</td>
+      <td>${r.dataGapReason ? pill(r.dataGapReason, "warn") : pill("OK", "ok")}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="10">無 annotation rows</td></tr>`;
+  }
+
+  function renderLifecycleAnnotations(responses) {
+    const groups = responses || {};
+    const list = ["candidates", "watchlist", "ranking", "positions"].map(k => groups[k] || {});
+    const safety = {
+      annotationOnly: list.every(r => r.annotationOnly === true),
+      advisoryOnly: list.every(r => r.advisoryOnly === true),
+      doesNotAffectBuySell: list.every(r => r.doesNotAffectBuySell === true)
+    };
+    $("lc-anno-safety").innerHTML = [
+      lcSafetyPill(safety.annotationOnly, "annotationOnly"),
+      lcSafetyPill(safety.advisoryOnly, "advisoryOnly"),
+      lcSafetyPill(safety.doesNotAffectBuySell, "doesNotAffectBuySell"),
+      `<span class="pill warn">not decision</span>`,
+      `<span class="pill warn">review only</span>`
+    ].join("");
+
+    $("lc-anno-summary").innerHTML = [
+      ["date", lifecycleAnnotationDateParam()],
+      ["candidates", (groups.candidates?.items || []).length],
+      ["watchlist", (groups.watchlist?.items || []).length],
+      ["ranking", (groups.ranking?.items || []).length],
+      ["positions", (groups.positions?.items || []).length],
+      ["data gaps", list.reduce((sum, r) => sum + ((r.dataGaps || []).length), 0)]
+    ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value ?? 0)}</div></div>`).join("");
+
+    renderLifecycleAnnotationRows(groups.candidates?.items, "lc-anno-candidatesBody");
+    renderLifecycleAnnotationRows(groups.watchlist?.items, "lc-anno-watchlistBody");
+    renderLifecycleAnnotationRows(groups.ranking?.items, "lc-anno-rankingBody");
+    renderLifecycleAnnotationRows(groups.positions?.items, "lc-anno-positionsBody");
+  }
+
+  async function loadLifecycleAnnotations() {
+    clearErr("errBoxLifecycle");
+    const date = lifecycleAnnotationDateParam();
+    try {
+      const [candidates, watchlist, ranking, positions] = await Promise.all([
+        api(`/api/theme-lifecycle/annotations/candidates?date=${encodeURIComponent(date)}`),
+        api(`/api/theme-lifecycle/annotations/watchlist?date=${encodeURIComponent(date)}`),
+        api(`/api/theme-lifecycle/annotations/ranking?date=${encodeURIComponent(date)}`),
+        api(`/api/theme-lifecycle/annotations/positions?date=${encodeURIComponent(date)}`)
+      ]);
+      renderLifecycleAnnotations({ candidates, watchlist, ranking, positions });
+    } catch(e) {
+      showErr("errBoxLifecycle", e.message || "Lifecycle annotation 載入失敗");
+    }
+  }
+
+  function loadLifecyclePage() {
+    loadLifecycleCalibration();
+    loadLifecycleAnnotations();
   }
 
   function showCopyableError(title, message) {
@@ -5796,7 +5981,7 @@ window.finalizeCatchup = async function(taskId) {
       case "pagePnl":        loadPnl(); break;
       case "pagePapers":     loadPapers(); break;
       case "pageDecisions":  loadDecisions(); break;
-      case "pageLifecycle":  loadLifecycleCalibration(); break;
+      case "pageLifecycle":  loadLifecyclePage(); break;
       case "pageAiResearch": loadAiResearch(); break;
       case "pageScheduler":  loadScheduler(); break;
       case "pageSystem":     loadSystemPage(); break;
@@ -5833,6 +6018,7 @@ window.finalizeCatchup = async function(taskId) {
     else await refreshCurrent();
   });
   $("lc-refresh")?.addEventListener("click", loadLifecycleCalibration);
+  $("lc-anno-refresh")?.addEventListener("click", loadLifecycleAnnotations);
   $("dec-btnEvaluate").addEventListener("click", runFinalDecisionEvaluate);
 
   /* ─────────────────────────────────────────────
