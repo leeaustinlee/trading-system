@@ -1,5 +1,6 @@
 package com.austin.trading.engine;
 
+import com.austin.trading.domain.enums.ThemeAdmissionProductionAction;
 import com.austin.trading.domain.enums.ThemeAdmissionShadowAction;
 import com.austin.trading.entity.HotGroupStockSignalEntity;
 import org.springframework.stereotype.Component;
@@ -69,6 +70,47 @@ public class ThemeDrivenAdmissionEngine {
                 "follower/other role: observe only", false, false, false, false, nearLimit);
     }
 
+    public ProductionDecision evaluateProduction(ProductionInput input) {
+        if (input == null || input.signal() == null) {
+            return new ProductionDecision(ThemeAdmissionProductionAction.REJECT_BAD_DATA, "missing signal");
+        }
+        HotGroupStockSignalEntity signal = input.signal();
+        if (isBlank(signal.getSymbol())) {
+            return new ProductionDecision(ThemeAdmissionProductionAction.REJECT_BAD_DATA, "missing symbol");
+        }
+        if (signal.getTradingDate() == null) {
+            return new ProductionDecision(ThemeAdmissionProductionAction.REJECT_BAD_DATA, "missing trading date");
+        }
+        if (isBlank(signal.getThemeTag())) {
+            return new ProductionDecision(ThemeAdmissionProductionAction.REJECT_WEAK_THEME, "missing theme");
+        }
+        if (Boolean.TRUE.equals(input.existingCandidate()) || Boolean.TRUE.equals(input.existingWatchlist())) {
+            return new ProductionDecision(ThemeAdmissionProductionAction.SKIP_ALREADY_EXISTS, "candidate/watchlist already exists");
+        }
+        if (Boolean.TRUE.equals(signal.getLimitRisk())) {
+            return new ProductionDecision(ThemeAdmissionProductionAction.SKIP_LIMIT_RISK, "limit risk remains shadow-only in P1-A");
+        }
+        if (isBadTradability(signal.getTradabilityTag()) || Boolean.TRUE.equals(input.suspended()) || Boolean.TRUE.equals(input.noPrice())) {
+            return new ProductionDecision(ThemeAdmissionProductionAction.REJECT_BAD_DATA, "bad tradability/suspended/no price");
+        }
+        if (Boolean.FALSE.equals(input.liquidityPass())) {
+            return new ProductionDecision(ThemeAdmissionProductionAction.REJECT_LIQUIDITY, "liquidity check failed");
+        }
+        if (isWeakTheme(signal.getRadarRankScore())) {
+            return new ProductionDecision(ThemeAdmissionProductionAction.REJECT_WEAK_THEME, "weak or missing theme strength");
+        }
+
+        String role = normalize(signal.getRole());
+        ShadowDecision shadow = evaluate(signal);
+        if (isThemeLeaderRole(role) && shadow.action() == ThemeAdmissionShadowAction.WOULD_ADMIT_CANDIDATE) {
+            return new ProductionDecision(ThemeAdmissionProductionAction.ADMIT_CANDIDATE, shadow.reason());
+        }
+        if (shadow.action() == ThemeAdmissionShadowAction.WOULD_ADMIT_WATCHLIST) {
+            return new ProductionDecision(ThemeAdmissionProductionAction.ADMIT_WATCHLIST, shadow.reason());
+        }
+        return new ProductionDecision(ThemeAdmissionProductionAction.SHADOW_ONLY, shadow.reason());
+    }
+
     private ShadowDecision reject(String reason, boolean limitRisk, boolean nearLimit,
                                   boolean leaderLike, boolean watchlistLike) {
         return new ShadowDecision(ThemeAdmissionShadowAction.REJECT, reason,
@@ -86,6 +128,18 @@ public class ThemeDrivenAdmissionEngine {
         String t = normalize(tag);
         return t.contains("SUSPEND") || t.contains("HALT") || t.contains("NO_PRICE") || t.contains("NO PRICE")
                 || t.contains("NO_QUOTE") || t.contains("NO QUOTE");
+    }
+
+    private boolean isWeakTheme(BigDecimal score) {
+        return score == null || score.compareTo(BigDecimal.ZERO) <= 0;
+    }
+
+    private boolean isThemeLeaderRole(String role) {
+        return "THEME_LEADER".equals(role) || "STRONGEST_LEADER".equals(role);
+    }
+
+    private boolean isSecondLeaderRole(String role) {
+        return "SECOND_LEADER".equals(role) || "THEME_SECOND_LEADER".equals(role);
     }
 
     private String normalize(String value) {
@@ -106,4 +160,17 @@ public class ThemeDrivenAdmissionEngine {
             boolean nearLimit
     ) { }
 
+    public record ProductionInput(
+            HotGroupStockSignalEntity signal,
+            Boolean existingCandidate,
+            Boolean existingWatchlist,
+            Boolean suspended,
+            Boolean noPrice,
+            Boolean liquidityPass
+    ) { }
+
+    public record ProductionDecision(
+            ThemeAdmissionProductionAction action,
+            String reason
+    ) { }
 }
