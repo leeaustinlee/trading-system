@@ -249,6 +249,15 @@
     #pageSettings .settings-config-table th,
     #pageSettings .settings-config-table td { word-break: break-word; }
     #pageSettings .toolbar { min-width: 520px; }
+    #pageLifecycle .card { overflow-x: auto; }
+    #pageLifecycle table { min-width: 760px; }
+    #pageLifecycle .toolbar { min-width: 520px; }
+    .lifecycle-safety-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+    .lifecycle-warning { border:1px solid var(--c-wait-bd); border-left:3px solid var(--c-wait); background:var(--c-wait-bg); border-radius:var(--radius-sm); padding:9px 11px; font-size:12px; color:#6f4a00; margin-bottom:8px; }
+    .lifecycle-warning.err { border-color:var(--c-blocked-bd); border-left-color:var(--c-blocked); background:var(--c-blocked-bg); color:#7d1928; }
+    .lifecycle-map-list { display:grid; gap:6px; }
+    .lifecycle-map-row { display:flex; justify-content:space-between; gap:10px; border:1px solid var(--line); border-radius:var(--radius-sm); padding:7px 9px; background:#f8fafd; }
+    .lifecycle-map-row span:first-child { color:var(--muted); font-weight:700; overflow-wrap:anywhere; }
 
     /* ── Misc ── */
     .mono { font-family: var(--mono); font-size: 12.5px; font-feature-settings: "tnum" 1; }
@@ -986,6 +995,7 @@
   <button class="nav-tab" data-page="pagePnl" style="display:none">損益</button>
   <button class="nav-tab" data-page="pagePapers" style="display:none">紙上交易</button>
   <button class="nav-tab" data-page="pageDecisions">決策</button>
+  <button class="nav-tab" data-page="pageLifecycle">Lifecycle</button>
   <button class="nav-tab" data-page="pageAiResearch">AI</button>
   <button class="nav-tab" data-page="pageScheduler" style="display:none">排程</button>
   <div class="nav-more">
@@ -1371,6 +1381,106 @@
           <thead><tr><th>時間</th><th>類型</th><th>標題</th><th>頻道</th></tr></thead>
           <tbody id="dec-notifBody"></tbody>
         </table>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE: Theme Lifecycle Calibration ══════════════ -->
+<div class="page" id="pageLifecycle">
+  <div class="wrap">
+    <div id="errBoxLifecycle" class="errbox"></div>
+    <div class="grid">
+
+      <section class="card span-12">
+        <h2>Theme Lifecycle Calibration <span class="small" style="margin-left:auto;color:var(--muted)">Read-only diagnostics</span></h2>
+        <div class="toolbar">
+          <label>Days <input type="number" id="lc-days" min="1" max="365" value="60" style="width:90px" /></label>
+          <button class="btn" id="lc-refresh">重新整理</button>
+          <span class="small" style="color:var(--muted);font-weight:700">Review / calibration only · 不影響 BUY / SELL</span>
+        </div>
+        <div class="lifecycle-safety-row" id="lc-safety">
+          <span class="pill muted">readOnly</span>
+          <span class="pill muted">advisoryOnly</span>
+          <span class="pill muted">doesNotAffectBuySell</span>
+        </div>
+        <div class="lifecycle-warning">
+          OVERHEATED currently may behave like strong crowded trend; do not treat as sell signal
+        </div>
+        <div class="stat-row" id="lc-summary"></div>
+      </section>
+
+      <section class="card span-12">
+        <h2>Stage Distribution</h2>
+        <table>
+          <thead><tr>
+            <th>stage</th><th class="num">sampleCount</th><th class="num">avgLifecycleScore</th>
+            <th class="num">avgContinuationDays</th><th class="num">avgBreadth</th><th class="num">avgCrowdingScore</th>
+          </tr></thead>
+          <tbody id="lc-stageBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-8">
+        <h2>Funnel Summary</h2>
+        <div class="stat-row" id="lc-funnelStats"></div>
+        <div class="grid" style="gap:10px">
+          <div class="span-4">
+            <h2 style="margin-top:4px">conversionRates</h2>
+            <div id="lc-conversionRates" class="lifecycle-map-list"></div>
+          </div>
+          <div class="span-4">
+            <h2 style="margin-top:4px">blockedStageDistribution</h2>
+            <div id="lc-blockedStages" class="lifecycle-map-list"></div>
+          </div>
+          <div class="span-4">
+            <h2 style="margin-top:4px">topBlockedReasons</h2>
+            <div id="lc-blockedReasons" class="lifecycle-map-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card span-4">
+        <h2>Theme Admission Summary</h2>
+        <div class="stat-row" id="lc-admissionStats"></div>
+        <h2 style="margin-top:4px">shadow action counts</h2>
+        <div id="lc-shadowActions" class="lifecycle-map-list"></div>
+      </section>
+
+      <section class="card span-12">
+        <h2>TopN Shadow</h2>
+        <table>
+          <thead><tr>
+            <th>bucket</th><th class="num">sampleCount</th><th class="num">avgActualReturn1d</th><th class="num">winRate1d</th>
+            <th class="num">avgActualReturn5d</th><th class="num">winRate5d</th><th class="num">avgActualReturn10d</th>
+            <th class="num">winRate10d</th><th class="num">avgMaxDrawdown10d</th><th class="num">missedByTop3Count</th>
+          </tr></thead>
+          <tbody id="lc-topNBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-6">
+        <h2>Predictive Power</h2>
+        <div id="lc-predictivePanel"></div>
+      </section>
+
+      <section class="card span-6">
+        <h2>Data Coverage</h2>
+        <table>
+          <thead><tr><th>table</th><th class="num">rows</th><th>range</th><th class="num">days</th><th>status</th></tr></thead>
+          <tbody id="lc-coverageBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-6">
+        <h2>Calibration Findings</h2>
+        <div id="lc-findingsPanel"></div>
+      </section>
+
+      <section class="card span-6">
+        <h2>Data Gaps</h2>
+        <div id="lc-dataGapsPanel"></div>
       </section>
 
     </div>
@@ -2398,6 +2508,157 @@ function clearErr(boxId) {
     box.innerHTML = `${qErr}<div class="stat-row"><div class="stat-box"><div class="stat-label">Quality</div><div class="stat-value">${esc(o.taxonomyQualityStatus || '—')}</div></div><div class="stat-box"><div class="stat-label">缺分類</div><div class="stat-value ${o.missingCategoryCount>0?'num-neg':''}">${esc(o.missingCategoryCount ?? '—')}</div></div><div class="stat-box"><div class="stat-label">低信心</div><div class="stat-value ${o.lowConfidenceCount>0?'num-neg':''}">${esc(o.lowConfidenceCount ?? '—')}</div></div><div class="stat-box"><div class="stat-label">歧義代號</div><div class="stat-value ${o.ambiguousSymbolCount>0?'num-neg':''}">${esc(o.ambiguousSymbolCount ?? '—')}</div></div><div class="stat-box"><div class="stat-label">Other%</div><div class="stat-value">${o.otherCategoryRatio!=null?esc(Number(o.otherCategoryRatio).toFixed(1)+'%'):'—'}</div></div><div class="stat-box"><div class="stat-label">待審</div><div class="stat-value">${esc(q.totalReviewItems ?? '—')}</div></div></div>
       <div class="small" style="color:var(--muted);margin:8px 0">${esc((o.qualityWarnings || []).slice(0,3).join(' / ') || o.taxonomyQualitySummary || o.safetyNote || '無重大警示')}</div>
       <div class="p1-chiprow">${Object.entries(by).map(([k,v]) => `<span class="p1-chip">${esc(k)} ${esc(v)}</span>`).join('')}</div>`;
+  }
+
+  function lifecycleDaysParam() {
+    const el = $("lc-days");
+    const n = Math.floor(Number(el?.value || 60));
+    const days = Math.max(1, Math.min(Number.isFinite(n) ? n : 60, 365));
+    if (el) el.value = String(days);
+    return days;
+  }
+
+  function lcNum(v, digits = 2) {
+    if (v == null || v === "") return "-";
+    const n = Number(v);
+    return Number.isFinite(n) ? n.toFixed(digits) : esc(v);
+  }
+
+  function lcPct(v) {
+    if (v == null || v === "") return "-";
+    const n = Number(v);
+    return Number.isFinite(n) ? `${n.toFixed(1)}%` : esc(v);
+  }
+
+  function lcMapList(map, valueFormatter = v => esc(v)) {
+    const entries = Object.entries(map || {});
+    if (!entries.length) return `<div class="terminal-empty">無資料</div>`;
+    return entries.map(([k,v]) => `<div class="lifecycle-map-row"><span>${esc(k)}</span><b class="mono">${valueFormatter(v)}</b></div>`).join("");
+  }
+
+  function lcSafetyPill(ok, label) {
+    return `<span class="pill ${ok ? 'ok' : 'err'}">${esc(label)}=${ok ? 'true' : 'false'}</span>`;
+  }
+
+  function lcFindingClass(severity) {
+    const s = String(severity || "").toUpperCase();
+    return s === "WARN" || s === "ERROR" || s === "CRITICAL" ? "err" : "";
+  }
+
+  function renderLifecycleWarnings(findings, gaps) {
+    const rows = Array.isArray(findings) ? findings : [];
+    const gapRows = Array.isArray(gaps) ? gaps : [];
+    const byCode = new Map(rows.map(f => [String(f.code || "").toUpperCase(), f]));
+    const watched = [
+      ["MAINSTREAM_ZERO", "No MAINSTREAM rows in this window; calibration may understate normal lifecycle behavior."],
+      ["OVERHEATED_STRONG_TREND_WARNING", "OVERHEATED currently may behave like strong crowded trend; do not treat as sell signal"],
+      ["PORTFOLIO_DATA_DATE_WARNING", "Portfolio risk data has future-dated rows; verify source dates before interpreting calibration."]
+    ];
+    const watchedHtml = watched.map(([code, fallback]) => {
+      const f = byCode.get(code);
+      return `<div class="lifecycle-warning ${f ? lcFindingClass(f.severity) : ''}">
+        <b class="mono">${esc(code)}</b> · ${esc(f?.message || fallback)}
+      </div>`;
+    }).join("");
+    const findingHtml = rows.length ? rows.map(f => `<div class="lifecycle-warning ${lcFindingClass(f.severity)}"><b class="mono">${esc(f.code || 'FINDING')}</b> · ${esc(f.severity || 'INFO')} · ${esc(f.message || '')}</div>`).join("") : `<div class="terminal-empty">目前無 calibration findings</div>`;
+    const gapHtml = gapRows.length ? gapRows.map(g => `<div class="lifecycle-warning"><b class="mono">DATA_GAP</b> · ${esc(g)}</div>`).join("") : `<div class="terminal-empty">目前無 data gaps</div>`;
+    return { watchedHtml, findingHtml, gapHtml };
+  }
+
+  function renderLifecycleCalibration(cal, gapResp) {
+    $("lc-safety").innerHTML = [
+      lcSafetyPill(cal.readOnly === true, "readOnly"),
+      lcSafetyPill(cal.advisoryOnly === true, "advisoryOnly"),
+      lcSafetyPill(cal.doesNotAffectBuySell === true, "doesNotAffectBuySell"),
+      `<span class="pill warn">Review / calibration only</span>`,
+      `<span class="pill warn">不影響 BUY / SELL</span>`
+    ].join("");
+
+    const stages = Array.isArray(cal.stageDistribution) ? cal.stageDistribution : [];
+    const lifecycleRows = stages.reduce((sum, r) => sum + Number(r.sampleCount || 0), 0);
+    const findings = Array.isArray(cal.calibrationFindings) ? cal.calibrationFindings : [];
+    const mainstreamWarnings = findings.filter(f => String(f.code || "").toUpperCase() === "MAINSTREAM_ZERO").length;
+    const findingWarnCount = findings.filter(f => /WARN|ERROR|CRITICAL/i.test(String(f.severity || ""))).length;
+    const range = cal.actualStartDate || cal.actualEndDate ? `${fmtDate(cal.actualStartDate)} → ${fmtDate(cal.actualEndDate)}` : "-";
+    const funnel = cal.funnelSummary || {};
+
+    $("lc-summary").innerHTML = [
+      ["requestedDays", cal.requestedDays ?? "-"],
+      ["available days", `${cal.actualAvailableDays ?? 0} / ${range}`],
+      ["lifecycle rows", lifecycleRows],
+      ["funnel signals", funnel.hotGroupSignalCount ?? 0],
+      ["MAINSTREAM / findings", `${mainstreamWarnings} / ${findingWarnCount}`]
+    ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
+
+    $("lc-stageBody").innerHTML = stages.length ? stages.map(r => `<tr>
+      <td>${zhEsc(r.stage)}</td><td class="num">${esc(r.sampleCount)}</td><td class="num">${lcNum(r.avgLifecycleScore)}</td>
+      <td class="num">${lcNum(r.avgContinuationDays)}</td><td class="num">${lcNum(r.avgBreadth)}</td><td class="num">${lcNum(r.avgCrowdingScore)}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="6">無 lifecycle stage samples</td></tr>`;
+
+    $("lc-funnelStats").innerHTML = [
+      ["hotGroupSignalCount", funnel.hotGroupSignalCount],
+      ["candidateHitCount", funnel.candidateHitCount],
+      ["watchlistHitCount", funnel.watchlistHitCount],
+      ["rankingHitCount", funnel.rankingHitCount],
+      ["riskPassCount", funnel.riskPassCount],
+      ["buyCount", funnel.buyCount]
+    ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value ?? 0)}</div></div>`).join("");
+    $("lc-conversionRates").innerHTML = lcMapList(funnel.conversionRates, lcPct);
+    $("lc-blockedStages").innerHTML = lcMapList(funnel.blockedStageDistribution);
+    $("lc-blockedReasons").innerHTML = lcMapList(funnel.topBlockedReasons);
+
+    const admission = cal.themeAdmissionSummary || {};
+    $("lc-admissionStats").innerHTML = [
+      ["would candidate", admission.wouldWriteCandidateCount],
+      ["would watchlist", admission.wouldWriteWatchlistCount],
+      ["would pullback", admission.wouldCreatePullbackPlanCount]
+    ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value ?? 0)}</div></div>`).join("");
+    $("lc-shadowActions").innerHTML = lcMapList(admission.shadowActionCounts);
+
+    const topN = Array.isArray(cal.topNShadowSummary) ? cal.topNShadowSummary : [];
+    $("lc-topNBody").innerHTML = topN.length ? topN.map(r => `<tr>
+      <td>${esc(r.bucket)}</td><td class="num">${esc(r.sampleCount)}</td><td class="num">${lcNum(r.avgActualReturn1d)}</td><td class="num">${lcPct(r.winRate1d)}</td>
+      <td class="num">${lcNum(r.avgActualReturn5d)}</td><td class="num">${lcPct(r.winRate5d)}</td><td class="num">${lcNum(r.avgActualReturn10d)}</td>
+      <td class="num">${lcPct(r.winRate10d)}</td><td class="num">${lcNum(r.avgMaxDrawdown10d)}</td><td class="num">${esc(r.missedByTop3Count ?? 0)}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="10">無 TopN shadow samples</td></tr>`;
+
+    const pp = cal.lifecycleMetricPredictivePower || {};
+    $("lc-predictivePanel").innerHTML = `<div class="kv">
+      <div class="k">n</div><div class="v mono">${esc(pp.n ?? 0)}</div>
+      <div class="k">lifecycle corr</div><div class="v mono">${lcNum(pp.lifecycleScoreCorrelation, 4)}</div>
+      <div class="k">continuation corr</div><div class="v mono">${lcNum(pp.continuationDaysCorrelation, 4)}</div>
+      <div class="k">breadth corr</div><div class="v mono">${lcNum(pp.breadthCorrelation, 4)}</div>
+      <div class="k">crowding corr</div><div class="v mono">${lcNum(pp.crowdingScoreCorrelation, 4)}</div>
+      <div class="k">top avg</div><div class="v mono">${lcNum(pp.topQuartileAvgReturn)}</div>
+      <div class="k">bottom avg</div><div class="v mono">${lcNum(pp.bottomQuartileAvgReturn)}</div>
+      <div class="k">spread</div><div class="v mono">${lcNum(pp.topBottomSpread)}</div>
+      <div class="k">data gap</div><div class="v">${esc(pp.dataGapReason || "-")}</div>
+    </div>`;
+
+    const coverage = Object.values((gapResp && gapResp.dataCoverage) || cal.dataCoverage || {});
+    $("lc-coverageBody").innerHTML = coverage.length ? coverage.map(c => `<tr>
+      <td class="mono">${esc(c.tableName)}</td><td class="num">${esc(c.rowCount ?? 0)}</td>
+      <td class="mono">${fmtDate(c.firstDate)} → ${fmtDate(c.lastDate)}</td><td class="num">${esc(c.availableDays ?? 0)}</td>
+      <td>${c.tableAvailable === false ? pill("TABLE MISSING", "err") : c.dataGapReason ? pill(c.dataGapReason, "warn") : pill("OK", "ok")}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="5">無 coverage 資料</td></tr>`;
+
+    const warningHtml = renderLifecycleWarnings(findings, (gapResp && gapResp.dataGaps) || cal.dataGaps || []);
+    $("lc-findingsPanel").innerHTML = warningHtml.watchedHtml + warningHtml.findingHtml;
+    $("lc-dataGapsPanel").innerHTML = warningHtml.gapHtml;
+  }
+
+  async function loadLifecycleCalibration() {
+    clearErr("errBoxLifecycle");
+    const days = lifecycleDaysParam();
+    try {
+      const [cal, gaps] = await Promise.all([
+        api(`/api/theme-lifecycle/calibration?days=${encodeURIComponent(days)}`),
+        api(`/api/theme-lifecycle/data-gaps?days=${encodeURIComponent(days)}`)
+      ]);
+      renderLifecycleCalibration(cal || {}, gaps || {});
+    } catch(e) {
+      showErr("errBoxLifecycle", e.message || "Lifecycle calibration 載入失敗");
+    }
   }
 
   function showCopyableError(title, message) {
@@ -5535,6 +5796,7 @@ window.finalizeCatchup = async function(taskId) {
       case "pagePnl":        loadPnl(); break;
       case "pagePapers":     loadPapers(); break;
       case "pageDecisions":  loadDecisions(); break;
+      case "pageLifecycle":  loadLifecycleCalibration(); break;
       case "pageAiResearch": loadAiResearch(); break;
       case "pageScheduler":  loadScheduler(); break;
       case "pageSystem":     loadSystemPage(); break;
@@ -5570,6 +5832,7 @@ window.finalizeCatchup = async function(taskId) {
     if (pageId === "pageDashboard") await loadDashboard();
     else await refreshCurrent();
   });
+  $("lc-refresh")?.addEventListener("click", loadLifecycleCalibration);
   $("dec-btnEvaluate").addEventListener("click", runFinalDecisionEvaluate);
 
   /* ─────────────────────────────────────────────
