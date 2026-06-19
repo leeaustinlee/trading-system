@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface HotGroupStockSignalRepository extends JpaRepository<HotGroupStockSignalEntity, Long> {
+    List<HotGroupStockSignalEntity> findByTradingDateOrderByRadarRankScoreDesc(LocalDate tradingDate);
     List<HotGroupStockSignalEntity> findByTradingDateAndSourcePhaseOrderByRadarRankScoreDesc(LocalDate tradingDate, String sourcePhase);
     List<HotGroupStockSignalEntity> findByTradingDateAndThemeTagOrderByRadarRankScoreDesc(LocalDate tradingDate, String themeTag);
     List<HotGroupStockSignalEntity> findByTradingDateAndSymbolOrderByRadarRankScoreDesc(LocalDate tradingDate, String symbol);
