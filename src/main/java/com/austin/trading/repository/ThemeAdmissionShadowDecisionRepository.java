@@ -13,6 +13,7 @@ public interface ThemeAdmissionShadowDecisionRepository extends JpaRepository<Th
     List<ThemeAdmissionShadowDecisionEntity> findByTradingDate(LocalDate tradingDate);
     List<ThemeAdmissionShadowDecisionEntity> findByTradingDateAndThemeTag(LocalDate tradingDate, String themeTag);
     List<ThemeAdmissionShadowDecisionEntity> findByTradingDateAndShadowAction(LocalDate tradingDate, ThemeAdmissionShadowAction shadowAction);
+    List<ThemeAdmissionShadowDecisionEntity> findByTradingDateBetweenOrderByTradingDateDescThemeTagAscSymbolAsc(LocalDate startDate, LocalDate endDate);
     Optional<ThemeAdmissionShadowDecisionEntity> findByTradingDateAndSymbolAndThemeTag(LocalDate tradingDate, String symbol, String themeTag);
     Optional<ThemeAdmissionShadowDecisionEntity> findByTradingDateAndSymbolAndThemeTagAndSignalId(LocalDate tradingDate, String symbol, String themeTag, Long signalId);
 }
