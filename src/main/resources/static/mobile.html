@@ -685,7 +685,7 @@ const S = {
   decisionsHistory:null, hourlyHistory:null, monitorHistory:null, decisionSnapshots:null,
   notifications:null, schedulerJobs:null, scheduledTasks:null,
   migrationHealth:null, themeMappings:null, featureModesSummary:null, featureModes:null,
-  themeOpsDate:localYmd(), themeOps:null, intelligence:null, intelThemes:[],
+  themeOpsDate:localYmd(), themeOps:null, lifecycleExitReview:null, intelligence:null, intelThemes:[],
   filter:'all',
   lastFetchAt:null, routeSeq:0, routeAbort:null, activeRoute:'overview', isRendering:false,
 };
@@ -1900,7 +1900,7 @@ async function fetchResearchTab(opts={}){
 function asRows(x){
   if (Array.isArray(x)) return x;
   if (!x || typeof x !== 'object') return [];
-  for (const k of ['items','rows','themes','states','traces','candidates','queue','signals','snapshots']){
+  for (const k of ['items','rows','reviewRows','exitReviewRows','themes','states','traces','candidates','queue','signals','snapshots']){
     if (Array.isArray(x[k])) return x[k];
   }
   return [];
@@ -1908,7 +1908,7 @@ function asRows(x){
 async function fetchThemeOpsTab(date, opts={}){
   const d = date || S.themeOpsDate || localYmd();
   S.themeOpsDate = d;
-  const [meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision, mappingObs, reviewQueue] = await Promise.all([
+  const [meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision, mappingObs, reviewQueue, exitReview] = await Promise.all([
     safeFetch('/api/dashboard/theme-first?date='+encodeURIComponent(d), 8000, opts),
     safeFetch('/api/ops/daily-summary?date='+encodeURIComponent(d), 8000, opts),
     safeFetch('/api/replay-metrics/safety-summary?date='+encodeURIComponent(d), 8000, opts),
@@ -1922,10 +1922,12 @@ async function fetchThemeOpsTab(date, opts={}){
     safeFetch('/api/candidates/current', 8000, opts),
     safeFetch('/api/decisions/current', 8000, opts),
     p1Fetch('/api/themes/mappings/observability', 8000, opts),
-    p1Fetch('/api/themes/mappings/manual-review-queue', 8000, opts)
+    p1Fetch('/api/themes/mappings/manual-review-queue', 8000, opts),
+    safeFetch('/api/theme-lifecycle/exit-review?date='+encodeURIComponent(d), 8000, opts)
   ]);
   if (!isRouteCurrent(opts.token)) return;
-  S.themeOps = {meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision, mappingObs, reviewQueue};
+  S.lifecycleExitReview = exitReview;
+  S.themeOps = {meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision, mappingObs, reviewQueue, exitReview};
 }
 async function fetchSchedulerTab(opts={}){
   const [jobs, tasks, today] = await Promise.all([
@@ -2376,11 +2378,34 @@ function themeCard(title, kv, badge){
   card.append(data);
   return card;
 }
+function lifecycleExitReviewAction(action){
+  const a = String(action || '').toUpperCase();
+  if (a.includes('DATA_GAP')) return 'Data gap';
+  if (a.includes('NO_CHASE')) return 'No chase';
+  if (a.includes('TIGHTEN')) return 'Tighten review';
+  if (a.includes('HOLD_THESIS') || a.includes('PRIORITY')) return 'Hold thesis';
+  if (a.includes('WATCH_RESEARCH')) return 'Watch research only';
+  return 'Review';
+}
 function appendThemeSection(app, title, rows, render, emptyText){
   const sec = el('section',{class:'section'});
   sec.append(el('div',{class:'section-title',html:`${title} <span class="count">${rows.length}</span>`}));
   if (!rows.length) sec.append(el('div',{class:'empty',text:emptyText || '目前無資料'}));
   else rows.slice(0,20).forEach(r => sec.append(render(r)));
+  app.append(sec);
+}
+function appendLifecycleExitReviewSection(app, payload){
+  const rows = asRows(payload).slice(0,5);
+  const sec = el('section',{class:'section'});
+  sec.append(el('div',{class:'section-title',html:`Lifecycle Exit Review <span class="count">${asRows(payload).length}</span>`}));
+  sec.append(el('div',{class:'empty',style:'margin-bottom:10px;padding:12px var(--sp-4)',text:'Review only · 不影響 BUY/SELL · 不自動賣出'}));
+  if (!rows.length) sec.append(el('div',{class:'empty',text:'目前無 review rows'}));
+  else rows.forEach(r => sec.append(themeCard(`${r.symbol || '—'} ${r.stockName || ''}`.trim(), {
+    stage: r.lifecycleStage || r.stage || '—',
+    reviewAction: lifecycleExitReviewAction(r.reviewAction),
+    priority: r.reviewPriority || 'REVIEW',
+    dataGapReason: truncate(r.dataGapReason || 'OK', 36)
+  }, 'REVIEW')));
   app.append(sec);
 }
 
@@ -2453,6 +2478,8 @@ Views.themeops = async (ctx={}) => {
     playbook: truncate(String(r.recommendedPlaybook || r.recommendedPlaybookJson || ''), 32),
     avoid: truncate(String(r.avoidPlaybook || r.avoidPlaybookJson || ''), 32)
   }, 'LIFE'));
+
+  appendLifecycleExitReviewSection(app, t.exitReview || S.lifecycleExitReview);
 
   appendThemeSection(app, 'Research Universe', researchRows, r => themeCard(`${r.symbol || '—'} ${r.stockName || ''}`.trim(), {
     theme: r.themeTag,

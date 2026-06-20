@@ -252,6 +252,7 @@
     #pageLifecycle .card { overflow-x: auto; }
     #pageLifecycle table { min-width: 760px; }
     #pageLifecycle .annotation-table { min-width: 1120px; }
+    #pageLifecycle .exit-review-table { min-width: 1380px; }
     #pageLifecycle .toolbar { min-width: 520px; }
     .lifecycle-safety-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
     .lifecycle-warning { border:1px solid var(--c-wait-bd); border-left:3px solid var(--c-wait); background:var(--c-wait-bg); border-radius:var(--radius-sm); padding:9px 11px; font-size:12px; color:#6f4a00; margin-bottom:8px; }
@@ -275,6 +276,11 @@
     .lifecycle-badge.action-no-chase-wait-pullback { background:#fff3d6; color:#8a4a00; border-color:#f3d28b; }
     .lifecycle-badge.action-tighten-review,
     .lifecycle-badge.action-avoid-or-exit-review { background:#fde8ec; color:#9f1d36; border-color:#f4bac6; }
+    .lifecycle-badge.priority-critical,
+    .lifecycle-badge.priority-high { background:#fde8ec; color:#9f1d36; border-color:#f4bac6; }
+    .lifecycle-badge.priority-review,
+    .lifecycle-badge.priority-medium { background:#fff3d6; color:#8a4a00; border-color:#f3d28b; }
+    .lifecycle-badge.priority-low { background:#eaf6ff; color:#0f5594; border-color:#b9def8; }
 
     /* ── Misc ── */
     .mono { font-family: var(--mono); font-size: 12.5px; font-feature-settings: "tnum" 1; }
@@ -1567,6 +1573,42 @@
         </table>
       </section>
 
+      <section class="card span-12">
+        <h2 class="lifecycle-annotation-title">
+          Lifecycle Exit Review
+          <span class="lifecycle-annotation-note">Review only · advisory only</span>
+          <span class="lifecycle-annotation-note">不影響 BUY / SELL · 不自動賣出</span>
+        </h2>
+        <div class="toolbar">
+          <label>Date <input type="date" id="lc-exit-date" /></label>
+          <button class="btn" id="lc-exit-refresh">產生 Review Report</button>
+          <button class="btn warn" id="lc-exit-rebuild">重建 Review Shadow</button>
+          <span class="small" style="color:var(--muted);font-weight:700">review-only shadow · no mutation</span>
+        </div>
+        <div class="lifecycle-safety-row" id="lc-exit-safety">
+          <span class="pill muted">reviewOnly</span>
+          <span class="pill muted">advisoryOnly</span>
+          <span class="pill muted">doesNotAffectBuySell</span>
+          <span class="pill muted">autoSellEnabled=false</span>
+          <span class="pill muted">stopMutationEnabled=false</span>
+          <span class="pill muted">positionMutationEnabled=false</span>
+        </div>
+        <div class="stat-row" id="lc-exit-summary"></div>
+      </section>
+
+      <section class="card span-12">
+        <h2>Exit Review Rows</h2>
+        <table class="exit-review-table">
+          <thead><tr>
+            <th>symbol</th><th>stockName</th><th>themeTag</th><th>lifecycleStage</th>
+            <th>reviewAction</th><th>reviewPriority</th><th class="num">lifecycleScore</th>
+            <th class="num">crowdingScore</th><th>structuralExitTier</th><th>priceState</th>
+            <th>structureState</th><th>dataGapReason</th>
+          </tr></thead>
+          <tbody id="lc-exit-body"></tbody>
+        </table>
+      </section>
+
     </div>
   </div>
 </div>
@@ -2624,6 +2666,10 @@ function clearErr(boxId) {
     return `<span class="pill ${ok ? 'ok' : 'err'}">${esc(label)}=${ok ? 'true' : 'false'}</span>`;
   }
 
+  function lcFalseSafetyPill(value, label) {
+    return `<span class="pill ${value === false ? 'ok' : 'err'}">${esc(label)}=${value === false ? 'false' : esc(value)}</span>`;
+  }
+
   function lcFindingClass(severity) {
     const s = String(severity || "").toUpperCase();
     return s === "WARN" || s === "ERROR" || s === "CRITICAL" ? "err" : "";
@@ -2762,13 +2808,12 @@ function clearErr(boxId) {
 
   function lcAdvisoryLabel(action) {
     const a = String(action || "").toUpperCase();
-    if (a === "NO_CHASE_WAIT_PULLBACK") return "no chase · review pullback";
-    if (a === "TIGHTEN_REVIEW") return "tighten review";
-    if (a === "HOLD_THESIS_OR_PRIORITY_REVIEW") return "thesis / priority review";
-    if (a === "WATCH_RESEARCH_ONLY") return "watch research only";
-    if (a === "AVOID_OR_EXIT_REVIEW") return "risk review only";
-    if (a === "DATA_GAP_REVIEW") return "data gap review";
-    return action || "review only";
+    if (a.includes("DATA_GAP")) return "Data gap";
+    if (a.includes("NO_CHASE")) return "No chase";
+    if (a.includes("TIGHTEN")) return "Tighten review";
+    if (a.includes("HOLD_THESIS") || a.includes("PRIORITY")) return "Hold thesis";
+    if (a.includes("WATCH_RESEARCH")) return "Watch research only";
+    return "Review";
   }
 
   function lcAdvisoryBadge(action) {
@@ -2841,9 +2886,98 @@ function clearErr(boxId) {
     }
   }
 
+  function lifecycleExitDateParam() {
+    const el = $("lc-exit-date");
+    if (el && !el.value) el.value = new Date().toLocaleDateString("sv-SE");
+    return el?.value || new Date().toLocaleDateString("sv-SE");
+  }
+
+  function lifecycleExitRows(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (!payload || typeof payload !== "object") return [];
+    for (const key of ["items", "rows", "reviewRows", "exitReviewRows", "data"]) {
+      if (Array.isArray(payload[key])) return payload[key];
+    }
+    return [];
+  }
+
+  function lcReviewPriorityBadge(priority) {
+    const label = priority || "REVIEW";
+    return `<span class="lifecycle-badge ${lcBadgeClass("priority", label)}">${esc(label)}</span>`;
+  }
+
+  function renderLifecycleExitReview(payload) {
+    const p = payload || {};
+    const rows = lifecycleExitRows(p);
+    const dataGapCount = rows.filter(r => r && r.dataGapReason).length;
+    const priorityCounts = rows.reduce((acc, r) => {
+      const k = String(r?.reviewPriority || "REVIEW").toUpperCase();
+      acc[k] = (acc[k] || 0) + 1;
+      return acc;
+    }, {});
+    const reviewCount = rows.filter(r => r && r.reviewAction).length;
+
+    $("lc-exit-safety").innerHTML = [
+      lcSafetyPill(p.reviewOnly === true, "reviewOnly"),
+      lcSafetyPill(p.advisoryOnly === true, "advisoryOnly"),
+      lcSafetyPill(p.doesNotAffectBuySell === true, "doesNotAffectBuySell"),
+      lcFalseSafetyPill(p.autoSellEnabled, "autoSellEnabled"),
+      lcFalseSafetyPill(p.stopMutationEnabled, "stopMutationEnabled"),
+      lcFalseSafetyPill(p.positionMutationEnabled, "positionMutationEnabled")
+    ].join("");
+
+    $("lc-exit-summary").innerHTML = [
+      ["requestedDate", p.requestedDate || lifecycleExitDateParam()],
+      ["rebuiltCount", p.rebuiltCount ?? "-"],
+      ["row count", rows.length],
+      ["data gap count", p.dataGapCount ?? dataGapCount],
+      ["critical / high", `${priorityCounts.CRITICAL || 0} / ${priorityCounts.HIGH || 0}`],
+      ["review count", priorityCounts.REVIEW || reviewCount]
+    ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
+
+    $("lc-exit-body").innerHTML = rows.length ? rows.map(r => `<tr>
+      <td class="mono">${esc(r.symbol)}</td>
+      <td>${esc(r.stockName)}</td>
+      <td>${esc(r.themeTag)}</td>
+      <td>${lcStageBadge(r.lifecycleStage || r.stage)}</td>
+      <td>${lcAdvisoryBadge(r.reviewAction)}</td>
+      <td>${lcReviewPriorityBadge(r.reviewPriority)}</td>
+      <td class="num">${lcNum(r.lifecycleScore, 4)}</td>
+      <td class="num">${lcNum(r.crowdingScore, 4)}</td>
+      <td>${esc(r.structuralExitTier)}</td>
+      <td>${esc(r.priceState)}</td>
+      <td>${esc(r.structureState)}</td>
+      <td>${r.dataGapReason ? pill(r.dataGapReason, "warn") : pill("OK", "ok")}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="12">無 exit review rows · Review only</td></tr>`;
+  }
+
+  async function loadLifecycleExitReview() {
+    clearErr("errBoxLifecycle");
+    const date = lifecycleExitDateParam();
+    try {
+      const report = await api(`/api/theme-lifecycle/exit-review?date=${encodeURIComponent(date)}`);
+      renderLifecycleExitReview(report || {});
+    } catch(e) {
+      showErr("errBoxLifecycle", e.message || "Lifecycle exit review 載入失敗");
+      renderLifecycleExitReview({ requestedDate: date, items: [] });
+    }
+  }
+
+  async function rebuildLifecycleExitReview() {
+    clearErr("errBoxLifecycle");
+    const date = lifecycleExitDateParam();
+    try {
+      const report = await api(`/api/theme-lifecycle/exit-review/rebuild?date=${encodeURIComponent(date)}`, { method: "POST" });
+      renderLifecycleExitReview(report || {});
+    } catch(e) {
+      showErr("errBoxLifecycle", e.message || "Lifecycle exit review shadow 重建失敗");
+    }
+  }
+
   function loadLifecyclePage() {
     loadLifecycleCalibration();
     loadLifecycleAnnotations();
+    loadLifecycleExitReview();
   }
 
   function showCopyableError(title, message) {
@@ -6019,6 +6153,8 @@ window.finalizeCatchup = async function(taskId) {
   });
   $("lc-refresh")?.addEventListener("click", loadLifecycleCalibration);
   $("lc-anno-refresh")?.addEventListener("click", loadLifecycleAnnotations);
+  $("lc-exit-refresh")?.addEventListener("click", loadLifecycleExitReview);
+  $("lc-exit-rebuild")?.addEventListener("click", rebuildLifecycleExitReview);
   $("dec-btnEvaluate").addEventListener("click", runFinalDecisionEvaluate);
 
   /* ─────────────────────────────────────────────
