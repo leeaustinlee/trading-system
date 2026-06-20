@@ -253,6 +253,7 @@
     #pageLifecycle table { min-width: 760px; }
     #pageLifecycle .annotation-table { min-width: 1120px; }
     #pageLifecycle .exit-review-table { min-width: 1380px; }
+    #pageLifecycle .ranking-calibration-table { min-width: 1180px; }
     #pageLifecycle .toolbar { min-width: 520px; }
     .lifecycle-safety-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
     .lifecycle-warning { border:1px solid var(--c-wait-bd); border-left:3px solid var(--c-wait); background:var(--c-wait-bg); border-radius:var(--radius-sm); padding:9px 11px; font-size:12px; color:#6f4a00; margin-bottom:8px; }
@@ -1432,6 +1433,70 @@
           OVERHEATED currently may behave like strong crowded trend; do not treat as sell signal
         </div>
         <div class="stat-row" id="lc-summary"></div>
+      </section>
+
+      <section class="card span-12">
+        <h2 class="lifecycle-annotation-title">
+          Ranking TopN Shadow Calibration
+          <span class="lifecycle-annotation-note">Read-only · shadow-only · advisory-only</span>
+          <span class="lifecycle-annotation-note">ranking.top_n production is unchanged</span>
+        </h2>
+        <div class="lifecycle-safety-row" id="lc-rankTopN-safety">
+          <span class="pill muted">readOnly</span>
+          <span class="pill muted">shadowOnly</span>
+          <span class="pill muted">doesNotAffectRanking</span>
+          <span class="pill muted">doesNotAffectBuySell</span>
+        </div>
+        <div class="lifecycle-warning">
+          Shadow analysis only: doesNotAffectRanking=true · doesNotAffectBuySell=true · ranking.top_n production is unchanged.
+        </div>
+        <div class="stat-row" id="lc-rankTopN-summary"></div>
+      </section>
+
+      <section class="card span-12">
+        <h2>Top3 vs Top5 / Top10 / Top20 Comparison</h2>
+        <table class="ranking-calibration-table">
+          <thead><tr>
+            <th>window</th><th class="num">selectedCount</th><th class="num">distinctSymbols</th><th class="num">avgRank</th><th class="num">avgScore</th>
+            <th class="num">avgReturn1d</th><th class="num">winRate1d</th><th class="num">avgReturn5d</th><th class="num">winRate5d</th>
+            <th class="num">avgReturn10d</th><th class="num">winRate10d</th><th class="num">avgMaxDD10d</th><th class="num">missedWinners</th><th class="num">missedRate</th>
+          </tr></thead>
+          <tbody id="lc-rankTopN-windowBody"></tbody>
+        </table>
+        <h2 style="margin-top:14px">Incremental Comparison vs Top3</h2>
+        <table class="ranking-calibration-table">
+          <thead><tr>
+            <th>comparison</th><th class="num">baselineTopN</th><th class="num">candidateTopN</th><th class="num">incrementalRows</th>
+            <th class="num">incrementalMissedWinners</th><th class="num">incAvgReturn5d</th><th class="num">incWinRate5d</th>
+            <th class="num">incAvgReturn10d</th><th class="num">incWinRate10d</th>
+          </tr></thead>
+          <tbody id="lc-rankTopN-compareBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-12">
+        <h2>Missed Winners Outside Top3</h2>
+        <div class="stat-row" id="lc-rankTopN-missedSummary"></div>
+        <table class="ranking-calibration-table">
+          <thead><tr>
+            <th>date</th><th>symbol</th><th>stockName</th><th>themeTag</th><th>bucket</th><th class="num">rank</th><th class="num">score</th>
+            <th class="num">return1d</th><th class="num">return5d</th><th class="num">return10d</th><th class="num">maxDD10d</th><th>traceStatus</th>
+          </tr></thead>
+          <tbody id="lc-rankTopN-missedBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-12">
+        <h2>Theme Quota Shadow Analysis</h2>
+        <div class="stat-row" id="lc-rankTopN-themeSummary"></div>
+        <table class="ranking-calibration-table">
+          <thead><tr>
+            <th>themeTag</th><th class="num">rows</th><th class="num">top3</th><th class="num">top5</th><th class="num">top10</th><th class="num">top20</th>
+            <th class="num">outsideTop3</th><th class="num">missedWinners</th><th class="num">missedRateOutsideTop3</th>
+            <th class="num">avgReturn5d</th><th class="num">top3AvgReturn5d</th><th class="num">outsideTop3AvgReturn5d</th><th class="num">shadowTop3Quota</th><th>rationale</th>
+          </tr></thead>
+          <tbody id="lc-rankTopN-themeBody"></tbody>
+        </table>
       </section>
 
       <section class="card span-12">
@@ -2670,6 +2735,100 @@ function clearErr(boxId) {
     return `<span class="pill ${value === false ? 'ok' : 'err'}">${esc(label)}=${value === false ? 'false' : esc(value)}</span>`;
   }
 
+  function renderRankingTopNCalibration(cal, missed, quota) {
+    const c = cal || {};
+    const m = missed || {};
+    const q = quota || {};
+    const safety = {
+      readOnly: c.readOnly === true && m.readOnly === true && q.readOnly === true,
+      shadowOnly: c.shadowOnly === true && m.shadowOnly === true && q.shadowOnly === true,
+      doesNotAffectRanking: c.doesNotAffectRanking === true && m.doesNotAffectRanking === true && q.doesNotAffectRanking === true,
+      doesNotAffectBuySell: c.doesNotAffectBuySell === true && m.doesNotAffectBuySell === true && q.doesNotAffectBuySell === true
+    };
+    const dataGapCount = new Set([...(c.dataGaps || []), ...(m.dataGaps || []), ...(q.dataGaps || [])]).size;
+    $("lc-rankTopN-safety").innerHTML = [
+      lcSafetyPill(safety.readOnly, "readOnly"),
+      lcSafetyPill(safety.shadowOnly, "shadowOnly"),
+      lcSafetyPill(safety.doesNotAffectRanking, "doesNotAffectRanking"),
+      lcSafetyPill(safety.doesNotAffectBuySell, "doesNotAffectBuySell"),
+      `<span class="pill warn">advisoryOnly</span>`,
+      `<span class="pill warn">ranking.top_n unchanged</span>`
+    ].join("");
+    const range = c.startDate || c.endDate ? `${fmtDate(c.startDate)} → ${fmtDate(c.endDate)}` : "-";
+    $("lc-rankTopN-summary").innerHTML = [
+      ["requestedDays", c.requestedDays ?? lifecycleDaysParam()],
+      ["range", range],
+      ["totalRows", c.totalRows ?? 0],
+      ["tradingDays", c.distinctTradingDays ?? 0],
+      ["missed winners", m.totalMissedWinners ?? 0],
+      ["themes", q.totalThemes ?? 0],
+      ["data gaps", dataGapCount]
+    ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
+
+    const windows = [c.top3, c.top5, c.top10, c.top20].filter(Boolean);
+    $("lc-rankTopN-windowBody").innerHTML = windows.length ? windows.map(r => `<tr>
+      <td class="mono">Top${esc(r.topN)}</td><td class="num">${esc(r.selectedCount ?? 0)}</td><td class="num">${esc(r.distinctSymbols ?? 0)}</td>
+      <td class="num">${lcNum(r.averageRank)}</td><td class="num">${lcNum(r.averageScore, 4)}</td>
+      <td class="num">${lcNum(r.averageReturn1d)}</td><td class="num">${lcPct(r.winRate1d)}</td>
+      <td class="num">${lcNum(r.averageReturn5d)}</td><td class="num">${lcPct(r.winRate5d)}</td>
+      <td class="num">${lcNum(r.averageReturn10d)}</td><td class="num">${lcPct(r.winRate10d)}</td>
+      <td class="num">${lcNum(r.averageMaxDrawdown10d)}</td><td class="num">${esc(r.missedWinnerCount ?? 0)}</td><td class="num">${lcPct(r.missedWinnerRate)}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="14">無 TopN calibration summary · shadow-only</td></tr>`;
+
+    const comparisons = Array.isArray(c.comparisons) ? c.comparisons : [];
+    $("lc-rankTopN-compareBody").innerHTML = comparisons.length ? comparisons.map(r => `<tr>
+      <td class="mono">${esc(r.comparison)}</td><td class="num">${esc(r.baselineTopN ?? 3)}</td><td class="num">${esc(r.candidateTopN ?? "-")}</td>
+      <td class="num">${esc(r.incrementalRows ?? 0)}</td><td class="num">${esc(r.incrementalMissedWinners ?? 0)}</td>
+      <td class="num">${lcNum(r.incrementalAverageReturn5d)}</td><td class="num">${lcPct(r.incrementalWinRate5d)}</td>
+      <td class="num">${lcNum(r.incrementalAverageReturn10d)}</td><td class="num">${lcPct(r.incrementalWinRate10d)}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="9">無 incremental comparison rows</td></tr>`;
+
+    const missedRows = Array.isArray(m.missedWinners) ? m.missedWinners : [];
+    $("lc-rankTopN-missedSummary").innerHTML = [
+      ["totalMissedWinners", m.totalMissedWinners ?? missedRows.length],
+      ["avgReturn5d", lcNum(m.averageReturn5d)],
+      ["avgReturn10d", lcNum(m.averageReturn10d)],
+      ["safety", "outside Top3 · read-only"]
+    ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
+    $("lc-rankTopN-missedBody").innerHTML = missedRows.length ? missedRows.slice(0, 50).map(r => `<tr>
+      <td class="mono">${fmtDate(r.tradingDate)}</td><td class="mono">${esc(r.symbol)}</td><td>${esc(r.stockName)}</td><td>${esc(r.themeTag)}</td><td>${esc(r.bucket)}</td>
+      <td class="num">${esc(r.rankingRank ?? "-")}</td><td class="num">${lcNum(r.rankingScore, 4)}</td>
+      <td class="num">${lcNum(r.actualReturn1d)}</td><td class="num">${lcNum(r.actualReturn5d)}</td><td class="num">${lcNum(r.actualReturn10d)}</td><td class="num">${lcNum(r.maxDrawdown10d)}</td>
+      <td>${r.traceStatus ? pill(r.traceStatus, String(r.traceStatus).toUpperCase() === "OK" ? "ok" : "warn") : pill("shadow", "muted")}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="12">無 missed winners outside Top3</td></tr>`;
+
+    const themes = Array.isArray(q.themes) ? q.themes : [];
+    $("lc-rankTopN-themeSummary").innerHTML = [
+      ["totalThemes", q.totalThemes ?? themes.length],
+      ["shadowOnly", q.shadowOnly === true ? "true" : "-"],
+      ["doesNotAffectRanking", q.doesNotAffectRanking === true ? "true" : "-"],
+      ["production", "ranking.top_n unchanged"]
+    ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
+    $("lc-rankTopN-themeBody").innerHTML = themes.length ? themes.map(r => `<tr>
+      <td>${esc(r.themeTag)}</td><td class="num">${esc(r.totalRows ?? 0)}</td><td class="num">${esc(r.top3Count ?? 0)}</td><td class="num">${esc(r.top5Count ?? 0)}</td>
+      <td class="num">${esc(r.top10Count ?? 0)}</td><td class="num">${esc(r.top20Count ?? 0)}</td><td class="num">${esc(r.outsideTop3Count ?? 0)}</td>
+      <td class="num">${esc(r.missedWinnerCount ?? 0)}</td><td class="num">${lcPct(r.missedWinnerRateOutsideTop3)}</td>
+      <td class="num">${lcNum(r.averageReturn5d)}</td><td class="num">${lcNum(r.top3AverageReturn5d)}</td><td class="num">${lcNum(r.outsideTop3AverageReturn5d)}</td>
+      <td class="num">${esc(r.shadowSuggestedTop3Quota ?? "-")}</td><td>${esc(r.shadowQuotaRationale)}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="14">無 theme quota shadow rows</td></tr>`;
+  }
+
+  async function loadRankingTopNCalibration() {
+    clearErr("errBoxLifecycle");
+    const days = lifecycleDaysParam();
+    try {
+      const [cal, missed, quota] = await Promise.all([
+        api(`/api/ranking/topn-shadow/calibration?days=${encodeURIComponent(days)}`),
+        api(`/api/ranking/topn-shadow/missed-winners?days=${encodeURIComponent(days)}`),
+        api(`/api/ranking/topn-shadow/theme-quota?days=${encodeURIComponent(days)}`)
+      ]);
+      renderRankingTopNCalibration(cal || {}, missed || {}, quota || {});
+    } catch(e) {
+      showErr("errBoxLifecycle", e.message || "Ranking TopN shadow calibration 載入失敗");
+      renderRankingTopNCalibration({}, {}, {});
+    }
+  }
+
   function lcFindingClass(severity) {
     const s = String(severity || "").toUpperCase();
     return s === "WARN" || s === "ERROR" || s === "CRITICAL" ? "err" : "";
@@ -2976,6 +3135,7 @@ function clearErr(boxId) {
 
   function loadLifecyclePage() {
     loadLifecycleCalibration();
+    loadRankingTopNCalibration();
     loadLifecycleAnnotations();
     loadLifecycleExitReview();
   }
@@ -6151,7 +6311,7 @@ window.finalizeCatchup = async function(taskId) {
     if (pageId === "pageDashboard") await loadDashboard();
     else await refreshCurrent();
   });
-  $("lc-refresh")?.addEventListener("click", loadLifecycleCalibration);
+  $("lc-refresh")?.addEventListener("click", () => { loadLifecycleCalibration(); loadRankingTopNCalibration(); });
   $("lc-anno-refresh")?.addEventListener("click", loadLifecycleAnnotations);
   $("lc-exit-refresh")?.addEventListener("click", loadLifecycleExitReview);
   $("lc-exit-rebuild")?.addEventListener("click", rebuildLifecycleExitReview);
