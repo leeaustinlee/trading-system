@@ -685,7 +685,7 @@ const S = {
   decisionsHistory:null, hourlyHistory:null, monitorHistory:null, decisionSnapshots:null,
   notifications:null, schedulerJobs:null, scheduledTasks:null,
   migrationHealth:null, themeMappings:null, featureModesSummary:null, featureModes:null,
-  themeOpsDate:localYmd(), themeOps:null, lifecycleExitReview:null, intelligence:null, intelThemes:[],
+  themeOpsDate:localYmd(), themeOps:null, lifecycleExitReview:null, pullbackPlanShadow:null, intelligence:null, intelThemes:[],
   filter:'all',
   lastFetchAt:null, routeSeq:0, routeAbort:null, activeRoute:'overview', isRendering:false,
 };
@@ -1908,7 +1908,7 @@ function asRows(x){
 async function fetchThemeOpsTab(date, opts={}){
   const d = date || S.themeOpsDate || localYmd();
   S.themeOpsDate = d;
-  const [meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision, mappingObs, reviewQueue, exitReview] = await Promise.all([
+  const [meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision, mappingObs, reviewQueue, exitReview, pullbackShadow] = await Promise.all([
     safeFetch('/api/dashboard/theme-first?date='+encodeURIComponent(d), 8000, opts),
     safeFetch('/api/ops/daily-summary?date='+encodeURIComponent(d), 8000, opts),
     safeFetch('/api/replay-metrics/safety-summary?date='+encodeURIComponent(d), 8000, opts),
@@ -1923,11 +1923,13 @@ async function fetchThemeOpsTab(date, opts={}){
     safeFetch('/api/decisions/current', 8000, opts),
     p1Fetch('/api/themes/mappings/observability', 8000, opts),
     p1Fetch('/api/themes/mappings/manual-review-queue', 8000, opts),
-    safeFetch('/api/theme-lifecycle/exit-review?date='+encodeURIComponent(d), 8000, opts)
+    safeFetch('/api/theme-lifecycle/exit-review?date='+encodeURIComponent(d), 8000, opts),
+    safeFetch('/api/theme-lifecycle/pullback-plan/shadow?days=60', 8000, opts)
   ]);
   if (!isRouteCurrent(opts.token)) return;
   S.lifecycleExitReview = exitReview;
-  S.themeOps = {meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision, mappingObs, reviewQueue, exitReview};
+  S.pullbackPlanShadow = pullbackShadow;
+  S.themeOps = {meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision, mappingObs, reviewQueue, exitReview, pullbackShadow};
 }
 async function fetchSchedulerTab(opts={}){
   const [jobs, tasks, today] = await Promise.all([
@@ -2408,6 +2410,37 @@ function appendLifecycleExitReviewSection(app, payload){
   }, 'REVIEW')));
   app.append(sec);
 }
+function appendPullbackWatchSection(app, payload){
+  const p = payload || {};
+  const rows = asRows(p);
+  const sec = el('section',{class:'section'});
+  sec.append(el('div',{class:'section-title',html:`Pullback Watch Shadow <span class="count">${rows.length}</span>`}));
+  const safetyOk = p.readOnly === true && p.shadowOnly === true && p.doesNotAffectBuySell === true && p.doesNotWriteCandidateWatchlist === true && p.doesNotAffectRanking === true;
+  const card = el('div',{class:'card'});
+  card.append(el('div',{class:'p1-card-title'},[
+    el('span',{text:'Pullback Plan Watch'}),
+    el('span',{class:'badge '+(safetyOk?'buy':'wait'),text:safetyOk?'SAFE':'CHECK'})
+  ]));
+  card.append(MetricStrip([
+    {label:'Total plans', value:String(p.pullbackPlanRows ?? rows.filter(r=>r.wouldCreatePullbackPlan===true).length)},
+    {label:'Avoid chasing', value:String(p.avoidChasingRows ?? 0), cls:(p.avoidChasingRows||0)>0?'dn':''},
+    {label:'Watch pullback', value:String(p.watchPullbackRows ?? 0), cls:'up'},
+    {label:'Avg DD', value:p.averageMaxDrawdown!=null?Number(p.averageMaxDrawdown).toFixed(2):'—'}
+  ]));
+  card.append(el('div',{class:'p1-note',text:'readOnly=true · shadowOnly=true · doesNotAffectBuySell=true · doesNotWriteCandidateWatchlist=true · doesNotAffectRanking=true'}));
+  sec.append(card);
+  if (!rows.length) sec.append(el('div',{class:'empty',text:'目前無 pullback watch rows'}));
+  else rows.slice(0,4).forEach(r => sec.append(themeCard(`${r.symbol || '—'} ${r.stockName || ''}`.trim(), {
+    theme: r.themeTag || '—',
+    stage: r.lifecycleStage || r.stage || '—',
+    nearLimit: r.nearLimit === true,
+    limitRisk: r.limitRisk || '—',
+    planStatus: r.planStatus || r.shadowAction || '—',
+    ret5d: r.actualReturn5d!=null?Number(r.actualReturn5d).toFixed(2):'—',
+    maxDD: r.maxDrawdownPct!=null?Number(r.maxDrawdownPct).toFixed(2):'—'
+  }, 'WATCH')));
+  app.append(sec);
+}
 
 /* 7. theme-first ops */
 Views.themeops = async (ctx={}) => {
@@ -2480,6 +2513,7 @@ Views.themeops = async (ctx={}) => {
   }, 'LIFE'));
 
   appendLifecycleExitReviewSection(app, t.exitReview || S.lifecycleExitReview);
+  appendPullbackWatchSection(app, t.pullbackShadow || S.pullbackPlanShadow);
 
   appendThemeSection(app, 'Research Universe', researchRows, r => themeCard(`${r.symbol || '—'} ${r.stockName || ''}`.trim(), {
     theme: r.themeTag,

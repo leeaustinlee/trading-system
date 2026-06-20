@@ -253,6 +253,7 @@
     #pageLifecycle table { min-width: 760px; }
     #pageLifecycle .annotation-table { min-width: 1120px; }
     #pageLifecycle .exit-review-table { min-width: 1380px; }
+    #pageLifecycle .pullback-watch-table { min-width: 1320px; }
     #pageLifecycle .ranking-calibration-table { min-width: 1180px; }
     #pageLifecycle .toolbar { min-width: 520px; }
     .lifecycle-safety-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
@@ -1451,6 +1452,38 @@
           Shadow analysis only: doesNotAffectRanking=true · doesNotAffectBuySell=true · ranking.top_n production is unchanged.
         </div>
         <div class="stat-row" id="lc-rankTopN-summary"></div>
+      </section>
+
+      <section class="card span-12">
+        <h2 class="lifecycle-annotation-title">
+          Pullback Watch Shadow Plan
+          <span class="lifecycle-annotation-note">Read-only · shadow-only · watch only</span>
+          <span class="lifecycle-annotation-note">不寫 candidate/watchlist · 不影響排名或買賣</span>
+        </h2>
+        <div class="lifecycle-safety-row" id="lc-pullback-safety">
+          <span class="pill muted">readOnly</span>
+          <span class="pill muted">shadowOnly</span>
+          <span class="pill muted">doesNotAffectBuySell</span>
+          <span class="pill muted">doesNotWriteCandidateWatchlist</span>
+          <span class="pill muted">doesNotAffectRanking</span>
+        </div>
+        <div class="lifecycle-warning">
+          Pullback Watch is an observation report only: no buy/sell/rebuild actions, no candidate/watchlist writes, no ranking/risk/final-decision impact.
+        </div>
+        <div class="stat-row" id="lc-pullback-summary"></div>
+      </section>
+
+      <section class="card span-12">
+        <h2>Pullback Watch Rows</h2>
+        <table class="pullback-watch-table">
+          <thead><tr>
+            <th>status</th><th>stage</th><th>symbol</th><th>stockName</th><th>theme</th>
+            <th>nearLimit</th><th>limitRisk</th><th>planStatus</th>
+            <th class="num">return5d</th><th class="num">return10d</th><th class="num">maxDrawdown</th>
+            <th>reason</th>
+          </tr></thead>
+          <tbody id="lc-pullback-body"></tbody>
+        </table>
       </section>
 
       <section class="card span-12">
@@ -2735,6 +2768,63 @@ function clearErr(boxId) {
     return `<span class="pill ${value === false ? 'ok' : 'err'}">${esc(label)}=${value === false ? 'false' : esc(value)}</span>`;
   }
 
+  function renderPullbackPlanShadow(payload) {
+    const p = payload || {};
+    const rows = Array.isArray(p.rows) ? p.rows : [];
+    const safety = {
+      readOnly: p.readOnly === true,
+      shadowOnly: p.shadowOnly === true,
+      doesNotAffectBuySell: p.doesNotAffectBuySell === true,
+      doesNotWriteCandidateWatchlist: p.doesNotWriteCandidateWatchlist === true,
+      doesNotAffectRanking: p.doesNotAffectRanking === true
+    };
+    $("lc-pullback-safety").innerHTML = [
+      lcSafetyPill(safety.readOnly, "readOnly"),
+      lcSafetyPill(safety.shadowOnly, "shadowOnly"),
+      lcSafetyPill(safety.doesNotAffectBuySell, "doesNotAffectBuySell"),
+      lcSafetyPill(safety.doesNotWriteCandidateWatchlist, "doesNotWriteCandidateWatchlist"),
+      lcSafetyPill(safety.doesNotAffectRanking, "doesNotAffectRanking"),
+      `<span class="pill warn">watch only</span>`
+    ].join("");
+    const range = p.startDate || p.endDate ? `${fmtDate(p.startDate)} → ${fmtDate(p.endDate)}` : "-";
+    $("lc-pullback-summary").innerHTML = [
+      ["requestedDays", p.requestedDays ?? lifecycleDaysParam()],
+      ["range", range],
+      ["total plans", p.pullbackPlanRows ?? rows.filter(r => r.wouldCreatePullbackPlan === true).length],
+      ["avoid chasing", p.avoidChasingRows ?? rows.filter(r => /AVOID|CHASE/i.test(String(r.planStatus || r.shadowAction || ""))).length],
+      ["watch pullback", p.watchPullbackRows ?? rows.filter(r => /WATCH|PULLBACK/i.test(String(r.planStatus || r.shadowAction || ""))).length],
+      ["wait support", p.waitSupportRows ?? 0],
+      ["avg return 5d", lcNum(p.averageReturn5d)],
+      ["avg max DD", lcNum(p.averageMaxDrawdown)]
+    ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
+    $("lc-pullback-body").innerHTML = rows.length ? rows.slice(0, 80).map(r => `<tr>
+      <td>${lcAdvisoryBadge(r.shadowAction || r.planStatus)}</td>
+      <td>${lcStageBadge(r.lifecycleStage || r.stage)}</td>
+      <td class="mono">${esc(r.symbol)}</td>
+      <td>${esc(r.stockName)}</td>
+      <td>${esc(r.themeTag)}</td>
+      <td>${r.nearLimit === true ? pill("true", "warn") : pill("false", "muted")}</td>
+      <td>${pill(r.limitRisk || "-", /HIGH|LIMIT|CHASE/i.test(String(r.limitRisk || "")) ? "warn" : "muted")}</td>
+      <td>${esc(r.planStatus || "-")}</td>
+      <td class="num">${lcNum(r.actualReturn5d)}</td>
+      <td class="num">${lcNum(r.actualReturn10d)}</td>
+      <td class="num">${lcNum(r.maxDrawdownPct)}</td>
+      <td>${esc(r.planReason || "shadow-only")}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="12">無 Pullback Watch shadow rows · read-only</td></tr>`;
+  }
+
+  async function loadPullbackPlanShadow() {
+    clearErr("errBoxLifecycle");
+    const days = lifecycleDaysParam();
+    try {
+      const report = await api(`/api/theme-lifecycle/pullback-plan/shadow?days=${encodeURIComponent(days)}`);
+      renderPullbackPlanShadow(report || {});
+    } catch(e) {
+      showErr("errBoxLifecycle", e.message || "Pullback Watch shadow report 載入失敗");
+      renderPullbackPlanShadow({ requestedDays: days, rows: [] });
+    }
+  }
+
   function renderRankingTopNCalibration(cal, missed, quota) {
     const c = cal || {};
     const m = missed || {};
@@ -3136,6 +3226,7 @@ function clearErr(boxId) {
   function loadLifecyclePage() {
     loadLifecycleCalibration();
     loadRankingTopNCalibration();
+    loadPullbackPlanShadow();
     loadLifecycleAnnotations();
     loadLifecycleExitReview();
   }
@@ -6311,7 +6402,7 @@ window.finalizeCatchup = async function(taskId) {
     if (pageId === "pageDashboard") await loadDashboard();
     else await refreshCurrent();
   });
-  $("lc-refresh")?.addEventListener("click", () => { loadLifecycleCalibration(); loadRankingTopNCalibration(); });
+  $("lc-refresh")?.addEventListener("click", () => { loadLifecycleCalibration(); loadRankingTopNCalibration(); loadPullbackPlanShadow(); });
   $("lc-anno-refresh")?.addEventListener("click", loadLifecycleAnnotations);
   $("lc-exit-refresh")?.addEventListener("click", loadLifecycleExitReview);
   $("lc-exit-rebuild")?.addEventListener("click", rebuildLifecycleExitReview);
