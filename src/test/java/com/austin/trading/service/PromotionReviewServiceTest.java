@@ -344,6 +344,68 @@ class PromotionReviewServiceTest {
     }
 
     @Test
+    void graduationReadinessReportsOnlyAndSuggestsDataCollectionBeforeThresholdTuning() {
+        LocalDate endDate = DATE.plusDays(1);
+        PromotionReviewItemEntity winner = simulationItem(1L, DATE, "2492", false, false, new BigDecimal("8"));
+        PromotionReviewItemEntity loser = simulationItem(2L, DATE, "2327", false, false, new BigDecimal("8"));
+        when(itemRepo.findByTradingDateBetweenAndCurrentStatusOrderByTradingDateAscThemeTagAscSymbolAscSourceAsc(
+                DATE, endDate, "CANDIDATE_POOL_SHADOW")).thenReturn(List.of(winner, loser));
+        when(forwardTrackingRepo.findByTradingDateBetween(DATE, endDate)).thenReturn(List.of(
+                forward(DATE, "2492", "1", "2.5", "3", "-2", false),
+                forward(DATE, "2327", "-1", "-0.5", "1", "-3", false)
+        ));
+
+        var response = service.graduationReadiness(DATE, endDate, "CANDIDATE_POOL_SHADOW");
+
+        assertThat(response.readinessReportOnly()).isTrue();
+        assertThat(response.thresholdTuningSuggestionOnly()).isTrue();
+        assertThat(response.doesNotAffectFinalDecision()).isTrue();
+        assertThat(response.doesNotWriteCandidateStock()).isTrue();
+        assertThat(response.doesNotWriteProductionScore()).isTrue();
+        assertThat(response.noThresholdMutation()).isTrue();
+        assertThat(response.summary().readinessStatus()).isEqualTo("BLOCKED_BY_DATA_GAP");
+        assertThat(response.summary().sampleShortfall()).isEqualTo(8);
+        assertThat(response.thresholdSuggestions()).singleElement().satisfies(s -> {
+            assertThat(s.key()).isEqualTo("promotion.validation.min_sample");
+            assertThat(s.direction()).isEqualTo("KEEP");
+            assertThat(s.manualReviewRequired()).isTrue();
+            assertThat(s.appliesToShadowOnly()).isTrue();
+        });
+        assertThat(response.items()).filteredOn(i -> i.symbol().equals("2492")).singleElement()
+                .satisfies(i -> assertThat(i.readinessStatus()).isEqualTo("CANDIDATE_FOR_SHADOW_REVIEW"));
+        verify(candidateStockRepo, never()).save(any());
+        verify(finalDecisionRepo, never()).save(any());
+        verify(auditRepo, never()).save(any());
+    }
+
+    @Test
+    void graduationReadinessSuggestsManualThresholdReviewWhenMatureSampleUnderperforms() {
+        LocalDate endDate = DATE.plusDays(1);
+        List<PromotionReviewItemEntity> items = new ArrayList<>();
+        List<CandidateForwardTrackingEntity> forwards = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            String symbol = "24" + i;
+            items.add(simulationItem((long) i + 1, DATE, symbol, false, false, new BigDecimal("8")));
+            forwards.add(forward(DATE, symbol, "0", i < 4 ? "1.0" : "-1.0", "0", "-2", false));
+        }
+        when(itemRepo.findByTradingDateBetweenAndCurrentStatusOrderByTradingDateAscThemeTagAscSymbolAscSourceAsc(
+                DATE, endDate, "CANDIDATE_POOL_SHADOW")).thenReturn(items);
+        when(forwardTrackingRepo.findByTradingDateBetween(DATE, endDate)).thenReturn(forwards);
+
+        var response = service.graduationReadiness(DATE, endDate, "CANDIDATE_POOL_SHADOW");
+
+        assertThat(response.summary().readinessStatus()).isEqualTo("THRESHOLD_TUNING_REVIEW");
+        assertThat(response.summary().sampleShortfall()).isZero();
+        assertThat(response.thresholdSuggestions()).anySatisfy(s -> {
+            assertThat(s.key()).isEqualTo("promotion.validation.min_win_rate_t5");
+            assertThat(s.direction()).isEqualTo("REVIEW_LOWER_ONLY_IF_ACCEPTING_WEAKER_SIGNAL");
+            assertThat(s.manualReviewRequired()).isTrue();
+        });
+        verify(candidateStockRepo, never()).save(any());
+        verify(finalDecisionRepo, never()).save(any());
+    }
+
+    @Test
     void bridgeForwardTrackingCreatesPromotionShadowRowsWithoutTradingWrites() {
         PromotionReviewItemEntity item = simulationItem(42L, DATE, "2492", false, false, new BigDecimal("8"));
         item.setStockName("華新科");

@@ -1,6 +1,7 @@
 package com.austin.trading.service;
 
 import com.austin.trading.dto.request.PromotionReviewDecisionRequest;
+import com.austin.trading.dto.response.PromotionGraduationReadinessResponse;
 import com.austin.trading.dto.response.PromotionPolicySimulationResponse;
 import com.austin.trading.dto.response.PromotionReviewResponse;
 import com.austin.trading.dto.response.PromotionValidationReportResponse;
@@ -213,6 +214,117 @@ public class PromotionReviewService {
                 avgT5, winRateT5, hitStopRate, avgMaxDrawdown, overallStatus,
                 overallValidationReason(overallStatus));
         return PromotionValidationReportResponse.of(startDate, endDate, simulation.status(), criteria, summary, items);
+    }
+
+    @Transactional(readOnly = true)
+    public PromotionGraduationReadinessResponse graduationReadiness(LocalDate startDate, LocalDate endDate, String status) {
+        PromotionValidationReportResponse validation = validationReport(startDate, endDate, status);
+        PromotionValidationReportResponse.Summary s = validation.summary();
+        PromotionValidationReportResponse.GraduationCriteria c = validation.graduationCriteria();
+        String readinessStatus = readinessStatus(s, c);
+        PromotionGraduationReadinessResponse.ReadinessSummary summary = new PromotionGraduationReadinessResponse.ReadinessSummary(
+                readinessStatus,
+                readinessReason(readinessStatus, s, c),
+                s.itemCount(),
+                c.minSample(),
+                Math.max(0, c.minSample() - s.evidenceReadyCount()),
+                s.evidenceReadyCount(),
+                s.dataGapCount(),
+                s.riskBlockedCount(),
+                s.governanceBlockedCount(),
+                s.avgT5(),
+                s.winRateT5(),
+                s.hitStopRate(),
+                s.avgMaxDrawdown(),
+                c.minWinRateT5(),
+                c.minAvgT5(),
+                c.maxHitStopRate(),
+                c.minAvgMaxDrawdown());
+        List<PromotionGraduationReadinessResponse.ThresholdSuggestion> suggestions = thresholdSuggestions(s, c);
+        List<PromotionGraduationReadinessResponse.Item> items = validation.items().stream()
+                .map(i -> new PromotionGraduationReadinessResponse.Item(i.id(), i.tradingDate(), i.symbol(), i.stockName(),
+                        i.themeTag(), i.source(), i.currentStatus(), i.validationStatus(), itemReadinessStatus(i),
+                        itemReadinessReason(i), i.t5ReturnPct(), i.maxDrawdownPct(), i.hitStop(), i.dataGapReason()))
+                .toList();
+        return PromotionGraduationReadinessResponse.of(startDate, endDate, validation.status(), c, summary, suggestions, items);
+    }
+
+    private String readinessStatus(PromotionValidationReportResponse.Summary s,
+                                   PromotionValidationReportResponse.GraduationCriteria c) {
+        if (s.itemCount() == 0) return "NEED_MORE_EVIDENCE";
+        if (s.dataGapCount() > 0 || s.evidenceReadyCount() < c.minSample()) return "BLOCKED_BY_DATA_GAP";
+        if (s.riskBlockedCount() > 0) return "BLOCKED_BY_RISK";
+        if (s.governanceBlockedCount() > 0) return "BLOCKED_BY_GOVERNANCE";
+        if ("ELIGIBLE_FOR_SOFT_BOOST_SHADOW".equals(s.overallStatus())) return "READY_FOR_SHADOW_SOFT_BOOST_REVIEW";
+        return "THRESHOLD_TUNING_REVIEW";
+    }
+
+    private String readinessReason(String status, PromotionValidationReportResponse.Summary s,
+                                   PromotionValidationReportResponse.GraduationCriteria c) {
+        return switch (status) {
+            case "BLOCKED_BY_DATA_GAP" -> "need " + Math.max(0, c.minSample() - s.evidenceReadyCount())
+                    + " more evidence-ready sample(s) or completed forward returns";
+            case "BLOCKED_BY_RISK" -> "risk blocker, stop hit, or drawdown must be reviewed before any graduation";
+            case "BLOCKED_BY_GOVERNANCE" -> "governance blocker must be resolved manually";
+            case "READY_FOR_SHADOW_SOFT_BOOST_REVIEW" -> "criteria met for manual shadow-only soft boost review";
+            case "THRESHOLD_TUNING_REVIEW" -> "sample is mature but observed performance does not meet current criteria";
+            default -> "no promotion-ready evidence yet";
+        };
+    }
+
+    private List<PromotionGraduationReadinessResponse.ThresholdSuggestion> thresholdSuggestions(
+            PromotionValidationReportResponse.Summary s,
+            PromotionValidationReportResponse.GraduationCriteria c) {
+        List<PromotionGraduationReadinessResponse.ThresholdSuggestion> out = new ArrayList<>();
+        if (s.evidenceReadyCount() < c.minSample()) {
+            out.add(thresholdSuggestion("promotion.validation.min_sample", String.valueOf(c.minSample()), String.valueOf(c.minSample()),
+                    "KEEP", "insufficient sample; collect more forward tracking before tuning", true));
+            return out;
+        }
+        if (s.winRateT5() != null && s.winRateT5().compareTo(c.minWinRateT5()) < 0) {
+            out.add(thresholdSuggestion("promotion.validation.min_win_rate_t5", c.minWinRateT5().toPlainString(), s.winRateT5().toPlainString(),
+                    "REVIEW_LOWER_ONLY_IF_ACCEPTING_WEAKER_SIGNAL", "observed T5 win rate is below current graduation threshold", true));
+        }
+        if (s.avgT5() != null && s.avgT5().compareTo(c.minAvgT5()) <= 0) {
+            out.add(thresholdSuggestion("promotion.validation.min_avg_t5", c.minAvgT5().toPlainString(), s.avgT5().toPlainString(),
+                    "REVIEW_LOWER_ONLY_IF_RISK_ACCEPTED", "observed average T5 does not exceed current positive-return requirement", true));
+        }
+        if (s.hitStopRate() != null && s.hitStopRate().compareTo(c.maxHitStopRate()) > 0) {
+            out.add(thresholdSuggestion("promotion.validation.max_hit_stop_rate", c.maxHitStopRate().toPlainString(), s.hitStopRate().toPlainString(),
+                    "TIGHTEN_OR_KEEP_BLOCKED", "stop-hit rate is above current safety threshold", true));
+        }
+        if (s.avgMaxDrawdown() != null && s.avgMaxDrawdown().compareTo(c.minAvgMaxDrawdown()) <= 0) {
+            out.add(thresholdSuggestion("promotion.validation.min_avg_max_drawdown", c.minAvgMaxDrawdown().toPlainString(), s.avgMaxDrawdown().toPlainString(),
+                    "TIGHTEN_OR_KEEP_BLOCKED", "average max drawdown is worse than current safety threshold", true));
+        }
+        if (out.isEmpty()) {
+            out.add(thresholdSuggestion("promotion.validation.current_criteria", "met", "no change", "KEEP",
+                    "current criteria are satisfied; only manual shadow soft-boost review is allowed", true));
+        }
+        return out;
+    }
+
+    private PromotionGraduationReadinessResponse.ThresholdSuggestion thresholdSuggestion(String key, String currentValue,
+                                                                                         String suggestedValue, String direction,
+                                                                                         String reason, boolean manualReviewRequired) {
+        return new PromotionGraduationReadinessResponse.ThresholdSuggestion(key, currentValue, suggestedValue, direction,
+                reason, manualReviewRequired, true);
+    }
+
+    private String itemReadinessStatus(PromotionValidationReportResponse.Item item) {
+        return switch (item.validationStatus()) {
+            case "ELIGIBLE_FOR_SOFT_BOOST_SHADOW" -> "CANDIDATE_FOR_SHADOW_REVIEW";
+            case "BLOCKED_BY_DATA_GAP", "BLOCKED_BY_RISK", "BLOCKED_BY_GOVERNANCE" -> item.validationStatus();
+            default -> "KEEP_WATCHING";
+        };
+    }
+
+    private String itemReadinessReason(PromotionValidationReportResponse.Item item) {
+        return switch (itemReadinessStatus(item)) {
+            case "CANDIDATE_FOR_SHADOW_REVIEW" -> "positive forward evidence; still requires manual shadow review";
+            case "KEEP_WATCHING" -> "not enough edge for graduation readiness";
+            default -> item.validationReason();
+        };
     }
 
     private PromotionValidationReportResponse.Item toValidationItem(PromotionPolicySimulationResponse.Item item) {

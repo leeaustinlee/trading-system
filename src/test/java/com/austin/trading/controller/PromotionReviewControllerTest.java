@@ -1,6 +1,7 @@
 package com.austin.trading.controller;
 
 import com.austin.trading.dto.request.PromotionReviewDecisionRequest;
+import com.austin.trading.dto.response.PromotionGraduationReadinessResponse;
 import com.austin.trading.dto.response.PromotionPolicySimulationResponse;
 import com.austin.trading.dto.response.PromotionReviewResponse;
 import com.austin.trading.dto.response.PromotionValidationReportResponse;
@@ -217,6 +218,42 @@ class PromotionReviewControllerTest {
                 .andExpect(jsonPath("$.overallStatus", is("BLOCKED_BY_DATA_GAP")));
 
         verify(dailySummaryService).run(DATE, "CANDIDATE_POOL_SHADOW", 14);
+    }
+
+    @Test
+    void graduationReadinessEndpointExposesReportOnlyThresholdTuningBoundary() throws Exception {
+        var criteria = new PromotionValidationReportResponse.GraduationCriteria(10, new BigDecimal("0.55"),
+                BigDecimal.ZERO, new BigDecimal("0.25"), new BigDecimal("-8"));
+        var summary = new PromotionGraduationReadinessResponse.ReadinessSummary("BLOCKED_BY_DATA_GAP",
+                "need more completed forward returns", 1, 10, 9, 1, 0, 0, 0,
+                new BigDecimal("1.0"), BigDecimal.ONE, BigDecimal.ZERO, new BigDecimal("-2.0"),
+                new BigDecimal("0.55"), BigDecimal.ZERO, new BigDecimal("0.25"), new BigDecimal("-8"));
+        var suggestion = new PromotionGraduationReadinessResponse.ThresholdSuggestion("promotion.validation.min_sample",
+                "10", "10", "KEEP", "collect more forward tracking", true, true);
+        var item = new PromotionGraduationReadinessResponse.Item(1L, DATE, "2492", "華新科", "被動元件/MLCC",
+                "PEER_SHADOW", "CANDIDATE_POOL_SHADOW", "ELIGIBLE_FOR_SOFT_BOOST_SHADOW",
+                "CANDIDATE_FOR_SHADOW_REVIEW", "positive forward evidence; still requires manual shadow review",
+                new BigDecimal("1.0"), new BigDecimal("-2.0"), false, null);
+        var response = PromotionGraduationReadinessResponse.of(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW",
+                criteria, summary, List.of(suggestion), List.of(item));
+        when(service.graduationReadiness(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW")).thenReturn(response);
+
+        mvc.perform(get("/api/promotion-review/graduation-readiness")
+                        .param("startDate", DATE.toString())
+                        .param("endDate", DATE.plusDays(1).toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.readinessReportOnly", is(true)))
+                .andExpect(jsonPath("$.thresholdTuningSuggestionOnly", is(true)))
+                .andExpect(jsonPath("$.doesNotAffectFinalDecision", is(true)))
+                .andExpect(jsonPath("$.doesNotAffectBuySellEnter", is(true)))
+                .andExpect(jsonPath("$.doesNotWriteCandidateStock", is(true)))
+                .andExpect(jsonPath("$.doesNotWriteProductionScore", is(true)))
+                .andExpect(jsonPath("$.noThresholdMutation", is(true)))
+                .andExpect(jsonPath("$.summary.readinessStatus", is("BLOCKED_BY_DATA_GAP")))
+                .andExpect(jsonPath("$.thresholdSuggestions[0].manualReviewRequired", is(true)))
+                .andExpect(jsonPath("$.thresholdSuggestions[0].appliesToShadowOnly", is(true)));
+
+        verify(service).graduationReadiness(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW");
     }
 
     private PromotionReviewResponse.Item item(Long id, String symbol, String source, String status) {

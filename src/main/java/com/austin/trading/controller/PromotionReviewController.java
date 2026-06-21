@@ -2,6 +2,7 @@ package com.austin.trading.controller;
 
 import com.austin.trading.dto.request.PromotionReviewDecisionRequest;
 import com.austin.trading.dto.response.BuildOperationResponse;
+import com.austin.trading.dto.response.PromotionGraduationReadinessResponse;
 import com.austin.trading.dto.response.PromotionPolicySimulationResponse;
 import com.austin.trading.dto.response.PromotionReviewResponse;
 import com.austin.trading.dto.response.PromotionValidationReportResponse;
@@ -78,6 +79,14 @@ public class PromotionReviewController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(defaultValue = "CANDIDATE_POOL_SHADOW") String status) {
         return service.validationReport(startDate, endDate, status);
+    }
+
+    @GetMapping("/graduation-readiness")
+    public PromotionGraduationReadinessResponse graduationReadiness(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "CANDIDATE_POOL_SHADOW") String status) {
+        return service.graduationReadiness(startDate, endDate, status);
     }
 
     @PostMapping("/forward-tracking-bridge")
