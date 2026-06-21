@@ -5,6 +5,7 @@ import com.austin.trading.dto.response.PromotionPolicySimulationResponse;
 import com.austin.trading.dto.response.PromotionReviewResponse;
 import com.austin.trading.dto.response.PromotionValidationReportResponse;
 import com.austin.trading.service.PromotionReviewService;
+import com.austin.trading.service.PromotionValidationDailySummaryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -28,12 +29,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PromotionReviewControllerTest {
     private static final LocalDate DATE = LocalDate.of(2026, 5, 22);
     private PromotionReviewService service;
+    private PromotionValidationDailySummaryService dailySummaryService;
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
         service = mock(PromotionReviewService.class);
-        mvc = MockMvcBuilders.standaloneSetup(new PromotionReviewController(service)).build();
+        dailySummaryService = mock(PromotionValidationDailySummaryService.class);
+        mvc = MockMvcBuilders.standaloneSetup(new PromotionReviewController(service, null, dailySummaryService)).build();
     }
 
     @Test
@@ -183,6 +186,37 @@ class PromotionReviewControllerTest {
                 .andExpect(jsonPath("$.returnBackfillRequired", is(true)));
 
         verify(service).bridgeForwardTracking(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW");
+    }
+
+    @Test
+    void dailyValidationSummaryEndpointRunsReportOnlyAutomation() throws Exception {
+        Map<String, Object> response = Map.of(
+                "dailyValidationSummaryOnly", true,
+                "reportOnly", true,
+                "doesNotAffectFinalDecision", true,
+                "doesNotAffectBuySellEnter", true,
+                "doesNotWriteCandidateStock", true,
+                "doesNotWriteProductionScore", true,
+                "noAutoPromotion", true,
+                "softBoostShadowOnly", true,
+                "overallStatus", "BLOCKED_BY_DATA_GAP",
+                "itemCount", 1);
+        when(dailySummaryService.run(DATE, "CANDIDATE_POOL_SHADOW", 14)).thenReturn(response);
+
+        mvc.perform(post("/api/promotion-review/daily-validation-summary")
+                        .param("date", DATE.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dailyValidationSummaryOnly", is(true)))
+                .andExpect(jsonPath("$.reportOnly", is(true)))
+                .andExpect(jsonPath("$.doesNotAffectFinalDecision", is(true)))
+                .andExpect(jsonPath("$.doesNotAffectBuySellEnter", is(true)))
+                .andExpect(jsonPath("$.doesNotWriteCandidateStock", is(true)))
+                .andExpect(jsonPath("$.doesNotWriteProductionScore", is(true)))
+                .andExpect(jsonPath("$.noAutoPromotion", is(true)))
+                .andExpect(jsonPath("$.softBoostShadowOnly", is(true)))
+                .andExpect(jsonPath("$.overallStatus", is("BLOCKED_BY_DATA_GAP")));
+
+        verify(dailySummaryService).run(DATE, "CANDIDATE_POOL_SHADOW", 14);
     }
 
     private PromotionReviewResponse.Item item(Long id, String symbol, String source, String status) {

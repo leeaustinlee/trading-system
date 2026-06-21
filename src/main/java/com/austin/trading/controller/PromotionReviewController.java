@@ -7,6 +7,7 @@ import com.austin.trading.dto.response.PromotionReviewResponse;
 import com.austin.trading.dto.response.PromotionValidationReportResponse;
 import com.austin.trading.service.BuildOperationsService;
 import com.austin.trading.service.PromotionReviewService;
+import com.austin.trading.service.PromotionValidationDailySummaryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
@@ -19,15 +20,18 @@ import java.util.Map;
 public class PromotionReviewController {
     private final PromotionReviewService service;
     private final BuildOperationsService buildOperations;
+    private final PromotionValidationDailySummaryService validationDailySummaryService;
 
     public PromotionReviewController(PromotionReviewService service) {
-        this(service, null);
+        this(service, null, null);
     }
 
     @Autowired
-    public PromotionReviewController(PromotionReviewService service, BuildOperationsService buildOperations) {
+    public PromotionReviewController(PromotionReviewService service, BuildOperationsService buildOperations,
+                                     PromotionValidationDailySummaryService validationDailySummaryService) {
         this.service = service;
         this.buildOperations = buildOperations;
+        this.validationDailySummaryService = validationDailySummaryService;
     }
 
     @PostMapping("/build")
@@ -82,5 +86,16 @@ public class PromotionReviewController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(defaultValue = "CANDIDATE_POOL_SHADOW") String status) {
         return service.bridgeForwardTracking(startDate, endDate, status);
+    }
+
+    @PostMapping("/daily-validation-summary")
+    public Map<String, Object> dailyValidationSummary(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(defaultValue = "CANDIDATE_POOL_SHADOW") String status,
+            @RequestParam(defaultValue = "14") int backfillDays) {
+        if (validationDailySummaryService == null) {
+            throw new IllegalStateException("PromotionValidationDailySummaryService is not available");
+        }
+        return validationDailySummaryService.run(date, status, backfillDays);
     }
 }
