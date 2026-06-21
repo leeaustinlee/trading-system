@@ -1859,6 +1859,30 @@
         <div class="stat-row" id="lc-daily-summary-result"></div>
       </section>
 
+      <section class="card span-12">
+        <h2 class="lifecycle-annotation-title">
+          Graduation Readiness / Threshold Suggestions
+          <span class="lifecycle-annotation-note">Report only</span>
+          <span class="lifecycle-annotation-note">No threshold mutation</span>
+        </h2>
+        <div class="lifecycle-safety-row" id="lc-graduation-safety">
+          <span class="pill muted">readinessReportOnly</span>
+          <span class="pill muted">thresholdTuningSuggestionOnly</span>
+          <span class="pill muted">noThresholdMutation</span>
+          <span class="pill muted">softBoostShadowOnly</span>
+        </div>
+        <div class="lifecycle-warning">
+          Graduation readiness only summarizes evidence and threshold suggestions. It does not change thresholds, final decisions, candidate stocks, production scores, or trading actions.
+        </div>
+        <div class="stat-row" id="lc-graduation-summary"></div>
+        <table class="promotion-validation-table">
+          <thead><tr>
+            <th>suggestion</th><th>current</th><th>suggested</th><th>direction</th><th>reason</th><th>manual</th><th>scope</th>
+          </tr></thead>
+          <tbody id="lc-graduation-suggestions-body"></tbody>
+        </table>
+      </section>
+
     </div>
   </div>
 </div>
@@ -3591,6 +3615,55 @@ function clearErr(boxId) {
     }
   }
 
+  function renderGraduationReadiness(payload) {
+    const p = payload || {};
+    const s = p.summary || {};
+    const rows = Array.isArray(p.thresholdSuggestions) ? p.thresholdSuggestions : [];
+    $("lc-graduation-safety").innerHTML = [
+      lcSafetyPill(p.readinessReportOnly === true, "readinessReportOnly"),
+      lcSafetyPill(p.thresholdTuningSuggestionOnly === true, "thresholdTuningSuggestionOnly"),
+      lcSafetyPill(p.reviewOnly === true, "reviewOnly"),
+      lcSafetyPill(p.doesNotAffectFinalDecision === true, "doesNotAffectFinalDecision"),
+      lcSafetyPill(p.doesNotAffectBuySellEnter === true, "doesNotAffectBuySellEnter"),
+      lcSafetyPill(p.doesNotWriteCandidateStock === true, "doesNotWriteCandidateStock"),
+      lcSafetyPill(p.doesNotWriteProductionScore === true, "doesNotWriteProductionScore"),
+      lcSafetyPill(p.noAutoPromotion === true, "noAutoPromotion"),
+      lcSafetyPill(p.noThresholdMutation === true, "noThresholdMutation"),
+      lcSafetyPill(p.softBoostShadowOnly === true, "softBoostShadowOnly")
+    ].join("");
+    $("lc-graduation-summary").innerHTML = [
+      ["readiness", s.readinessStatus || "NEED_MORE_EVIDENCE"],
+      ["reason", s.readinessReason || "-"],
+      ["sample / min", `${s.sampleCount ?? 0} / ${s.minSample ?? 10}`],
+      ["shortfall", s.sampleShortfall ?? 0],
+      ["ready / gaps", `${s.evidenceReadyCount ?? 0} / ${s.dataGapCount ?? 0}`],
+      ["risk / governance", `${s.riskBlockedCount ?? 0} / ${s.governanceBlockedCount ?? 0}`],
+      ["avgT5 / winT5", `${lcNum(s.avgT5)} / ${s.winRateT5 == null ? "-" : lcPct(s.winRateT5)}`],
+      ["hitStop / MDD", `${s.hitStopRate == null ? "-" : lcPct(s.hitStopRate)} / ${lcNum(s.avgMaxDrawdown)}`]
+    ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
+    $("lc-graduation-suggestions-body").innerHTML = rows.length ? rows.map(r => `<tr>
+      <td class="mono">${esc(r.key)}</td>
+      <td class="mono small">${esc(r.currentValue)}</td>
+      <td class="mono small">${esc(r.suggestedValue)}</td>
+      <td>${pill(r.direction || "KEEP", String(r.direction || "").includes("BLOCK") || String(r.direction || "").includes("TIGHTEN") ? "warn" : "muted")}</td>
+      <td>${esc(r.reason || "-")}</td>
+      <td>${r.manualReviewRequired === true ? pill("manual", "warn") : pill("auto", "muted")}</td>
+      <td>${r.appliesToShadowOnly === true ? pill("shadow-only", "ok") : pill("check", "warn")}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="7">無 threshold suggestions · report only</td></tr>`;
+  }
+
+  async function loadGraduationReadiness() {
+    clearErr("errBoxLifecycle");
+    const p = policyDateParams();
+    try {
+      const report = await api(`/api/promotion-review/graduation-readiness?startDate=${encodeURIComponent(p.startDate)}&endDate=${encodeURIComponent(p.endDate)}&status=${encodeURIComponent(p.status)}`);
+      renderGraduationReadiness(report || {});
+    } catch(e) {
+      showErr("errBoxLifecycle", e.message || "Graduation readiness 載入失敗");
+      renderGraduationReadiness({ startDate: p.startDate, endDate: p.endDate, status: p.status, thresholdSuggestions: [] });
+    }
+  }
+
   async function loadPolicySimulation() {
     clearErr("errBoxLifecycle");
     const p = policyDateParams();
@@ -3598,6 +3671,7 @@ function clearErr(boxId) {
       const report = await api(`/api/promotion-review/policy-simulation?startDate=${encodeURIComponent(p.startDate)}&endDate=${encodeURIComponent(p.endDate)}&status=${encodeURIComponent(p.status)}`);
       renderPolicySimulation(report || {});
       await loadPromotionValidationReport();
+      await loadGraduationReadiness();
     } catch(e) {
       showErr("errBoxLifecycle", e.message || "Policy simulation 載入失敗");
       renderPolicySimulation({ startDate: p.startDate, endDate: p.endDate, status: p.status, items: [] });
