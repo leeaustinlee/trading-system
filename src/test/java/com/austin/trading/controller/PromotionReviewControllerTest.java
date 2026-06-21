@@ -123,6 +123,37 @@ class PromotionReviewControllerTest {
         verify(service).policySimulation(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW");
     }
 
+    @Test
+    void forwardTrackingBridgeEndpointCreatesTrackingRowsWithSafetyFlags() throws Exception {
+        Map<String, Object> response = Map.of(
+                "trackingBridgeOnly", true,
+                "doesNotAffectFinalDecision", true,
+                "doesNotAffectBuySellEnter", true,
+                "doesNotWriteCandidateStock", true,
+                "doesNotWriteProductionScore", true,
+                "noAutoPromotion", true,
+                "sourceItems", 1,
+                "written", 1,
+                "skippedExisting", 0,
+                "returnBackfillRequired", true);
+        when(service.bridgeForwardTracking(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW")).thenReturn(response);
+
+        mvc.perform(post("/api/promotion-review/forward-tracking-bridge")
+                        .param("startDate", DATE.toString())
+                        .param("endDate", DATE.plusDays(1).toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.trackingBridgeOnly", is(true)))
+                .andExpect(jsonPath("$.doesNotAffectFinalDecision", is(true)))
+                .andExpect(jsonPath("$.doesNotAffectBuySellEnter", is(true)))
+                .andExpect(jsonPath("$.doesNotWriteCandidateStock", is(true)))
+                .andExpect(jsonPath("$.doesNotWriteProductionScore", is(true)))
+                .andExpect(jsonPath("$.noAutoPromotion", is(true)))
+                .andExpect(jsonPath("$.written", is(1)))
+                .andExpect(jsonPath("$.returnBackfillRequired", is(true)));
+
+        verify(service).bridgeForwardTracking(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW");
+    }
+
     private PromotionReviewResponse.Item item(Long id, String symbol, String source, String status) {
         return new PromotionReviewResponse.Item(id, DATE, symbol, symbol.equals("2375") ? "凱美" : "華新科", "被動元件/MLCC", source,
                 "PEER_SHADOW", status, null, "review only", new BigDecimal("10"), false, false, "MAINSTREAM",

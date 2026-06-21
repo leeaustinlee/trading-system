@@ -39,7 +39,7 @@ class PromotionReviewSafetyTest {
         when(itemRepo.findByTradingDateOrderByThemeTagAscSymbolAscSourceAsc(DATE)).thenReturn(List.of());
         service = new PromotionReviewService(itemRepo, auditRepo, mock(ResearchUniverseItemRepository.class), mock(HotGroupStockSignalRepository.class),
                 mock(ThemeReplayNodeRepository.class), mock(ThemeLifecycleStateRepository.class), mock(ThemeReplayMetricsRepository.class),
-                candidateStockRepo, finalDecisionRepo, forwardTrackingRepo, new ObjectMapper());
+                candidateStockRepo, finalDecisionRepo, forwardTrackingRepo, mock(MarketIndexDailyRepository.class), new ObjectMapper());
     }
 
     @Test

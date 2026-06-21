@@ -7,6 +7,7 @@ import com.austin.trading.entity.*;
 import com.austin.trading.repository.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +38,7 @@ public class PromotionReviewService {
     private final CandidateStockRepository candidateStockRepo;
     private final FinalDecisionRepository finalDecisionRepo;
     private final CandidateForwardTrackingRepository forwardTrackingRepo;
+    private final MarketIndexDailyRepository marketIndexRepo;
     private final ObjectMapper objectMapper;
 
     public PromotionReviewService(PromotionReviewItemRepository itemRepo,
@@ -49,6 +51,7 @@ public class PromotionReviewService {
                                   CandidateStockRepository candidateStockRepo,
                                   FinalDecisionRepository finalDecisionRepo,
                                   CandidateForwardTrackingRepository forwardTrackingRepo,
+                                  MarketIndexDailyRepository marketIndexRepo,
                                   ObjectMapper objectMapper) {
         this.itemRepo = itemRepo;
         this.auditRepo = auditRepo;
@@ -60,6 +63,7 @@ public class PromotionReviewService {
         this.candidateStockRepo = candidateStockRepo;
         this.finalDecisionRepo = finalDecisionRepo;
         this.forwardTrackingRepo = forwardTrackingRepo;
+        this.marketIndexRepo = marketIndexRepo;
         this.objectMapper = objectMapper;
     }
 
@@ -185,9 +189,68 @@ public class PromotionReviewService {
         return PromotionPolicySimulationResponse.of(startDate, endDate, effectiveStatus, summary, rows);
     }
 
+    @Transactional
+    public Map<String, Object> bridgeForwardTracking(LocalDate startDate, LocalDate endDate, String status) {
+        String effectiveStatus = blankToDefault(status, "CANDIDATE_POOL_SHADOW").trim().toUpperCase(Locale.ROOT);
+        String finalDecision = "PROMOTION_" + effectiveStatus;
+        List<PromotionReviewItemEntity> reviewItems = itemRepo
+                .findByTradingDateBetweenAndCurrentStatusOrderByTradingDateAscThemeTagAscSymbolAscSourceAsc(startDate, endDate, effectiveStatus);
+        int written = 0;
+        int skippedExisting = 0;
+        int updatedExisting = 0;
+        for (PromotionReviewItemEntity item : reviewItems) {
+            Optional<CandidateForwardTrackingEntity> existing = forwardTrackingRepo.findByTradingDateAndStockIdAndFinalDecision(
+                    item.getTradingDate(), item.getSymbol(), finalDecision);
+            BigDecimal entryPrice = entryPriceAtDecision(item.getSymbol(), item.getTradingDate());
+            if (existing.isPresent()) {
+                CandidateForwardTrackingEntity row = existing.get();
+                if (row.getEntryPriceAtDecision() == null && entryPrice != null) {
+                    row.setEntryPriceAtDecision(entryPrice);
+                    forwardTrackingRepo.save(row);
+                    updatedExisting++;
+                } else {
+                    skippedExisting++;
+                }
+                continue;
+            }
+            CandidateForwardTrackingEntity row = new CandidateForwardTrackingEntity();
+            row.setTradingDate(item.getTradingDate());
+            row.setStockId(item.getSymbol());
+            row.setStockName(item.getStockName());
+            row.setFinalDecision(finalDecision);
+            row.setFinalScore(item.getEvidenceScore());
+            row.setGrade(item.getLifecycleStage());
+            row.setPrimaryStrategy("PROMOTION_REVIEW");
+            row.setGateName(suggestedPolicy(item));
+            row.setEntryPriceAtDecision(entryPrice);
+            row.setThemeTag(item.getThemeTag());
+            row.setThemeReason(firstText(item.getReviewReason(), item.getExplainMissReason(), item.getDecisionReason()));
+            row.setSourceCandidateId(item.getId());
+            forwardTrackingRepo.save(row);
+            written++;
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("trackingBridgeOnly", true);
+        result.put("doesNotAffectFinalDecision", true);
+        result.put("doesNotAffectBuySellEnter", true);
+        result.put("doesNotWriteCandidateStock", true);
+        result.put("doesNotWriteProductionScore", true);
+        result.put("noAutoPromotion", true);
+        result.put("startDate", startDate);
+        result.put("endDate", endDate);
+        result.put("status", effectiveStatus);
+        result.put("finalDecision", finalDecision);
+        result.put("sourceItems", reviewItems.size());
+        result.put("written", written);
+        result.put("updatedExisting", updatedExisting);
+        result.put("skippedExisting", skippedExisting);
+        result.put("returnBackfillRequired", true);
+        return result;
+    }
+
     private PromotionPolicySimulationResponse.Item toPolicySimulationItem(PromotionReviewItemEntity item,
                                                                          CandidateForwardTrackingEntity forward) {
-        String gapReason = forward == null ? "MISSING_FORWARD_TRACKING" : null;
+        String gapReason = forwardGapReason(forward);
         return new PromotionPolicySimulationResponse.Item(item.getId(), item.getTradingDate(), item.getSymbol(), item.getStockName(),
                 item.getThemeTag(), item.getSource(), item.getCurrentStatus(), suggestedPolicy(item),
                 forward == null ? null : forward.getT1CloseReturnPct(),
@@ -203,6 +266,24 @@ public class PromotionReviewService {
         if (count == 0) return null;
         long wins = rows.stream().filter(r -> r.t5ReturnPct() != null && r.t5ReturnPct().compareTo(BigDecimal.ZERO) > 0).count();
         return BigDecimal.valueOf(wins).divide(BigDecimal.valueOf(count), 4, java.math.RoundingMode.HALF_UP);
+    }
+
+    private String forwardGapReason(CandidateForwardTrackingEntity forward) {
+        if (forward == null) return "MISSING_FORWARD_TRACKING";
+        if (forward.getEntryPriceAtDecision() == null) return "MISSING_ENTRY_PRICE_AT_DECISION";
+        if (forward.getT1CloseReturnPct() == null && forward.getT5CloseReturnPct() == null && forward.getT10CloseReturnPct() == null) {
+            return "PENDING_FORWARD_RETURN_BACKFILL";
+        }
+        return null;
+    }
+
+    private BigDecimal entryPriceAtDecision(String symbol, LocalDate tradingDate) {
+        return marketIndexRepo.findBySymbolAndTradingDate(symbol, tradingDate)
+                .map(MarketIndexDailyEntity::getClosePrice)
+                .or(() -> marketIndexRepo.findLatestBySymbolBefore(symbol, tradingDate.plusDays(1), PageRequest.of(0, 1)).stream()
+                        .findFirst()
+                        .map(MarketIndexDailyEntity::getClosePrice))
+                .orElse(null);
     }
 
     private String suggestedPolicy(PromotionReviewItemEntity item) {

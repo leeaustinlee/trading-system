@@ -31,6 +31,7 @@ class PromotionReviewServiceTest {
     private CandidateStockRepository candidateStockRepo;
     private FinalDecisionRepository finalDecisionRepo;
     private CandidateForwardTrackingRepository forwardTrackingRepo;
+    private MarketIndexDailyRepository marketIndexRepo;
     private PromotionReviewService service;
     private final List<PromotionReviewItemEntity> savedItems = new ArrayList<>();
     private final List<PromotionReviewAuditEntity> savedAudits = new ArrayList<>();
@@ -48,6 +49,7 @@ class PromotionReviewServiceTest {
         candidateStockRepo = mock(CandidateStockRepository.class);
         finalDecisionRepo = mock(FinalDecisionRepository.class);
         forwardTrackingRepo = mock(CandidateForwardTrackingRepository.class);
+        marketIndexRepo = mock(MarketIndexDailyRepository.class);
         when(itemRepo.findByTradingDateOrderByThemeTagAscSymbolAscSourceAsc(DATE)).thenReturn(List.of());
         when(lifecycleRepo.findByTradingDateOrderByThemeTagAsc(DATE)).thenReturn(List.of(lifecycle("被動元件/MLCC", "MAINSTREAM"), lifecycle("被動元件/鋁電容", "EMERGING")));
         when(metricsRepo.findByTradingDateOrderByThemeTagAsc(DATE)).thenReturn(List.of(metrics("被動元件/MLCC"), metrics("被動元件/鋁電容")));
@@ -63,7 +65,7 @@ class PromotionReviewServiceTest {
             return e;
         });
         service = new PromotionReviewService(itemRepo, auditRepo, researchRepo, hotGroupRepo, replayNodeRepo,
-                lifecycleRepo, metricsRepo, candidateStockRepo, finalDecisionRepo, forwardTrackingRepo, new ObjectMapper());
+                lifecycleRepo, metricsRepo, candidateStockRepo, finalDecisionRepo, forwardTrackingRepo, marketIndexRepo, new ObjectMapper());
     }
 
     @Test
@@ -285,6 +287,63 @@ class PromotionReviewServiceTest {
         verify(finalDecisionRepo, never()).save(any());
     }
 
+    @Test
+    void bridgeForwardTrackingCreatesPromotionShadowRowsWithoutTradingWrites() {
+        PromotionReviewItemEntity item = simulationItem(42L, DATE, "2492", false, false, new BigDecimal("8"));
+        item.setStockName("華新科");
+        item.setLifecycleStage("MAINSTREAM");
+        item.setReviewReason("manual shadow approval");
+        when(itemRepo.findByTradingDateBetweenAndCurrentStatusOrderByTradingDateAscThemeTagAscSymbolAscSourceAsc(
+                DATE, DATE, "CANDIDATE_POOL_SHADOW")).thenReturn(List.of(item));
+        when(forwardTrackingRepo.findByTradingDateAndStockIdAndFinalDecision(
+                DATE, "2492", "PROMOTION_CANDIDATE_POOL_SHADOW")).thenReturn(Optional.empty());
+        MarketIndexDailyEntity bar = new MarketIndexDailyEntity();
+        bar.setClosePrice(new BigDecimal("100"));
+        when(marketIndexRepo.findBySymbolAndTradingDate("2492", DATE)).thenReturn(Optional.of(bar));
+
+        var response = service.bridgeForwardTracking(DATE, DATE, null);
+
+        assertThat(response).containsEntry("trackingBridgeOnly", true)
+                .containsEntry("doesNotAffectFinalDecision", true)
+                .containsEntry("doesNotAffectBuySellEnter", true)
+                .containsEntry("doesNotWriteCandidateStock", true)
+                .containsEntry("doesNotWriteProductionScore", true)
+                .containsEntry("noAutoPromotion", true)
+                .containsEntry("written", 1)
+                .containsEntry("sourceItems", 1)
+                .containsEntry("returnBackfillRequired", true);
+        verify(forwardTrackingRepo).save(argThat(row ->
+                row.getTradingDate().equals(DATE)
+                        && row.getStockId().equals("2492")
+                        && row.getStockName().equals("華新科")
+                        && row.getFinalDecision().equals("PROMOTION_CANDIDATE_POOL_SHADOW")
+                        && row.getEntryPriceAtDecision().compareTo(new BigDecimal("100")) == 0
+                        && row.getPrimaryStrategy().equals("PROMOTION_REVIEW")
+                        && row.getGateName().equals("ELIGIBLE_FOR_SOFT_BOOST_SHADOW")
+                        && row.getThemeTag().equals("被動元件/MLCC")
+                        && row.getThemeReason().equals("manual shadow approval")
+                        && row.getSourceCandidateId().equals(42L)));
+        verify(candidateStockRepo, never()).save(any());
+        verify(finalDecisionRepo, never()).save(any());
+        verify(auditRepo, never()).save(any());
+    }
+
+    @Test
+    void bridgeForwardTrackingSkipsExistingRows() {
+        PromotionReviewItemEntity item = simulationItem(42L, DATE, "2492", false, false, new BigDecimal("8"));
+        when(itemRepo.findByTradingDateBetweenAndCurrentStatusOrderByTradingDateAscThemeTagAscSymbolAscSourceAsc(
+                DATE, DATE, "CANDIDATE_POOL_SHADOW")).thenReturn(List.of(item));
+        when(forwardTrackingRepo.findByTradingDateAndStockIdAndFinalDecision(
+                DATE, "2492", "PROMOTION_CANDIDATE_POOL_SHADOW")).thenReturn(Optional.of(new CandidateForwardTrackingEntity()));
+
+        var response = service.bridgeForwardTracking(DATE, DATE, "CANDIDATE_POOL_SHADOW");
+
+        assertThat(response).containsEntry("written", 0).containsEntry("skippedExisting", 1);
+        verify(forwardTrackingRepo, never()).save(any());
+        verify(candidateStockRepo, never()).save(any());
+        verify(finalDecisionRepo, never()).save(any());
+    }
+
     private PromotionReviewItemEntity manualItem(String symbol, String name, String theme, String source, String status) {
         PromotionReviewItemEntity e = new PromotionReviewItemEntity();
         e.setId(ids.getAndIncrement());
@@ -329,6 +388,7 @@ class PromotionReviewServiceTest {
         CandidateForwardTrackingEntity e = new CandidateForwardTrackingEntity();
         e.setTradingDate(date);
         e.setStockId(symbol);
+        e.setEntryPriceAtDecision(BigDecimal.ONE);
         e.setT1CloseReturnPct(new BigDecimal(t1));
         e.setT5CloseReturnPct(new BigDecimal(t5));
         e.setT10CloseReturnPct(new BigDecimal(t10));

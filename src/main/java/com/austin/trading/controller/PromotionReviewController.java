@@ -66,4 +66,12 @@ public class PromotionReviewController {
             @RequestParam(defaultValue = "CANDIDATE_POOL_SHADOW") String status) {
         return service.policySimulation(startDate, endDate, status);
     }
+
+    @PostMapping("/forward-tracking-bridge")
+    public Map<String, Object> forwardTrackingBridge(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "CANDIDATE_POOL_SHADOW") String status) {
+        return service.bridgeForwardTracking(startDate, endDate, status);
+    }
 }
