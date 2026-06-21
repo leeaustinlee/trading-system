@@ -1,9 +1,11 @@
 package com.austin.trading.controller;
 
 import com.austin.trading.dto.response.NextDayStrategyDto;
+import com.austin.trading.dto.response.PortfolioRotationShadowResponse;
 import com.austin.trading.dto.response.PositionIntelligenceResultDto;
 import com.austin.trading.service.NextDayStrategyBuilder;
 import com.austin.trading.service.PortfolioHealthV2Service;
+import com.austin.trading.service.PortfolioRotationShadowService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,15 +20,23 @@ import java.util.Map;
 public class PortfolioDecisionController {
     private final NextDayStrategyBuilder builder;
     private final PortfolioHealthV2Service healthV2Service;
+    private final PortfolioRotationShadowService rotationShadowService;
 
     @Autowired
-    public PortfolioDecisionController(NextDayStrategyBuilder builder, PortfolioHealthV2Service healthV2Service) {
+    public PortfolioDecisionController(NextDayStrategyBuilder builder,
+                                       PortfolioHealthV2Service healthV2Service,
+                                       PortfolioRotationShadowService rotationShadowService) {
         this.builder = builder;
         this.healthV2Service = healthV2Service;
+        this.rotationShadowService = rotationShadowService;
+    }
+
+    public PortfolioDecisionController(NextDayStrategyBuilder builder, PortfolioHealthV2Service healthV2Service) {
+        this(builder, healthV2Service, null);
     }
 
     public PortfolioDecisionController(NextDayStrategyBuilder builder) {
-        this(builder, null);
+        this(builder, null, null);
     }
 
     @GetMapping("/review")
@@ -57,6 +67,14 @@ public class PortfolioDecisionController {
             throw new IllegalStateException("Portfolio health-v2 service is not available");
         }
         return healthV2Service.healthV2History(days, symbol);
+    }
+
+    @GetMapping("/rotation-shadow")
+    public PortfolioRotationShadowResponse rotationShadow(@RequestParam(defaultValue = "60") int days) {
+        if (rotationShadowService == null) {
+            throw new IllegalStateException("Portfolio rotation-shadow service is not available");
+        }
+        return rotationShadowService.report(days);
     }
 
     @GetMapping("/next-day-strategy")

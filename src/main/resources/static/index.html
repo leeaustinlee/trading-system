@@ -254,6 +254,7 @@
     #pageLifecycle .annotation-table { min-width: 1120px; }
     #pageLifecycle .exit-review-table { min-width: 1380px; }
     #pageLifecycle .pullback-watch-table { min-width: 1320px; }
+    #pageLifecycle .rotation-shadow-table { min-width: 1320px; }
     #pageLifecycle .ranking-calibration-table { min-width: 1180px; }
     #pageLifecycle .toolbar { min-width: 520px; }
     .lifecycle-safety-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
@@ -1471,6 +1472,37 @@
           Pullback Watch is an observation report only: no buy/sell/rebuild actions, no candidate/watchlist writes, no ranking/risk/final-decision impact.
         </div>
         <div class="stat-row" id="lc-pullback-summary"></div>
+      </section>
+
+      <section class="card span-12">
+        <h2 class="lifecycle-annotation-title">
+          Portfolio Rotation Shadow
+          <span class="lifecycle-annotation-note">Shadow-only · advisory-only · manual review</span>
+          <span class="lifecycle-annotation-note">不動持股 · 不自動換股 · 不影響 risk gate</span>
+        </h2>
+        <div class="lifecycle-safety-row" id="lc-rotation-safety">
+          <span class="pill muted">shadowOnly</span>
+          <span class="pill muted">advisoryOnly</span>
+          <span class="pill muted">doesNotAffectBuySell</span>
+          <span class="pill muted">doesNotMutatePositions</span>
+          <span class="pill muted">doesNotAffectRiskGate</span>
+        </div>
+        <div class="lifecycle-warning">
+          Rotation Shadow compares best candidate vs weakest holding for review only: no orders, no position writes, no auto reduction, no portfolio risk-gate changes.
+        </div>
+        <div class="stat-row" id="lc-rotation-summary"></div>
+      </section>
+
+      <section class="card span-12">
+        <h2>Rotation Shadow Rows</h2>
+        <table class="rotation-shadow-table">
+          <thead><tr>
+            <th>action</th><th>candidate</th><th>candidateTheme</th><th class="num">candidateScore</th>
+            <th>weakestHolding</th><th>holdingTheme</th><th class="num">holdingScore</th>
+            <th class="num">lifecycleDiff</th><th class="num">opportunityDelta</th><th>dataGap</th><th>reason</th>
+          </tr></thead>
+          <tbody id="lc-rotation-body"></tbody>
+        </table>
       </section>
 
       <section class="card span-12">
@@ -2825,6 +2857,56 @@ function clearErr(boxId) {
     }
   }
 
+  function renderPortfolioRotationShadow(payload) {
+    const p = payload || {};
+    const rows = Array.isArray(p.items) ? p.items : [];
+    $("lc-rotation-safety").innerHTML = [
+      lcSafetyPill(p.shadowOnly === true, "shadowOnly"),
+      lcSafetyPill(p.advisoryOnly === true, "advisoryOnly"),
+      lcSafetyPill(p.doesNotAffectBuySell === true, "doesNotAffectBuySell"),
+      lcSafetyPill(p.doesNotMutatePositions === true, "doesNotMutatePositions"),
+      lcSafetyPill(p.doesNotAffectRiskGate === true, "doesNotAffectRiskGate"),
+      `<span class="pill warn">manual review only</span>`
+    ].join("");
+    const range = p.startDate || p.endDate ? `${fmtDate(p.startDate)} → ${fmtDate(p.endDate)}` : "-";
+    const rotateRows = rows.filter(r => String(r.shadowAction || "").toUpperCase() === "SHADOW_ROTATE").length;
+    const reduceRows = rows.filter(r => String(r.shadowAction || "").toUpperCase() === "SHADOW_REDUCE").length;
+    $("lc-rotation-summary").innerHTML = [
+      ["requestedDays", p.requestedDays ?? lifecycleDaysParam()],
+      ["range", range],
+      ["open positions", p.openPositionCount ?? 0],
+      ["candidates", p.candidateCount ?? 0],
+      ["shadow rotate", rotateRows],
+      ["shadow reduce", reduceRows],
+      ["data gaps", Array.isArray(p.dataGaps) ? p.dataGaps.length : 0]
+    ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
+    $("lc-rotation-body").innerHTML = rows.length ? rows.slice(0, 80).map(r => `<tr>
+      <td>${lcAdvisoryBadge(r.shadowAction)}</td>
+      <td><span class="mono">${esc(r.candidateSymbol)}</span> ${esc(r.candidateName || "")}</td>
+      <td>${esc(r.candidateTheme || "-")}</td>
+      <td class="num">${lcNum(r.newCandidateScore)}</td>
+      <td><span class="mono">${esc(r.weakestHoldingSymbol)}</span> ${esc(r.weakestHoldingName || "")}</td>
+      <td>${esc(r.weakestHoldingTheme || "-")}</td>
+      <td class="num">${lcNum(r.weakestHoldingScore)}</td>
+      <td class="num">${lcNum(r.lifecycleDifferential)}</td>
+      <td class="num">${r.opportunityDeltaDataGapped === true ? "-" : lcNum(r.opportunityDelta)}</td>
+      <td>${r.opportunityDeltaDataGapped === true ? pill("DATA_GAP", "warn") : pill("OK", "ok")}</td>
+      <td>${esc(r.reason || p.safetyNote || "shadow-only")}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="11">無 Rotation Shadow rows · shadow-only · no position mutation</td></tr>`;
+  }
+
+  async function loadPortfolioRotationShadow() {
+    clearErr("errBoxLifecycle");
+    const days = lifecycleDaysParam();
+    try {
+      const report = await api(`/api/portfolio/rotation-shadow?days=${encodeURIComponent(days)}`);
+      renderPortfolioRotationShadow(report || {});
+    } catch(e) {
+      showErr("errBoxLifecycle", e.message || "Portfolio Rotation Shadow 載入失敗");
+      renderPortfolioRotationShadow({ requestedDays: days, items: [] });
+    }
+  }
+
   function renderRankingTopNCalibration(cal, missed, quota) {
     const c = cal || {};
     const m = missed || {};
@@ -3227,6 +3309,7 @@ function clearErr(boxId) {
     loadLifecycleCalibration();
     loadRankingTopNCalibration();
     loadPullbackPlanShadow();
+    loadPortfolioRotationShadow();
     loadLifecycleAnnotations();
     loadLifecycleExitReview();
   }
@@ -6402,7 +6485,7 @@ window.finalizeCatchup = async function(taskId) {
     if (pageId === "pageDashboard") await loadDashboard();
     else await refreshCurrent();
   });
-  $("lc-refresh")?.addEventListener("click", () => { loadLifecycleCalibration(); loadRankingTopNCalibration(); loadPullbackPlanShadow(); });
+  $("lc-refresh")?.addEventListener("click", () => { loadLifecycleCalibration(); loadRankingTopNCalibration(); loadPullbackPlanShadow(); loadPortfolioRotationShadow(); });
   $("lc-anno-refresh")?.addEventListener("click", loadLifecycleAnnotations);
   $("lc-exit-refresh")?.addEventListener("click", loadLifecycleExitReview);
   $("lc-exit-rebuild")?.addEventListener("click", rebuildLifecycleExitReview);
