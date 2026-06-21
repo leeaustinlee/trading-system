@@ -3,6 +3,7 @@ package com.austin.trading.controller;
 import com.austin.trading.dto.request.PromotionReviewDecisionRequest;
 import com.austin.trading.dto.response.PromotionPolicySimulationResponse;
 import com.austin.trading.dto.response.PromotionReviewResponse;
+import com.austin.trading.dto.response.PromotionValidationReportResponse;
 import com.austin.trading.service.PromotionReviewService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -121,6 +122,36 @@ class PromotionReviewControllerTest {
                 .andExpect(jsonPath("$.items[0].suggestedPolicy", is("ELIGIBLE_FOR_SOFT_BOOST_SHADOW")));
 
         verify(service).policySimulation(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW");
+    }
+
+    @Test
+    void validationReportEndpointExposesGraduationStatusAndSafetyFlags() throws Exception {
+        var response = PromotionValidationReportResponse.of(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW",
+                new PromotionValidationReportResponse.GraduationCriteria(10, new BigDecimal("0.55"), BigDecimal.ZERO,
+                        new BigDecimal("0.25"), new BigDecimal("-8")),
+                new PromotionValidationReportResponse.Summary(1, 0, 1, 0, 0,
+                        null, null, null, null, "BLOCKED_BY_DATA_GAP", "insufficient completed forward-return evidence or missing market data"),
+                List.of(new PromotionValidationReportResponse.Item(1L, DATE, "2492", "華新科", "被動元件/MLCC", "PEER_SHADOW",
+                        "CANDIDATE_POOL_SHADOW", "BLOCKED_BY_DATA_GAP", "PENDING_FORWARD_RETURN_BACKFILL",
+                        null, null, null, null, null, "PENDING_FORWARD_RETURN_BACKFILL")));
+        when(service.validationReport(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW")).thenReturn(response);
+
+        mvc.perform(get("/api/promotion-review/validation-report")
+                        .param("startDate", DATE.toString())
+                        .param("endDate", DATE.plusDays(1).toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.validationOnly", is(true)))
+                .andExpect(jsonPath("$.doesNotAffectFinalDecision", is(true)))
+                .andExpect(jsonPath("$.doesNotAffectBuySellEnter", is(true)))
+                .andExpect(jsonPath("$.doesNotWriteCandidateStock", is(true)))
+                .andExpect(jsonPath("$.doesNotWriteProductionScore", is(true)))
+                .andExpect(jsonPath("$.noAutoPromotion", is(true)))
+                .andExpect(jsonPath("$.softBoostShadowOnly", is(true)))
+                .andExpect(jsonPath("$.summary.overallStatus", is("BLOCKED_BY_DATA_GAP")))
+                .andExpect(jsonPath("$.graduationCriteria.minSample", is(10)))
+                .andExpect(jsonPath("$.items[0].validationStatus", is("BLOCKED_BY_DATA_GAP")));
+
+        verify(service).validationReport(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW");
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.austin.trading.dto.request.PromotionReviewDecisionRequest;
 import com.austin.trading.dto.response.BuildOperationResponse;
 import com.austin.trading.dto.response.PromotionPolicySimulationResponse;
 import com.austin.trading.dto.response.PromotionReviewResponse;
+import com.austin.trading.dto.response.PromotionValidationReportResponse;
 import com.austin.trading.service.BuildOperationsService;
 import com.austin.trading.service.PromotionReviewService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,6 +66,14 @@ public class PromotionReviewController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(defaultValue = "CANDIDATE_POOL_SHADOW") String status) {
         return service.policySimulation(startDate, endDate, status);
+    }
+
+    @GetMapping("/validation-report")
+    public PromotionValidationReportResponse validationReport(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "CANDIDATE_POOL_SHADOW") String status) {
+        return service.validationReport(startDate, endDate, status);
     }
 
     @PostMapping("/forward-tracking-bridge")

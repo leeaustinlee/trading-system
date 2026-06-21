@@ -288,6 +288,62 @@ class PromotionReviewServiceTest {
     }
 
     @Test
+    void validationReportBlocksByDataGapUntilForwardEvidenceCompletes() {
+        LocalDate endDate = DATE.plusDays(1);
+        PromotionReviewItemEntity item = simulationItem(1L, DATE, "2492", false, false, new BigDecimal("8"));
+        when(itemRepo.findByTradingDateBetweenAndCurrentStatusOrderByTradingDateAscThemeTagAscSymbolAscSourceAsc(
+                DATE, endDate, "CANDIDATE_POOL_SHADOW")).thenReturn(List.of(item));
+        CandidateForwardTrackingEntity forward = new CandidateForwardTrackingEntity();
+        forward.setTradingDate(DATE);
+        forward.setStockId("2492");
+        forward.setEntryPriceAtDecision(BigDecimal.ONE);
+        when(forwardTrackingRepo.findByTradingDateBetween(DATE, endDate)).thenReturn(List.of(forward));
+
+        var response = service.validationReport(DATE, endDate, null);
+
+        assertThat(response.validationOnly()).isTrue();
+        assertThat(response.doesNotAffectFinalDecision()).isTrue();
+        assertThat(response.noAutoPromotion()).isTrue();
+        assertThat(response.softBoostShadowOnly()).isTrue();
+        assertThat(response.graduationCriteria().minSample()).isEqualTo(10);
+        assertThat(response.summary().overallStatus()).isEqualTo("BLOCKED_BY_DATA_GAP");
+        assertThat(response.summary().dataGapCount()).isEqualTo(1);
+        assertThat(response.items()).singleElement().satisfies(i -> {
+            assertThat(i.validationStatus()).isEqualTo("BLOCKED_BY_DATA_GAP");
+            assertThat(i.dataGapReason()).isEqualTo("PENDING_FORWARD_RETURN_BACKFILL");
+        });
+        verify(itemRepo, never()).save(any());
+        verify(candidateStockRepo, never()).save(any());
+        verify(finalDecisionRepo, never()).save(any());
+    }
+
+    @Test
+    void validationReportAggregatesEligibleShadowEvidenceButRequiresMinimumSampleForOverallGraduation() {
+        LocalDate endDate = DATE.plusDays(1);
+        PromotionReviewItemEntity winner = simulationItem(1L, DATE, "2492", false, false, new BigDecimal("8"));
+        PromotionReviewItemEntity loser = simulationItem(2L, DATE, "2327", false, false, new BigDecimal("8"));
+        when(itemRepo.findByTradingDateBetweenAndCurrentStatusOrderByTradingDateAscThemeTagAscSymbolAscSourceAsc(
+                DATE, endDate, "CANDIDATE_POOL_SHADOW")).thenReturn(List.of(winner, loser));
+        when(forwardTrackingRepo.findByTradingDateBetween(DATE, endDate)).thenReturn(List.of(
+                forward(DATE, "2492", "1", "2.5", "3", "-2", false),
+                forward(DATE, "2327", "-1", "-0.5", "1", "-3", false)
+        ));
+
+        var response = service.validationReport(DATE, endDate, "CANDIDATE_POOL_SHADOW");
+
+        assertThat(response.summary().itemCount()).isEqualTo(2);
+        assertThat(response.summary().evidenceReadyCount()).isEqualTo(2);
+        assertThat(response.summary().winRateT5()).isEqualByComparingTo("0.5000");
+        assertThat(response.summary().overallStatus()).isEqualTo("NEED_MORE_EVIDENCE");
+        assertThat(response.items()).filteredOn(i -> i.symbol().equals("2492")).singleElement()
+                .satisfies(i -> assertThat(i.validationStatus()).isEqualTo("ELIGIBLE_FOR_SOFT_BOOST_SHADOW"));
+        assertThat(response.items()).filteredOn(i -> i.symbol().equals("2327")).singleElement()
+                .satisfies(i -> assertThat(i.validationStatus()).isEqualTo("KEEP_WATCHING"));
+        verify(candidateStockRepo, never()).save(any());
+        verify(finalDecisionRepo, never()).save(any());
+    }
+
+    @Test
     void bridgeForwardTrackingCreatesPromotionShadowRowsWithoutTradingWrites() {
         PromotionReviewItemEntity item = simulationItem(42L, DATE, "2492", false, false, new BigDecimal("8"));
         item.setStockName("華新科");

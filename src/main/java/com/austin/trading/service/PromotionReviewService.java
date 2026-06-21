@@ -3,6 +3,7 @@ package com.austin.trading.service;
 import com.austin.trading.dto.request.PromotionReviewDecisionRequest;
 import com.austin.trading.dto.response.PromotionPolicySimulationResponse;
 import com.austin.trading.dto.response.PromotionReviewResponse;
+import com.austin.trading.dto.response.PromotionValidationReportResponse;
 import com.austin.trading.entity.*;
 import com.austin.trading.repository.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -187,6 +188,106 @@ public class PromotionReviewService {
                 (int) rows.stream().filter(PromotionPolicySimulationResponse.Item::riskBlocker).count(),
                 (int) rows.stream().filter(PromotionPolicySimulationResponse.Item::governanceBlocker).count());
         return PromotionPolicySimulationResponse.of(startDate, endDate, effectiveStatus, summary, rows);
+    }
+
+    @Transactional(readOnly = true)
+    public PromotionValidationReportResponse validationReport(LocalDate startDate, LocalDate endDate, String status) {
+        PromotionPolicySimulationResponse simulation = policySimulation(startDate, endDate, status);
+        List<PromotionValidationReportResponse.Item> items = simulation.items().stream()
+                .map(this::toValidationItem)
+                .toList();
+        int itemCount = items.size();
+        int dataGapCount = (int) items.stream().filter(i -> "BLOCKED_BY_DATA_GAP".equals(i.validationStatus())).count();
+        int evidenceReadyCount = itemCount - dataGapCount;
+        int riskBlockedCount = (int) items.stream().filter(i -> "BLOCKED_BY_RISK".equals(i.validationStatus())).count();
+        int governanceBlockedCount = (int) items.stream().filter(i -> "BLOCKED_BY_GOVERNANCE".equals(i.validationStatus())).count();
+        BigDecimal avgT5 = avg(items.stream().map(PromotionValidationReportResponse.Item::t5ReturnPct).toArray(BigDecimal[]::new));
+        BigDecimal winRateT5 = validationWinRate(items);
+        BigDecimal hitStopRate = ratio(items.stream().filter(i -> Boolean.TRUE.equals(i.hitStop())).count(), evidenceReadyCount);
+        BigDecimal avgMaxDrawdown = avg(items.stream().map(PromotionValidationReportResponse.Item::maxDrawdownPct).toArray(BigDecimal[]::new));
+        PromotionValidationReportResponse.GraduationCriteria criteria = graduationCriteria();
+        String overallStatus = overallValidationStatus(itemCount, evidenceReadyCount, dataGapCount, riskBlockedCount,
+                governanceBlockedCount, avgT5, winRateT5, hitStopRate, avgMaxDrawdown, criteria);
+        PromotionValidationReportResponse.Summary summary = new PromotionValidationReportResponse.Summary(
+                itemCount, evidenceReadyCount, dataGapCount, riskBlockedCount, governanceBlockedCount,
+                avgT5, winRateT5, hitStopRate, avgMaxDrawdown, overallStatus,
+                overallValidationReason(overallStatus));
+        return PromotionValidationReportResponse.of(startDate, endDate, simulation.status(), criteria, summary, items);
+    }
+
+    private PromotionValidationReportResponse.Item toValidationItem(PromotionPolicySimulationResponse.Item item) {
+        String status = validationStatus(item);
+        return new PromotionValidationReportResponse.Item(item.id(), item.tradingDate(), item.symbol(), item.stockName(),
+                item.themeTag(), item.source(), item.currentStatus(), status, validationReason(status, item),
+                item.t1ReturnPct(), item.t5ReturnPct(), item.t10ReturnPct(), item.maxDrawdownPct(), item.hitStop(), item.dataGapReason());
+    }
+
+    private String validationStatus(PromotionPolicySimulationResponse.Item item) {
+        if (item.dataGapReason() != null) return "BLOCKED_BY_DATA_GAP";
+        if (item.riskBlocker() || Boolean.TRUE.equals(item.hitStop())
+                || (item.maxDrawdownPct() != null && item.maxDrawdownPct().compareTo(new BigDecimal("-8")) < 0)) {
+            return "BLOCKED_BY_RISK";
+        }
+        if (item.governanceBlocker()) return "BLOCKED_BY_GOVERNANCE";
+        if (item.t5ReturnPct() == null) return "NEED_MORE_EVIDENCE";
+        if (item.t5ReturnPct().compareTo(BigDecimal.ZERO) > 0) return "ELIGIBLE_FOR_SOFT_BOOST_SHADOW";
+        return "KEEP_WATCHING";
+    }
+
+    private String validationReason(String status, PromotionPolicySimulationResponse.Item item) {
+        return switch (status) {
+            case "BLOCKED_BY_DATA_GAP" -> item.dataGapReason();
+            case "BLOCKED_BY_RISK" -> item.riskBlocker() ? "risk blocker" : Boolean.TRUE.equals(item.hitStop()) ? "hit stop" : "max drawdown below threshold";
+            case "BLOCKED_BY_GOVERNANCE" -> "governance blocker";
+            case "ELIGIBLE_FOR_SOFT_BOOST_SHADOW" -> "positive T5 shadow evidence; still shadow only";
+            case "KEEP_WATCHING" -> "evidence available but threshold not met";
+            default -> "insufficient forward evidence";
+        };
+    }
+
+    private PromotionValidationReportResponse.GraduationCriteria graduationCriteria() {
+        return new PromotionValidationReportResponse.GraduationCriteria(10, new BigDecimal("0.55"), BigDecimal.ZERO,
+                new BigDecimal("0.25"), new BigDecimal("-8"));
+    }
+
+    private String overallValidationStatus(int itemCount, int evidenceReadyCount, int dataGapCount, int riskBlockedCount,
+                                           int governanceBlockedCount, BigDecimal avgT5, BigDecimal winRateT5,
+                                           BigDecimal hitStopRate, BigDecimal avgMaxDrawdown,
+                                           PromotionValidationReportResponse.GraduationCriteria criteria) {
+        if (itemCount == 0) return "NEED_MORE_EVIDENCE";
+        if (evidenceReadyCount < criteria.minSample()) return dataGapCount > 0 ? "BLOCKED_BY_DATA_GAP" : "NEED_MORE_EVIDENCE";
+        if (riskBlockedCount > 0) return "BLOCKED_BY_RISK";
+        if (governanceBlockedCount > 0) return "BLOCKED_BY_GOVERNANCE";
+        if (winRateT5 != null && winRateT5.compareTo(criteria.minWinRateT5()) >= 0
+                && avgT5 != null && avgT5.compareTo(criteria.minAvgT5()) > 0
+                && (hitStopRate == null || hitStopRate.compareTo(criteria.maxHitStopRate()) <= 0)
+                && (avgMaxDrawdown == null || avgMaxDrawdown.compareTo(criteria.minAvgMaxDrawdown()) > 0)) {
+            return "ELIGIBLE_FOR_SOFT_BOOST_SHADOW";
+        }
+        return "KEEP_WATCHING";
+    }
+
+    private String overallValidationReason(String status) {
+        return switch (status) {
+            case "BLOCKED_BY_DATA_GAP" -> "insufficient completed forward-return evidence or missing market data";
+            case "BLOCKED_BY_RISK" -> "risk blocker, hit stop, or drawdown threshold triggered";
+            case "BLOCKED_BY_GOVERNANCE" -> "governance blocker present";
+            case "ELIGIBLE_FOR_SOFT_BOOST_SHADOW" -> "graduation criteria met for shadow-only soft boost review";
+            case "KEEP_WATCHING" -> "sample exists but graduation thresholds are not met";
+            default -> "minimum sample requirement not met";
+        };
+    }
+
+    private BigDecimal validationWinRate(List<PromotionValidationReportResponse.Item> items) {
+        long count = items.stream().filter(i -> i.t5ReturnPct() != null).count();
+        if (count == 0) return null;
+        long wins = items.stream().filter(i -> i.t5ReturnPct() != null && i.t5ReturnPct().compareTo(BigDecimal.ZERO) > 0).count();
+        return ratio(wins, count);
+    }
+
+    private BigDecimal ratio(long numerator, long denominator) {
+        if (denominator == 0) return null;
+        return BigDecimal.valueOf(numerator).divide(BigDecimal.valueOf(denominator), 4, java.math.RoundingMode.HALF_UP);
     }
 
     @Transactional
