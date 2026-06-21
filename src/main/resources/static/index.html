@@ -254,6 +254,7 @@
     #pageLifecycle .annotation-table { min-width: 1120px; }
     #pageLifecycle .exit-review-table { min-width: 1380px; }
     #pageLifecycle .promotion-review-table { min-width: 1420px; }
+    #pageLifecycle .promotion-simulation-table { min-width: 1280px; }
     #pageLifecycle .pullback-watch-table { min-width: 1320px; }
     #pageLifecycle .rotation-shadow-table { min-width: 1320px; }
     #pageLifecycle .ranking-calibration-table { min-width: 1180px; }
@@ -1773,6 +1774,51 @@
             <th class="num">evidence</th><th>lifecycle</th><th>risk</th><th>governance</th><th>reason</th>
           </tr></thead>
           <tbody id="lc-promo-body"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-12">
+        <h2 class="lifecycle-annotation-title">
+          P4 Policy Simulation / Forward Tracking
+          <span class="lifecycle-annotation-note">Simulation only · bounded soft boost shadow only</span>
+          <span class="lifecycle-annotation-note">Tracking bridge writes forward tracking only</span>
+        </h2>
+        <div class="toolbar">
+          <label>Start <input type="date" id="lc-policy-start" /></label>
+          <label>End <input type="date" id="lc-policy-end" /></label>
+          <label>Status
+            <select id="lc-policy-status">
+              <option value="CANDIDATE_POOL_SHADOW">CANDIDATE_POOL_SHADOW</option>
+              <option value="WATCH_ONLY">WATCH_ONLY</option>
+              <option value="NEED_MORE_EVIDENCE">NEED_MORE_EVIDENCE</option>
+              <option value="RESEARCH_ONLY">RESEARCH_ONLY</option>
+              <option value="PENDING_REVIEW">PENDING_REVIEW</option>
+            </select>
+          </label>
+          <button class="btn" id="lc-policy-refresh">Run Simulation</button>
+          <button class="btn warn" id="lc-policy-bridge">Bridge Forward Tracking</button>
+          <button class="btn" id="lc-policy-backfill">Backfill Returns</button>
+        </div>
+        <div class="lifecycle-safety-row" id="lc-policy-safety">
+          <span class="pill muted">simulationOnly</span>
+          <span class="pill muted">doesNotAffectFinalDecision</span>
+          <span class="pill muted">noAutoPromotion</span>
+        </div>
+        <div class="lifecycle-warning">
+          Policy simulation and bridge remain guarded: bridge rows use PROMOTION_* tracking labels and do not make symbols tradable. T1/T5/T10 remain data-gap until enough future trading days exist.
+        </div>
+        <div class="stat-row" id="lc-policy-summary"></div>
+        <div class="stat-row" id="lc-policy-bridge-summary"></div>
+      </section>
+
+      <section class="card span-12">
+        <h2>Policy Simulation Items</h2>
+        <table class="promotion-simulation-table">
+          <thead><tr>
+            <th>policy</th><th>symbol</th><th>stockName</th><th>theme</th><th>source</th><th>status</th>
+            <th class="num">T1</th><th class="num">T5</th><th class="num">T10</th><th class="num">MDD</th><th>stop</th><th>data gap</th>
+          </tr></thead>
+          <tbody id="lc-policy-body"></tbody>
         </table>
       </section>
 
@@ -3414,6 +3460,111 @@ function clearErr(boxId) {
     }
   }
 
+  function policyDateParams() {
+    const today = new Date().toLocaleDateString("sv-SE");
+    const queueDate = promotionReviewDateParam();
+    const startEl = $("lc-policy-start");
+    const endEl = $("lc-policy-end");
+    if (startEl && !startEl.value) startEl.value = queueDate || today;
+    if (endEl && !endEl.value) endEl.value = queueDate || today;
+    return {
+      startDate: startEl?.value || queueDate || today,
+      endDate: endEl?.value || queueDate || today,
+      status: $("lc-policy-status")?.value || "CANDIDATE_POOL_SHADOW"
+    };
+  }
+
+  function renderPolicySimulation(payload) {
+    const p = payload || {};
+    const rows = Array.isArray(p.items) ? p.items : [];
+    const s = p.summary || {};
+    $("lc-policy-safety").innerHTML = [
+      lcSafetyPill(p.simulationOnly === true, "simulationOnly"),
+      lcSafetyPill(p.reviewOnly === true, "reviewOnly"),
+      lcSafetyPill(p.doesNotAffectFinalDecision === true, "doesNotAffectFinalDecision"),
+      lcSafetyPill(p.doesNotAffectBuySellEnter === true, "doesNotAffectBuySellEnter"),
+      lcSafetyPill(p.doesNotWriteCandidateStock === true, "doesNotWriteCandidateStock"),
+      lcSafetyPill(p.doesNotWriteProductionScore === true, "doesNotWriteProductionScore"),
+      lcSafetyPill(p.noAutoPromotion === true, "noAutoPromotion"),
+      lcSafetyPill(p.boundedSoftBoostShadowOnly === true, "boundedSoftBoostShadowOnly")
+    ].join("");
+    $("lc-policy-summary").innerHTML = [
+      ["range", `${fmtDate(p.startDate || policyDateParams().startDate)} → ${fmtDate(p.endDate || policyDateParams().endDate)}`],
+      ["status", p.status || policyDateParams().status],
+      ["items", s.itemCount ?? rows.length],
+      ["matched", s.matchedForwardCount ?? 0],
+      ["data gaps", s.dataGapCount ?? 0],
+      ["avg T1 / T5 / T10", `${lcNum(s.avgT1)} / ${lcNum(s.avgT5)} / ${lcNum(s.avgT10)}`],
+      ["winRate T5", s.winRateT5 == null ? "-" : lcPct(s.winRateT5)],
+      ["hitStop", s.hitStopCount ?? 0]
+    ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
+    $("lc-policy-body").innerHTML = rows.length ? rows.slice(0, 100).map(r => `<tr>
+      <td>${pill(r.suggestedPolicy || "NEED_MORE_EVIDENCE", String(r.suggestedPolicy || "").includes("BLOCK") ? "warn" : "muted")}</td>
+      <td class="mono">${esc(r.symbol)}</td>
+      <td>${esc(r.stockName)}</td>
+      <td>${esc(r.themeTag)}</td>
+      <td>${esc(r.source)}</td>
+      <td>${pill(r.currentStatus || "-", String(r.currentStatus || "").includes("SHADOW") ? "ok" : "muted")}</td>
+      <td class="num">${lcNum(r.t1ReturnPct, 4)}</td>
+      <td class="num">${lcNum(r.t5ReturnPct, 4)}</td>
+      <td class="num">${lcNum(r.t10ReturnPct, 4)}</td>
+      <td class="num">${lcNum(r.maxDrawdownPct, 4)}</td>
+      <td>${r.hitStop === true ? pill("STOP", "warn") : r.hitStop === false ? pill("NO", "ok") : pill("-", "muted")}</td>
+      <td>${r.dataGapReason ? pill(r.dataGapReason, "warn") : pill("OK", "ok")}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="12">無 policy simulation items · guarded simulation only</td></tr>`;
+  }
+
+  async function loadPolicySimulation() {
+    clearErr("errBoxLifecycle");
+    const p = policyDateParams();
+    try {
+      const report = await api(`/api/promotion-review/policy-simulation?startDate=${encodeURIComponent(p.startDate)}&endDate=${encodeURIComponent(p.endDate)}&status=${encodeURIComponent(p.status)}`);
+      renderPolicySimulation(report || {});
+    } catch(e) {
+      showErr("errBoxLifecycle", e.message || "Policy simulation 載入失敗");
+      renderPolicySimulation({ startDate: p.startDate, endDate: p.endDate, status: p.status, items: [] });
+    }
+  }
+
+  async function bridgePolicyForwardTracking() {
+    clearErr("errBoxLifecycle");
+    const p = policyDateParams();
+    try {
+      const res = await api(`/api/promotion-review/forward-tracking-bridge?startDate=${encodeURIComponent(p.startDate)}&endDate=${encodeURIComponent(p.endDate)}&status=${encodeURIComponent(p.status)}`, { method: "POST", timeoutMs: 20000 });
+      $("lc-policy-bridge-summary").innerHTML = [
+        ["bridge", res.trackingBridgeOnly === true ? "tracking only" : "check"],
+        ["source", res.sourceItems ?? 0],
+        ["written", res.written ?? 0],
+        ["updated", res.updatedExisting ?? 0],
+        ["skipped", res.skippedExisting ?? 0],
+        ["decision", res.finalDecision || "PROMOTION_*"],
+        ["backfill", res.returnBackfillRequired === true ? "required" : "-"],
+      ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
+      await loadPolicySimulation();
+    } catch(e) {
+      showErr("errBoxLifecycle", e.message || "Forward tracking bridge 失敗");
+    }
+  }
+
+  async function backfillPolicyForwardReturns() {
+    clearErr("errBoxLifecycle");
+    const p = policyDateParams();
+    const days = Math.max(10, Math.ceil((new Date(p.endDate) - new Date(p.startDate)) / 86400000) + 10 || 10);
+    try {
+      const res = await api(`/api/forward-tracking/backfill-returns?days=${encodeURIComponent(days)}`, { method: "POST", timeoutMs: 30000 });
+      $("lc-policy-bridge-summary").innerHTML = [
+        ["return backfill", "done"],
+        ["processed", res.processedRows ?? 0],
+        ["updated", res.updatedRows ?? 0],
+        ["data gaps", res.dataGapRows ?? 0],
+        ["benchmark", typeof res.benchmarkHorizon === "string" ? res.benchmarkHorizon : JSON.stringify(res.benchmarkHorizon || {})]
+      ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
+      await loadPolicySimulation();
+    } catch(e) {
+      showErr("errBoxLifecycle", e.message || "Forward return backfill 失敗");
+    }
+  }
+
   function loadLifecyclePage() {
     loadLifecycleCalibration();
     loadRankingTopNCalibration();
@@ -3422,6 +3573,7 @@ function clearErr(boxId) {
     loadLifecycleAnnotations();
     loadLifecycleExitReview();
     loadPromotionReviewQueue();
+    loadPolicySimulation();
   }
 
   function showCopyableError(title, message) {
@@ -6595,12 +6747,15 @@ window.finalizeCatchup = async function(taskId) {
     if (pageId === "pageDashboard") await loadDashboard();
     else await refreshCurrent();
   });
-  $("lc-refresh")?.addEventListener("click", () => { loadLifecycleCalibration(); loadRankingTopNCalibration(); loadPullbackPlanShadow(); loadPortfolioRotationShadow(); });
+  $("lc-refresh")?.addEventListener("click", () => { loadLifecycleCalibration(); loadRankingTopNCalibration(); loadPullbackPlanShadow(); loadPortfolioRotationShadow(); loadPolicySimulation(); });
   $("lc-anno-refresh")?.addEventListener("click", loadLifecycleAnnotations);
   $("lc-exit-refresh")?.addEventListener("click", loadLifecycleExitReview);
   $("lc-exit-rebuild")?.addEventListener("click", rebuildLifecycleExitReview);
-  $("lc-promo-refresh")?.addEventListener("click", loadPromotionReviewQueue);
-  $("lc-promo-build")?.addEventListener("click", buildPromotionReviewQueue);
+  $("lc-promo-refresh")?.addEventListener("click", () => { loadPromotionReviewQueue(); loadPolicySimulation(); });
+  $("lc-promo-build")?.addEventListener("click", async () => { await buildPromotionReviewQueue(); await loadPolicySimulation(); });
+  $("lc-policy-refresh")?.addEventListener("click", loadPolicySimulation);
+  $("lc-policy-bridge")?.addEventListener("click", bridgePolicyForwardTracking);
+  $("lc-policy-backfill")?.addEventListener("click", backfillPolicyForwardReturns);
   $("dec-btnEvaluate").addEventListener("click", runFinalDecisionEvaluate);
 
   /* ─────────────────────────────────────────────
