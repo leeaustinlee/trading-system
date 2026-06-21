@@ -1835,6 +1835,30 @@
         </table>
       </section>
 
+      <section class="card span-12">
+        <h2 class="lifecycle-annotation-title">
+          Daily Validation Summary
+          <span class="lifecycle-annotation-note">Report only · scheduler-backed</span>
+          <span class="lifecycle-annotation-note">No production promotion</span>
+        </h2>
+        <div class="toolbar">
+          <label>Backfill days <input type="number" id="lc-daily-backfill-days" min="1" max="60" value="14" style="width:90px" /></label>
+          <button class="btn warn" id="lc-daily-summary-run">Run Daily Summary</button>
+          <span class="small" style="color:var(--muted)">Uses policy date/status above · same guarded automation as PromotionValidationDailySummaryJob</span>
+        </div>
+        <div class="lifecycle-safety-row" id="lc-daily-summary-safety">
+          <span class="pill muted">dailyValidationSummaryOnly</span>
+          <span class="pill muted">reportOnly</span>
+          <span class="pill muted">doesNotAffectBuySellEnter</span>
+          <span class="pill muted">doesNotWriteCandidateStock</span>
+          <span class="pill muted">noAutoPromotion</span>
+        </div>
+        <div class="lifecycle-warning">
+          Daily summary runs bridge/backfill/validation in report-only mode. It is a dashboard checkpoint for evidence readiness, not a promotion or trading action.
+        </div>
+        <div class="stat-row" id="lc-daily-summary-result"></div>
+      </section>
+
     </div>
   </div>
 </div>
@@ -3616,6 +3640,42 @@ function clearErr(boxId) {
       await loadPolicySimulation();
     } catch(e) {
       showErr("errBoxLifecycle", e.message || "Forward return backfill 失敗");
+    }
+  }
+
+  async function runDailyValidationSummary() {
+    clearErr("errBoxLifecycle");
+    const p = policyDateParams();
+    const date = p.endDate || p.startDate;
+    const days = Math.max(1, Math.min(60, Number($("lc-daily-backfill-days")?.value || 14)));
+    try {
+      const res = await api(`/api/promotion-review/daily-validation-summary?date=${encodeURIComponent(date)}&status=${encodeURIComponent(p.status)}&backfillDays=${encodeURIComponent(days)}`, { method: "POST", timeoutMs: 40000 });
+      const bridge = res.bridge || {};
+      const backfill = res.returnBackfill || {};
+      const summary = res.validationSummary || {};
+      $("lc-daily-summary-safety").innerHTML = [
+        lcSafetyPill(res.dailyValidationSummaryOnly === true, "dailyValidationSummaryOnly"),
+        lcSafetyPill(res.reportOnly === true, "reportOnly"),
+        lcSafetyPill(res.doesNotAffectFinalDecision === true, "doesNotAffectFinalDecision"),
+        lcSafetyPill(res.doesNotAffectBuySellEnter === true, "doesNotAffectBuySellEnter"),
+        lcSafetyPill(res.doesNotWriteCandidateStock === true, "doesNotWriteCandidateStock"),
+        lcSafetyPill(res.doesNotWriteProductionScore === true, "doesNotWriteProductionScore"),
+        lcSafetyPill(res.noAutoPromotion === true, "noAutoPromotion"),
+        lcSafetyPill(res.softBoostShadowOnly === true, "softBoostShadowOnly")
+      ].join("");
+      $("lc-daily-summary-result").innerHTML = [
+        ["date", fmtDate(res.date || date)],
+        ["status", res.status || p.status],
+        ["overall", res.overallStatus || summary.overallStatus || "NEED_MORE_EVIDENCE"],
+        ["reason", res.overallReason || summary.overallReason || "-"],
+        ["items", res.itemCount ?? summary.itemCount ?? 0],
+        ["ready / gaps", `${summary.evidenceReadyCount ?? 0} / ${summary.dataGapCount ?? 0}`],
+        ["bridge written / updated", `${bridge.written ?? 0} / ${bridge.updatedExisting ?? 0}`],
+        ["backfill updated / gaps", `${backfill.updatedRows ?? 0} / ${backfill.dataGapRows ?? 0}`]
+      ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
+      await loadPolicySimulation();
+    } catch(e) {
+      showErr("errBoxLifecycle", e.message || "Daily validation summary 失敗");
     }
   }
 
@@ -6810,6 +6870,7 @@ window.finalizeCatchup = async function(taskId) {
   $("lc-policy-refresh")?.addEventListener("click", loadPolicySimulation);
   $("lc-policy-bridge")?.addEventListener("click", bridgePolicyForwardTracking);
   $("lc-policy-backfill")?.addEventListener("click", backfillPolicyForwardReturns);
+  $("lc-daily-summary-run")?.addEventListener("click", runDailyValidationSummary);
   $("dec-btnEvaluate").addEventListener("click", runFinalDecisionEvaluate);
 
   /* ─────────────────────────────────────────────

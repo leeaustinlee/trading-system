@@ -21,17 +21,25 @@ class LifecyclePromotionUiTest {
                 "id=\"lc-policy-validation-summary\"",
                 "id=\"lc-validation-body\"",
                 "Promotion Validation Report",
+                "Daily Validation Summary",
+                "id=\"lc-daily-backfill-days\"",
+                "id=\"lc-daily-summary-run\"",
+                "id=\"lc-daily-summary-result\"",
                 "/api/promotion-review/policy-simulation?startDate=",
                 "/api/promotion-review/validation-report?startDate=",
                 "/api/promotion-review/forward-tracking-bridge?startDate=",
+                "/api/promotion-review/daily-validation-summary?date=",
                 "/api/forward-tracking/backfill-returns?days=");
         assertThat(html).contains(
                 "simulationOnly",
+                "dailyValidationSummaryOnly",
+                "reportOnly",
                 "doesNotAffectFinalDecision",
                 "doesNotWriteCandidateStock",
                 "doesNotWriteProductionScore",
                 "noAutoPromotion",
                 "boundedSoftBoostShadowOnly",
+                "softBoostShadowOnly",
                 "minimum sample requirement not met");
         assertThat(html).doesNotContain("BUY_NOW", "PROMOTE_TO_TRADABLE");
     }
