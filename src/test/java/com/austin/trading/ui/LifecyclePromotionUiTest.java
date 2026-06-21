@@ -18,7 +18,11 @@ class LifecyclePromotionUiTest {
                 "id=\"lc-policy-refresh\"",
                 "id=\"lc-policy-bridge\"",
                 "id=\"lc-policy-backfill\"",
+                "id=\"lc-policy-validation-summary\"",
+                "id=\"lc-validation-body\"",
+                "Promotion Validation Report",
                 "/api/promotion-review/policy-simulation?startDate=",
+                "/api/promotion-review/validation-report?startDate=",
                 "/api/promotion-review/forward-tracking-bridge?startDate=",
                 "/api/forward-tracking/backfill-returns?days=");
         assertThat(html).contains(
@@ -27,7 +31,8 @@ class LifecyclePromotionUiTest {
                 "doesNotWriteCandidateStock",
                 "doesNotWriteProductionScore",
                 "noAutoPromotion",
-                "boundedSoftBoostShadowOnly");
+                "boundedSoftBoostShadowOnly",
+                "minimum sample requirement not met");
         assertThat(html).doesNotContain("BUY_NOW", "PROMOTE_TO_TRADABLE");
     }
 }

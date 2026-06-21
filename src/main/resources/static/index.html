@@ -255,6 +255,7 @@
     #pageLifecycle .exit-review-table { min-width: 1380px; }
     #pageLifecycle .promotion-review-table { min-width: 1420px; }
     #pageLifecycle .promotion-simulation-table { min-width: 1280px; }
+    #pageLifecycle .promotion-validation-table { min-width: 1320px; }
     #pageLifecycle .pullback-watch-table { min-width: 1320px; }
     #pageLifecycle .rotation-shadow-table { min-width: 1320px; }
     #pageLifecycle .ranking-calibration-table { min-width: 1180px; }
@@ -1808,6 +1809,7 @@
           Policy simulation and bridge remain guarded: bridge rows use PROMOTION_* tracking labels and do not make symbols tradable. T1/T5/T10 remain data-gap until enough future trading days exist.
         </div>
         <div class="stat-row" id="lc-policy-summary"></div>
+        <div class="stat-row" id="lc-policy-validation-summary"></div>
         <div class="stat-row" id="lc-policy-bridge-summary"></div>
       </section>
 
@@ -1819,6 +1821,17 @@
             <th class="num">T1</th><th class="num">T5</th><th class="num">T10</th><th class="num">MDD</th><th>stop</th><th>data gap</th>
           </tr></thead>
           <tbody id="lc-policy-body"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-12">
+        <h2>Promotion Validation Report</h2>
+        <table class="promotion-validation-table">
+          <thead><tr>
+            <th>validation</th><th>symbol</th><th>stockName</th><th>theme</th><th>source</th><th>status</th>
+            <th>reason</th><th class="num">T5</th><th class="num">MDD</th><th>stop</th><th>data gap</th>
+          </tr></thead>
+          <tbody id="lc-validation-body"></tbody>
         </table>
       </section>
 
@@ -3514,12 +3527,53 @@ function clearErr(boxId) {
     </tr>`).join("") : `<tr class="empty-row"><td colspan="12">無 policy simulation items · guarded simulation only</td></tr>`;
   }
 
+  function renderPromotionValidationReport(payload) {
+    const p = payload || {};
+    const rows = Array.isArray(p.items) ? p.items : [];
+    const s = p.summary || {};
+    const c = p.graduationCriteria || {};
+    $("lc-policy-validation-summary").innerHTML = [
+      ["validation", s.overallStatus || "NEED_MORE_EVIDENCE"],
+      ["reason", s.overallReason || "minimum sample requirement not met"],
+      ["ready / gaps", `${s.evidenceReadyCount ?? 0} / ${s.dataGapCount ?? 0}`],
+      ["criteria", `n≥${c.minSample ?? 10}, winT5≥${lcPct(c.minWinRateT5 ?? 0.55)}, avgT5>${lcNum(c.minAvgT5 ?? 0)}, stop≤${lcPct(c.maxHitStopRate ?? 0.25)}`],
+      ["avgT5 / winT5", `${lcNum(s.avgT5)} / ${s.winRateT5 == null ? "-" : lcPct(s.winRateT5)}`],
+      ["hitStop / MDD", `${s.hitStopRate == null ? "-" : lcPct(s.hitStopRate)} / ${lcNum(s.avgMaxDrawdown)}`]
+    ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
+    $("lc-validation-body").innerHTML = rows.length ? rows.slice(0, 100).map(r => `<tr>
+      <td>${pill(r.validationStatus || "NEED_MORE_EVIDENCE", /BLOCKED/i.test(String(r.validationStatus || "")) ? "warn" : String(r.validationStatus || "").includes("ELIGIBLE") ? "ok" : "muted")}</td>
+      <td class="mono">${esc(r.symbol)}</td>
+      <td>${esc(r.stockName)}</td>
+      <td>${esc(r.themeTag)}</td>
+      <td>${esc(r.source)}</td>
+      <td>${pill(r.currentStatus || "-", String(r.currentStatus || "").includes("SHADOW") ? "ok" : "muted")}</td>
+      <td>${esc(r.validationReason || "-")}</td>
+      <td class="num">${lcNum(r.t5ReturnPct, 4)}</td>
+      <td class="num">${lcNum(r.maxDrawdownPct, 4)}</td>
+      <td>${r.hitStop === true ? pill("STOP", "warn") : r.hitStop === false ? pill("NO", "ok") : pill("-", "muted")}</td>
+      <td>${r.dataGapReason ? pill(r.dataGapReason, "warn") : pill("OK", "ok")}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="11">無 validation rows · guarded validation only</td></tr>`;
+  }
+
+  async function loadPromotionValidationReport() {
+    clearErr("errBoxLifecycle");
+    const p = policyDateParams();
+    try {
+      const report = await api(`/api/promotion-review/validation-report?startDate=${encodeURIComponent(p.startDate)}&endDate=${encodeURIComponent(p.endDate)}&status=${encodeURIComponent(p.status)}`);
+      renderPromotionValidationReport(report || {});
+    } catch(e) {
+      showErr("errBoxLifecycle", e.message || "Promotion validation report 載入失敗");
+      renderPromotionValidationReport({ startDate: p.startDate, endDate: p.endDate, status: p.status, items: [] });
+    }
+  }
+
   async function loadPolicySimulation() {
     clearErr("errBoxLifecycle");
     const p = policyDateParams();
     try {
       const report = await api(`/api/promotion-review/policy-simulation?startDate=${encodeURIComponent(p.startDate)}&endDate=${encodeURIComponent(p.endDate)}&status=${encodeURIComponent(p.status)}`);
       renderPolicySimulation(report || {});
+      await loadPromotionValidationReport();
     } catch(e) {
       showErr("errBoxLifecycle", e.message || "Policy simulation 載入失敗");
       renderPolicySimulation({ startDate: p.startDate, endDate: p.endDate, status: p.status, items: [] });
