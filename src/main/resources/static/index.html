@@ -253,6 +253,7 @@
     #pageLifecycle table { min-width: 760px; }
     #pageLifecycle .annotation-table { min-width: 1120px; }
     #pageLifecycle .exit-review-table { min-width: 1380px; }
+    #pageLifecycle .promotion-review-table { min-width: 1420px; }
     #pageLifecycle .pullback-watch-table { min-width: 1320px; }
     #pageLifecycle .rotation-shadow-table { min-width: 1320px; }
     #pageLifecycle .ranking-calibration-table { min-width: 1180px; }
@@ -1736,6 +1737,42 @@
             <th>structureState</th><th>dataGapReason</th>
           </tr></thead>
           <tbody id="lc-exit-body"></tbody>
+        </table>
+      </section>
+
+      <section class="card span-12">
+        <h2 class="lifecycle-annotation-title">
+          P4 Promotion Review Queue
+          <span class="lifecycle-annotation-note">Guarded production review · manual approval only</span>
+          <span class="lifecycle-annotation-note">不寫候選池 · 不影響 FinalDecision · no auto promotion</span>
+        </h2>
+        <div class="toolbar">
+          <label>Date <input type="date" id="lc-promo-date" /></label>
+          <button class="btn" id="lc-promo-refresh">讀取 Queue</button>
+          <button class="btn warn" id="lc-promo-build">Build / Rebuild Review Queue</button>
+          <span class="small" style="color:var(--muted);font-weight:700">review-only · candidatePoolShadowIsNotTradable · requires separate risk gate</span>
+        </div>
+        <div class="lifecycle-safety-row" id="lc-promo-safety">
+          <span class="pill muted">reviewOnly</span>
+          <span class="pill muted">doesNotAffectFinalDecision</span>
+          <span class="pill muted">doesNotAffectBuySellEnter</span>
+          <span class="pill muted">doesNotWriteCandidateStock</span>
+          <span class="pill muted">noAutoPromotion</span>
+        </div>
+        <div class="lifecycle-warning">
+          Promotion Review is a governance queue only: approving an item keeps it candidate-pool shadow, not tradable; production promotion still requires a separate risk gate and manual workflow.
+        </div>
+        <div class="stat-row" id="lc-promo-summary"></div>
+      </section>
+
+      <section class="card span-12">
+        <h2>Promotion Review Items</h2>
+        <table class="promotion-review-table">
+          <thead><tr>
+            <th>status</th><th>suggested</th><th>symbol</th><th>stockName</th><th>theme</th><th>source</th><th>role</th>
+            <th class="num">evidence</th><th>lifecycle</th><th>risk</th><th>governance</th><th>reason</th>
+          </tr></thead>
+          <tbody id="lc-promo-body"></tbody>
         </table>
       </section>
 
@@ -3305,6 +3342,78 @@ function clearErr(boxId) {
     }
   }
 
+  function promotionReviewDateParam() {
+    const el = $("lc-promo-date");
+    if (el && !el.value) el.value = new Date().toLocaleDateString("sv-SE");
+    return el?.value || new Date().toLocaleDateString("sv-SE");
+  }
+
+  function renderPromotionReview(payload) {
+    const p = payload || {};
+    const rows = Array.isArray(p.items) ? p.items : [];
+    $("lc-promo-safety").innerHTML = [
+      lcSafetyPill(p.reviewOnly === true, "reviewOnly"),
+      lcSafetyPill(p.doesNotAffectFinalDecision === true, "doesNotAffectFinalDecision"),
+      lcSafetyPill(p.doesNotAffectBuySellEnter === true, "doesNotAffectBuySellEnter"),
+      lcSafetyPill(p.doesNotWriteCandidateStock === true, "doesNotWriteCandidateStock"),
+      lcSafetyPill(p.doesNotWriteProductionScore === true, "doesNotWriteProductionScore"),
+      lcSafetyPill(p.candidatePoolShadowIsNotTradable === true, "candidatePoolShadowIsNotTradable"),
+      lcSafetyPill(p.noAutoPromotion === true, "noAutoPromotion"),
+      lcSafetyPill(p.promotionRequiresSeparateRiskGate === true, "promotionRequiresSeparateRiskGate")
+    ].join("");
+    const statusCounts = rows.reduce((acc, r) => {
+      const k = String(r.currentStatus || "UNKNOWN").toUpperCase();
+      acc[k] = (acc[k] || 0) + 1;
+      return acc;
+    }, {});
+    $("lc-promo-summary").innerHTML = [
+      ["date", p.tradingDate || promotionReviewDateParam()],
+      ["items", p.itemCount ?? rows.length],
+      ["pending", statusCounts.PENDING_REVIEW || 0],
+      ["candidate shadow", statusCounts.CANDIDATE_POOL_SHADOW || 0],
+      ["blocked risk", statusCounts.BLOCKED_BY_RISK || 0],
+      ["manual preserved", p.manualReviewPreserved === true ? "true" : "-"],
+      ["deleted system", p.deletedSystemCount ?? 0]
+    ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
+    $("lc-promo-body").innerHTML = rows.length ? rows.slice(0, 100).map(r => `<tr>
+      <td>${pill(r.currentStatus || "PENDING_REVIEW", /BLOCKED|REJECT/i.test(String(r.currentStatus || "")) ? "warn" : "muted")}</td>
+      <td>${pill(r.suggestedStatus || "WATCH_ONLY", String(r.suggestedStatus || "").includes("SHADOW") ? "ok" : "muted")}</td>
+      <td class="mono">${esc(r.symbol)}</td>
+      <td>${esc(r.stockName)}</td>
+      <td>${esc(r.themeTag)}</td>
+      <td>${esc(r.source)}</td>
+      <td>${esc(r.researchRole || "-")}</td>
+      <td class="num">${lcNum(r.evidenceScore, 4)}</td>
+      <td>${lcStageBadge(r.lifecycleStage || "DATA_GAP")}</td>
+      <td>${r.riskBlocker === true ? pill("BLOCK", "warn") : pill("OK", "ok")}</td>
+      <td>${r.governanceBlocker === true ? pill("BLOCK", "warn") : pill("OK", "ok")}</td>
+      <td>${esc(r.reviewReason || r.explainMissReason || "review-only")}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="12">無 promotion review items · guarded review queue is empty</td></tr>`;
+  }
+
+  async function loadPromotionReviewQueue() {
+    clearErr("errBoxLifecycle");
+    const date = promotionReviewDateParam();
+    try {
+      const report = await api(`/api/promotion-review/queue?date=${encodeURIComponent(date)}`);
+      renderPromotionReview(report || {});
+    } catch(e) {
+      showErr("errBoxLifecycle", e.message || "Promotion Review queue 載入失敗");
+      renderPromotionReview({ tradingDate: date, items: [] });
+    }
+  }
+
+  async function buildPromotionReviewQueue() {
+    clearErr("errBoxLifecycle");
+    const date = promotionReviewDateParam();
+    try {
+      await api(`/api/promotion-review/build?date=${encodeURIComponent(date)}`, { method: "POST", timeoutMs: 20000 });
+      await loadPromotionReviewQueue();
+    } catch(e) {
+      showErr("errBoxLifecycle", e.message || "Promotion Review queue build 失敗");
+    }
+  }
+
   function loadLifecyclePage() {
     loadLifecycleCalibration();
     loadRankingTopNCalibration();
@@ -3312,6 +3421,7 @@ function clearErr(boxId) {
     loadPortfolioRotationShadow();
     loadLifecycleAnnotations();
     loadLifecycleExitReview();
+    loadPromotionReviewQueue();
   }
 
   function showCopyableError(title, message) {
@@ -6489,6 +6599,8 @@ window.finalizeCatchup = async function(taskId) {
   $("lc-anno-refresh")?.addEventListener("click", loadLifecycleAnnotations);
   $("lc-exit-refresh")?.addEventListener("click", loadLifecycleExitReview);
   $("lc-exit-rebuild")?.addEventListener("click", rebuildLifecycleExitReview);
+  $("lc-promo-refresh")?.addEventListener("click", loadPromotionReviewQueue);
+  $("lc-promo-build")?.addEventListener("click", buildPromotionReviewQueue);
   $("dec-btnEvaluate").addEventListener("click", runFinalDecisionEvaluate);
 
   /* ─────────────────────────────────────────────
