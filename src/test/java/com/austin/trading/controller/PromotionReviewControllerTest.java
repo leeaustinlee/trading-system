@@ -221,6 +221,39 @@ class PromotionReviewControllerTest {
     }
 
     @Test
+    void dailyValidationSummaryBackfillEndpointRunsDateRangeReportOnlyAutomation() throws Exception {
+        Map<String, Object> response = new java.util.LinkedHashMap<>();
+        response.put("dailyValidationSummaryBackfillOnly", true);
+        response.put("reportOnly", true);
+        response.put("doesNotAffectFinalDecision", true);
+        response.put("doesNotAffectBuySellEnter", true);
+        response.put("doesNotWriteCandidateStock", true);
+        response.put("doesNotWriteProductionScore", true);
+        response.put("noAutoPromotion", true);
+        response.put("softBoostShadowOnly", true);
+        response.put("totalDays", 2);
+        response.put("daysWithItems", 1);
+        response.put("totalItems", 1);
+        when(dailySummaryService.backfill(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW", 14)).thenReturn(response);
+
+        mvc.perform(post("/api/promotion-review/daily-validation-summary/backfill")
+                        .param("startDate", DATE.toString())
+                        .param("endDate", DATE.plusDays(1).toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dailyValidationSummaryBackfillOnly", is(true)))
+                .andExpect(jsonPath("$.reportOnly", is(true)))
+                .andExpect(jsonPath("$.doesNotAffectFinalDecision", is(true)))
+                .andExpect(jsonPath("$.doesNotWriteCandidateStock", is(true)))
+                .andExpect(jsonPath("$.doesNotWriteProductionScore", is(true)))
+                .andExpect(jsonPath("$.noAutoPromotion", is(true)))
+                .andExpect(jsonPath("$.softBoostShadowOnly", is(true)))
+                .andExpect(jsonPath("$.totalDays", is(2)))
+                .andExpect(jsonPath("$.daysWithItems", is(1)));
+
+        verify(dailySummaryService).backfill(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW", 14);
+    }
+
+    @Test
     void graduationReadinessEndpointExposesReportOnlyThresholdTuningBoundary() throws Exception {
         var criteria = new PromotionValidationReportResponse.GraduationCriteria(10, new BigDecimal("0.55"),
                 BigDecimal.ZERO, new BigDecimal("0.25"), new BigDecimal("-8"));

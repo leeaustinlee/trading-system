@@ -34,6 +34,25 @@ class PromotionValidationDailySummaryJobTest {
     }
 
     @Test
+    void runForDateWithLoggingHonorsExplicitDate() {
+        PromotionValidationDailySummaryService summaryService = mock(PromotionValidationDailySummaryService.class);
+        SchedulerLogService logService = mock(SchedulerLogService.class);
+        LocalDate date = LocalDate.of(2026, 6, 19);
+        when(summaryService.run(date)).thenReturn(Map.of(
+                "dailyValidationSummaryOnly", true,
+                "overallStatus", "BLOCKED_BY_DATA_GAP",
+                "itemCount", 1));
+
+        PromotionValidationDailySummaryJob job = new PromotionValidationDailySummaryJob(summaryService, logService);
+        Map<String, Object> result = job.runForDateWithLogging(date);
+
+        assertThat(result).containsEntry("overallStatus", "BLOCKED_BY_DATA_GAP");
+        verify(summaryService).run(date);
+        verify(logService).successReal(eq("PromotionValidationDailySummaryJob"), any(), any(),
+                org.mockito.ArgumentMatchers.contains("date=2026-06-19"));
+    }
+
+    @Test
     void scheduledRunWritesSchedulerSuccessLog() {
         PromotionValidationDailySummaryService summaryService = mock(PromotionValidationDailySummaryService.class);
         SchedulerLogService logService = mock(SchedulerLogService.class);

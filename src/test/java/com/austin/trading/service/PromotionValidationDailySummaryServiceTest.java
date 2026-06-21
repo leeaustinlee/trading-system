@@ -45,4 +45,40 @@ class PromotionValidationDailySummaryServiceTest {
         verify(backfillService).backfillReturns(14);
         verify(reviewService).validationReport(DATE, DATE, "CANDIDATE_POOL_SHADOW");
     }
+
+    @Test
+    void backfillRunsEachDateAndAggregatesReportOnlySummary() {
+        PromotionReviewService reviewService = mock(PromotionReviewService.class);
+        CandidateForwardReturnBackfillService backfillService = mock(CandidateForwardReturnBackfillService.class);
+        when(reviewService.bridgeForwardTracking(any(), any(), eq("CANDIDATE_POOL_SHADOW")))
+                .thenReturn(Map.of("written", 0, "trackingBridgeOnly", true));
+        when(backfillService.backfillReturns(14)).thenReturn(Map.of("processedRows", 1));
+        var criteria = new PromotionValidationReportResponse.GraduationCriteria(10, new BigDecimal("0.55"), BigDecimal.ZERO,
+                new BigDecimal("0.25"), new BigDecimal("-8"));
+        when(reviewService.validationReport(eq(DATE), eq(DATE), eq("CANDIDATE_POOL_SHADOW"))).thenReturn(
+                PromotionValidationReportResponse.of(DATE, DATE, "CANDIDATE_POOL_SHADOW", criteria,
+                        new PromotionValidationReportResponse.Summary(1, 0, 1, 0, 0,
+                                null, null, null, null, "BLOCKED_BY_DATA_GAP", "data gap"), java.util.List.of()));
+        LocalDate next = DATE.plusDays(1);
+        when(reviewService.validationReport(eq(next), eq(next), eq("CANDIDATE_POOL_SHADOW"))).thenReturn(
+                PromotionValidationReportResponse.of(next, next, "CANDIDATE_POOL_SHADOW", criteria,
+                        new PromotionValidationReportResponse.Summary(0, 0, 0, 0, 0,
+                                null, null, null, null, "NEED_MORE_EVIDENCE", "empty"), java.util.List.of()));
+
+        PromotionValidationDailySummaryService service = new PromotionValidationDailySummaryService(reviewService, backfillService);
+        Map<String, Object> result = service.backfill(DATE, next, "CANDIDATE_POOL_SHADOW", 14);
+
+        assertThat(result).containsEntry("dailyValidationSummaryBackfillOnly", true)
+                .containsEntry("reportOnly", true)
+                .containsEntry("totalDays", 2)
+                .containsEntry("daysWithItems", 1)
+                .containsEntry("totalItems", 1)
+                .containsEntry("totalEvidenceReady", 0)
+                .containsEntry("totalDataGaps", 1)
+                .containsEntry("latestOverallStatus", "NEED_MORE_EVIDENCE");
+        assertThat((java.util.List<?>) result.get("dailyResults")).hasSize(2);
+        verify(reviewService).bridgeForwardTracking(DATE, DATE, "CANDIDATE_POOL_SHADOW");
+        verify(reviewService).bridgeForwardTracking(next, next, "CANDIDATE_POOL_SHADOW");
+        verify(backfillService, times(2)).backfillReturns(14);
+    }
 }

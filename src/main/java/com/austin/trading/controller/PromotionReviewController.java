@@ -107,4 +107,16 @@ public class PromotionReviewController {
         }
         return validationDailySummaryService.run(date, status, backfillDays);
     }
+
+    @PostMapping("/daily-validation-summary/backfill")
+    public Map<String, Object> dailyValidationSummaryBackfill(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "CANDIDATE_POOL_SHADOW") String status,
+            @RequestParam(defaultValue = "14") int backfillDays) {
+        if (validationDailySummaryService == null) {
+            throw new IllegalStateException("PromotionValidationDailySummaryService is not available");
+        }
+        return validationDailySummaryService.backfill(startDate, endDate, status, backfillDays);
+    }
 }

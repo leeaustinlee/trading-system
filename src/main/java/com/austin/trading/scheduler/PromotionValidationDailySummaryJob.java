@@ -29,11 +29,18 @@ public class PromotionValidationDailySummaryJob {
         this.schedulerLogService = schedulerLogService;
     }
 
-    @Scheduled(cron = "${trading.scheduler.promotion-validation-daily-summary-cron:0 40 15 * * MON-FRI}",
+    @Scheduled(cron = "${trading.scheduler.promotion-validation-daily-summary-cron:0 0 16 * * MON-FRI}",
                zone = "${trading.timezone:Asia/Taipei}")
     public void run() {
+        runForDateWithLogging(LocalDate.now(MARKET_ZONE));
+    }
+
+    public Map<String, Object> runForDate(LocalDate tradingDate) {
+        return summaryService.run(tradingDate);
+    }
+
+    public Map<String, Object> runForDateWithLogging(LocalDate tradingDate) {
         LocalDateTime started = LocalDateTime.now(MARKET_ZONE);
-        LocalDate tradingDate = LocalDate.now(MARKET_ZONE);
         try {
             Map<String, Object> result = runForDate(tradingDate);
             String message = "promotionValidationDailySummary SUCCESS date=" + tradingDate
@@ -41,15 +48,12 @@ public class PromotionValidationDailySummaryJob {
                     + " items=" + result.get("itemCount");
             log.info("[{}] {}", JOB_NAME, message);
             schedulerLogService.successReal(JOB_NAME, started, LocalDateTime.now(MARKET_ZONE), message);
+            return result;
         } catch (Exception e) {
             String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
             log.error("[{}] FAILED date={} error={}", JOB_NAME, tradingDate, message, e);
             schedulerLogService.failed(JOB_NAME, started, LocalDateTime.now(MARKET_ZONE), message);
             throw new RuntimeException(e);
         }
-    }
-
-    public Map<String, Object> runForDate(LocalDate tradingDate) {
-        return summaryService.run(tradingDate);
     }
 }

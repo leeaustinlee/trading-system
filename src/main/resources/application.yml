@@ -103,6 +103,10 @@ trading:
     portfolio-daily-bars-backfill:
       enabled: ${PORTFOLIO_DAILY_BARS_BACKFILL_ENABLED:true}
     portfolio-daily-bars-backfill-cron: "0 50 15 * * MON-FRI"
+    # P4：Promotion validation 每日摘要。排在 market-index / portfolio daily bars backfill 之後，避免 15:40 資料未齊。
+    promotion-validation-daily-summary:
+      enabled: ${PROMOTION_VALIDATION_DAILY_SUMMARY_ENABLED:true}
+    promotion-validation-daily-summary-cron: "${PROMOTION_VALIDATION_DAILY_SUMMARY_CRON:0 0 16 * * MON-FRI}"
   paper-trade:
     enabled: ${PAPER_TRADE_ENABLED:true}
 

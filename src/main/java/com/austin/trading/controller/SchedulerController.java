@@ -247,7 +247,11 @@ public class SchedulerController {
                 case "external-probe-health" -> { requireJob(externalProbeHealthJob, "external-probe-health"); externalProbeHealthJob.run(); yield "external-probe-health done"; }
                 case "daily-health-check" -> { requireJob(dailyHealthCheckJob, "daily-health-check"); dailyHealthCheckJob.run(); yield "daily-health-check done"; }
                 case "theme-ops-daily-build" -> { requireJob(themeOpsDailyBuildJob, "theme-ops-daily-build"); themeOpsDailyBuildJob.run(); yield "theme-ops-daily-build done"; }
-                case "promotion-validation-daily-summary" -> { requireJob(promotionValidationDailySummaryJob, "promotion-validation-daily-summary"); promotionValidationDailySummaryJob.run(); yield "promotion-validation-daily-summary done"; }
+                case "promotion-validation-daily-summary" -> {
+                    requireJob(promotionValidationDailySummaryJob, "promotion-validation-daily-summary");
+                    promotionValidationDailySummaryJob.runForDateWithLogging(d);
+                    yield "promotion-validation-daily-summary done date=" + d;
+                }
                 default -> throw new IllegalArgumentException("Unknown triggerKey: " + triggerKey);
             };
             schedulerLogService.success(jobName, trigger, LocalDateTime.now(), result.toString());
