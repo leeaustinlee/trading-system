@@ -1,6 +1,7 @@
 package com.austin.trading.controller;
 
 import com.austin.trading.dto.request.PromotionReviewDecisionRequest;
+import com.austin.trading.dto.response.PromotionPolicySimulationResponse;
 import com.austin.trading.dto.response.PromotionReviewResponse;
 import com.austin.trading.service.PromotionReviewService;
 import org.junit.jupiter.api.BeforeEach;
@@ -91,6 +92,35 @@ class PromotionReviewControllerTest {
                         .contentType("application/json")
                         .content("{\"status\":\"BUY\",\"reviewer\":\"system\",\"reason\":\"forbidden\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void policySimulationEndpointExposesSimulationSafetyFlags() throws Exception {
+        var response = PromotionPolicySimulationResponse.of(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW",
+                new PromotionPolicySimulationResponse.Summary(1, 1, 0, new BigDecimal("1.0"), new BigDecimal("2.0"),
+                        new BigDecimal("3.0"), BigDecimal.ONE, 0, new BigDecimal("-1.0"), 0, 0),
+                List.of(new PromotionPolicySimulationResponse.Item(1L, DATE, "2492", "華新科", "被動元件/MLCC", "PEER_SHADOW",
+                        "CANDIDATE_POOL_SHADOW", "ELIGIBLE_FOR_SOFT_BOOST_SHADOW", new BigDecimal("1.0"),
+                        new BigDecimal("2.0"), new BigDecimal("3.0"), new BigDecimal("-1.0"), false,
+                        false, false, null)));
+        when(service.policySimulation(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW")).thenReturn(response);
+
+        mvc.perform(get("/api/promotion-review/policy-simulation")
+                        .param("startDate", DATE.toString())
+                        .param("endDate", DATE.plusDays(1).toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.simulationOnly", is(true)))
+                .andExpect(jsonPath("$.reviewOnly", is(true)))
+                .andExpect(jsonPath("$.doesNotAffectFinalDecision", is(true)))
+                .andExpect(jsonPath("$.doesNotAffectBuySellEnter", is(true)))
+                .andExpect(jsonPath("$.doesNotWriteCandidateStock", is(true)))
+                .andExpect(jsonPath("$.doesNotWriteProductionScore", is(true)))
+                .andExpect(jsonPath("$.noAutoPromotion", is(true)))
+                .andExpect(jsonPath("$.boundedSoftBoostShadowOnly", is(true)))
+                .andExpect(jsonPath("$.summary.itemCount", is(1)))
+                .andExpect(jsonPath("$.items[0].suggestedPolicy", is("ELIGIBLE_FOR_SOFT_BOOST_SHADOW")));
+
+        verify(service).policySimulation(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW");
     }
 
     private PromotionReviewResponse.Item item(Long id, String symbol, String source, String status) {

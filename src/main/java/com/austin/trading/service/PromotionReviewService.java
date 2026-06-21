@@ -1,6 +1,7 @@
 package com.austin.trading.service;
 
 import com.austin.trading.dto.request.PromotionReviewDecisionRequest;
+import com.austin.trading.dto.response.PromotionPolicySimulationResponse;
 import com.austin.trading.dto.response.PromotionReviewResponse;
 import com.austin.trading.entity.*;
 import com.austin.trading.repository.*;
@@ -35,6 +36,7 @@ public class PromotionReviewService {
     private final ThemeReplayMetricsRepository metricsRepo;
     private final CandidateStockRepository candidateStockRepo;
     private final FinalDecisionRepository finalDecisionRepo;
+    private final CandidateForwardTrackingRepository forwardTrackingRepo;
     private final ObjectMapper objectMapper;
 
     public PromotionReviewService(PromotionReviewItemRepository itemRepo,
@@ -46,6 +48,7 @@ public class PromotionReviewService {
                                   ThemeReplayMetricsRepository metricsRepo,
                                   CandidateStockRepository candidateStockRepo,
                                   FinalDecisionRepository finalDecisionRepo,
+                                  CandidateForwardTrackingRepository forwardTrackingRepo,
                                   ObjectMapper objectMapper) {
         this.itemRepo = itemRepo;
         this.auditRepo = auditRepo;
@@ -56,6 +59,7 @@ public class PromotionReviewService {
         this.metricsRepo = metricsRepo;
         this.candidateStockRepo = candidateStockRepo;
         this.finalDecisionRepo = finalDecisionRepo;
+        this.forwardTrackingRepo = forwardTrackingRepo;
         this.objectMapper = objectMapper;
     }
 
@@ -150,6 +154,68 @@ public class PromotionReviewService {
                 ? auditRepo.findByTradingDateAndSymbolOrderByCreatedAtAscIdAsc(date, symbol)
                 : auditRepo.findByTradingDateOrderByCreatedAtAscIdAsc(date);
         return PromotionReviewResponse.AuditResponse.of(date, symbol, audits.stream().map(this::toAuditItem).toList());
+    }
+
+    @Transactional(readOnly = true)
+    public PromotionPolicySimulationResponse policySimulation(LocalDate startDate, LocalDate endDate, String status) {
+        String effectiveStatus = blankToDefault(status, "CANDIDATE_POOL_SHADOW").trim().toUpperCase(Locale.ROOT);
+        List<PromotionReviewItemEntity> reviewItems = itemRepo
+                .findByTradingDateBetweenAndCurrentStatusOrderByTradingDateAscThemeTagAscSymbolAscSourceAsc(startDate, endDate, effectiveStatus);
+        Map<String, CandidateForwardTrackingEntity> forwards = forwardTrackingRepo.findByTradingDateBetween(startDate, endDate).stream()
+                .collect(Collectors.toMap(f -> forwardKey(f.getTradingDate(), f.getStockId()), Function.identity(), (a, b) -> a));
+
+        List<PromotionPolicySimulationResponse.Item> rows = reviewItems.stream()
+                .map(item -> toPolicySimulationItem(item, forwards.get(forwardKey(item.getTradingDate(), item.getSymbol()))))
+                .toList();
+
+        int matchedForwardCount = (int) rows.stream().filter(r -> r.dataGapReason() == null).count();
+        int dataGapCount = rows.size() - matchedForwardCount;
+        PromotionPolicySimulationResponse.Summary summary = new PromotionPolicySimulationResponse.Summary(
+                rows.size(),
+                matchedForwardCount,
+                dataGapCount,
+                avg(rows.stream().map(PromotionPolicySimulationResponse.Item::t1ReturnPct).toArray(BigDecimal[]::new)),
+                avg(rows.stream().map(PromotionPolicySimulationResponse.Item::t5ReturnPct).toArray(BigDecimal[]::new)),
+                avg(rows.stream().map(PromotionPolicySimulationResponse.Item::t10ReturnPct).toArray(BigDecimal[]::new)),
+                winRate(rows),
+                (int) rows.stream().filter(r -> Boolean.TRUE.equals(r.hitStop())).count(),
+                avg(rows.stream().map(PromotionPolicySimulationResponse.Item::maxDrawdownPct).toArray(BigDecimal[]::new)),
+                (int) rows.stream().filter(PromotionPolicySimulationResponse.Item::riskBlocker).count(),
+                (int) rows.stream().filter(PromotionPolicySimulationResponse.Item::governanceBlocker).count());
+        return PromotionPolicySimulationResponse.of(startDate, endDate, effectiveStatus, summary, rows);
+    }
+
+    private PromotionPolicySimulationResponse.Item toPolicySimulationItem(PromotionReviewItemEntity item,
+                                                                         CandidateForwardTrackingEntity forward) {
+        String gapReason = forward == null ? "MISSING_FORWARD_TRACKING" : null;
+        return new PromotionPolicySimulationResponse.Item(item.getId(), item.getTradingDate(), item.getSymbol(), item.getStockName(),
+                item.getThemeTag(), item.getSource(), item.getCurrentStatus(), suggestedPolicy(item),
+                forward == null ? null : forward.getT1CloseReturnPct(),
+                forward == null ? null : forward.getT5CloseReturnPct(),
+                forward == null ? null : forward.getT10CloseReturnPct(),
+                forward == null ? null : forward.getMaxDrawdownPct(),
+                forward == null ? null : forward.getHitStop(),
+                Boolean.TRUE.equals(item.getRiskBlocker()), Boolean.TRUE.equals(item.getGovernanceBlocker()), gapReason);
+    }
+
+    private BigDecimal winRate(List<PromotionPolicySimulationResponse.Item> rows) {
+        long count = rows.stream().filter(r -> r.t5ReturnPct() != null).count();
+        if (count == 0) return null;
+        long wins = rows.stream().filter(r -> r.t5ReturnPct() != null && r.t5ReturnPct().compareTo(BigDecimal.ZERO) > 0).count();
+        return BigDecimal.valueOf(wins).divide(BigDecimal.valueOf(count), 4, java.math.RoundingMode.HALF_UP);
+    }
+
+    private String suggestedPolicy(PromotionReviewItemEntity item) {
+        if (Boolean.TRUE.equals(item.getRiskBlocker())) return "BLOCKED_BY_RISK";
+        if (Boolean.TRUE.equals(item.getGovernanceBlocker())) return "BLOCKED_BY_GOVERNANCE";
+        if (item.getEvidenceScore() == null && item.getRadarScore() == null && item.getReplayMetricScore() == null && item.getThemeImportanceScore() == null) {
+            return "NEED_MORE_EVIDENCE";
+        }
+        return "ELIGIBLE_FOR_SOFT_BOOST_SHADOW";
+    }
+
+    private String forwardKey(LocalDate date, String symbol) {
+        return date + "|" + symbol;
     }
 
     PromotionReviewResponse.Item toItem(PromotionReviewItemEntity e) {

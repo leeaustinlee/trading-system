@@ -14,6 +14,8 @@ import java.util.Optional;
 public interface PromotionReviewItemRepository extends JpaRepository<PromotionReviewItemEntity, Long> {
     List<PromotionReviewItemEntity> findByTradingDateOrderByThemeTagAscSymbolAscSourceAsc(LocalDate tradingDate);
     List<PromotionReviewItemEntity> findByTradingDateAndSymbolOrderByThemeTagAscSourceAsc(LocalDate tradingDate, String symbol);
+    List<PromotionReviewItemEntity> findByTradingDateBetweenAndCurrentStatusOrderByTradingDateAscThemeTagAscSymbolAscSourceAsc(
+            LocalDate startDate, LocalDate endDate, String currentStatus);
     long countByTradingDate(LocalDate tradingDate);
 
     @Query("""

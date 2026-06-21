@@ -24,6 +24,7 @@ class PromotionReviewSafetyTest {
     private PromotionReviewAuditRepository auditRepo;
     private CandidateStockRepository candidateStockRepo;
     private FinalDecisionRepository finalDecisionRepo;
+    private CandidateForwardTrackingRepository forwardTrackingRepo;
     private PromotionReviewService service;
 
     @BeforeEach
@@ -32,12 +33,13 @@ class PromotionReviewSafetyTest {
         auditRepo = mock(PromotionReviewAuditRepository.class);
         candidateStockRepo = mock(CandidateStockRepository.class);
         finalDecisionRepo = mock(FinalDecisionRepository.class);
+        forwardTrackingRepo = mock(CandidateForwardTrackingRepository.class);
         when(itemRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(auditRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(itemRepo.findByTradingDateOrderByThemeTagAscSymbolAscSourceAsc(DATE)).thenReturn(List.of());
         service = new PromotionReviewService(itemRepo, auditRepo, mock(ResearchUniverseItemRepository.class), mock(HotGroupStockSignalRepository.class),
                 mock(ThemeReplayNodeRepository.class), mock(ThemeLifecycleStateRepository.class), mock(ThemeReplayMetricsRepository.class),
-                candidateStockRepo, finalDecisionRepo, new ObjectMapper());
+                candidateStockRepo, finalDecisionRepo, forwardTrackingRepo, new ObjectMapper());
     }
 
     @Test
@@ -82,6 +84,31 @@ class PromotionReviewSafetyTest {
         assertThat(responseItem.tradable()).isFalse();
         assertThat(responseItem.notFinalDecisionEligible()).isTrue();
         assertThat(responseItem.safetyBoundary().candidatePoolShadowIsNotTradable()).isTrue();
+        verify(candidateStockRepo, never()).save(any());
+        verify(finalDecisionRepo, never()).save(any());
+    }
+
+    @Test
+    void policySimulationIsReadOnlyAndNeverOutputsTradingPolicyWords() {
+        PromotionReviewItemEntity item = item();
+        item.setCurrentStatus("CANDIDATE_POOL_SHADOW");
+        item.setRiskBlocker(true);
+        when(itemRepo.findByTradingDateBetweenAndCurrentStatusOrderByTradingDateAscThemeTagAscSymbolAscSourceAsc(
+                DATE, DATE, "CANDIDATE_POOL_SHADOW")).thenReturn(List.of(item));
+        when(forwardTrackingRepo.findByTradingDateBetween(DATE, DATE)).thenReturn(List.of());
+
+        var response = service.policySimulation(DATE, DATE, "CANDIDATE_POOL_SHADOW");
+
+        assertThat(response.simulationOnly()).isTrue();
+        assertThat(response.doesNotAffectBuySellEnter()).isTrue();
+        assertThat(response.doesNotWriteCandidateStock()).isTrue();
+        assertThat(response.doesNotWriteProductionScore()).isTrue();
+        assertThat(response.noAutoPromotion()).isTrue();
+        assertThat(response.items()).extracting("suggestedPolicy")
+                .doesNotContain("BUY", "ENTER", "TRADABLE")
+                .containsExactly("BLOCKED_BY_RISK");
+        verify(itemRepo, never()).save(any());
+        verify(auditRepo, never()).save(any());
         verify(candidateStockRepo, never()).save(any());
         verify(finalDecisionRepo, never()).save(any());
     }

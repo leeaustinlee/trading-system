@@ -2,6 +2,7 @@ package com.austin.trading.controller;
 
 import com.austin.trading.dto.request.PromotionReviewDecisionRequest;
 import com.austin.trading.dto.response.BuildOperationResponse;
+import com.austin.trading.dto.response.PromotionPolicySimulationResponse;
 import com.austin.trading.dto.response.PromotionReviewResponse;
 import com.austin.trading.service.BuildOperationsService;
 import com.austin.trading.service.PromotionReviewService;
@@ -56,5 +57,13 @@ public class PromotionReviewController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) String symbol) {
         return service.audit(date, symbol);
+    }
+
+    @GetMapping("/policy-simulation")
+    public PromotionPolicySimulationResponse policySimulation(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "CANDIDATE_POOL_SHADOW") String status) {
+        return service.policySimulation(startDate, endDate, status);
     }
 }

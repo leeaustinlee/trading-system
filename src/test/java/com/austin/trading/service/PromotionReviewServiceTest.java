@@ -30,6 +30,7 @@ class PromotionReviewServiceTest {
     private ThemeReplayMetricsRepository metricsRepo;
     private CandidateStockRepository candidateStockRepo;
     private FinalDecisionRepository finalDecisionRepo;
+    private CandidateForwardTrackingRepository forwardTrackingRepo;
     private PromotionReviewService service;
     private final List<PromotionReviewItemEntity> savedItems = new ArrayList<>();
     private final List<PromotionReviewAuditEntity> savedAudits = new ArrayList<>();
@@ -46,6 +47,7 @@ class PromotionReviewServiceTest {
         metricsRepo = mock(ThemeReplayMetricsRepository.class);
         candidateStockRepo = mock(CandidateStockRepository.class);
         finalDecisionRepo = mock(FinalDecisionRepository.class);
+        forwardTrackingRepo = mock(CandidateForwardTrackingRepository.class);
         when(itemRepo.findByTradingDateOrderByThemeTagAscSymbolAscSourceAsc(DATE)).thenReturn(List.of());
         when(lifecycleRepo.findByTradingDateOrderByThemeTagAsc(DATE)).thenReturn(List.of(lifecycle("被動元件/MLCC", "MAINSTREAM"), lifecycle("被動元件/鋁電容", "EMERGING")));
         when(metricsRepo.findByTradingDateOrderByThemeTagAsc(DATE)).thenReturn(List.of(metrics("被動元件/MLCC"), metrics("被動元件/鋁電容")));
@@ -61,7 +63,7 @@ class PromotionReviewServiceTest {
             return e;
         });
         service = new PromotionReviewService(itemRepo, auditRepo, researchRepo, hotGroupRepo, replayNodeRepo,
-                lifecycleRepo, metricsRepo, candidateStockRepo, finalDecisionRepo, new ObjectMapper());
+                lifecycleRepo, metricsRepo, candidateStockRepo, finalDecisionRepo, forwardTrackingRepo, new ObjectMapper());
     }
 
     @Test
@@ -235,6 +237,54 @@ class PromotionReviewServiceTest {
         });
     }
 
+    @Test
+    void policySimulationJoinsForwardTrackingAndSummarizesMatchedRiskAndDataGaps() {
+        LocalDate endDate = DATE.plusDays(1);
+        PromotionReviewItemEntity matched = simulationItem(1L, DATE, "2492", false, false, new BigDecimal("8"));
+        PromotionReviewItemEntity risk = simulationItem(2L, DATE, "2327", true, false, new BigDecimal("9"));
+        PromotionReviewItemEntity missing = simulationItem(3L, endDate, "2375", false, false, null);
+        when(itemRepo.findByTradingDateBetweenAndCurrentStatusOrderByTradingDateAscThemeTagAscSymbolAscSourceAsc(
+                DATE, endDate, "CANDIDATE_POOL_SHADOW")).thenReturn(List.of(matched, risk, missing));
+        when(forwardTrackingRepo.findByTradingDateBetween(DATE, endDate)).thenReturn(List.of(
+                forward(DATE, "2492", "1.5", "3.0", "4.0", "-2.0", false),
+                forward(DATE, "2327", "-1.0", "-2.0", "1.0", "-5.0", true)
+        ));
+
+        var response = service.policySimulation(DATE, endDate, null);
+
+        assertThat(response.simulationOnly()).isTrue();
+        assertThat(response.reviewOnly()).isTrue();
+        assertThat(response.doesNotAffectFinalDecision()).isTrue();
+        assertThat(response.boundedSoftBoostShadowOnly()).isTrue();
+        assertThat(response.summary().itemCount()).isEqualTo(3);
+        assertThat(response.summary().matchedForwardCount()).isEqualTo(2);
+        assertThat(response.summary().dataGapCount()).isEqualTo(1);
+        assertThat(response.summary().avgT1()).isEqualByComparingTo("0.2500");
+        assertThat(response.summary().avgT5()).isEqualByComparingTo("0.5000");
+        assertThat(response.summary().avgT10()).isEqualByComparingTo("2.5000");
+        assertThat(response.summary().winRateT5()).isEqualByComparingTo("0.5000");
+        assertThat(response.summary().hitStopCount()).isEqualTo(1);
+        assertThat(response.summary().maxDrawdownAvg()).isEqualByComparingTo("-3.5000");
+        assertThat(response.summary().blockedByRiskCount()).isEqualTo(1);
+        assertThat(response.items()).filteredOn(i -> i.symbol().equals("2492")).singleElement()
+                .satisfies(i -> {
+                    assertThat(i.suggestedPolicy()).isEqualTo("ELIGIBLE_FOR_SOFT_BOOST_SHADOW");
+                    assertThat(i.t5ReturnPct()).isEqualByComparingTo("3.0");
+                    assertThat(i.dataGapReason()).isNull();
+                });
+        assertThat(response.items()).filteredOn(i -> i.symbol().equals("2327")).singleElement()
+                .satisfies(i -> assertThat(i.suggestedPolicy()).isEqualTo("BLOCKED_BY_RISK"));
+        assertThat(response.items()).filteredOn(i -> i.symbol().equals("2375")).singleElement()
+                .satisfies(i -> {
+                    assertThat(i.suggestedPolicy()).isEqualTo("NEED_MORE_EVIDENCE");
+                    assertThat(i.dataGapReason()).isEqualTo("MISSING_FORWARD_TRACKING");
+                });
+        verify(itemRepo, never()).save(any());
+        verify(auditRepo, never()).save(any());
+        verify(candidateStockRepo, never()).save(any());
+        verify(finalDecisionRepo, never()).save(any());
+    }
+
     private PromotionReviewItemEntity manualItem(String symbol, String name, String theme, String source, String status) {
         PromotionReviewItemEntity e = new PromotionReviewItemEntity();
         e.setId(ids.getAndIncrement());
@@ -257,6 +307,33 @@ class PromotionReviewServiceTest {
         e.setTradingDate(DATE); e.setSymbol(symbol); e.setStockName(name); e.setThemeTag(theme); e.setSource(source);
         e.setResearchRole("PEER_SHADOW"); e.setThemeImportanceScore(new BigDecimal("8")); e.setTradableScore(BigDecimal.ZERO);
         e.setResearchUniverse(true); e.setTradableUniverse(false); e.setPromotedToTradable(false);
+        return e;
+    }
+
+    private PromotionReviewItemEntity simulationItem(Long id, LocalDate date, String symbol, boolean risk, boolean governance, BigDecimal evidenceScore) {
+        PromotionReviewItemEntity e = new PromotionReviewItemEntity();
+        e.setId(id);
+        e.setTradingDate(date);
+        e.setSymbol(symbol);
+        e.setStockName(symbol);
+        e.setThemeTag("被動元件/MLCC");
+        e.setSource("PEER_SHADOW");
+        e.setCurrentStatus("CANDIDATE_POOL_SHADOW");
+        e.setRiskBlocker(risk);
+        e.setGovernanceBlocker(governance);
+        e.setEvidenceScore(evidenceScore);
+        return e;
+    }
+
+    private CandidateForwardTrackingEntity forward(LocalDate date, String symbol, String t1, String t5, String t10, String maxDrawdown, boolean hitStop) {
+        CandidateForwardTrackingEntity e = new CandidateForwardTrackingEntity();
+        e.setTradingDate(date);
+        e.setStockId(symbol);
+        e.setT1CloseReturnPct(new BigDecimal(t1));
+        e.setT5CloseReturnPct(new BigDecimal(t5));
+        e.setT10CloseReturnPct(new BigDecimal(t10));
+        e.setMaxDrawdownPct(new BigDecimal(maxDrawdown));
+        e.setHitStop(hitStop);
         return e;
     }
 
