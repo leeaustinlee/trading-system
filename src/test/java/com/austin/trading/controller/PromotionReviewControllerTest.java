@@ -191,17 +191,34 @@ class PromotionReviewControllerTest {
 
     @Test
     void dailyValidationSummaryEndpointRunsReportOnlyAutomation() throws Exception {
-        Map<String, Object> response = Map.of(
-                "dailyValidationSummaryOnly", true,
-                "reportOnly", true,
-                "doesNotAffectFinalDecision", true,
-                "doesNotAffectBuySellEnter", true,
-                "doesNotWriteCandidateStock", true,
-                "doesNotWriteProductionScore", true,
-                "noAutoPromotion", true,
-                "softBoostShadowOnly", true,
-                "overallStatus", "BLOCKED_BY_DATA_GAP",
-                "itemCount", 1);
+        Map<String, Object> pending = new java.util.LinkedHashMap<>();
+        pending.put("status", "PENDING_REVIEW");
+        pending.put("itemCount", 17);
+        pending.put("dataGapCount", 17);
+        Map<String, Object> shadow = new java.util.LinkedHashMap<>();
+        shadow.put("status", "CANDIDATE_POOL_SHADOW");
+        shadow.put("itemCount", 0);
+        shadow.put("dataGapCount", 0);
+        Map<String, Object> byStatus = new java.util.LinkedHashMap<>();
+        byStatus.put("PENDING_REVIEW", pending);
+        byStatus.put("CANDIDATE_POOL_SHADOW", shadow);
+        Map<String, Object> allStatusSummary = new java.util.LinkedHashMap<>();
+        allStatusSummary.put("totalQueueItems", 17);
+        allStatusSummary.put("totalDataGaps", 17);
+        Map<String, Object> response = new java.util.LinkedHashMap<>();
+        response.put("dailyValidationSummaryOnly", true);
+        response.put("reportOnly", true);
+        response.put("doesNotAffectFinalDecision", true);
+        response.put("doesNotAffectBuySellEnter", true);
+        response.put("doesNotWriteCandidateStock", true);
+        response.put("doesNotWriteProductionScore", true);
+        response.put("noAutoPromotion", true);
+        response.put("softBoostShadowOnly", true);
+        response.put("overallStatus", "BLOCKED_BY_DATA_GAP");
+        response.put("itemCount", 0);
+        response.put("totalQueueItems", 17);
+        response.put("allStatusSummary", allStatusSummary);
+        response.put("byStatus", byStatus);
         when(dailySummaryService.run(DATE, "CANDIDATE_POOL_SHADOW", 14)).thenReturn(response);
 
         mvc.perform(post("/api/promotion-review/daily-validation-summary")
@@ -215,7 +232,11 @@ class PromotionReviewControllerTest {
                 .andExpect(jsonPath("$.doesNotWriteProductionScore", is(true)))
                 .andExpect(jsonPath("$.noAutoPromotion", is(true)))
                 .andExpect(jsonPath("$.softBoostShadowOnly", is(true)))
-                .andExpect(jsonPath("$.overallStatus", is("BLOCKED_BY_DATA_GAP")));
+                .andExpect(jsonPath("$.overallStatus", is("BLOCKED_BY_DATA_GAP")))
+                .andExpect(jsonPath("$.totalQueueItems", is(17)))
+                .andExpect(jsonPath("$.allStatusSummary.totalQueueItems", is(17)))
+                .andExpect(jsonPath("$.byStatus.PENDING_REVIEW.itemCount", is(17)))
+                .andExpect(jsonPath("$.byStatus.CANDIDATE_POOL_SHADOW.itemCount", is(0)));
 
         verify(dailySummaryService).run(DATE, "CANDIDATE_POOL_SHADOW", 14);
     }
@@ -231,9 +252,15 @@ class PromotionReviewControllerTest {
         response.put("doesNotWriteProductionScore", true);
         response.put("noAutoPromotion", true);
         response.put("softBoostShadowOnly", true);
+        Map<String, Object> totalByStatus = new java.util.LinkedHashMap<>();
+        Map<String, Object> pendingTotal = new java.util.LinkedHashMap<>();
+        pendingTotal.put("itemCount", 17);
+        totalByStatus.put("PENDING_REVIEW", pendingTotal);
         response.put("totalDays", 2);
         response.put("daysWithItems", 1);
         response.put("totalItems", 1);
+        response.put("totalQueueItems", 17);
+        response.put("totalByStatus", totalByStatus);
         when(dailySummaryService.backfill(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW", 14)).thenReturn(response);
 
         mvc.perform(post("/api/promotion-review/daily-validation-summary/backfill")
@@ -248,7 +275,9 @@ class PromotionReviewControllerTest {
                 .andExpect(jsonPath("$.noAutoPromotion", is(true)))
                 .andExpect(jsonPath("$.softBoostShadowOnly", is(true)))
                 .andExpect(jsonPath("$.totalDays", is(2)))
-                .andExpect(jsonPath("$.daysWithItems", is(1)));
+                .andExpect(jsonPath("$.daysWithItems", is(1)))
+                .andExpect(jsonPath("$.totalQueueItems", is(17)))
+                .andExpect(jsonPath("$.totalByStatus.PENDING_REVIEW.itemCount", is(17)));
 
         verify(dailySummaryService).backfill(DATE, DATE.plusDays(1), "CANDIDATE_POOL_SHADOW", 14);
     }

@@ -600,7 +600,7 @@
     <a class="tab" data-r="overview"  href="#/overview"><span class="ico">⊙</span><span>市場</span></a>
     <a class="tab" data-r="positions" href="#/positions"><span class="ico">▣</span><span>持股</span></a>
     <a class="tab" data-r="decisions" href="#/decisions"><span class="ico">∿</span><span>決策</span></a>
-    <a class="tab" data-r="themeops"  href="#/themeops"><span class="ico">◆</span><span>題材</span></a>
+    <a class="tab" data-r="themeops"  href="#/themeops"><span class="ico">◆</span><span>題材工作台</span></a>
     <a class="tab" data-r="review"  href="#/review"><span class="ico">◎</span><span>回顧</span></a>
     <a class="tab" data-r="system"  href="#/system"><span class="ico">⚙</span><span>系統</span></a>
   </div>
@@ -1327,13 +1327,13 @@ function renderHealthDataGapsMobile(){
   const critical = d.criticalCount ?? d.blockingCount ?? rows.filter(r => /CRITICAL|BLOCK|HIGH/.test(String(r.severity||r.level||'').toUpperCase())).length;
   const card = el('div',{class:'card'});
   card.append(el('div',{class:'p1-card-title'},[
-    el('span',{text:'Health Data Gaps'}),
+    el('span',{text:'持股資料缺口'}),
     el('span',{class:'badge '+(critical>0?'stop':total>0?'wait':'buy'),text: critical>0?'DATA RISK':total>0?'GAPS':'OK'})
   ]));
   card.append(MetricStrip([
     {label:'缺口', value:String(total)},
     {label:'高風險', value:String(critical), cls:critical>0?'dn':'up'},
-    {label:'模式', value:d.mode || d.status || d.healthMode || 'health-v2', mono:false},
+    {label:'狀態', value:d.mode || d.status || d.healthMode || '今日檢查', mono:false},
   ]));
   if (rows.length) {
     const body = el('div');
@@ -1342,7 +1342,7 @@ function renderHealthDataGapsMobile(){
     }, r.severity || 'GAP')));
     card.append(CollapsibleSection('缺資料明細', body, {open:false}));
   } else {
-    card.append(el('div',{class:'p1-note',text:d.summary || d.safetyNote || 'health-v2 未回報資料缺口。'}));
+    card.append(el('div',{class:'p1-note',text:d.summary || d.safetyNote || '今日檢查未回報資料缺口。'}));
   }
   return card;
 }
@@ -1350,15 +1350,15 @@ function AdaptiveExitBlock(item){
   if (!item) return null;
   const body = el('div');
   body.append(el('div',{class:'p1-kv'},[
-    el('span',{class:'k',text:'Thesis'}), el('span',{class:'v',text:`${item.thesisStatus || '—'} · ${truncate(item.thesisSummary || '', 70)}`}),
-    el('span',{class:'k',text:'Invalid'}), el('span',{class:'v',text:truncate(item.invalidationCondition || '', 70) || '—'}),
-    el('span',{class:'k',text:'Theme'}), el('span',{class:'v',text:`${item.themeLifecycle || '—'} · stale ${item.themeStaleDays ?? '—'}d`}),
-    el('span',{class:'k',text:'Heat/Risk'}), el('span',{class:'v',text:`heat ${item.narrativeHeat ?? '—'} · crowding ${item.crowdingRisk || '—'}`}),
-    el('span',{class:'k',text:'Wave'}), el('span',{class:'v',text:`${item.wavePhase || '—'} · rotation ${item.rotationStrength ?? '—'}`}),
-    el('span',{class:'k',text:'Inst/Sector'}), el('span',{class:'v',text:`${item.institutionalAlignment || '—'} · ${item.sectorLeadership || '—'}`}),
+    el('span',{class:'k',text:'投資論點'}), el('span',{class:'v',text:`${item.thesisStatus || '—'} · ${truncate(item.thesisSummary || '', 70)}`}),
+    el('span',{class:'k',text:'失效條件'}), el('span',{class:'v',text:truncate(item.invalidationCondition || '', 70) || '—'}),
+    el('span',{class:'k',text:'題材階段'}), el('span',{class:'v',text:`${item.themeLifecycle || '—'} · 停滯 ${item.themeStaleDays ?? '—'} 天`}),
+    el('span',{class:'k',text:'熱度/風險'}), el('span',{class:'v',text:`熱度 ${item.narrativeHeat ?? '—'} · 擁擠 ${item.crowdingRisk || '—'}`}),
+    el('span',{class:'k',text:'波段/輪動'}), el('span',{class:'v',text:`${item.wavePhase || '—'} · 輪動 ${item.rotationStrength ?? '—'}`}),
+    el('span',{class:'k',text:'法人/族群'}), el('span',{class:'v',text:`${item.institutionalAlignment || '—'} · ${item.sectorLeadership || '—'}`}),
   ]));
-  body.append(el('div',{class:'p1-note',text:item.safetyNote || 'Read-only / manual-confirm only.'}));
-  return CollapsibleSection(`Adaptive Exit Review · ${item.recommendation || '—'}`, body, {open:false});
+  body.append(el('div',{class:'p1-note',text:'只提供人工確認，不會自動賣出。',title:item.safetyNote || ''}));
+  return CollapsibleSection(`出場檢查 · ${item.recommendation || '—'}`, body, {open:false});
 }
 function DecisionSnapshotCard(snap){
   const gate = safeJson(snap.gateTraceJson);
@@ -1367,15 +1367,19 @@ function DecisionSnapshotCard(snap){
   const rejected = summarizeSymbols(snap.rejectedSymbolsJson);
   const watch = summarizeSymbols(snap.watchSymbolsJson);
   const card = el('div',{class:'card a-card'});
-  card.append(el('div',{class:'row1'},[el('div',{},[el('span',{class:'sym',text:snap.tradingDate || 'Decision Snapshot'}), el('span',{class:'badge watch',style:'margin-left:8px',text:snap.aiReadinessMode || snap.aiStatus || 'SNAP'})]) ]));
+  card.append(el('div',{class:'row1'},[el('div',{},[el('span',{class:'sym',text:snap.tradingDate || '今日決策摘要'}), el('span',{class:'badge watch',style:'margin-left:8px',text:snap.finalDecisionCode || snap.aiReadinessMode || snap.aiStatus || '摘要'})]) ]));
   card.append(el('div',{class:'p1-kv'},[
-    el('span',{class:'k',text:'AI'}), el('span',{class:'v',text:`${snap.aiStatus || '—'} · ${snap.aiReadinessMode || '—'}`}),
-    el('span',{class:'k',text:'Task'}), el('span',{class:'v',text:`${snap.sourceTaskType || '—'} → ${snap.preferTaskType || '—'}`}),
-    el('span',{class:'k',text:'Fallback'}), el('span',{class:'v',text:snap.fallbackReason || '—'}),
-    el('span',{class:'k',text:'Symbols'}), el('span',{class:'v',text:`選 ${selected}｜排 ${rejected}｜看 ${watch}`}),
-    el('span',{class:'k',text:'Gate'}), el('span',{class:'v',text:summarizeObj(gate)}),
-    el('span',{class:'k',text:'Trace'}), el('span',{class:'v',text:summarizeObj(trace)}),
+    el('span',{class:'k',text:'AI狀態'}), el('span',{class:'v',text:`${snap.aiStatus || '—'} · ${snap.aiReadinessMode || '—'}`}),
+    el('span',{class:'k',text:'股票摘要'}), el('span',{class:'v',text:`選 ${selected}｜排 ${rejected}｜看 ${watch}`}),
   ]));
+  const detail = el('div');
+  detail.append(el('div',{class:'p1-kv'},[
+    el('span',{class:'k',text:'任務來源'}), el('span',{class:'v',text:`${snap.sourceTaskType || '—'} → ${snap.preferTaskType || '—'}`}),
+    el('span',{class:'k',text:'備援原因'}), el('span',{class:'v',text:snap.fallbackReason || '—'}),
+    el('span',{class:'k',text:'閘道檢查明細'}), el('span',{class:'v',text:summarizeObj(gate)}),
+    el('span',{class:'k',text:'決策推論明細'}), el('span',{class:'v',text:summarizeObj(trace)}),
+  ]));
+  card.append(CollapsibleSection('技術細節', detail, {open:false}));
   return card;
 }
 function summarizeSymbols(raw){
@@ -1590,6 +1594,64 @@ function StatusBadge(code, label){
                FAILED:'stop', PENDING:'wait', RUNNING:'watch'};
   const cls = map[String(code||'').toUpperCase()] || 'rest';
   return el('span',{class:'badge '+cls, text: label || code || '—'});
+}
+
+const THEME_OPS_ZH = {
+  PENDING_REVIEW:'待人工審核', RESEARCH_ONLY:'僅研究', CANDIDATE_POOL_SHADOW:'影子候選', WATCH_ONLY:'僅觀察',
+  NEED_MORE_EVIDENCE:'證據不足', BLOCKED_BY_RISK:'風險阻擋', BLOCKED_BY_GOVERNANCE:'治理阻擋', BLOCKED_BY_DATA_GAP:'資料不足',
+  ELIGIBLE_FOR_SOFT_BOOST_SHADOW:'可進 Shadow 加分觀察', SOFT_BOOST_SHADOW:'Shadow 加分觀察', STOP_LOSS:'觸及停損', NO:'否', KEEP:'維持', TIGHTEN:'收緊', LOOSEN:'放寬', MANUAL:'需人工審核', AUTO:'自動建議',
+  HOT_GROUP_RADAR:'強勢族群雷達', RESEARCH_UNIVERSE:'研究池', PEER_SHADOW:'同族群影子觀察', RETAINED_LEADER:'保留領先股', EXPLAIN_MISS:'未入選原因',
+  LEADERSHIP_ONLY:'僅作領先指標', REPLAY_CANDIDATE:'回放候選', THEME_LEADER:'題材領先股', CHANNEL_DISTRIBUTOR:'通路/供應鏈角色',
+  SUCCESS:'成功', FAILED:'失敗', PARTIAL:'部分完成', READ:'只讀', SHADOW:'Shadow 觀察', RADAR:'雷達', LIFE:'生命週期', SAFE:'安全', WARN:'警示', TRACE:'建置紀錄', REVIEW:'審核', WATCH:'觀察',
+  OK:'正常', TRUE:'是', FALSE:'否',
+  reviewOnly:'僅審核', reportOnly:'僅報告', simulationOnly:'僅模擬', readinessReportOnly:'準備度僅報告', thresholdTuningSuggestionOnly:'門檻僅建議',
+  doesNotAffectFinalDecision:'不影響最終決策', doesNotAffectBuySellEnter:'不影響買賣進場', doesNotWriteCandidateStock:'不寫入正式候選股', doesNotWriteProductionScore:'不修改正式分數', noAutoPromotion:'不自動升級', noThresholdMutation:'不自動改門檻', candidatePoolShadowIsNotTradable:'Shadow 候選不可交易', boundedSoftBoostShadowOnly:'限定 Shadow 加分', softBoostShadowOnly:'Shadow 加分限定',
+  'insufficient completed forward-return evidence or missing market data':'缺少完成的後續報酬或市場資料',
+  'minimum sample requirement not met':'樣本數不足，還不能判斷策略是否穩定',
+  'positive T5 shadow evidence; still shadow only':'T5 影子追蹤為正，但仍僅限 Shadow 觀察'
+};
+const THEME_OPS_KEY_ZH = {
+  theme:'題材', source:'來源', role:'角色', status:'狀態', riskBlocker:'風險阻擋', evidence:'證據分數',
+  hotScore:'熱度分數', leaderCount:'領先股數', limitUpCount:'漲停家數', watchOnly:'僅觀察', signals:'訊號',
+  stage:'階段', reason:'原因', playbook:'建議劇本', avoid:'避免動作', governance:'治理狀態', lifecycle:'題材階段', score:'分數',
+  candidates:'候選股', decision:'決策', productionPath:'正式流程', started:'開始', finished:'完成', count:'筆數',
+  reviewAction:'審核動作', priority:'優先度', dataGapReason:'資料缺口', nearLimit:'接近漲停', limitRisk:'漲停風險', planStatus:'計畫狀態', ret5d:'5日報酬', maxDD:'最大回撤',
+  currentStatus:'目前狀態', suggestedPolicy:'模擬結論', validationStatus:'驗證狀態', validationReason:'驗證原因', readinessStatus:'準備度', readinessReason:'準備度原因', sampleShortfall:'樣本缺口', thresholdKey:'門檻項目', currentValue:'目前值', suggestedValue:'建議值', direction:'調整方向', manualReviewRequired:'人工審核', appliesToShadowOnly:'僅適用 Shadow', rawCode:'原始代碼'
+};
+function themeOpsZh(value){
+  if (value == null) return '—';
+  if (typeof value === 'boolean') return value ? '是' : '否';
+  const raw = String(value);
+  const direct = THEME_OPS_ZH[raw] || THEME_OPS_ZH[raw.toUpperCase()];
+  if (direct) return direct;
+  return raw
+    .replace(/minimum sample requirement not met/ig, '樣本數不足，還不能判斷策略是否穩定')
+    .replace(/insufficient completed forward-return evidence or missing market data/ig, '缺少完成的後續報酬或市場資料')
+    .replace(/positive T5 shadow evidence; still shadow only/ig, 'T5 影子追蹤為正，但仍僅限 Shadow 觀察')
+    .replace(/risk blocker/ig, '風險阻擋')
+    .replace(/governance blocker/ig, '治理阻擋')
+    .replace(/data gap/ig, '資料缺口')
+    .replace(/review-only/ig, '僅審核')
+    .replace(/shadow-only/ig, '僅 Shadow')
+    .replaceAll('_',' ');
+}
+function themeOpsKeyZh(key){ return THEME_OPS_KEY_ZH[key] || key; }
+function themeOpsTone(code){
+  const s = String(code||'').toUpperCase();
+  if (s.includes('ELIGIBLE') || s === 'SUCCESS' || s === 'OK') return 'buy';
+  if (s.includes('BLOCK') || s.includes('GAP') || s.includes('STOP') || s === 'FAILED') return 'wait';
+  if (s.includes('PENDING') || s.includes('REVIEW') || s.includes('EVIDENCE')) return 'watch';
+  return 'rest';
+}
+function themeOpsNum(v, digits=2){
+  if (v == null || v === '') return '—';
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toFixed(digits) : themeOpsZh(v);
+}
+function themeOpsPct(v){
+  if (v == null || v === '') return '—';
+  const n = Number(v);
+  return Number.isFinite(n) ? `${n.toFixed(1)}%` : themeOpsZh(v);
 }
 
 /** 6. RiskBadge — 距停損 % 對應風險文字 */
@@ -1908,7 +1970,8 @@ function asRows(x){
 async function fetchThemeOpsTab(date, opts={}){
   const d = date || S.themeOpsDate || localYmd();
   S.themeOpsDate = d;
-  const [meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision, mappingObs, reviewQueue, exitReview, pullbackShadow] = await Promise.all([
+  const validationStatus = 'PENDING_REVIEW';
+  const [meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision, mappingObs, reviewQueue, exitReview, pullbackShadow, policySimulation, validationReport, graduationReadiness] = await Promise.all([
     safeFetch('/api/dashboard/theme-first?date='+encodeURIComponent(d), 8000, opts),
     safeFetch('/api/ops/daily-summary?date='+encodeURIComponent(d), 8000, opts),
     safeFetch('/api/replay-metrics/safety-summary?date='+encodeURIComponent(d), 8000, opts),
@@ -1924,12 +1987,15 @@ async function fetchThemeOpsTab(date, opts={}){
     p1Fetch('/api/themes/mappings/observability', 8000, opts),
     p1Fetch('/api/themes/mappings/manual-review-queue', 8000, opts),
     safeFetch('/api/theme-lifecycle/exit-review?date='+encodeURIComponent(d), 8000, opts),
-    safeFetch('/api/theme-lifecycle/pullback-plan/shadow?days=60', 8000, opts)
+    safeFetch('/api/theme-lifecycle/pullback-plan/shadow?days=60', 8000, opts),
+    safeFetch('/api/promotion-review/policy-simulation?startDate='+encodeURIComponent(d)+'&endDate='+encodeURIComponent(d)+'&status='+validationStatus, 8000, opts),
+    safeFetch('/api/promotion-review/validation-report?startDate='+encodeURIComponent(d)+'&endDate='+encodeURIComponent(d)+'&status='+validationStatus, 8000, opts),
+    safeFetch('/api/promotion-review/graduation-readiness?startDate='+encodeURIComponent(d)+'&endDate='+encodeURIComponent(d)+'&status='+validationStatus, 8000, opts)
   ]);
   if (!isRouteCurrent(opts.token)) return;
   S.lifecycleExitReview = exitReview;
   S.pullbackPlanShadow = pullbackShadow;
-  S.themeOps = {meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision, mappingObs, reviewQueue, exitReview, pullbackShadow};
+  S.themeOps = {meta, ops, safety, traces, hot, feed, promo, replay, lifecycle, research, candidates, decision, mappingObs, reviewQueue, exitReview, pullbackShadow, policySimulation, validationReport, graduationReadiness};
 }
 async function fetchSchedulerTab(opts={}){
   const [jobs, tasks, today] = await Promise.all([
@@ -2193,11 +2259,11 @@ Views.decisions = async (ctx={}) => {
   await fetchCommon(ctx); if (!isRouteCurrent(ctx.token)) return;
   await fetchDecisionsTab(ctx); if (!isRouteCurrent(ctx.token)) return;
   app.append(AIStatusPill(S.dashboard?.finalDecision));
-  const snapErr = p1ErrBox(S.decisionSnapshots, 'Decision Snapshot'); if (snapErr) app.append(snapErr);
+  const snapErr = p1ErrBox(S.decisionSnapshots, '今日決策摘要'); if (snapErr) app.append(snapErr);
   const snapRows = S.decisionSnapshots?.ok === true ? (Array.isArray(S.decisionSnapshots.data) ? S.decisionSnapshots.data : asRows(S.decisionSnapshots.data)) : [];
   if (snapRows.length){
     const sec = el('section',{class:'section'});
-    sec.append(el('div',{class:'section-title',html:`Decision Snapshot <span class="count">${snapRows.length}</span>`}));
+    sec.append(el('div',{class:'section-title',html:`今日決策摘要 <span class="count">${snapRows.length}</span>`}));
     snapRows.slice(0,5).forEach(x => sec.append(DecisionSnapshotCard(x)));
     app.append(sec);
   }
@@ -2275,9 +2341,9 @@ Views.review = async (ctx={}) => {
   app.append(EffectiveDecisionCompactMobile());
   const snapRows = S.decisionSnapshots?.ok === true ? (Array.isArray(S.decisionSnapshots.data) ? S.decisionSnapshots.data : asRows(S.decisionSnapshots.data)) : [];
   const snap = el('div');
-  if (!snapRows.length) snap.append(el('div',{class:'empty',text:'無 Decision Snapshot'}));
+  if (!snapRows.length) snap.append(el('div',{class:'empty',text:'無今日決策摘要'}));
   else snapRows.slice(0,5).forEach(x => snap.append(DecisionSnapshotCard(x)));
-  app.append(CollapsibleSection(`Decision Snapshots (${snapRows.length})`, snap, {open:true}));
+  app.append(CollapsibleSection(`今日決策摘要 (${snapRows.length})`, snap, {open:true}));
   const mq = MappingQualityPanelMobile(S.themeOps?.mappingObs, S.themeOps?.reviewQueue); if (mq) app.append(mq);
   const fmp = FeatureModePanelMobile(); if (fmp) app.append(fmp);
   const notes = el('div');
@@ -2373,10 +2439,10 @@ function themeMetricCard(label, value, sub, cls){
 function themeCard(title, kv, badge){
   const card = el('div',{class:'card a-card'});
   card.append(el('div',{class:'row1'},[
-    el('div',{},[el('span',{class:'sym',text:title || '—'}), badge ? el('span',{class:'badge watch',style:'margin-left:8px',text:badge}) : null])
+    el('div',{},[el('span',{class:'sym',text:title || '—'}), badge ? el('span',{class:'badge watch',style:'margin-left:8px',text:themeOpsZh(badge),title:String(badge)}) : null])
   ]));
   const data = el('div',{class:'data'});
-  Object.entries(kv||{}).forEach(([k,v]) => { data.append(el('span',{class:'k',text:k})); data.append(el('span',{class:'v',text:String(v ?? '—')})); });
+  Object.entries(kv||{}).forEach(([k,v]) => { data.append(el('span',{class:'k',text:themeOpsKeyZh(k)})); data.append(el('span',{class:'v',text:themeOpsZh(v),title:String(v ?? '—')})); });
   card.append(data);
   return card;
 }
@@ -2442,9 +2508,118 @@ function appendPullbackWatchSection(app, payload){
   app.append(sec);
 }
 
+
+function promotionSafetyStrip(payloads){
+  const merged = Object.assign({}, ...(payloads||[]).filter(Boolean));
+  const safety = [
+    ['simulationOnly', merged.simulationOnly === true],
+    ['reviewOnly', merged.reviewOnly === true],
+    ['doesNotAffectFinalDecision', merged.doesNotAffectFinalDecision === true],
+    ['doesNotAffectBuySellEnter', merged.doesNotAffectBuySellEnter === true],
+    ['doesNotWriteCandidateStock', merged.doesNotWriteCandidateStock === true],
+    ['doesNotWriteProductionScore', merged.doesNotWriteProductionScore === true],
+    ['noAutoPromotion', merged.noAutoPromotion === true],
+    ['noThresholdMutation', merged.noThresholdMutation === true || merged.noThresholdMutation == null]
+  ];
+  const row = el('div',{class:'p1-chiprow'});
+  safety.forEach(([k,ok]) => row.append(el('span',{class:'p1-chip',title:`${k}=${ok}`,text:`${themeOpsZh(k)} ${ok?'✓':'?'}`})));
+  return row;
+}
+function promotionSummaryCard(title, badgeCode, metrics, note){
+  const card = el('div',{class:'card'});
+  card.append(el('div',{class:'p1-card-title'},[
+    el('span',{text:title}),
+    el('span',{class:'badge '+themeOpsTone(badgeCode),text:themeOpsZh(badgeCode || 'READ'),title:String(badgeCode || '')})
+  ]));
+  card.append(MetricStrip(metrics));
+  if (note) card.append(el('div',{class:'p1-note',text:themeOpsZh(note)}));
+  return card;
+}
+function promotionDetailCards(rows, type, limit=5){
+  const wrap = el('div');
+  if (!rows.length) { wrap.append(el('div',{class:'empty',text:'目前無明細資料'})); return wrap; }
+  rows.slice(0, limit).forEach(r => {
+    if (type === 'policy') wrap.append(themeCard(`${r.symbol || '—'} ${r.stockName || ''}`.trim(), {
+      suggestedPolicy: r.suggestedPolicy || 'NEED_MORE_EVIDENCE', theme: r.themeTag, currentStatus: r.currentStatus,
+      ret5d: r.t5ReturnPct!=null?themeOpsNum(r.t5ReturnPct,2):'—', maxDD: r.maxDrawdownPct!=null?themeOpsNum(r.maxDrawdownPct,2):'—', dataGapReason: r.dataGapReason || 'OK'
+    }, r.suggestedPolicy || 'READ'));
+    else if (type === 'validation') wrap.append(themeCard(`${r.symbol || '—'} ${r.stockName || ''}`.trim(), {
+      validationStatus: r.validationStatus || 'NEED_MORE_EVIDENCE', validationReason: truncate(themeOpsZh(r.validationReason || ''), 46),
+      theme: r.themeTag, ret5d: r.t5ReturnPct!=null?themeOpsNum(r.t5ReturnPct,2):'—', hitStop: r.hitStop === true ? 'STOP_LOSS' : (r.hitStop === false ? 'NO' : '—'), dataGapReason: r.dataGapReason || 'OK'
+    }, r.validationStatus || 'READ'));
+    else wrap.append(themeCard(String(r.key || r.thresholdKey || '門檻建議'), {
+      currentValue: r.currentValue ?? '—', suggestedValue: r.suggestedValue ?? '—', direction: r.direction || 'KEEP',
+      reason: truncate(themeOpsZh(r.reason || ''), 46), manualReviewRequired: r.manualReviewRequired === true, appliesToShadowOnly: r.appliesToShadowOnly === true
+    }, r.direction || 'REVIEW'));
+  });
+  if (rows.length > limit) wrap.append(el('div',{class:'p1-note',text:`手機版只顯示前 ${limit} 筆，共 ${rows.length} 筆；完整明細請用桌機版。`}));
+  return wrap;
+}
+function promotionStatusCounts(rows){
+  const counts = {};
+  (rows||[]).forEach(r => { const k = String(r.currentStatus || r.status || 'UNKNOWN'); counts[k] = (counts[k]||0)+1; });
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+}
+function appendPromotionValidationMobileSection(app, policyPayload, validationPayload, graduationPayload, queueRows=[]){
+  const policyRows = Array.isArray(policyPayload?.items) ? policyPayload.items : [];
+  const validationRows = Array.isArray(validationPayload?.items) ? validationPayload.items : [];
+  const thresholdRows = Array.isArray(graduationPayload?.thresholdSuggestions) ? graduationPayload.thresholdSuggestions : [];
+  const policySummary = policyPayload?.summary || {};
+  const validationSummary = validationPayload?.summary || {};
+  const graduationSummary = graduationPayload?.summary || {};
+  const criteria = validationPayload?.graduationCriteria || graduationPayload?.graduationCriteria || {};
+  const statusCounts = promotionStatusCounts(queueRows);
+  const sec = el('section',{class:'section'});
+  sec.append(el('div',{class:'section-title',html:`題材晉級審核中心 <span class="count">只讀</span>`}));
+  const safety = el('div',{class:'card'});
+  safety.append(el('div',{class:'p1-card-title'},[el('span',{text:'手機安全模式'}), el('span',{class:'badge buy',text:'只讀'})]));
+  safety.append(el('div',{class:'p1-note',text:'手機只讀，不執行建置/補報酬/追蹤橋接；本頁僅查詢 Promotion validation / report-only pipeline，不寫入正式候選股、不修改正式分數、不影響最終決策。'}));
+  safety.append(promotionSafetyStrip([policyPayload, validationPayload, graduationPayload]));
+  sec.append(safety);
+
+  sec.append(promotionSummaryCard('晉級審核摘要', validationSummary.overallStatus || 'NEED_MORE_EVIDENCE', [
+    {label:'審核清單', value:String(queueRows.length)},
+    {label:'待人工審核', value:String(statusCounts.find(([k])=>k==='PENDING_REVIEW')?.[1] || 0), cls:'watch'},
+    {label:'僅研究', value:String(statusCounts.find(([k])=>k==='RESEARCH_ONLY')?.[1] || 0)},
+    {label:'影子候選', value:String(statusCounts.find(([k])=>k==='CANDIDATE_POOL_SHADOW')?.[1] || 0), cls:'up'}
+  ], statusCounts.length ? `狀態分布：${statusCounts.slice(0,4).map(([k,v])=>`${themeOpsZh(k)} ${v}`).join(' / ')}` : '目前沒有審核清單資料'));
+
+  sec.append(promotionSummaryCard('策略模擬摘要', policySummary.dataGapCount ? 'BLOCKED_BY_DATA_GAP' : 'READ', [
+    {label:'模擬筆數', value:String(policySummary.itemCount ?? policyRows.length)},
+    {label:'已匹配追蹤', value:String(policySummary.matchedForwardCount ?? 0), cls:(policySummary.matchedForwardCount||0)>0?'up':''},
+    {label:'資料缺口', value:String(policySummary.dataGapCount ?? 0), cls:(policySummary.dataGapCount||0)>0?'dn':''},
+    {label:'T5 勝率', value:policySummary.winRateT5==null?'—':themeOpsPct(policySummary.winRateT5)}
+  ], `平均 T1/T5/T10：${themeOpsNum(policySummary.avgT1)} / ${themeOpsNum(policySummary.avgT5)} / ${themeOpsNum(policySummary.avgT10)}；觸及停損 ${policySummary.hitStopCount ?? 0} 筆`));
+  sec.append(CollapsibleSection(`策略模擬明細（前 ${Math.min(5, policyRows.length)} 筆）`, promotionDetailCards(policyRows, 'policy'), {open:false}));
+
+  sec.append(promotionSummaryCard('驗證報告摘要', validationSummary.overallStatus || 'NEED_MORE_EVIDENCE', [
+    {label:'驗證筆數', value:String(validationSummary.itemCount ?? validationRows.length)},
+    {label:'證據完成', value:String(validationSummary.evidenceReadyCount ?? 0), cls:(validationSummary.evidenceReadyCount||0)>0?'up':''},
+    {label:'資料缺口', value:String(validationSummary.dataGapCount ?? 0), cls:(validationSummary.dataGapCount||0)>0?'dn':''},
+    {label:'停損率', value:validationSummary.hitStopRate==null?'—':themeOpsPct(validationSummary.hitStopRate)}
+  ], validationSummary.overallReason || '資料仍不足'));
+  sec.append(CollapsibleSection(`驗證報告明細（前 ${Math.min(5, validationRows.length)} 筆）`, promotionDetailCards(validationRows, 'validation'), {open:false}));
+
+  sec.append(promotionSummaryCard('畢業準備度摘要', graduationSummary.readinessStatus || validationSummary.overallStatus || 'NEED_MORE_EVIDENCE', [
+    {label:'樣本 / 門檻', value:`${graduationSummary.sampleCount ?? 0}/${graduationSummary.minSample ?? criteria.minSample ?? 10}`},
+    {label:'樣本缺口', value:String(graduationSummary.sampleShortfall ?? 0), cls:(graduationSummary.sampleShortfall||0)>0?'dn':'up'},
+    {label:'T5 勝率門檻', value:criteria.minWinRateT5==null?'—':themeOpsPct(criteria.minWinRateT5)},
+    {label:'停損上限', value:criteria.maxHitStopRate==null?'—':themeOpsPct(criteria.maxHitStopRate)}
+  ], graduationSummary.readinessReason || validationSummary.overallReason || '尚未達畢業條件'));
+
+  sec.append(promotionSummaryCard('資料缺口 / 門檻建議摘要', (validationSummary.dataGapCount||graduationSummary.dataGapCount)?'BLOCKED_BY_DATA_GAP':'REVIEW', [
+    {label:'資料缺口', value:String(validationSummary.dataGapCount ?? graduationSummary.dataGapCount ?? 0), cls:(validationSummary.dataGapCount||graduationSummary.dataGapCount||0)>0?'dn':'up'},
+    {label:'證據完成', value:String(graduationSummary.evidenceReadyCount ?? validationSummary.evidenceReadyCount ?? 0)},
+    {label:'風險阻擋', value:String(graduationSummary.riskBlockedCount ?? 0), cls:(graduationSummary.riskBlockedCount||0)>0?'dn':''},
+    {label:'門檻建議', value:String(thresholdRows.length)}
+  ], '門檻建議僅供人工檢視，不會自動調整策略門檻。'));
+  sec.append(CollapsibleSection(`門檻建議明細（前 ${Math.min(5, thresholdRows.length)} 筆）`, promotionDetailCards(thresholdRows, 'threshold'), {open:false}));
+  app.append(sec);
+}
+
 /* 7. theme-first ops */
 Views.themeops = async (ctx={}) => {
-  setHeader('題材 Ops');
+  setHeader('題材工作台');
   const app = $('app'); app.innerHTML = '';
   await fetchCommon(ctx); if (!isRouteCurrent(ctx.token)) return;
   await fetchThemeOpsTab(null, ctx); if (!isRouteCurrent(ctx.token)) return;
@@ -2459,7 +2634,7 @@ Views.themeops = async (ctx={}) => {
   ctrl.append(el('div',{class:'card',style:'display:flex;gap:10px;align-items:center;position:sticky;top:56px;z-index:20'},[
     el('div',{style:'font-weight:800;flex:1',text:'Theme-first Ops / Research'}), input, refresh
   ]));
-  ctrl.append(el('div',{class:'empty',style:'margin-top:8px',text:'Read-only：只看題材雷達、Research Universe、Promotion Review 與 build trace；不提供交易或 review 寫入按鈕。'}));
+  ctrl.append(el('div',{class:'empty',style:'margin-top:8px',text:'手機只讀：只看題材雷達、研究池、晉級審核與驗證報告；不執行建置、追蹤橋接、補報酬或任何 review 寫入按鈕。'}));
   app.append(ctrl);
 
   const forbiddenSafetyKeys = [
@@ -2496,7 +2671,7 @@ Views.themeops = async (ctx={}) => {
     signals: truncate(String(r.topSignals || r.topSymbols || r.leaderSymbols || ''), 40)
   }, 'RADAR'));
 
-  appendThemeSection(app, 'Promotion Review Queue', promoRows, r => themeCard(`${r.symbol || '—'} ${r.stockName || ''}`.trim(), {
+  appendThemeSection(app, '晉級審核清單', promoRows, r => themeCard(`${r.symbol || '—'} ${r.stockName || ''}`.trim(), {
     theme: r.themeTag,
     source: r.source,
     role: r.researchRole,
@@ -2504,6 +2679,8 @@ Views.themeops = async (ctx={}) => {
     riskBlocker: r.riskBlocker,
     evidence: r.evidenceScore
   }, 'READ'));
+
+  appendPromotionValidationMobileSection(app, t.policySimulation, t.validationReport, t.graduationReadiness, promoRows);
 
   appendThemeSection(app, 'Lifecycle', lifecycleRows, r => themeCard(r.themeTag || r.theme || 'Theme', {
     stage: r.lifecycleStage || r.stage,

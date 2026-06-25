@@ -268,6 +268,27 @@
     .lifecycle-map-row span:first-child { color:var(--muted); font-weight:700; overflow-wrap:anywhere; }
     .lifecycle-annotation-title { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .lifecycle-annotation-note { color:var(--muted); font-size:12px; font-weight:700; }
+    .promotion-workbench-hero { border:1px solid rgba(22,101,216,.18); background:linear-gradient(135deg,#f7fbff 0%,#ffffff 58%,#f8fafd 100%); }
+    .promotion-workbench-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap:wrap; margin-bottom:12px; }
+    .promotion-workbench-title { font-size:24px; line-height:1.15; font-weight:950; color:#17233a; margin:0; }
+    .promotion-workbench-desc { max-width:840px; margin-top:6px; color:var(--muted); font-size:13px; line-height:1.55; }
+    .promotion-safe-card { min-width:280px; flex:0 0 330px; border:1px solid #b9def8; border-left:4px solid var(--accent); border-radius:var(--radius); background:#eef7ff; padding:12px 14px; box-shadow:var(--shadow); }
+    .promotion-safe-card .safe-title { font-size:13px; font-weight:900; color:#0f5594; margin-bottom:6px; }
+    .promotion-safe-card .safe-body { font-size:12px; color:#35536f; line-height:1.55; }
+    .promotion-stepper { display:grid; grid-template-columns:repeat(5,minmax(120px,1fr)); gap:8px; margin:10px 0 14px; }
+    .promotion-step { position:relative; border:1px solid var(--line); border-radius:var(--radius-sm); background:#fff; padding:10px; min-height:74px; }
+    .promotion-step.active { border-color:#b9def8; background:#f0f8ff; box-shadow:inset 0 3px 0 var(--accent); }
+    .promotion-step.warn { border-color:var(--c-wait-bd); background:var(--c-wait-bg); }
+    .promotion-step .step-no { display:inline-flex; width:22px; height:22px; align-items:center; justify-content:center; border-radius:999px; background:var(--accent); color:#fff; font-size:12px; font-weight:900; margin-bottom:5px; }
+    .promotion-step .step-title { font-weight:900; color:#17233a; font-size:13px; }
+    .promotion-step .step-meta { color:var(--muted); font-size:11px; margin-top:3px; line-height:1.35; }
+    .promotion-conclusion { display:grid; grid-template-columns:minmax(220px,.9fr) minmax(0,1.4fr) minmax(220px,.9fr); gap:10px; }
+    .promotion-conclusion-card { border:1px solid var(--line); border-radius:var(--radius-sm); background:#fff; padding:10px 12px; }
+    .promotion-conclusion-card .label { font-size:11px; color:var(--muted); font-weight:900; letter-spacing:.4px; }
+    .promotion-conclusion-card .value { margin-top:4px; font-size:17px; font-weight:950; color:#17233a; }
+    .promotion-conclusion-card .note { margin-top:4px; color:var(--muted); font-size:12px; line-height:1.45; }
+    .promotion-status-strip { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+    @media (max-width: 980px) { .promotion-stepper, .promotion-conclusion { grid-template-columns:1fr; } .promotion-safe-card { flex:1 1 auto; } }
     .lifecycle-badge { display:inline-flex; align-items:center; max-width:180px; padding:2px 7px; border-radius:999px; font-size:11px; font-weight:800; border:1px solid var(--line); background:#f6f8fb; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .lifecycle-badge.stage-mainstream { background:#eaf6ff; color:#0f5594; border-color:#b9def8; }
     .lifecycle-badge.stage-overheated { background:#fff3d6; color:#8a4a00; border-color:#f3d28b; }
@@ -291,6 +312,7 @@
     /* ── Misc ── */
     .mono { font-family: var(--mono); font-size: 12.5px; font-feature-settings: "tnum" 1; }
     .small { font-size:12px; color:var(--muted); }
+    .raw-code { display:block; margin-top:2px; font-size:10.5px; color:var(--muted); font-family:var(--mono); font-weight:600; opacity:.78; }
     .num-pos { color: var(--up); font-weight: 700; font-family: var(--mono); font-feature-settings: "tnum" 1; }
     .num-neg { color: var(--dn); font-weight: 700; font-family: var(--mono); font-feature-settings: "tnum" 1; }
     .errbox {
@@ -365,6 +387,9 @@
     .p1-chiprow { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
     .p1-chip { border:1px solid var(--line); border-radius:999px; padding:3px 8px; background:var(--panel-2); font-size:11px; color:var(--muted-dark); }
     .p1-inline-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+    .p1-detail { border:1px solid var(--line); border-radius:8px; padding:7px 9px; margin-top:6px; background:rgba(255,255,255,.035); }
+    .p1-detail summary { cursor:pointer; font-size:12px; font-weight:800; color:var(--muted-dark); }
+    .p1-detail pre { white-space:pre-wrap; overflow:auto; max-height:220px; margin:8px 0 0; font:11px/1.45 var(--mono); color:var(--muted-dark); }
     @media(max-width:900px){ .p1-inline-grid{grid-template-columns:1fr} .p1-kv{grid-template-columns:110px 1fr} }
 
     /* ── Position Health v2 ── */
@@ -1024,7 +1049,7 @@
   <button class="nav-tab" data-page="pagePnl" style="display:none">損益</button>
   <button class="nav-tab" data-page="pagePapers" style="display:none">紙上交易</button>
   <button class="nav-tab" data-page="pageDecisions">決策</button>
-  <button class="nav-tab" data-page="pageLifecycle">Lifecycle</button>
+  <button class="nav-tab" data-page="pageLifecycle">題材生命週期</button>
   <button class="nav-tab" data-page="pageAiResearch">AI</button>
   <button class="nav-tab" data-page="pageScheduler" style="display:none">排程</button>
   <div class="nav-more">
@@ -1035,7 +1060,7 @@
       box-shadow:0 8px 24px rgba(18,35,62,.12); padding:6px; min-width:130px;
       margin-top:4px;
     ">
-      <button class="nav-tab" id="navThemeOpsBtn" style="display:block;width:100%;text-align:left">題材 Ops</button>
+      <button class="nav-tab" id="navThemeOpsBtn" title="開啟獨立題材工作台" style="display:block;width:100%;text-align:left">題材工作台 ↗</button>
       <button class="nav-tab" data-page="pageSystem"     style="display:block;width:100%;text-align:left">系統狀態</button>
       <button class="nav-tab" data-page="pageSettings"   style="display:block;width:100%;text-align:left">設定</button>
     </div>
@@ -1192,6 +1217,7 @@
       <section class="card span-12">
         <h2><span id="c-currentTitle">最新候選股（研究資料）</span>
           <span id="c-currentBadge" class="pill session-badge" style="margin-left:8px">--</span>
+          <span class="small" style="margin-left:8px;color:var(--muted);font-weight:700">依最終分由高到低排序</span>
           <button class="btn primary" id="c-btnAdd" style="margin-left:auto;padding:5px 14px;font-size:13px">＋ 手動新增</button>
         </h2>
         <table>
@@ -1204,10 +1230,10 @@
             <th title="A+/A/B/C等級（A+才可交易）">等級</th>
             <th title="三AI共識分">共識分</th>
             <th title="分歧懲罰值">分歧罰</th>
-            <th title="是否被硬性淘汰">淘汰</th>
+            <th title="風控是否明確淘汰；未判定不代表通過或淘汰">風控淘汰</th>
             <th>風報比</th><th>估值模式</th><th>進場區間</th>
             <th>停損</th><th>停利1</th><th>停利2</th>
-            <th>納入計畫</th><th>操作</th>
+            <th title="研究追蹤與標的角色；題材指標不等於可交易">清單/角色</th><th>操作</th>
           </tr></thead>
           <tbody id="c-currentBody"></tbody>
         </table>
@@ -1238,13 +1264,13 @@
     <div class="grid">
 
       <section class="card span-12 health-panel" id="portfolioHealthSection">
-        <h2>持股健康判斷 v2 <span class="health-mode" id="healthMode" style="margin-left:auto">SHADOW</span></h2>
+        <h2>今日持股檢查 <span class="health-mode" id="healthMode" style="margin-left:auto">人工確認</span></h2>
         <div id="portfolioHealthPanel"></div>
         <div id="portfolioHealthGapsPanel"></div>
       </section>
 
       <section class="card span-12" id="adaptiveExitDesktopSection">
-        <h2>Adaptive Exit Review <span class="small" style="margin-left:auto;color:var(--muted)">read-only / manual confirm</span></h2>
+        <h2>出場檢查 <span class="small" style="margin-left:auto;color:var(--muted)">人工出場檢查清單，不會自動賣出</span></h2>
         <div id="adaptiveExitDesktopPanel"></div>
       </section>
 
@@ -1261,7 +1287,7 @@
             <th>代號</th><th>名稱</th><th>方向</th><th>股數</th><th>均價</th>
             <th>停損</th><th>停利1</th><th>停利2</th>
             <th>距停損</th><th>現值</th><th>預估損益</th>
-            <th>AI 建議</th><th>健康 v2</th>
+            <th>AI 建議</th><th>今日建議</th>
             <th>開倉時間</th><th>備註</th><th style="width:130px">操作</th>
           </tr></thead>
           <tbody id="p-openBody"></tbody>
@@ -1373,7 +1399,7 @@
     <div class="grid">
 
       <section class="card span-12">
-        <h2>Decision Snapshot <span class="small" style="margin-left:auto;color:var(--muted)">AI final path / gate trace</span></h2>
+        <h2>今日決策摘要 <span class="small" style="margin-left:auto;color:var(--muted)">結論、股票摘要與技術明細</span></h2>
         <div id="dec-snapshotPanel"></div>
       </section>
 
@@ -1416,291 +1442,294 @@
   </div>
 </div>
 
-<!-- ══════════════ PAGE: Theme Lifecycle Calibration ══════════════ -->
+<!-- ══════════════ PAGE: 題材生命週期 ══════════════ -->
 <div class="page" id="pageLifecycle">
   <div class="wrap">
     <div id="errBoxLifecycle" class="errbox"></div>
     <div class="grid">
 
       <section class="card span-12">
-        <h2>Theme Lifecycle Calibration <span class="small" style="margin-left:auto;color:var(--muted)">Read-only diagnostics</span></h2>
+        <h2>題材階段總覽 <span class="small" style="margin-left:auto;color:var(--muted)">唯讀診斷</span></h2>
+        <p class="small" style="margin:0 0 12px;color:var(--muted);line-height:1.6">
+          本頁用來觀察題材從發酵、主升、過熱到退潮，並輔助候選股、持股與晉級審核；不會自動交易。
+        </p>
         <div class="toolbar">
-          <label>Days <input type="number" id="lc-days" min="1" max="365" value="60" style="width:90px" /></label>
+          <label>觀察天數 <input type="number" id="lc-days" min="1" max="365" value="60" style="width:90px" /></label>
           <button class="btn" id="lc-refresh">重新整理</button>
-          <span class="small" style="color:var(--muted);font-weight:700">Review / calibration only · 不影響 BUY / SELL</span>
+          <span class="small" style="color:var(--muted);font-weight:700">僅檢視 / 校準 · 不影響買賣</span>
         </div>
         <div class="lifecycle-safety-row" id="lc-safety">
-          <span class="pill muted">readOnly</span>
-          <span class="pill muted">advisoryOnly</span>
-          <span class="pill muted">doesNotAffectBuySell</span>
+          <span class="pill muted">唯讀</span>
+          <span class="pill muted">僅建議</span>
+          <span class="pill muted">不影響買賣</span>
         </div>
         <div class="lifecycle-warning">
-          OVERHEATED currently may behave like strong crowded trend; do not treat as sell signal
+          「過熱」目前可能代表強勢但擁擠的趨勢；請勿直接視為賣出訊號。
         </div>
         <div class="stat-row" id="lc-summary"></div>
       </section>
 
       <section class="card span-12">
         <h2 class="lifecycle-annotation-title">
-          Ranking TopN Shadow Calibration
-          <span class="lifecycle-annotation-note">Read-only · shadow-only · advisory-only</span>
-          <span class="lifecycle-annotation-note">ranking.top_n production is unchanged</span>
+          排名名額模擬
+          <span class="lifecycle-annotation-note">唯讀 · Shadow 模擬 · 僅供參考</span>
+          <span class="lifecycle-annotation-note">正式 ranking.top_n 不變</span>
         </h2>
         <div class="lifecycle-safety-row" id="lc-rankTopN-safety">
-          <span class="pill muted">readOnly</span>
-          <span class="pill muted">shadowOnly</span>
-          <span class="pill muted">doesNotAffectRanking</span>
-          <span class="pill muted">doesNotAffectBuySell</span>
+          <span class="pill muted">唯讀</span>
+          <span class="pill muted">模擬觀察</span>
+          <span class="pill muted">不影響排名</span>
+          <span class="pill muted">不影響買賣</span>
         </div>
         <div class="lifecycle-warning">
-          Shadow analysis only: doesNotAffectRanking=true · doesNotAffectBuySell=true · ranking.top_n production is unchanged.
+          僅做 Shadow 分析：不影響正式排名、不影響買賣，正式 ranking.top_n 設定維持不變。
         </div>
         <div class="stat-row" id="lc-rankTopN-summary"></div>
       </section>
 
       <section class="card span-12">
         <h2 class="lifecycle-annotation-title">
-          Pullback Watch Shadow Plan
-          <span class="lifecycle-annotation-note">Read-only · shadow-only · watch only</span>
+          回檔觀察計畫
+          <span class="lifecycle-annotation-note">唯讀 · Shadow 模擬 · 僅觀察</span>
           <span class="lifecycle-annotation-note">不寫 candidate/watchlist · 不影響排名或買賣</span>
         </h2>
         <div class="lifecycle-safety-row" id="lc-pullback-safety">
-          <span class="pill muted">readOnly</span>
-          <span class="pill muted">shadowOnly</span>
-          <span class="pill muted">doesNotAffectBuySell</span>
-          <span class="pill muted">doesNotWriteCandidateWatchlist</span>
-          <span class="pill muted">doesNotAffectRanking</span>
+          <span class="pill muted">唯讀</span>
+          <span class="pill muted">模擬觀察</span>
+          <span class="pill muted">不影響買賣</span>
+          <span class="pill muted">不寫候選/觀察清單</span>
+          <span class="pill muted">不影響排名</span>
         </div>
         <div class="lifecycle-warning">
-          Pullback Watch is an observation report only: no buy/sell/rebuild actions, no candidate/watchlist writes, no ranking/risk/final-decision impact.
+          回檔觀察只是報告：不買賣、不重建正式清單、不寫入候選/觀察清單，也不影響排名、風控或最終決策。
         </div>
         <div class="stat-row" id="lc-pullback-summary"></div>
       </section>
 
       <section class="card span-12">
         <h2 class="lifecycle-annotation-title">
-          Portfolio Rotation Shadow
-          <span class="lifecycle-annotation-note">Shadow-only · advisory-only · manual review</span>
+          持股輪動觀察
+          <span class="lifecycle-annotation-note">Shadow 模擬 · 僅供參考 · 人工檢查</span>
           <span class="lifecycle-annotation-note">不動持股 · 不自動換股 · 不影響 risk gate</span>
         </h2>
         <div class="lifecycle-safety-row" id="lc-rotation-safety">
-          <span class="pill muted">shadowOnly</span>
-          <span class="pill muted">advisoryOnly</span>
-          <span class="pill muted">doesNotAffectBuySell</span>
-          <span class="pill muted">doesNotMutatePositions</span>
-          <span class="pill muted">doesNotAffectRiskGate</span>
+          <span class="pill muted">模擬觀察</span>
+          <span class="pill muted">僅供參考</span>
+          <span class="pill muted">不影響買賣</span>
+          <span class="pill muted">不異動持股</span>
+          <span class="pill muted">不影響風控</span>
         </div>
         <div class="lifecycle-warning">
-          Rotation Shadow compares best candidate vs weakest holding for review only: no orders, no position writes, no auto reduction, no portfolio risk-gate changes.
+          輪動觀察只比較最佳候選與相對弱持股：不下單、不異動持股、不自動減碼，也不改變投組風控。
         </div>
         <div class="stat-row" id="lc-rotation-summary"></div>
       </section>
 
       <section class="card span-12">
-        <h2>Rotation Shadow Rows</h2>
+        <h2>輪動觀察明細</h2>
         <table class="rotation-shadow-table">
           <thead><tr>
-            <th>action</th><th>candidate</th><th>candidateTheme</th><th class="num">candidateScore</th>
-            <th>weakestHolding</th><th>holdingTheme</th><th class="num">holdingScore</th>
-            <th class="num">lifecycleDiff</th><th class="num">opportunityDelta</th><th>dataGap</th><th>reason</th>
+            <th>動作</th><th>候選股</th><th>候選題材</th><th class="num">候選分數</th>
+            <th>相對弱持股</th><th>持股題材</th><th class="num">持股分數</th>
+            <th class="num">生命週期差</th><th class="num">機會差</th><th>資料缺口</th><th>原因</th>
           </tr></thead>
           <tbody id="lc-rotation-body"></tbody>
         </table>
       </section>
 
       <section class="card span-12">
-        <h2>Pullback Watch Rows</h2>
+        <h2>回檔觀察明細</h2>
         <table class="pullback-watch-table">
           <thead><tr>
-            <th>status</th><th>stage</th><th>symbol</th><th>stockName</th><th>theme</th>
-            <th>nearLimit</th><th>limitRisk</th><th>planStatus</th>
-            <th class="num">return5d</th><th class="num">return10d</th><th class="num">maxDrawdown</th>
-            <th>reason</th>
+            <th>狀態</th><th>階段</th><th>代號</th><th>名稱</th><th>題材</th>
+            <th>接近漲停</th><th>漲停風險</th><th>計畫狀態</th>
+            <th class="num">5日報酬</th><th class="num">10日報酬</th><th class="num">最大回撤</th>
+            <th>原因</th>
           </tr></thead>
           <tbody id="lc-pullback-body"></tbody>
         </table>
       </section>
 
       <section class="card span-12">
-        <h2>Top3 vs Top5 / Top10 / Top20 Comparison</h2>
+        <h2>Top3 與 Top5 / Top10 / Top20 比較</h2>
         <table class="ranking-calibration-table">
           <thead><tr>
-            <th>window</th><th class="num">selectedCount</th><th class="num">distinctSymbols</th><th class="num">avgRank</th><th class="num">avgScore</th>
-            <th class="num">avgReturn1d</th><th class="num">winRate1d</th><th class="num">avgReturn5d</th><th class="num">winRate5d</th>
-            <th class="num">avgReturn10d</th><th class="num">winRate10d</th><th class="num">avgMaxDD10d</th><th class="num">missedWinners</th><th class="num">missedRate</th>
+            <th>區間</th><th class="num">入選筆數</th><th class="num">不重複股票</th><th class="num">平均排名</th><th class="num">平均分數</th>
+            <th class="num">1日平均報酬</th><th class="num">1日勝率</th><th class="num">5日平均報酬</th><th class="num">5日勝率</th>
+            <th class="num">10日平均報酬</th><th class="num">10日勝率</th><th class="num">10日最大回撤</th><th class="num">漏掉強勢股</th><th class="num">漏掉比例</th>
           </tr></thead>
           <tbody id="lc-rankTopN-windowBody"></tbody>
         </table>
-        <h2 style="margin-top:14px">Incremental Comparison vs Top3</h2>
+        <h2 style="margin-top:14px">相較 Top3 的增量比較</h2>
         <table class="ranking-calibration-table">
           <thead><tr>
-            <th>comparison</th><th class="num">baselineTopN</th><th class="num">candidateTopN</th><th class="num">incrementalRows</th>
-            <th class="num">incrementalMissedWinners</th><th class="num">incAvgReturn5d</th><th class="num">incWinRate5d</th>
-            <th class="num">incAvgReturn10d</th><th class="num">incWinRate10d</th>
+            <th>比較項目</th><th class="num">基準TopN</th><th class="num">候選TopN</th><th class="num">新增筆數</th>
+            <th class="num">新增漏掉強勢股</th><th class="num">新增5日平均報酬</th><th class="num">新增5日勝率</th>
+            <th class="num">新增10日平均報酬</th><th class="num">新增10日勝率</th>
           </tr></thead>
           <tbody id="lc-rankTopN-compareBody"></tbody>
         </table>
       </section>
 
       <section class="card span-12">
-        <h2>Missed Winners Outside Top3</h2>
+        <h2>Top3 外漏掉的強勢股</h2>
         <div class="stat-row" id="lc-rankTopN-missedSummary"></div>
         <table class="ranking-calibration-table">
           <thead><tr>
-            <th>date</th><th>symbol</th><th>stockName</th><th>themeTag</th><th>bucket</th><th class="num">rank</th><th class="num">score</th>
-            <th class="num">return1d</th><th class="num">return5d</th><th class="num">return10d</th><th class="num">maxDD10d</th><th>traceStatus</th>
+            <th>日期</th><th>代號</th><th>名稱</th><th>題材</th><th>分組</th><th class="num">排名</th><th class="num">分數</th>
+            <th class="num">1日報酬</th><th class="num">5日報酬</th><th class="num">10日報酬</th><th class="num">10日最大回撤</th><th>追蹤狀態</th>
           </tr></thead>
           <tbody id="lc-rankTopN-missedBody"></tbody>
         </table>
       </section>
 
       <section class="card span-12">
-        <h2>Theme Quota Shadow Analysis</h2>
+        <h2>題材名額模擬分析</h2>
         <div class="stat-row" id="lc-rankTopN-themeSummary"></div>
         <table class="ranking-calibration-table">
           <thead><tr>
-            <th>themeTag</th><th class="num">rows</th><th class="num">top3</th><th class="num">top5</th><th class="num">top10</th><th class="num">top20</th>
-            <th class="num">outsideTop3</th><th class="num">missedWinners</th><th class="num">missedRateOutsideTop3</th>
-            <th class="num">avgReturn5d</th><th class="num">top3AvgReturn5d</th><th class="num">outsideTop3AvgReturn5d</th><th class="num">shadowTop3Quota</th><th>rationale</th>
+            <th>題材</th><th class="num">筆數</th><th class="num">Top3</th><th class="num">Top5</th><th class="num">Top10</th><th class="num">Top20</th>
+            <th class="num">Top3外</th><th class="num">漏掉強勢股</th><th class="num">Top3外漏掉比例</th>
+            <th class="num">5日平均報酬</th><th class="num">Top3 5日平均報酬</th><th class="num">Top3外5日平均報酬</th><th class="num">模擬Top3名額</th><th>理由</th>
           </tr></thead>
           <tbody id="lc-rankTopN-themeBody"></tbody>
         </table>
       </section>
 
       <section class="card span-12">
-        <h2>Stage Distribution</h2>
+        <h2>階段分布</h2>
         <table>
           <thead><tr>
-            <th>stage</th><th class="num">sampleCount</th><th class="num">avgLifecycleScore</th>
-            <th class="num">avgContinuationDays</th><th class="num">avgBreadth</th><th class="num">avgCrowdingScore</th>
+            <th>階段</th><th class="num">樣本數</th><th class="num">平均生命週期分數</th>
+            <th class="num">平均延續天數</th><th class="num">平均廣度</th><th class="num">平均擁擠分數</th>
           </tr></thead>
           <tbody id="lc-stageBody"></tbody>
         </table>
       </section>
 
       <section class="card span-8">
-        <h2>Funnel Summary</h2>
+        <h2>漏斗摘要</h2>
         <div class="stat-row" id="lc-funnelStats"></div>
         <div class="grid" style="gap:10px">
           <div class="span-4">
-            <h2 style="margin-top:4px">conversionRates</h2>
+            <h2 style="margin-top:4px">轉換率</h2>
             <div id="lc-conversionRates" class="lifecycle-map-list"></div>
           </div>
           <div class="span-4">
-            <h2 style="margin-top:4px">blockedStageDistribution</h2>
+            <h2 style="margin-top:4px">阻擋階段分布</h2>
             <div id="lc-blockedStages" class="lifecycle-map-list"></div>
           </div>
           <div class="span-4">
-            <h2 style="margin-top:4px">topBlockedReasons</h2>
+            <h2 style="margin-top:4px">主要阻擋原因</h2>
             <div id="lc-blockedReasons" class="lifecycle-map-list"></div>
           </div>
         </div>
       </section>
 
       <section class="card span-4">
-        <h2>Theme Admission Summary</h2>
+        <h2>題材納入摘要</h2>
         <div class="stat-row" id="lc-admissionStats"></div>
-        <h2 style="margin-top:4px">shadow action counts</h2>
+        <h2 style="margin-top:4px">模擬動作統計</h2>
         <div id="lc-shadowActions" class="lifecycle-map-list"></div>
       </section>
 
       <section class="card span-12">
-        <h2>TopN Shadow</h2>
+        <h2>TopN 名額模擬</h2>
         <table>
           <thead><tr>
-            <th>bucket</th><th class="num">sampleCount</th><th class="num">avgActualReturn1d</th><th class="num">winRate1d</th>
-            <th class="num">avgActualReturn5d</th><th class="num">winRate5d</th><th class="num">avgActualReturn10d</th>
-            <th class="num">winRate10d</th><th class="num">avgMaxDrawdown10d</th><th class="num">missedByTop3Count</th>
+            <th>區間</th><th class="num">樣本數</th><th class="num">1日平均實際報酬</th><th class="num">1日勝率</th>
+            <th class="num">5日平均實際報酬</th><th class="num">5日勝率</th><th class="num">10日平均實際報酬</th>
+            <th class="num">10日勝率</th><th class="num">10日平均最大回撤</th><th class="num">Top3漏掉數</th>
           </tr></thead>
           <tbody id="lc-topNBody"></tbody>
         </table>
       </section>
 
       <section class="card span-6">
-        <h2>Predictive Power</h2>
+        <h2>預測力</h2>
         <div id="lc-predictivePanel"></div>
       </section>
 
       <section class="card span-6">
-        <h2>Data Coverage</h2>
+        <h2>資料覆蓋</h2>
         <table>
-          <thead><tr><th>table</th><th class="num">rows</th><th>range</th><th class="num">days</th><th>status</th></tr></thead>
+          <thead><tr><th>資料表</th><th class="num">筆數</th><th>範圍</th><th class="num">天數</th><th>狀態</th></tr></thead>
           <tbody id="lc-coverageBody"></tbody>
         </table>
       </section>
 
       <section class="card span-6">
-        <h2>Calibration Findings</h2>
+        <h2>校準發現</h2>
         <div id="lc-findingsPanel"></div>
       </section>
 
       <section class="card span-6">
-        <h2>Data Gaps</h2>
+        <h2>資料缺口</h2>
         <div id="lc-dataGapsPanel"></div>
       </section>
 
       <section class="card span-12">
         <h2 class="lifecycle-annotation-title">
-          Lifecycle Annotation
-          <span class="lifecycle-annotation-note">Annotation only · 不影響 BUY / SELL</span>
-          <span class="lifecycle-annotation-note">Review labels, not trading commands</span>
+          生命週期標註
+          <span class="lifecycle-annotation-note">僅標註 · 不影響買賣</span>
+          <span class="lifecycle-annotation-note">這是檢查標籤，不是交易指令</span>
         </h2>
         <div class="toolbar">
-          <label>Date <input type="date" id="lc-anno-date" /></label>
+          <label>日期 <input type="date" id="lc-anno-date" /></label>
           <button class="btn" id="lc-anno-refresh">重新整理</button>
-          <span class="small" style="color:var(--muted);font-weight:700">annotation only · advisory only · review only</span>
+          <span class="small" style="color:var(--muted);font-weight:700">僅標註 · 僅建議 · 僅檢查</span>
         </div>
         <div class="lifecycle-safety-row" id="lc-anno-safety">
-          <span class="pill muted">annotationOnly</span>
-          <span class="pill muted">advisoryOnly</span>
-          <span class="pill muted">doesNotAffectBuySell</span>
+          <span class="pill muted">僅標註</span>
+          <span class="pill muted">僅供參考</span>
+          <span class="pill muted">不影響買賣</span>
         </div>
         <div class="stat-row" id="lc-anno-summary"></div>
       </section>
 
       <section class="card span-12">
-        <h2>Candidates Annotation</h2>
+        <h2>候選股標註</h2>
         <table class="annotation-table">
           <thead><tr>
-            <th>symbol</th><th>stockName</th><th>themeTag</th><th>stage</th>
-            <th class="num">lifecycleScore</th><th class="num">continuationDays</th><th class="num">breadth</th>
-            <th class="num">crowdingScore</th><th>advisoryAction</th><th>dataGapReason</th>
+            <th>代號</th><th>名稱</th><th>題材</th><th>階段</th>
+            <th class="num">生命週期分數</th><th class="num">延續天數</th><th class="num">廣度</th>
+            <th class="num">擁擠分數</th><th>建議動作</th><th>資料缺口原因</th>
           </tr></thead>
           <tbody id="lc-anno-candidatesBody"></tbody>
         </table>
       </section>
 
       <section class="card span-12">
-        <h2>Watchlist Annotation</h2>
+        <h2>觀察清單標註</h2>
         <table class="annotation-table">
           <thead><tr>
-            <th>symbol</th><th>stockName</th><th>themeTag</th><th>stage</th>
-            <th class="num">lifecycleScore</th><th class="num">continuationDays</th><th class="num">breadth</th>
-            <th class="num">crowdingScore</th><th>advisoryAction</th><th>dataGapReason</th>
+            <th>代號</th><th>名稱</th><th>題材</th><th>階段</th>
+            <th class="num">生命週期分數</th><th class="num">延續天數</th><th class="num">廣度</th>
+            <th class="num">擁擠分數</th><th>建議動作</th><th>資料缺口原因</th>
           </tr></thead>
           <tbody id="lc-anno-watchlistBody"></tbody>
         </table>
       </section>
 
       <section class="card span-12">
-        <h2>Ranking Annotation</h2>
+        <h2>排名標註</h2>
         <table class="annotation-table">
           <thead><tr>
-            <th>symbol</th><th>stockName</th><th>themeTag</th><th>stage</th>
-            <th class="num">lifecycleScore</th><th class="num">continuationDays</th><th class="num">breadth</th>
-            <th class="num">crowdingScore</th><th>advisoryAction</th><th>dataGapReason</th>
+            <th>代號</th><th>名稱</th><th>題材</th><th>階段</th>
+            <th class="num">生命週期分數</th><th class="num">延續天數</th><th class="num">廣度</th>
+            <th class="num">擁擠分數</th><th>建議動作</th><th>資料缺口原因</th>
           </tr></thead>
           <tbody id="lc-anno-rankingBody"></tbody>
         </table>
       </section>
 
       <section class="card span-12">
-        <h2>Positions Annotation</h2>
+        <h2>持股標註</h2>
         <table class="annotation-table">
           <thead><tr>
-            <th>symbol</th><th>stockName</th><th>themeTag</th><th>stage</th>
-            <th class="num">lifecycleScore</th><th class="num">continuationDays</th><th class="num">breadth</th>
-            <th class="num">crowdingScore</th><th>advisoryAction</th><th>dataGapReason</th>
+            <th>代號</th><th>名稱</th><th>題材</th><th>階段</th>
+            <th class="num">生命週期分數</th><th class="num">延續天數</th><th class="num">廣度</th>
+            <th class="num">擁擠分數</th><th>建議動作</th><th>資料缺口原因</th>
           </tr></thead>
           <tbody id="lc-anno-positionsBody"></tbody>
         </table>
@@ -1708,71 +1737,118 @@
 
       <section class="card span-12">
         <h2 class="lifecycle-annotation-title">
-          Lifecycle Exit Review
-          <span class="lifecycle-annotation-note">Review only · advisory only</span>
+          生命週期出場檢查
+          <span class="lifecycle-annotation-note">僅檢查 · 僅供參考</span>
           <span class="lifecycle-annotation-note">不影響 BUY / SELL · 不自動賣出</span>
         </h2>
         <div class="toolbar">
-          <label>Date <input type="date" id="lc-exit-date" /></label>
-          <button class="btn" id="lc-exit-refresh">產生 Review Report</button>
-          <button class="btn warn" id="lc-exit-rebuild">重建 Review Shadow</button>
-          <span class="small" style="color:var(--muted);font-weight:700">review-only shadow · no mutation</span>
+          <label>日期 <input type="date" id="lc-exit-date" /></label>
+          <button class="btn" id="lc-exit-refresh">產生檢查報告</button>
+          <button class="btn warn" id="lc-exit-rebuild">重建檢查 Shadow</button>
+          <span class="small" style="color:var(--muted);font-weight:700">僅檢查 Shadow · 不異動資料</span>
         </div>
         <div class="lifecycle-safety-row" id="lc-exit-safety">
-          <span class="pill muted">reviewOnly</span>
-          <span class="pill muted">advisoryOnly</span>
-          <span class="pill muted">doesNotAffectBuySell</span>
-          <span class="pill muted">autoSellEnabled=false</span>
-          <span class="pill muted">stopMutationEnabled=false</span>
-          <span class="pill muted">positionMutationEnabled=false</span>
+          <span class="pill muted">僅檢查</span>
+          <span class="pill muted">僅供參考</span>
+          <span class="pill muted">不影響買賣</span>
+          <span class="pill muted">不自動賣出</span>
+          <span class="pill muted">不修改停損</span>
+          <span class="pill muted">不異動持股</span>
         </div>
         <div class="stat-row" id="lc-exit-summary"></div>
       </section>
 
       <section class="card span-12">
-        <h2>Exit Review Rows</h2>
+        <h2>出場檢查明細</h2>
         <table class="exit-review-table">
           <thead><tr>
-            <th>symbol</th><th>stockName</th><th>themeTag</th><th>lifecycleStage</th>
-            <th>reviewAction</th><th>reviewPriority</th><th class="num">lifecycleScore</th>
-            <th class="num">crowdingScore</th><th>structuralExitTier</th><th>priceState</th>
-            <th>structureState</th><th>dataGapReason</th>
+            <th>代號</th><th>名稱</th><th>題材</th><th>生命週期階段</th>
+            <th>檢查動作</th><th>優先級</th><th class="num">生命週期分數</th>
+            <th class="num">擁擠分數</th><th>結構出場層級</th><th>價格狀態</th>
+            <th>結構狀態</th><th>資料缺口原因</th>
           </tr></thead>
           <tbody id="lc-exit-body"></tbody>
         </table>
       </section>
 
+      <section class="card span-12 promotion-workbench-hero" id="promotion-validation-center">
+        <div class="promotion-workbench-head">
+          <div>
+            <h2 class="promotion-workbench-title">題材晉級審核中心</h2>
+            <div class="promotion-workbench-desc">
+              把「審核清單 → 策略模擬 → 追蹤/補報酬 → 驗證報告 → 畢業準備度」集中成同一個工作台。
+              本區只產生治理與驗證證據，不會修改正式候選股、正式分數、最終決策或任何交易行為。
+            </div>
+          </div>
+          <div class="promotion-safe-card">
+            <div class="safe-title">目前安全模式：僅報告 / Shadow 觀察 / 人工確認</div>
+            <div class="safe-body">
+              Shadow 候選不可交易；任何晉級都必須另經獨立風控與人工流程。下方警示按鈕執行前會再次確認作用範圍。
+            </div>
+            <div class="promotion-status-strip" id="lc-workbench-safety">
+              <span class="pill muted">不影響最終決策</span>
+              <span class="pill muted">不寫入正式候選股</span>
+              <span class="pill muted">不自動升級</span>
+            </div>
+          </div>
+        </div>
+        <div class="promotion-stepper" id="lc-pipeline-stepper">
+          <div class="promotion-step active"><span class="step-no">1</span><div class="step-title">發現題材 / 股票</div><div class="step-meta">上游 Theme Ops 與研究池資料</div></div>
+          <div class="promotion-step"><span class="step-no">2</span><div class="step-title">建立審核清單</div><div class="step-meta" id="lc-step-queue">等待讀取</div></div>
+          <div class="promotion-step"><span class="step-no">3</span><div class="step-title">策略模擬與追蹤</div><div class="step-meta" id="lc-step-policy">等待模擬</div></div>
+          <div class="promotion-step"><span class="step-no">4</span><div class="step-title">驗證報告</div><div class="step-meta" id="lc-step-validation">等待驗證</div></div>
+          <div class="promotion-step"><span class="step-no">5</span><div class="step-title">畢業準備度 / 門檻建議</div><div class="step-meta" id="lc-step-graduation">等待摘要</div></div>
+        </div>
+        <div class="promotion-conclusion" id="lc-today-conclusion">
+          <div class="promotion-conclusion-card">
+            <div class="label">今日結論</div>
+            <div class="value" id="lc-today-status">尚未產生</div>
+            <div class="note" id="lc-today-reason">讀取審核清單與驗證摘要後，這裡會顯示今日是否仍因資料缺口或樣本不足而保留觀察。</div>
+          </div>
+          <div class="promotion-conclusion-card">
+            <div class="label">清單狀態分布</div>
+            <div class="promotion-status-strip" id="lc-today-status-strip"><span class="pill muted">等待資料</span></div>
+            <div class="note">英文原始代碼保留在提示文字中，畫面主顯示以中文為主。</div>
+          </div>
+          <div class="promotion-conclusion-card">
+            <div class="label">今日安全邊界</div>
+            <div class="value">不接正式交易</div>
+            <div class="note" id="lc-today-safety-note">僅審核、僅模擬、僅報告；不影響 BUY / SELL / ENTER。</div>
+          </div>
+        </div>
+      </section>
+
       <section class="card span-12">
         <h2 class="lifecycle-annotation-title">
-          P4 Promotion Review Queue
-          <span class="lifecycle-annotation-note">Guarded production review · manual approval only</span>
-          <span class="lifecycle-annotation-note">不寫候選池 · 不影響 FinalDecision · no auto promotion</span>
+          題材晉級審核清單
+          <span class="lifecycle-annotation-note">僅審核 · 人工確認 · 不影響正式決策</span>
+          <span class="lifecycle-annotation-note">不寫入正式候選股 · 不自動升級</span>
         </h2>
         <div class="toolbar">
-          <label>Date <input type="date" id="lc-promo-date" /></label>
-          <button class="btn" id="lc-promo-refresh">讀取 Queue</button>
-          <button class="btn warn" id="lc-promo-build">Build / Rebuild Review Queue</button>
-          <span class="small" style="color:var(--muted);font-weight:700">review-only · candidatePoolShadowIsNotTradable · requires separate risk gate</span>
+          <label>日期 <input type="date" id="lc-promo-date" /></label>
+          <button class="btn" id="lc-promo-refresh">讀取審核清單</button>
+          <button class="btn warn" id="lc-promo-build">重新產生審核清單</button>
+          <span class="small" style="color:var(--muted);font-weight:700">僅審核 · Shadow 候選不可交易 · 仍需獨立風控關卡</span>
         </div>
         <div class="lifecycle-safety-row" id="lc-promo-safety">
-          <span class="pill muted">reviewOnly</span>
+          <span class="pill muted">僅檢查</span>
           <span class="pill muted">doesNotAffectFinalDecision</span>
           <span class="pill muted">doesNotAffectBuySellEnter</span>
           <span class="pill muted">doesNotWriteCandidateStock</span>
           <span class="pill muted">noAutoPromotion</span>
         </div>
         <div class="lifecycle-warning">
-          Promotion Review is a governance queue only: approving an item keeps it candidate-pool shadow, not tradable; production promotion still requires a separate risk gate and manual workflow.
+          此區只是治理審核清單：即使通過也只會停留在 Shadow 觀察，不可交易；正式升級仍需要獨立風控與人工流程。
         </div>
         <div class="stat-row" id="lc-promo-summary"></div>
       </section>
 
       <section class="card span-12">
-        <h2>Promotion Review Items</h2>
+        <h2>審核清單明細 <span class="lifecycle-annotation-note">英文代碼改放小字供除錯</span></h2>
         <table class="promotion-review-table">
           <thead><tr>
-            <th>status</th><th>suggested</th><th>symbol</th><th>stockName</th><th>theme</th><th>source</th><th>role</th>
-            <th class="num">evidence</th><th>lifecycle</th><th>risk</th><th>governance</th><th>reason</th>
+            <th>目前狀態</th><th>建議狀態</th><th>代號</th><th>名稱</th><th>題材</th><th>來源</th><th>角色</th>
+            <th class="num">證據分數</th><th>生命週期</th><th>風險</th><th>治理</th><th>原因</th>
           </tr></thead>
           <tbody id="lc-promo-body"></tbody>
         </table>
@@ -1780,25 +1856,25 @@
 
       <section class="card span-12">
         <h2 class="lifecycle-annotation-title">
-          P4 Policy Simulation / Forward Tracking
-          <span class="lifecycle-annotation-note">Simulation only · bounded soft boost shadow only</span>
-          <span class="lifecycle-annotation-note">Tracking bridge writes forward tracking only</span>
+          策略模擬 / 後續追蹤
+          <span class="lifecycle-annotation-note">僅模擬 · 只做 Shadow 加分觀察</span>
+          <span class="lifecycle-annotation-note">追蹤橋接只寫入 forward tracking</span>
         </h2>
         <div class="toolbar">
-          <label>Start <input type="date" id="lc-policy-start" /></label>
-          <label>End <input type="date" id="lc-policy-end" /></label>
-          <label>Status
+          <label>開始 <input type="date" id="lc-policy-start" /></label>
+          <label>結束 <input type="date" id="lc-policy-end" /></label>
+          <label>狀態
             <select id="lc-policy-status">
-              <option value="CANDIDATE_POOL_SHADOW">CANDIDATE_POOL_SHADOW</option>
-              <option value="WATCH_ONLY">WATCH_ONLY</option>
-              <option value="NEED_MORE_EVIDENCE">NEED_MORE_EVIDENCE</option>
-              <option value="RESEARCH_ONLY">RESEARCH_ONLY</option>
-              <option value="PENDING_REVIEW">PENDING_REVIEW</option>
+              <option value="CANDIDATE_POOL_SHADOW">影子候選（CANDIDATE_POOL_SHADOW）</option>
+              <option value="WATCH_ONLY">僅觀察（WATCH_ONLY）</option>
+              <option value="NEED_MORE_EVIDENCE">證據不足（NEED_MORE_EVIDENCE）</option>
+              <option value="RESEARCH_ONLY">僅研究（RESEARCH_ONLY）</option>
+              <option value="PENDING_REVIEW">待人工審核（PENDING_REVIEW）</option>
             </select>
           </label>
-          <button class="btn" id="lc-policy-refresh">Run Simulation</button>
-          <button class="btn warn" id="lc-policy-bridge">Bridge Forward Tracking</button>
-          <button class="btn" id="lc-policy-backfill">Backfill Returns</button>
+          <button class="btn" id="lc-policy-refresh">執行策略模擬</button>
+          <button class="btn warn" id="lc-policy-bridge">建立追蹤紀錄</button>
+          <button class="btn" id="lc-policy-backfill">補齊報酬資料</button>
         </div>
         <div class="lifecycle-safety-row" id="lc-policy-safety">
           <span class="pill muted">simulationOnly</span>
@@ -1806,7 +1882,7 @@
           <span class="pill muted">noAutoPromotion</span>
         </div>
         <div class="lifecycle-warning">
-          Policy simulation and bridge remain guarded: bridge rows use PROMOTION_* tracking labels and do not make symbols tradable. T1/T5/T10 remain data-gap until enough future trading days exist.
+          策略模擬與追蹤橋接都在安全邊界內：追蹤列使用 PROMOTION_* 標籤，不會讓股票變成可交易；未累積足夠交易日之前，T1/T5/T10 會顯示資料不足。
         </div>
         <div class="stat-row" id="lc-policy-summary"></div>
         <div class="stat-row" id="lc-policy-validation-summary"></div>
@@ -1814,22 +1890,22 @@
       </section>
 
       <section class="card span-12">
-        <h2>Policy Simulation Items</h2>
+        <h2>策略模擬明細</h2>
         <table class="promotion-simulation-table">
           <thead><tr>
-            <th>policy</th><th>symbol</th><th>stockName</th><th>theme</th><th>source</th><th>status</th>
-            <th class="num">T1</th><th class="num">T5</th><th class="num">T10</th><th class="num">MDD</th><th>stop</th><th>data gap</th>
+            <th>模擬結論</th><th>代號</th><th>名稱</th><th>題材</th><th>來源</th><th>目前狀態</th>
+            <th class="num">T1</th><th class="num">T5</th><th class="num">T10</th><th class="num">最大回撤</th><th>停損</th><th>資料缺口</th>
           </tr></thead>
           <tbody id="lc-policy-body"></tbody>
         </table>
       </section>
 
       <section class="card span-12">
-        <h2>Promotion Validation Report</h2>
+        <h2>晉級驗證報告</h2>
         <table class="promotion-validation-table">
           <thead><tr>
-            <th>validation</th><th>symbol</th><th>stockName</th><th>theme</th><th>source</th><th>status</th>
-            <th>reason</th><th class="num">T5</th><th class="num">MDD</th><th>stop</th><th>data gap</th>
+            <th>驗證狀態</th><th>代號</th><th>名稱</th><th>題材</th><th>來源</th><th>目前狀態</th>
+            <th>原因</th><th class="num">T5</th><th class="num">最大回撤</th><th>停損</th><th>資料缺口</th>
           </tr></thead>
           <tbody id="lc-validation-body"></tbody>
         </table>
@@ -1837,14 +1913,14 @@
 
       <section class="card span-12">
         <h2 class="lifecycle-annotation-title">
-          Daily Validation Summary
-          <span class="lifecycle-annotation-note">Report only · scheduler-backed</span>
-          <span class="lifecycle-annotation-note">No production promotion</span>
+          每日驗證摘要
+          <span class="lifecycle-annotation-note">僅報告 · 排程同邏輯</span>
+          <span class="lifecycle-annotation-note">不會正式升級</span>
         </h2>
         <div class="toolbar">
-          <label>Backfill days <input type="number" id="lc-daily-backfill-days" min="1" max="60" value="14" style="width:90px" /></label>
-          <button class="btn warn" id="lc-daily-summary-run">Run Daily Summary</button>
-          <span class="small" style="color:var(--muted)">Uses policy date/status above · same guarded automation as PromotionValidationDailySummaryJob</span>
+          <label>補齊天數 <input type="number" id="lc-daily-backfill-days" min="1" max="60" value="14" style="width:90px" /></label>
+          <button class="btn warn" id="lc-daily-summary-run">產生每日驗證摘要</button>
+          <span class="small" style="color:var(--muted)">使用上方日期/狀態 · 與 PromotionValidationDailySummaryJob 相同安全自動化</span>
         </div>
         <div class="lifecycle-safety-row" id="lc-daily-summary-safety">
           <span class="pill muted">dailyValidationSummaryOnly</span>
@@ -1854,16 +1930,16 @@
           <span class="pill muted">noAutoPromotion</span>
         </div>
         <div class="lifecycle-warning">
-          Daily summary runs bridge/backfill/validation in report-only mode. It is a dashboard checkpoint for evidence readiness, not a promotion or trading action.
+          每日摘要會以僅報告模式執行追蹤、補報酬與驗證；它只是證據準備度檢查點，不是升級或交易動作。
         </div>
         <div class="stat-row" id="lc-daily-summary-result"></div>
       </section>
 
       <section class="card span-12">
         <h2 class="lifecycle-annotation-title">
-          Graduation Readiness / Threshold Suggestions
-          <span class="lifecycle-annotation-note">Report only</span>
-          <span class="lifecycle-annotation-note">No threshold mutation</span>
+          畢業準備度 / 門檻建議
+          <span class="lifecycle-annotation-note">僅報告</span>
+          <span class="lifecycle-annotation-note">不自動改門檻</span>
         </h2>
         <div class="lifecycle-safety-row" id="lc-graduation-safety">
           <span class="pill muted">readinessReportOnly</span>
@@ -1872,12 +1948,12 @@
           <span class="pill muted">softBoostShadowOnly</span>
         </div>
         <div class="lifecycle-warning">
-          Graduation readiness only summarizes evidence and threshold suggestions. It does not change thresholds, final decisions, candidate stocks, production scores, or trading actions.
+          畢業準備度只彙整證據與門檻建議；不會修改門檻、最終決策、候選股、正式分數或交易行為。
         </div>
         <div class="stat-row" id="lc-graduation-summary"></div>
         <table class="promotion-validation-table">
           <thead><tr>
-            <th>suggestion</th><th>current</th><th>suggested</th><th>direction</th><th>reason</th><th>manual</th><th>scope</th>
+            <th>建議項目</th><th>目前值</th><th>建議值</th><th>方向</th><th>原因</th><th>人工確認</th><th>適用範圍</th>
           </tr></thead>
           <tbody id="lc-graduation-suggestions-body"></tbody>
         </table>
@@ -2621,6 +2697,36 @@
     "CODEX_DONE": "Codex 完成", "FINALIZED": "已完成",
     "CLAUDE_FAILED": "Claude 失敗", "CODEX_FAILED": "Codex 失敗",
     "EXPIRED": "已逾時",
+
+    // Promotion / Validation / Report-only 產品語言
+    "PENDING_REVIEW": "待人工審核", "RESEARCH_ONLY": "僅研究", "CANDIDATE_POOL_SHADOW": "影子候選",
+    "NEED_MORE_EVIDENCE": "證據不足", "REJECTED": "已拒絕", "BLOCKED_BY_RISK": "風險阻擋",
+    "BLOCKED_BY_GOVERNANCE": "治理阻擋", "BLOCKED_BY_DATA_GAP": "資料不足",
+    "ELIGIBLE_FOR_SOFT_BOOST_SHADOW": "可進 Shadow 加分觀察", "KEEP_WATCHING": "持續觀察",
+    "READY_FOR_SHADOW_SOFT_BOOST_REVIEW": "可進 Shadow 加分審核", "THRESHOLD_TUNING_REVIEW": "門檻檢討",
+    "MISSING_FORWARD_TRACKING": "缺追蹤紀錄", "MISSING_ENTRY_PRICE_AT_DECISION": "缺決策價",
+    "PENDING_FORWARD_RETURN_BACKFILL": "等待補齊報酬", "PROMOTION_RESEARCH_ONLY": "僅研究追蹤",
+    "PROMOTION_PENDING_REVIEW": "待審核追蹤", "PROMOTION_CANDIDATE_POOL_SHADOW": "影子候選追蹤",
+    "HOT_GROUP_RADAR": "強勢族群雷達", "RETAINED_LEADER": "保留領先股", "PEER_SHADOW": "同族群影子觀察",
+    "RESEARCH_UNIVERSE": "研究池", "EXPLAIN_MISS": "未入選原因", "REPLAY_CANDIDATE": "回放候選",
+    "LEADERSHIP_ONLY": "僅作領先指標", "THEME_LEADER": "題材領先股", "CHANNEL_DISTRIBUTOR": "通路/供應鏈角色",
+    "reviewOnly": "僅審核", "reportOnly": "僅報告", "simulationOnly": "僅模擬",
+    "dailyValidationSummaryOnly": "僅每日驗證摘要", "readinessReportOnly": "僅畢業準備報告",
+    "thresholdTuningSuggestionOnly": "僅門檻建議", "doesNotAffectFinalDecision": "不影響最終決策",
+    "doesNotAffectBuySellEnter": "不影響買賣進場", "doesNotWriteCandidateStock": "不寫入正式候選股",
+    "doesNotWriteProductionScore": "不修改正式分數", "candidatePoolShadowIsNotTradable": "Shadow 候選不可交易",
+    "noAutoPromotion": "不自動升級", "promotionRequiresSeparateRiskGate": "仍需獨立風控關卡",
+    "boundedSoftBoostShadowOnly": "僅 Shadow 加分觀察", "softBoostShadowOnly": "Shadow 加分觀察",
+    "noThresholdMutation": "不自動改門檻", "trackingBridgeOnly": "僅建立追蹤紀錄",
+    "returnBackfillRequired": "需要補齊報酬", "manual": "需人工確認", "auto": "自動", "shadow-only": "僅 Shadow",
+    "WATCH_ONLY": "僅觀察", "OK": "正常", "NO": "否", "KEEP": "維持", "TIGHTEN": "收緊", "LOOSEN": "放寬", "check": "需檢查",
+    "readOnly": "唯讀", "advisoryOnly": "僅建議", "shadowOnly": "僅 Shadow", "doesNotAffectBuySell": "不影響買賣",
+    "doesNotAffectRanking": "不影響排名", "doesNotWriteCandidateWatchlist": "不寫入候選/觀察清單",
+    "doesNotMutatePositions": "不異動持股", "doesNotAffectRiskGate": "不影響風控閘道",
+    "minimum sample requirement not met": "樣本數不足，還不能判斷策略是否穩定",
+    "insufficient completed forward-return evidence or missing market data": "缺少完成的後續報酬或市場資料",
+    "SHADOW_LOG_WRITTEN": "已寫入模擬紀錄", "READ_ONLY_DIAGNOSTIC_ONLY": "僅診斷，不影響交易",
+    "SOFT_WARNING": "觀察", "REVIEW": "需要檢查",
   };
 
   /* 翻譯單一值；若查不到直接回傳原值 */
@@ -2682,7 +2788,10 @@
       below_ma10:'跌破 10MA', low_volume_pullback:'量縮拉回', recent_high:'接近近期高', rising_volume:'上漲放量',
       below_ma5:'跌破 5MA', volume_breakdown:'放量轉弱', previous_low_break:'跌破前低'
     };
-    return map[r] || r.replaceAll('_',' ');
+    if (r === 'no_positive_or_negative_signal' || r === 'no positive or negative signal') return '尚無明確正負訊號';
+    if (r === 'MA5/MA10/MA20 insufficient') return '均線資料不足';
+    if (r === 'volume ratio missing') return '量能比資料不足';
+    return map[r] || zh(r) || r.replaceAll('_',' ');
   }
   function zhHealthStatus(raw) {
     const r = String(raw || '');
@@ -2707,27 +2816,64 @@
     return `<span class="health-pill ${m.cls}">${esc(m.label)}</span>`;
   }
   function renderHealthTableCell(h) {
-    if (!h) return `<span class="quote-meta">尚無 health-v2</span>`;
+    if (!h) return `<span class="quote-meta">尚無今日檢查</span>`;
     const gaps = (h.dataGaps || []).length;
-    return `${healthPill(h.actionTier)}<div class="sub">score ${esc(h.healthScore ?? '—')} · ${esc(zhHealthStatus(h.structureStatus || '—'))} · 缺口 ${gaps}</div>`;
+    const statuses = [h.structureStatus, h.volumeStatus, h.relativeStrengthStatus].filter(Boolean).slice(0,2).map(zhHealthStatus).join(' · ');
+    return `${healthPill(h.actionTier)}<div class="sub">分數 ${esc(h.healthScore ?? '—')} · ${esc(statuses || '資料不足')} · 缺資料 ${gaps}</div>`;
   }
   function renderPortfolioHealthPanel(payload, positions = [], liveMap = {}) {
     const box = $("portfolioHealthPanel");
     if (!box) return;
     if (!payload || !Array.isArray(payload.positions)) {
-      box.innerHTML = `<div class="terminal-empty">health-v2 尚無資料</div>`;
+      box.innerHTML = `<div class="terminal-empty">今日持股檢查尚無資料</div>`;
       return;
     }
     const rows = payload.positions || [];
     const healthMap = {};
     rows.forEach(h => { if (h?.symbol) healthMap[h.symbol] = h; });
     const count = k => rows.filter(x => String(x.actionTier || '').toUpperCase() === k).length;
-    const avg = rows.length ? Math.round(rows.reduce((a,b)=>a+Number(b.healthScore || 0),0)/rows.length) : 0;
+    const scoreVals = rows.map(x => Number(x.healthScore)).filter(Number.isFinite);
+    const avg = scoreVals.length ? Math.round(scoreVals.reduce((a,b)=>a+b,0)/scoreVals.length) : '—';
     const mode = $("healthMode");
-    if (mode) mode.textContent = payload.autoSellEnabled ? 'AUTO SELL ON' : 'MANUAL ONLY';
+    if (mode) mode.textContent = payload.autoSellEnabled ? '自動賣出開啟' : '僅人工確認';
     const kpis = [
-      ['平均分', avg], ['續抱', count('HOLD')], ['減碼檢查', count('REDUCE_REVIEW')], ['出場檢查', count('EXIT_REVIEW')], ['硬性警報', count('HARD_EXIT_ALERT')]
+      ['平均分', avg], ['續抱', count('HOLD')], ['觀察', count('SOFT_WARNING')], ['減碼檢查', count('REDUCE_REVIEW')], ['出場檢查', count('EXIT_REVIEW') + count('HARD_EXIT_ALERT')]
     ].map(([k,v]) => `<div class="health-kpi-box"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join('');
+
+    const severityRank = tier => ({HARD_EXIT_ALERT:5, EXIT_REVIEW:4, REDUCE_REVIEW:3, SOFT_WARNING:2, HOLD:1}[String(tier || '').toUpperCase()] || 0);
+    const positionMap = {};
+    (positions || []).forEach(p => { if (p?.symbol) positionMap[p.symbol] = p; });
+    const reviewRows = rows
+      .map(h => ({h, p: positionMap[h.symbol] || {symbol:h.symbol, stockName:h.stockName}}))
+      .sort((a,b) => (severityRank(b.h.actionTier) - severityRank(a.h.actionTier)) || (Number(a.h.healthScore ?? 999) - Number(b.h.healthScore ?? 999)))
+      .slice(0,3);
+
+    const topList = reviewRows.map(({h,p}) => {
+      const q = liveMap[p.symbol] || {};
+      const cur = q.currentPrice ?? p.currentPrice ?? null;
+      const reasons = (h.reasons || []).slice(0,3).map(r => `<span class="health-tag">${esc(zhHealthReason(r))}</span>`).join('');
+      const gaps = (h.dataGaps || []).slice(0,2).map(g => `<span class="health-tag gap">${esc(zhHealthGap(g))}</span>`).join('');
+      const statuses = [h.structureStatus, h.volumeStatus, h.relativeStrengthStatus].filter(Boolean).slice(0,3).map(zhHealthStatus).join(' · ');
+      return `<div class="health-card health-review-item">
+        <div class="top"><div><span class="sym">${esc(p.symbol || h.symbol || '—')}</span><span class="name">${esc(p.stockName || h.stockName || '')}</span></div><div>${healthPill(h.actionTier)}</div></div>
+        <div class="health-mini">
+          <div><span>分數</span><b>${esc(h.healthScore ?? '—')}</b></div>
+          <div><span>現價</span><b>${cur == null ? '—' : fmtPrice(cur)}</b></div>
+          <div><span>缺資料</span><b>${esc((h.dataGaps || []).length)}</b></div>
+        </div>
+        <div class="health-note" style="margin-top:8px">${esc(statuses || '資料不足，請搭配下方持倉表檢查。')}</div>
+        <div class="health-tags">${reasons || '<span class="health-tag">無明確警示</span>'}${gaps}</div>
+      </div>`;
+    }).join('');
+
+    const emptyTop = `<div class="terminal-empty">目前無需優先處理持股</div>`;
+    box.innerHTML = `<div class="health-head"><div><div class="health-title-row"><div><div class="health-title">持股風險總覽</div><div class="health-sub">${esc(payload.evaluatedAt || '')} · 僅提供人工確認，不會自動買賣</div></div></div><div class="health-note">先看整體 KPI 與需處理 Top 3；逐檔均價、現值、損益與停損停利請看下方持倉明細表，避免重複資訊。</div></div><div class="health-mode">${esc(zh(payload.persistence) || (payload.autoSellEnabled ? '自動' : '人工'))}</div></div>
+      <div class="health-kpi-grid">${kpis}</div>
+      <div class="health-title" style="font-size:15px;margin:2px 0 8px">需處理 Top 3</div>
+      <div class="health-card-grid">${topList || emptyTop}</div>`;
+
+    /* 舊版逐檔完整卡已改由下方持倉明細表承接，避免同頁重複顯示。 */
+    return;
 
     const cards = (positions || []).map(p => {
       const h = healthMap[p.symbol] || {};
@@ -2779,7 +2925,7 @@
       const tech = h.technicals || {};
       return `<div class="health-card position-health-card" style="--tone:${m.tone};--score:${Math.max(0,Math.min(100,Number(h.healthScore||0)))}"><div class="stock-row"><div><div class="stock-title"><span class="sym">${esc(h.symbol)}</span><span class="name">${esc(h.stockName || '')}</span></div></div><div class="health-score"><span>${esc(h.healthScore ?? '—')}</span></div></div><div style="margin-top:8px">${healthPill(h.actionTier)}</div><div class="position-metrics"><div><span>5MA</span><b>${esc(tech.ma5 ?? '—')}</b></div><div><span>10MA</span><b>${esc(tech.ma10 ?? '—')}</b></div><div><span>前低</span><b>${esc(tech.previousLow ?? '—')}</b></div><div><span>結構</span><b>${esc(zhHealthStatus(h.structureStatus || '—'))}</b></div></div></div>`;
     }).join('') : '';
-    box.innerHTML = `<div class="health-head"><div><div class="health-title-row"><div><div class="health-title">持倉健康與成本整合視圖</div><div class="health-sub">${esc(payload.mode || 'SHADOW')} · ${esc(payload.evaluatedAt || '')} · 不自動買賣，正式出場需人工確認</div></div></div><div class="health-note">每張卡同時整合股數、均價、現價、持倉成本、現值、未實現損益、停損停利與 health-v2 技術結構，方便直接判斷「這檔現在該續抱、觀察、減碼或人工出場」。</div></div><div class="health-mode">${esc(payload.persistence || 'READ ONLY')}</div></div>
+    box.innerHTML = `<div class="health-head"><div><div class="health-title-row"><div><div class="health-title">持股風險總覽</div><div class="health-sub">${esc(payload.evaluatedAt || '')} · 不自動買賣，正式出場需人工確認</div></div></div><div class="health-note">先看整體 KPI 與需處理 Top 3；逐檔均價、現值、損益與停損停利請看下方持倉明細表。</div></div><div class="health-mode">${esc(payload.persistence || '人工確認')}</div></div>
       <div class="health-kpi-grid">${kpis}</div><div class="health-card-grid integrated">${cards || fallbackCards || '<div class="terminal-empty">目前無持倉</div>'}</div>`;
   }
   function pnlHtml(v) {
@@ -2854,41 +3000,58 @@ function clearErr(boxId) {
   function p1Panel(title, inner, badge='') { return `<div class="p1-panel"><h3><span>${esc(title)}</span>${badge}</h3>${inner}</div>`; }
   function renderHealthDataGapsPanel(resp) {
     const box = $("portfolioHealthGapsPanel"); if (!box) return;
-    if (!resp || resp.ok === false) { box.innerHTML = p1ErrorHtml('Health Data Gaps', resp?.error); return; }
+    if (!resp || resp.ok === false) { box.innerHTML = p1ErrorHtml('持股資料缺口', resp?.error); return; }
     const d = resp.data || {}; const rows = Array.isArray(d) ? d : (d.items || d.gaps || d.rows || []);
     const total = d.totalGaps ?? d.gapCount ?? rows.length ?? 0;
     const critical = d.criticalCount ?? d.blockingCount ?? rows.filter(r => /CRITICAL|HIGH|BLOCK/.test(String(r.severity||r.level||'').toUpperCase())).length;
-    const rowHtml = rows.length ? `<div class="p1-chiprow">${rows.slice(0,10).map(r => `<span class="p1-chip">${esc(r.symbol || r.field || r.key || 'gap')} · ${esc(r.severity || r.level || r.type || '')}</span>`).join('')}</div>` : `<div class="small" style="color:var(--muted)">${esc(d.summary || d.safetyNote || 'health-v2 未回報資料缺口')}</div>`;
-    box.innerHTML = p1Panel('Health Data Gaps', `<div class="stat-row"><div class="stat-box"><div class="stat-label">缺口</div><div class="stat-value">${esc(total)}</div></div><div class="stat-box"><div class="stat-label">高風險</div><div class="stat-value ${critical>0?'num-neg':''}">${esc(critical)}</div></div><div class="stat-box"><div class="stat-label">狀態</div><div class="stat-value">${esc(d.status || d.mode || 'health-v2')}</div></div></div>${rowHtml}`, `<span class="pill ${critical>0?'err':total>0?'warn':'ok'}">${critical>0?'DATA RISK':total>0?'GAPS':'OK'}</span>`);
+    const rowHtml = rows.length ? `<div class="p1-chiprow">${rows.slice(0,10).map(r => `<span class="p1-chip">${esc(r.symbol || r.field || r.key || '缺口')} · ${zhEsc(r.severity || r.level || r.type || '')}</span>`).join('')}</div>` : `<div class="small" style="color:var(--muted)" title="${esc(d.summary || d.safetyNote || '')}">${d.summary || d.safetyNote ? '僅診斷，不影響交易；今日檢查未回報資料缺口。' : '今日檢查未回報資料缺口'}</div>`;
+    box.innerHTML = p1Panel('持股資料缺口', `<div class="stat-row"><div class="stat-box"><div class="stat-label">缺口</div><div class="stat-value">${esc(total)}</div></div><div class="stat-box"><div class="stat-label">高風險</div><div class="stat-value ${critical>0?'num-neg':''}">${esc(critical)}</div></div><div class="stat-box"><div class="stat-label">狀態</div><div class="stat-value">${zhEsc(d.status || d.mode || '今日檢查')}</div></div></div>${rowHtml}`, `<span class="pill ${critical>0?'err':total>0?'warn':'ok'}">${critical>0?'資料風險':total>0?'有缺口':'正常'}</span>`);
   }
   function renderAdaptiveExitDesktop(resp) {
     const box = $("adaptiveExitDesktopPanel"); if (!box) return;
-    if (!resp || resp.ok === false) { box.innerHTML = p1ErrorHtml('Adaptive Exit Review', resp?.error); return; }
+    if (!resp || resp.ok === false) { box.innerHTML = p1ErrorHtml('出場檢查', resp?.error); return; }
     const d = resp.data || {}; const items = d.items || [];
-    if (!items.length) { box.innerHTML = p1EmptyHtml('目前無 Adaptive Exit Review 資料'); return; }
-    box.innerHTML = `<div class="p1-inline-grid">${items.map(it => p1Panel(`${it.symbol || '—'} · ${it.recommendation || '—'}`, `<div class="p1-kv">
-      <div class="k">Thesis</div><div class="v">${esc(it.thesisStatus || '—')} · ${esc(it.thesisSummary || '')}</div>
-      <div class="k">Invalidation</div><div class="v">${esc(it.invalidationCondition || '—')}</div>
-      <div class="k">Theme</div><div class="v">${esc(it.themeLifecycle || '—')} · stale ${esc(it.themeStaleDays ?? '—')}d</div>
-      <div class="k">Heat/Risk</div><div class="v">heat ${esc(it.narrativeHeat ?? '—')} · crowding ${esc(it.crowdingRisk || '—')}</div>
-      <div class="k">Wave/Rotation</div><div class="v">${esc(it.wavePhase || '—')} · ${esc(it.rotationStrength ?? '—')}</div>
-      <div class="k">Inst/Sector</div><div class="v">${esc(it.institutionalAlignment || '—')} · ${esc(it.sectorLeadership || '—')}</div>
-      <div class="k">Safety</div><div class="v small">${esc(it.safetyNote || d.safetyBoundary?.readOnly ? 'Read-only / manual confirm' : '—')}</div>
-    </div>`, `<span class="pill warn">${esc(it.thesisStatus || 'REVIEW')}</span>`)).join('')}</div>`;
+    if (!items.length) { box.innerHTML = p1EmptyHtml('目前無出場檢查資料'); return; }
+    const note = `<div class="small" style="color:var(--muted);margin:4px 0 10px">用途：列出需要人工確認的出場線索；只提供檢查清單，不會自動賣出。</div>`;
+    box.innerHTML = `${note}<div class="p1-inline-grid">${items.map(it => p1Panel(`${it.symbol || '—'} · ${zhEsc(it.recommendation || '—')}`, `<div class="p1-kv">
+      <div class="k">投資論點</div><div class="v">${zhEsc(it.thesisStatus || '—')} · ${esc(it.thesisSummary || '')}</div>
+      <div class="k">失效條件</div><div class="v">${esc(it.invalidationCondition || '—')}</div>
+      <div class="k">題材階段</div><div class="v">${zhEsc(it.themeLifecycle || '—')} · 停滯 ${esc(it.themeStaleDays ?? '—')} 天</div>
+      <div class="k">熱度/風險</div><div class="v">熱度 ${esc(it.narrativeHeat ?? '—')} · 擁擠 ${zhEsc(it.crowdingRisk || '—')}</div>
+      <div class="k">波段/輪動</div><div class="v">${zhEsc(it.wavePhase || '—')} · ${esc(it.rotationStrength ?? '—')}</div>
+      <div class="k">法人/族群</div><div class="v">${zhEsc(it.institutionalAlignment || '—')} · ${zhEsc(it.sectorLeadership || '—')}</div>
+      <div class="k">安全邊界</div><div class="v small" title="${esc(it.safetyNote || '')}">${d.safetyBoundary?.readOnly || it.safetyNote ? '只讀 / 需人工確認 / 不會自動賣出' : '—'}</div>
+    </div>`, `<span class="pill warn">${zhEsc(it.thesisStatus || 'REVIEW')}</span>`)).join('')}</div>`;
   }
   function renderDecisionSnapshotsPanel(resp) {
     const box = $("dec-snapshotPanel"); if (!box) return;
-    if (!resp || resp.ok === false) { box.innerHTML = p1ErrorHtml('Decision Snapshot', resp?.error); return; }
+    if (!resp || resp.ok === false) { box.innerHTML = p1ErrorHtml('今日決策摘要', resp?.error); return; }
     const rows = Array.isArray(resp.data) ? resp.data : (resp.data?.items || resp.data?.snapshots || []);
-    if (!rows.length) { box.innerHTML = p1EmptyHtml('無 Decision Snapshot'); return; }
-    box.innerHTML = rows.slice(0,8).map(r => p1Panel(`${r.tradingDate || '—'} · ${r.finalDecisionCode || r.aiStatus || 'SNAPSHOT'}`, `<div class="p1-kv">
-      <div class="k">AI</div><div class="v">${esc(r.aiStatus || '—')} · ${esc(r.aiReadinessMode || '—')}</div>
-      <div class="k">Task</div><div class="v">${esc(r.sourceTaskType || '—')} → ${esc(r.preferTaskType || '—')}</div>
-      <div class="k">Fallback</div><div class="v">${esc(r.fallbackReason || '—')}</div>
-      <div class="k">Symbols</div><div class="v">選 ${esc(p1SymbolsSummary(r.selectedSymbolsJson))}｜排 ${esc(p1SymbolsSummary(r.rejectedSymbolsJson))}｜看 ${esc(p1SymbolsSummary(r.watchSymbolsJson))}</div>
-      <div class="k">Gate Trace</div><div class="v">${esc(p1JsonSummary(r.gateTraceJson))}</div>
-      <div class="k">Decision Trace</div><div class="v">${esc(p1JsonSummary(r.decisionTraceJson))}</div>
-    </div>`, `<span class="pill">${esc(r.sourceTaskType || '')}</span>`)).join('');
+    if (!rows.length) { box.innerHTML = p1EmptyHtml('無今日決策摘要'); return; }
+    const detailBlock = (title, raw, fallback) => `<details class="p1-detail"><summary>${esc(title)}</summary><pre>${esc(raw || fallback || '—')}</pre></details>`;
+    box.innerHTML = rows.slice(0,8).map(r => {
+      const decision = r.finalDecisionCode || r.finalDecision || r.aiStatus || '—';
+      const selected = p1SymbolsSummary(r.selectedSymbolsJson);
+      const rejected = p1SymbolsSummary(r.rejectedSymbolsJson);
+      const watch = p1SymbolsSummary(r.watchSymbolsJson);
+      const chips = `<div class="p1-chiprow">
+        <span class="p1-chip">選入 ${esc(selected)}</span>
+        <span class="p1-chip">排除 ${esc(rejected)}</span>
+        <span class="p1-chip">觀察 ${esc(watch)}</span>
+      </div>`;
+      const conclusion = `<div class="stat-row" style="margin-bottom:10px">
+        <div class="stat-box"><div class="stat-label">結論</div><div class="stat-value">${esc(decision)}</div></div>
+        <div class="stat-box"><div class="stat-label">AI狀態</div><div class="stat-value" style="font-size:16px">${esc(r.aiStatus || '—')} · ${esc(r.aiReadinessMode || '—')}</div></div>
+        <div class="stat-box"><div class="stat-label">任務來源</div><div class="stat-value" style="font-size:16px">${esc(r.sourceTaskType || '—')} → ${esc(r.preferTaskType || '—')}</div></div>
+      </div>`;
+      const fallback = r.fallbackReason ? `<div class="small" style="color:var(--muted);margin:6px 0"><b>備援原因：</b>${esc(r.fallbackReason)}</div>` : '';
+      const details = `<div style="margin-top:10px">
+        ${detailBlock('閘道檢查明細', r.gateTraceJson, p1JsonSummary(r.gateTraceJson))}
+        ${detailBlock('決策推論明細', r.decisionTraceJson, p1JsonSummary(r.decisionTraceJson))}
+        ${detailBlock('技術細節：任務 / 備援', JSON.stringify({sourceTaskType:r.sourceTaskType, preferTaskType:r.preferTaskType, fallbackReason:r.fallbackReason}, null, 2), '')}
+      </div>`;
+      return p1Panel(`${r.tradingDate || '—'} · 今日決策摘要`, `${conclusion}<div class="small" style="font-weight:800;color:var(--muted-dark)">股票摘要</div>${chips}${fallback}${details}`, `<span class="pill">${esc(decision)}</span>`);
+    }).join('');
   }
   function renderFeatureModeSafetyPanel(summaryResp, listResp) {
     const box = $("sys-featureModesPanel"); if (!box) return;
@@ -2936,12 +3099,81 @@ function clearErr(boxId) {
     return entries.map(([k,v]) => `<div class="lifecycle-map-row"><span>${esc(k)}</span><b class="mono">${valueFormatter(v)}</b></div>`).join("");
   }
 
+  function lcCodeLabel(value) {
+    const raw = value == null || value === "" ? "-" : String(value);
+    const label = zh(raw) || raw;
+    if (raw === "-" || label === raw) return esc(raw);
+    return `${esc(label)} <span class="small mono" style="color:var(--muted)" title="原始代碼">${esc(raw)}</span>`;
+  }
+
+  function lcCodePill(value, cls = "muted") {
+    const raw = value == null || value === "" ? "-" : String(value);
+    const label = zh(raw) || raw;
+    const title = label === raw ? "" : ` title="${esc(raw)}"`;
+    return `<span class="pill ${cls}"${title}>${esc(label)}</span>`;
+  }
+
+  function lcReason(value) {
+    const raw = value == null || value === "" ? "-" : String(value);
+    const label = zh(raw) || raw;
+    if (label !== raw) return label;
+    return raw
+      .replace(/minimum sample requirement not met/ig, "樣本數不足，還不能判斷策略是否穩定")
+      .replace(/insufficient completed forward-return evidence or missing market data/ig, "缺少完成的後續報酬或市場資料")
+      .replace(/positive T5 shadow evidence; still shadow only/ig, "T5 影子追蹤為正，但仍僅限 Shadow 觀察")
+      .replace(/risk blocker/ig, "風險阻擋")
+      .replace(/governance blocker/ig, "治理阻擋")
+      .replace(/data gap/ig, "資料缺口")
+      .replace(/review-only/ig, "僅審核")
+      .replace(/shadow-only/ig, "僅 Shadow");
+  }
+
   function lcSafetyPill(ok, label) {
-    return `<span class="pill ${ok ? 'ok' : 'err'}">${esc(label)}=${ok ? 'true' : 'false'}</span>`;
+    const raw = String(label || "");
+    const translated = zh(raw) || raw;
+    return `<span class="pill ${ok ? 'ok' : 'err'}" title="${esc(raw)}=${ok ? 'true' : 'false'}">${esc(translated)}：${ok ? '成立' : '異常'}</span>`;
+  }
+
+  function setPromotionStep(stepNo, text, tone = "active") {
+    const el = $(`lc-step-${stepNo}`);
+    if (el) el.textContent = text || "等待資料";
+    const step = el?.closest(".promotion-step");
+    if (step) {
+      step.classList.toggle("active", tone !== "idle");
+      step.classList.toggle("warn", tone === "warn");
+    }
+  }
+
+  function updatePromotionTodayConclusion({ status, reason, queueCounts, safetyNote } = {}) {
+    const statusEl = $("lc-today-status");
+    const reasonEl = $("lc-today-reason");
+    const stripEl = $("lc-today-status-strip");
+    const safetyEl = $("lc-today-safety-note");
+    if (statusEl && status) statusEl.textContent = zh(status) || status;
+    if (reasonEl && reason) reasonEl.textContent = lcReason(reason);
+    if (safetyEl && safetyNote) safetyEl.textContent = safetyNote;
+    if (stripEl && queueCounts) {
+      const entries = Object.entries(queueCounts).filter(([,v]) => Number(v) > 0);
+      stripEl.innerHTML = entries.length
+        ? entries.map(([k,v]) => `<span class="pill muted" title="${esc(k)}">${esc(zh(k) || k)}：${esc(v)}</span>`).join("")
+        : `<span class="pill muted">目前沒有清單資料</span>`;
+    }
+  }
+
+  function confirmPromotionAction(actionName, details) {
+    return window.confirm([
+      `確認要「${actionName}」嗎？`,
+      "",
+      "安全邊界：此動作只服務 Promotion / Validation Center。",
+      "不會送單、不會改持股、不會寫入正式候選股、不會修改正式分數，也不會改變最終買賣決策。",
+      details || "若資料仍不足，結果會維持資料缺口或證據不足。"
+    ].join("\n"));
   }
 
   function lcFalseSafetyPill(value, label) {
-    return `<span class="pill ${value === false ? 'ok' : 'err'}">${esc(label)}=${value === false ? 'false' : esc(value)}</span>`;
+    const raw = String(label || "");
+    const translated = zh(raw) || raw;
+    return `<span class="pill ${value === false ? 'ok' : 'err'}" title="${esc(raw)}=${value === false ? 'false' : esc(value)}">${esc(translated)}：${value === false ? '關閉' : esc(value)}</span>`;
   }
 
   function renderPullbackPlanShadow(payload) {
@@ -2964,14 +3196,14 @@ function clearErr(boxId) {
     ].join("");
     const range = p.startDate || p.endDate ? `${fmtDate(p.startDate)} → ${fmtDate(p.endDate)}` : "-";
     $("lc-pullback-summary").innerHTML = [
-      ["requestedDays", p.requestedDays ?? lifecycleDaysParam()],
-      ["range", range],
-      ["total plans", p.pullbackPlanRows ?? rows.filter(r => r.wouldCreatePullbackPlan === true).length],
-      ["avoid chasing", p.avoidChasingRows ?? rows.filter(r => /AVOID|CHASE/i.test(String(r.planStatus || r.shadowAction || ""))).length],
-      ["watch pullback", p.watchPullbackRows ?? rows.filter(r => /WATCH|PULLBACK/i.test(String(r.planStatus || r.shadowAction || ""))).length],
-      ["wait support", p.waitSupportRows ?? 0],
-      ["avg return 5d", lcNum(p.averageReturn5d)],
-      ["avg max DD", lcNum(p.averageMaxDrawdown)]
+      ["觀察天數", p.requestedDays ?? lifecycleDaysParam()],
+      ["資料範圍", range],
+      ["計畫筆數", p.pullbackPlanRows ?? rows.filter(r => r.wouldCreatePullbackPlan === true).length],
+      ["避免追高", p.avoidChasingRows ?? rows.filter(r => /AVOID|CHASE/i.test(String(r.planStatus || r.shadowAction || ""))).length],
+      ["等待回檔", p.watchPullbackRows ?? rows.filter(r => /WATCH|PULLBACK/i.test(String(r.planStatus || r.shadowAction || ""))).length],
+      ["等待支撐", p.waitSupportRows ?? 0],
+      ["5日平均報酬", lcNum(p.averageReturn5d)],
+      ["平均最大回撤", lcNum(p.averageMaxDrawdown)]
     ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
     $("lc-pullback-body").innerHTML = rows.length ? rows.slice(0, 80).map(r => `<tr>
       <td>${lcAdvisoryBadge(r.shadowAction || r.planStatus)}</td>
@@ -2986,7 +3218,7 @@ function clearErr(boxId) {
       <td class="num">${lcNum(r.actualReturn10d)}</td>
       <td class="num">${lcNum(r.maxDrawdownPct)}</td>
       <td>${esc(r.planReason || "shadow-only")}</td>
-    </tr>`).join("") : `<tr class="empty-row"><td colspan="12">無 Pullback Watch shadow rows · read-only</td></tr>`;
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="12">目前沒有回檔觀察資料 · 僅檢視</td></tr>`;
   }
 
   async function loadPullbackPlanShadow() {
@@ -2996,7 +3228,7 @@ function clearErr(boxId) {
       const report = await api(`/api/theme-lifecycle/pullback-plan/shadow?days=${encodeURIComponent(days)}`);
       renderPullbackPlanShadow(report || {});
     } catch(e) {
-      showErr("errBoxLifecycle", e.message || "Pullback Watch shadow report 載入失敗");
+      showErr("errBoxLifecycle", e.message || "回檔觀察報告載入失敗");
       renderPullbackPlanShadow({ requestedDays: days, rows: [] });
     }
   }
@@ -3016,13 +3248,13 @@ function clearErr(boxId) {
     const rotateRows = rows.filter(r => String(r.shadowAction || "").toUpperCase() === "SHADOW_ROTATE").length;
     const reduceRows = rows.filter(r => String(r.shadowAction || "").toUpperCase() === "SHADOW_REDUCE").length;
     $("lc-rotation-summary").innerHTML = [
-      ["requestedDays", p.requestedDays ?? lifecycleDaysParam()],
-      ["range", range],
-      ["open positions", p.openPositionCount ?? 0],
-      ["candidates", p.candidateCount ?? 0],
-      ["shadow rotate", rotateRows],
-      ["shadow reduce", reduceRows],
-      ["data gaps", Array.isArray(p.dataGaps) ? p.dataGaps.length : 0]
+      ["觀察天數", p.requestedDays ?? lifecycleDaysParam()],
+      ["資料範圍", range],
+      ["持股數", p.openPositionCount ?? 0],
+      ["候選股數", p.candidateCount ?? 0],
+      ["Shadow 輪動", rotateRows],
+      ["Shadow 減碼", reduceRows],
+      ["資料缺口", Array.isArray(p.dataGaps) ? p.dataGaps.length : 0]
     ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
     $("lc-rotation-body").innerHTML = rows.length ? rows.slice(0, 80).map(r => `<tr>
       <td>${lcAdvisoryBadge(r.shadowAction)}</td>
@@ -3046,7 +3278,7 @@ function clearErr(boxId) {
       const report = await api(`/api/portfolio/rotation-shadow?days=${encodeURIComponent(days)}`);
       renderPortfolioRotationShadow(report || {});
     } catch(e) {
-      showErr("errBoxLifecycle", e.message || "Portfolio Rotation Shadow 載入失敗");
+      showErr("errBoxLifecycle", e.message || "持股輪動觀察載入失敗");
       renderPortfolioRotationShadow({ requestedDays: days, items: [] });
     }
   }
@@ -3072,13 +3304,13 @@ function clearErr(boxId) {
     ].join("");
     const range = c.startDate || c.endDate ? `${fmtDate(c.startDate)} → ${fmtDate(c.endDate)}` : "-";
     $("lc-rankTopN-summary").innerHTML = [
-      ["requestedDays", c.requestedDays ?? lifecycleDaysParam()],
-      ["range", range],
-      ["totalRows", c.totalRows ?? 0],
-      ["tradingDays", c.distinctTradingDays ?? 0],
-      ["missed winners", m.totalMissedWinners ?? 0],
-      ["themes", q.totalThemes ?? 0],
-      ["data gaps", dataGapCount]
+      ["觀察天數", c.requestedDays ?? lifecycleDaysParam()],
+      ["資料範圍", range],
+      ["總筆數", c.totalRows ?? 0],
+      ["交易天數", c.distinctTradingDays ?? 0],
+      ["漏掉贏家", m.totalMissedWinners ?? 0],
+      ["題材數", q.totalThemes ?? 0],
+      ["資料缺口", dataGapCount]
     ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
 
     const windows = [c.top3, c.top5, c.top10, c.top20].filter(Boolean);
@@ -3140,7 +3372,7 @@ function clearErr(boxId) {
       ]);
       renderRankingTopNCalibration(cal || {}, missed || {}, quota || {});
     } catch(e) {
-      showErr("errBoxLifecycle", e.message || "Ranking TopN shadow calibration 載入失敗");
+      showErr("errBoxLifecycle", e.message || "排名名額模擬載入失敗");
       renderRankingTopNCalibration({}, {}, {});
     }
   }
@@ -3188,11 +3420,11 @@ function clearErr(boxId) {
     const funnel = cal.funnelSummary || {};
 
     $("lc-summary").innerHTML = [
-      ["requestedDays", cal.requestedDays ?? "-"],
-      ["available days", `${cal.actualAvailableDays ?? 0} / ${range}`],
-      ["lifecycle rows", lifecycleRows],
-      ["funnel signals", funnel.hotGroupSignalCount ?? 0],
-      ["MAINSTREAM / findings", `${mainstreamWarnings} / ${findingWarnCount}`]
+      ["觀察天數", cal.requestedDays ?? "-"],
+      ["可用天數", `${cal.actualAvailableDays ?? 0} / ${range}`],
+      ["生命週期樣本", lifecycleRows],
+      ["漏斗訊號", funnel.hotGroupSignalCount ?? 0],
+      ["主升/警示", `${mainstreamWarnings} / ${findingWarnCount}`]
     ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
 
     $("lc-stageBody").innerHTML = stages.length ? stages.map(r => `<tr>
@@ -3201,12 +3433,12 @@ function clearErr(boxId) {
     </tr>`).join("") : `<tr class="empty-row"><td colspan="6">無 lifecycle stage samples</td></tr>`;
 
     $("lc-funnelStats").innerHTML = [
-      ["hotGroupSignalCount", funnel.hotGroupSignalCount],
-      ["candidateHitCount", funnel.candidateHitCount],
-      ["watchlistHitCount", funnel.watchlistHitCount],
-      ["rankingHitCount", funnel.rankingHitCount],
-      ["riskPassCount", funnel.riskPassCount],
-      ["buyCount", funnel.buyCount]
+      ["強勢族群訊號", funnel.hotGroupSignalCount],
+      ["候選命中", funnel.candidateHitCount],
+      ["觀察清單命中", funnel.watchlistHitCount],
+      ["排名命中", funnel.rankingHitCount],
+      ["風控通過", funnel.riskPassCount],
+      ["買進數", funnel.buyCount]
     ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value ?? 0)}</div></div>`).join("");
     $("lc-conversionRates").innerHTML = lcMapList(funnel.conversionRates, lcPct);
     $("lc-blockedStages").innerHTML = lcMapList(funnel.blockedStageDistribution);
@@ -3214,9 +3446,9 @@ function clearErr(boxId) {
 
     const admission = cal.themeAdmissionSummary || {};
     $("lc-admissionStats").innerHTML = [
-      ["would candidate", admission.wouldWriteCandidateCount],
-      ["would watchlist", admission.wouldWriteWatchlistCount],
-      ["would pullback", admission.wouldCreatePullbackPlanCount]
+      ["會進候選", admission.wouldWriteCandidateCount],
+      ["會進觀察", admission.wouldWriteWatchlistCount],
+      ["會建回檔計畫", admission.wouldCreatePullbackPlanCount]
     ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value ?? 0)}</div></div>`).join("");
     $("lc-shadowActions").innerHTML = lcMapList(admission.shadowActionCounts);
 
@@ -3229,15 +3461,15 @@ function clearErr(boxId) {
 
     const pp = cal.lifecycleMetricPredictivePower || {};
     $("lc-predictivePanel").innerHTML = `<div class="kv">
-      <div class="k">n</div><div class="v mono">${esc(pp.n ?? 0)}</div>
-      <div class="k">lifecycle corr</div><div class="v mono">${lcNum(pp.lifecycleScoreCorrelation, 4)}</div>
-      <div class="k">continuation corr</div><div class="v mono">${lcNum(pp.continuationDaysCorrelation, 4)}</div>
-      <div class="k">breadth corr</div><div class="v mono">${lcNum(pp.breadthCorrelation, 4)}</div>
-      <div class="k">crowding corr</div><div class="v mono">${lcNum(pp.crowdingScoreCorrelation, 4)}</div>
-      <div class="k">top avg</div><div class="v mono">${lcNum(pp.topQuartileAvgReturn)}</div>
-      <div class="k">bottom avg</div><div class="v mono">${lcNum(pp.bottomQuartileAvgReturn)}</div>
-      <div class="k">spread</div><div class="v mono">${lcNum(pp.topBottomSpread)}</div>
-      <div class="k">data gap</div><div class="v">${esc(pp.dataGapReason || "-")}</div>
+      <div class="k">樣本數</div><div class="v mono">${esc(pp.n ?? 0)}</div>
+      <div class="k">生命週期相關</div><div class="v mono">${lcNum(pp.lifecycleScoreCorrelation, 4)}</div>
+      <div class="k">延續天數相關</div><div class="v mono">${lcNum(pp.continuationDaysCorrelation, 4)}</div>
+      <div class="k">廣度相關</div><div class="v mono">${lcNum(pp.breadthCorrelation, 4)}</div>
+      <div class="k">擁擠相關</div><div class="v mono">${lcNum(pp.crowdingScoreCorrelation, 4)}</div>
+      <div class="k">前段平均</div><div class="v mono">${lcNum(pp.topQuartileAvgReturn)}</div>
+      <div class="k">後段平均</div><div class="v mono">${lcNum(pp.bottomQuartileAvgReturn)}</div>
+      <div class="k">差距</div><div class="v mono">${lcNum(pp.topBottomSpread)}</div>
+      <div class="k">資料缺口</div><div class="v">${esc(pp.dataGapReason || "-")}</div>
     </div>`;
 
     const coverage = Object.values((gapResp && gapResp.dataCoverage) || cal.dataCoverage || {});
@@ -3278,17 +3510,18 @@ function clearErr(boxId) {
 
   function lcStageBadge(stage) {
     const label = stage || "DATA_GAP";
-    return `<span class="lifecycle-badge ${lcBadgeClass("stage", label)}">${esc(label)}</span>`;
+    const translated = zh(label) || label;
+    return `<span class="lifecycle-badge ${lcBadgeClass("stage", label)}" title="${esc(label)}">${esc(translated)}</span>`;
   }
 
   function lcAdvisoryLabel(action) {
     const a = String(action || "").toUpperCase();
-    if (a.includes("DATA_GAP")) return "Data gap";
-    if (a.includes("NO_CHASE")) return "No chase";
-    if (a.includes("TIGHTEN")) return "Tighten review";
-    if (a.includes("HOLD_THESIS") || a.includes("PRIORITY")) return "Hold thesis";
-    if (a.includes("WATCH_RESEARCH")) return "Watch research only";
-    return "Review";
+    if (a.includes("DATA_GAP")) return "資料缺口";
+    if (a.includes("NO_CHASE")) return "不追高";
+    if (a.includes("TIGHTEN")) return "收緊檢查";
+    if (a.includes("HOLD_THESIS") || a.includes("PRIORITY")) return "維持題材假設";
+    if (a.includes("WATCH_RESEARCH")) return "僅研究觀察";
+    return "人工檢查";
   }
 
   function lcAdvisoryBadge(action) {
@@ -3331,12 +3564,12 @@ function clearErr(boxId) {
     ].join("");
 
     $("lc-anno-summary").innerHTML = [
-      ["date", lifecycleAnnotationDateParam()],
-      ["candidates", (groups.candidates?.items || []).length],
-      ["watchlist", (groups.watchlist?.items || []).length],
-      ["ranking", (groups.ranking?.items || []).length],
-      ["positions", (groups.positions?.items || []).length],
-      ["data gaps", list.reduce((sum, r) => sum + ((r.dataGaps || []).length), 0)]
+      ["日期", lifecycleAnnotationDateParam()],
+      ["候選股", (groups.candidates?.items || []).length],
+      ["觀察清單", (groups.watchlist?.items || []).length],
+      ["排名", (groups.ranking?.items || []).length],
+      ["持股", (groups.positions?.items || []).length],
+      ["資料缺口", list.reduce((sum, r) => sum + ((r.dataGaps || []).length), 0)]
     ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value ?? 0)}</div></div>`).join("");
 
     renderLifecycleAnnotationRows(groups.candidates?.items, "lc-anno-candidatesBody");
@@ -3402,12 +3635,12 @@ function clearErr(boxId) {
     ].join("");
 
     $("lc-exit-summary").innerHTML = [
-      ["requestedDate", p.requestedDate || lifecycleExitDateParam()],
-      ["rebuiltCount", p.rebuiltCount ?? "-"],
-      ["row count", rows.length],
-      ["data gap count", p.dataGapCount ?? dataGapCount],
-      ["critical / high", `${priorityCounts.CRITICAL || 0} / ${priorityCounts.HIGH || 0}`],
-      ["review count", priorityCounts.REVIEW || reviewCount]
+      ["日期", p.requestedDate || lifecycleExitDateParam()],
+      ["重建筆數", p.rebuiltCount ?? "-"],
+      ["明細筆數", rows.length],
+      ["資料缺口", p.dataGapCount ?? dataGapCount],
+      ["嚴重/高", `${priorityCounts.CRITICAL || 0} / ${priorityCounts.HIGH || 0}`],
+      ["檢查數", priorityCounts.REVIEW || reviewCount]
     ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
 
     $("lc-exit-body").innerHTML = rows.length ? rows.map(r => `<tr>
@@ -3473,29 +3706,36 @@ function clearErr(boxId) {
       acc[k] = (acc[k] || 0) + 1;
       return acc;
     }, {});
+    setPromotionStep("queue", `清單 ${p.itemCount ?? rows.length} 筆 · 待審核 ${statusCounts.PENDING_REVIEW || 0} 筆`, rows.length ? "active" : "warn");
+    updatePromotionTodayConclusion({
+      status: rows.length ? "待累積驗證證據" : "尚無審核清單",
+      reason: rows.length ? "清單已建立；請透過策略模擬、追蹤紀錄與驗證報告累積證據。" : "目前沒有審核清單資料，或該日期尚未重建。",
+      queueCounts: statusCounts,
+      safetyNote: "僅審核、僅模擬、僅報告；Shadow 候選仍不可交易。"
+    });
     $("lc-promo-summary").innerHTML = [
-      ["date", p.tradingDate || promotionReviewDateParam()],
-      ["items", p.itemCount ?? rows.length],
-      ["pending", statusCounts.PENDING_REVIEW || 0],
-      ["candidate shadow", statusCounts.CANDIDATE_POOL_SHADOW || 0],
-      ["blocked risk", statusCounts.BLOCKED_BY_RISK || 0],
-      ["manual preserved", p.manualReviewPreserved === true ? "true" : "-"],
-      ["deleted system", p.deletedSystemCount ?? 0]
+      ["日期", p.tradingDate || promotionReviewDateParam()],
+      ["總筆數", p.itemCount ?? rows.length],
+      ["待人工審核", statusCounts.PENDING_REVIEW || 0],
+      ["影子候選", statusCounts.CANDIDATE_POOL_SHADOW || 0],
+      ["風險阻擋", statusCounts.BLOCKED_BY_RISK || 0],
+      ["人工保留", p.manualReviewPreserved === true ? "是" : "-"],
+      ["系統重建刪除", p.deletedSystemCount ?? 0]
     ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
     $("lc-promo-body").innerHTML = rows.length ? rows.slice(0, 100).map(r => `<tr>
-      <td>${pill(r.currentStatus || "PENDING_REVIEW", /BLOCKED|REJECT/i.test(String(r.currentStatus || "")) ? "warn" : "muted")}</td>
-      <td>${pill(r.suggestedStatus || "WATCH_ONLY", String(r.suggestedStatus || "").includes("SHADOW") ? "ok" : "muted")}</td>
+      <td>${lcCodePill(r.currentStatus || "PENDING_REVIEW", /BLOCKED|REJECT/i.test(String(r.currentStatus || "")) ? "warn" : "muted")}</td>
+      <td>${lcCodePill(r.suggestedStatus || "WATCH_ONLY", String(r.suggestedStatus || "").includes("SHADOW") ? "ok" : "muted")}</td>
       <td class="mono">${esc(r.symbol)}</td>
       <td>${esc(r.stockName)}</td>
       <td>${esc(r.themeTag)}</td>
-      <td>${esc(r.source)}</td>
-      <td>${esc(r.researchRole || "-")}</td>
+      <td>${lcCodeLabel(r.source)}</td>
+      <td>${lcCodeLabel(r.researchRole || "-")}</td>
       <td class="num">${lcNum(r.evidenceScore, 4)}</td>
       <td>${lcStageBadge(r.lifecycleStage || "DATA_GAP")}</td>
-      <td>${r.riskBlocker === true ? pill("BLOCK", "warn") : pill("OK", "ok")}</td>
-      <td>${r.governanceBlocker === true ? pill("BLOCK", "warn") : pill("OK", "ok")}</td>
-      <td>${esc(r.reviewReason || r.explainMissReason || "review-only")}</td>
-    </tr>`).join("") : `<tr class="empty-row"><td colspan="12">無 promotion review items · guarded review queue is empty</td></tr>`;
+      <td>${r.riskBlocker === true ? lcCodePill("BLOCKED_BY_RISK", "warn") : lcCodePill("OK", "ok")}</td>
+      <td>${r.governanceBlocker === true ? lcCodePill("BLOCKED_BY_GOVERNANCE", "warn") : lcCodePill("OK", "ok")}</td>
+      <td>${esc(lcReason(r.reviewReason || r.explainMissReason || "review-only"))}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="12">目前沒有審核清單資料 · 僅審核安全模式</td></tr>`;
   }
 
   async function loadPromotionReviewQueue() {
@@ -3513,6 +3753,7 @@ function clearErr(boxId) {
   async function buildPromotionReviewQueue() {
     clearErr("errBoxLifecycle");
     const date = promotionReviewDateParam();
+    if (!confirmPromotionAction("重新產生審核清單", `日期：${date}\n此動作會呼叫既有 build API 重新整理 Promotion Review Queue；保留人工審核紀錄，不會自動升級股票。`)) return;
     try {
       await api(`/api/promotion-review/build?date=${encodeURIComponent(date)}`, { method: "POST", timeoutMs: 20000 });
       await loadPromotionReviewQueue();
@@ -3539,6 +3780,7 @@ function clearErr(boxId) {
     const p = payload || {};
     const rows = Array.isArray(p.items) ? p.items : [];
     const s = p.summary || {};
+    setPromotionStep("policy", `模擬 ${s.itemCount ?? rows.length} 筆 · 資料缺口 ${s.dataGapCount ?? 0} 筆`, (s.dataGapCount || 0) > 0 ? "warn" : "active");
     $("lc-policy-safety").innerHTML = [
       lcSafetyPill(p.simulationOnly === true, "simulationOnly"),
       lcSafetyPill(p.reviewOnly === true, "reviewOnly"),
@@ -3550,29 +3792,29 @@ function clearErr(boxId) {
       lcSafetyPill(p.boundedSoftBoostShadowOnly === true, "boundedSoftBoostShadowOnly")
     ].join("");
     $("lc-policy-summary").innerHTML = [
-      ["range", `${fmtDate(p.startDate || policyDateParams().startDate)} → ${fmtDate(p.endDate || policyDateParams().endDate)}`],
-      ["status", p.status || policyDateParams().status],
-      ["items", s.itemCount ?? rows.length],
-      ["matched", s.matchedForwardCount ?? 0],
-      ["data gaps", s.dataGapCount ?? 0],
-      ["avg T1 / T5 / T10", `${lcNum(s.avgT1)} / ${lcNum(s.avgT5)} / ${lcNum(s.avgT10)}`],
-      ["winRate T5", s.winRateT5 == null ? "-" : lcPct(s.winRateT5)],
-      ["hitStop", s.hitStopCount ?? 0]
+      ["區間", `${fmtDate(p.startDate || policyDateParams().startDate)} → ${fmtDate(p.endDate || policyDateParams().endDate)}`],
+      ["狀態", zh(p.status || policyDateParams().status)],
+      ["總筆數", s.itemCount ?? rows.length],
+      ["已匹配追蹤", s.matchedForwardCount ?? 0],
+      ["資料缺口", s.dataGapCount ?? 0],
+      ["平均 T1 / T5 / T10", `${lcNum(s.avgT1)} / ${lcNum(s.avgT5)} / ${lcNum(s.avgT10)}`],
+      ["T5 勝率", s.winRateT5 == null ? "-" : lcPct(s.winRateT5)],
+      ["觸及停損", s.hitStopCount ?? 0]
     ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
     $("lc-policy-body").innerHTML = rows.length ? rows.slice(0, 100).map(r => `<tr>
-      <td>${pill(r.suggestedPolicy || "NEED_MORE_EVIDENCE", String(r.suggestedPolicy || "").includes("BLOCK") ? "warn" : "muted")}</td>
+      <td>${lcCodePill(r.suggestedPolicy || "NEED_MORE_EVIDENCE", String(r.suggestedPolicy || "").includes("BLOCK") ? "warn" : "muted")}</td>
       <td class="mono">${esc(r.symbol)}</td>
       <td>${esc(r.stockName)}</td>
       <td>${esc(r.themeTag)}</td>
-      <td>${esc(r.source)}</td>
-      <td>${pill(r.currentStatus || "-", String(r.currentStatus || "").includes("SHADOW") ? "ok" : "muted")}</td>
+      <td>${lcCodeLabel(r.source)}</td>
+      <td>${lcCodePill(r.currentStatus || "-", String(r.currentStatus || "").includes("SHADOW") ? "ok" : "muted")}</td>
       <td class="num">${lcNum(r.t1ReturnPct, 4)}</td>
       <td class="num">${lcNum(r.t5ReturnPct, 4)}</td>
       <td class="num">${lcNum(r.t10ReturnPct, 4)}</td>
       <td class="num">${lcNum(r.maxDrawdownPct, 4)}</td>
-      <td>${r.hitStop === true ? pill("STOP", "warn") : r.hitStop === false ? pill("NO", "ok") : pill("-", "muted")}</td>
-      <td>${r.dataGapReason ? pill(r.dataGapReason, "warn") : pill("OK", "ok")}</td>
-    </tr>`).join("") : `<tr class="empty-row"><td colspan="12">無 policy simulation items · guarded simulation only</td></tr>`;
+      <td>${r.hitStop === true ? lcCodePill("STOP_LOSS", "warn") : r.hitStop === false ? lcCodePill("NO", "ok") : lcCodePill("-", "muted")}</td>
+      <td>${r.dataGapReason ? lcCodePill(r.dataGapReason, "warn") : lcCodePill("OK", "ok")}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="12">目前沒有策略模擬資料 · 僅模擬安全模式</td></tr>`;
   }
 
   function renderPromotionValidationReport(payload) {
@@ -3580,27 +3822,34 @@ function clearErr(boxId) {
     const rows = Array.isArray(p.items) ? p.items : [];
     const s = p.summary || {};
     const c = p.graduationCriteria || {};
+    const validationStatus = s.overallStatus || "NEED_MORE_EVIDENCE";
+    setPromotionStep("validation", `${zh(validationStatus)} · 證據 ${s.evidenceReadyCount ?? 0} / 缺口 ${s.dataGapCount ?? 0}`, /GAP|NEED|BLOCK/i.test(String(validationStatus)) ? "warn" : "active");
+    updatePromotionTodayConclusion({
+      status: validationStatus,
+      reason: s.overallReason || "驗證報告已更新；此結論只作報告，不會正式升級。",
+      safetyNote: "驗證報告僅作證據檢查，不寫入正式候選股、不修改正式分數。"
+    });
     $("lc-policy-validation-summary").innerHTML = [
-      ["validation", s.overallStatus || "NEED_MORE_EVIDENCE"],
-      ["reason", s.overallReason || "minimum sample requirement not met"],
-      ["ready / gaps", `${s.evidenceReadyCount ?? 0} / ${s.dataGapCount ?? 0}`],
-      ["criteria", `n≥${c.minSample ?? 10}, winT5≥${lcPct(c.minWinRateT5 ?? 0.55)}, avgT5>${lcNum(c.minAvgT5 ?? 0)}, stop≤${lcPct(c.maxHitStopRate ?? 0.25)}`],
-      ["avgT5 / winT5", `${lcNum(s.avgT5)} / ${s.winRateT5 == null ? "-" : lcPct(s.winRateT5)}`],
-      ["hitStop / MDD", `${s.hitStopRate == null ? "-" : lcPct(s.hitStopRate)} / ${lcNum(s.avgMaxDrawdown)}`]
+      ["驗證結論", zh(s.overallStatus || "NEED_MORE_EVIDENCE")],
+      ["原因", lcReason(s.overallReason || "minimum sample requirement not met")],
+      ["證據完成 / 缺口", `${s.evidenceReadyCount ?? 0} / ${s.dataGapCount ?? 0}`],
+      ["畢業門檻", `樣本≥${c.minSample ?? 10}, T5勝率≥${lcPct(c.minWinRateT5 ?? 0.55)}, 平均T5>${lcNum(c.minAvgT5 ?? 0)}, 停損≤${lcPct(c.maxHitStopRate ?? 0.25)}`],
+      ["平均T5 / T5勝率", `${lcNum(s.avgT5)} / ${s.winRateT5 == null ? "-" : lcPct(s.winRateT5)}`],
+      ["停損率 / 最大回撤", `${s.hitStopRate == null ? "-" : lcPct(s.hitStopRate)} / ${lcNum(s.avgMaxDrawdown)}`]
     ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
     $("lc-validation-body").innerHTML = rows.length ? rows.slice(0, 100).map(r => `<tr>
-      <td>${pill(r.validationStatus || "NEED_MORE_EVIDENCE", /BLOCKED/i.test(String(r.validationStatus || "")) ? "warn" : String(r.validationStatus || "").includes("ELIGIBLE") ? "ok" : "muted")}</td>
+      <td>${lcCodePill(r.validationStatus || "NEED_MORE_EVIDENCE", /BLOCKED/i.test(String(r.validationStatus || "")) ? "warn" : String(r.validationStatus || "").includes("ELIGIBLE") ? "ok" : "muted")}</td>
       <td class="mono">${esc(r.symbol)}</td>
       <td>${esc(r.stockName)}</td>
       <td>${esc(r.themeTag)}</td>
-      <td>${esc(r.source)}</td>
-      <td>${pill(r.currentStatus || "-", String(r.currentStatus || "").includes("SHADOW") ? "ok" : "muted")}</td>
-      <td>${esc(r.validationReason || "-")}</td>
+      <td>${lcCodeLabel(r.source)}</td>
+      <td>${lcCodePill(r.currentStatus || "-", String(r.currentStatus || "").includes("SHADOW") ? "ok" : "muted")}</td>
+      <td>${esc(lcReason(r.validationReason || "-"))}</td>
       <td class="num">${lcNum(r.t5ReturnPct, 4)}</td>
       <td class="num">${lcNum(r.maxDrawdownPct, 4)}</td>
-      <td>${r.hitStop === true ? pill("STOP", "warn") : r.hitStop === false ? pill("NO", "ok") : pill("-", "muted")}</td>
-      <td>${r.dataGapReason ? pill(r.dataGapReason, "warn") : pill("OK", "ok")}</td>
-    </tr>`).join("") : `<tr class="empty-row"><td colspan="11">無 validation rows · guarded validation only</td></tr>`;
+      <td>${r.hitStop === true ? lcCodePill("STOP_LOSS", "warn") : r.hitStop === false ? lcCodePill("NO", "ok") : lcCodePill("-", "muted")}</td>
+      <td>${r.dataGapReason ? lcCodePill(r.dataGapReason, "warn") : lcCodePill("OK", "ok")}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="11">目前沒有驗證明細 · 僅驗證安全模式</td></tr>`;
   }
 
   async function loadPromotionValidationReport() {
@@ -3619,6 +3868,8 @@ function clearErr(boxId) {
     const p = payload || {};
     const s = p.summary || {};
     const rows = Array.isArray(p.thresholdSuggestions) ? p.thresholdSuggestions : [];
+    const readinessStatus = s.readinessStatus || "NEED_MORE_EVIDENCE";
+    setPromotionStep("graduation", `${zh(readinessStatus)} · 樣本 ${s.sampleCount ?? 0}/${s.minSample ?? 10}`, /GAP|NEED|BLOCK/i.test(String(readinessStatus)) ? "warn" : "active");
     $("lc-graduation-safety").innerHTML = [
       lcSafetyPill(p.readinessReportOnly === true, "readinessReportOnly"),
       lcSafetyPill(p.thresholdTuningSuggestionOnly === true, "thresholdTuningSuggestionOnly"),
@@ -3632,24 +3883,24 @@ function clearErr(boxId) {
       lcSafetyPill(p.softBoostShadowOnly === true, "softBoostShadowOnly")
     ].join("");
     $("lc-graduation-summary").innerHTML = [
-      ["readiness", s.readinessStatus || "NEED_MORE_EVIDENCE"],
-      ["reason", s.readinessReason || "-"],
-      ["sample / min", `${s.sampleCount ?? 0} / ${s.minSample ?? 10}`],
-      ["shortfall", s.sampleShortfall ?? 0],
-      ["ready / gaps", `${s.evidenceReadyCount ?? 0} / ${s.dataGapCount ?? 0}`],
-      ["risk / governance", `${s.riskBlockedCount ?? 0} / ${s.governanceBlockedCount ?? 0}`],
-      ["avgT5 / winT5", `${lcNum(s.avgT5)} / ${s.winRateT5 == null ? "-" : lcPct(s.winRateT5)}`],
-      ["hitStop / MDD", `${s.hitStopRate == null ? "-" : lcPct(s.hitStopRate)} / ${lcNum(s.avgMaxDrawdown)}`]
+      ["畢業準備度", zh(s.readinessStatus || "NEED_MORE_EVIDENCE")],
+      ["原因", lcReason(s.readinessReason || "-")],
+      ["樣本 / 門檻", `${s.sampleCount ?? 0} / ${s.minSample ?? 10}`],
+      ["樣本缺口", s.sampleShortfall ?? 0],
+      ["證據完成 / 缺口", `${s.evidenceReadyCount ?? 0} / ${s.dataGapCount ?? 0}`],
+      ["風險 / 治理阻擋", `${s.riskBlockedCount ?? 0} / ${s.governanceBlockedCount ?? 0}`],
+      ["平均T5 / T5勝率", `${lcNum(s.avgT5)} / ${s.winRateT5 == null ? "-" : lcPct(s.winRateT5)}`],
+      ["停損率 / 最大回撤", `${s.hitStopRate == null ? "-" : lcPct(s.hitStopRate)} / ${lcNum(s.avgMaxDrawdown)}`]
     ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
     $("lc-graduation-suggestions-body").innerHTML = rows.length ? rows.map(r => `<tr>
-      <td class="mono">${esc(r.key)}</td>
+      <td>${lcCodeLabel(r.key)}</td>
       <td class="mono small">${esc(r.currentValue)}</td>
       <td class="mono small">${esc(r.suggestedValue)}</td>
-      <td>${pill(r.direction || "KEEP", String(r.direction || "").includes("BLOCK") || String(r.direction || "").includes("TIGHTEN") ? "warn" : "muted")}</td>
-      <td>${esc(r.reason || "-")}</td>
-      <td>${r.manualReviewRequired === true ? pill("manual", "warn") : pill("auto", "muted")}</td>
-      <td>${r.appliesToShadowOnly === true ? pill("shadow-only", "ok") : pill("check", "warn")}</td>
-    </tr>`).join("") : `<tr class="empty-row"><td colspan="7">無 threshold suggestions · report only</td></tr>`;
+      <td>${lcCodePill(r.direction || "KEEP", String(r.direction || "").includes("BLOCK") || String(r.direction || "").includes("TIGHTEN") ? "warn" : "muted")}</td>
+      <td>${esc(lcReason(r.reason || "-"))}</td>
+      <td>${r.manualReviewRequired === true ? lcCodePill("manual", "warn") : lcCodePill("auto", "muted")}</td>
+      <td>${r.appliesToShadowOnly === true ? lcCodePill("shadow-only", "ok") : lcCodePill("check", "warn")}</td>
+    </tr>`).join("") : `<tr class="empty-row"><td colspan="7">目前沒有門檻建議 · 僅報告模式</td></tr>`;
   }
 
   async function loadGraduationReadiness() {
@@ -3681,16 +3932,17 @@ function clearErr(boxId) {
   async function bridgePolicyForwardTracking() {
     clearErr("errBoxLifecycle");
     const p = policyDateParams();
+    if (!confirmPromotionAction("建立追蹤紀錄", `區間：${p.startDate} ～ ${p.endDate}\n狀態：${zh(p.status)}\n只會寫入 forward tracking 的 PROMOTION_* 追蹤標籤，用於後續 T1/T5/T10 報酬驗證。`)) return;
     try {
       const res = await api(`/api/promotion-review/forward-tracking-bridge?startDate=${encodeURIComponent(p.startDate)}&endDate=${encodeURIComponent(p.endDate)}&status=${encodeURIComponent(p.status)}`, { method: "POST", timeoutMs: 20000 });
       $("lc-policy-bridge-summary").innerHTML = [
-        ["bridge", res.trackingBridgeOnly === true ? "tracking only" : "check"],
-        ["source", res.sourceItems ?? 0],
-        ["written", res.written ?? 0],
-        ["updated", res.updatedExisting ?? 0],
-        ["skipped", res.skippedExisting ?? 0],
-        ["decision", res.finalDecision || "PROMOTION_*"],
-        ["backfill", res.returnBackfillRequired === true ? "required" : "-"],
+        ["追蹤模式", res.trackingBridgeOnly === true ? "僅建立追蹤" : "請檢查"],
+        ["來源筆數", res.sourceItems ?? 0],
+        ["新增", res.written ?? 0],
+        ["更新", res.updatedExisting ?? 0],
+        ["略過", res.skippedExisting ?? 0],
+        ["決策標籤", res.finalDecision || "PROMOTION_*"],
+        ["補報酬", res.returnBackfillRequired === true ? "需要" : "-"],
       ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
       await loadPolicySimulation();
     } catch(e) {
@@ -3702,14 +3954,15 @@ function clearErr(boxId) {
     clearErr("errBoxLifecycle");
     const p = policyDateParams();
     const days = Math.max(10, Math.ceil((new Date(p.endDate) - new Date(p.startDate)) / 86400000) + 10 || 10);
+    if (!confirmPromotionAction("補齊報酬資料", `預計補齊最近 ${days} 天 forward tracking 報酬。\n此動作只更新追蹤報酬欄位，讓驗證報告能判讀資料缺口。`)) return;
     try {
       const res = await api(`/api/forward-tracking/backfill-returns?days=${encodeURIComponent(days)}`, { method: "POST", timeoutMs: 30000 });
       $("lc-policy-bridge-summary").innerHTML = [
-        ["return backfill", "done"],
-        ["processed", res.processedRows ?? 0],
-        ["updated", res.updatedRows ?? 0],
-        ["data gaps", res.dataGapRows ?? 0],
-        ["benchmark", typeof res.benchmarkHorizon === "string" ? res.benchmarkHorizon : JSON.stringify(res.benchmarkHorizon || {})]
+        ["報酬補齊", "完成"],
+        ["處理筆數", res.processedRows ?? 0],
+        ["更新筆數", res.updatedRows ?? 0],
+        ["資料缺口", res.dataGapRows ?? 0],
+        ["基準資料", typeof res.benchmarkHorizon === "string" ? res.benchmarkHorizon : JSON.stringify(res.benchmarkHorizon || {})]
       ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
       await loadPolicySimulation();
     } catch(e) {
@@ -3722,6 +3975,7 @@ function clearErr(boxId) {
     const p = policyDateParams();
     const date = p.endDate || p.startDate;
     const days = Math.max(1, Math.min(60, Number($("lc-daily-backfill-days")?.value || 14)));
+    if (!confirmPromotionAction("產生每日驗證摘要", `日期：${date}\n狀態：${zh(p.status)}\n補齊天數：${days}\n會依排程相同邏輯做追蹤、補報酬與 validation summary，但僅輸出報告。`)) return;
     try {
       const res = await api(`/api/promotion-review/daily-validation-summary?date=${encodeURIComponent(date)}&status=${encodeURIComponent(p.status)}&backfillDays=${encodeURIComponent(days)}`, { method: "POST", timeoutMs: 40000 });
       const bridge = res.bridge || {};
@@ -3737,16 +3991,30 @@ function clearErr(boxId) {
         lcSafetyPill(res.noAutoPromotion === true, "noAutoPromotion"),
         lcSafetyPill(res.softBoostShadowOnly === true, "softBoostShadowOnly")
       ].join("");
+      const allStatus = res.allStatusSummary || {};
       $("lc-daily-summary-result").innerHTML = [
-        ["date", fmtDate(res.date || date)],
-        ["status", res.status || p.status],
-        ["overall", res.overallStatus || summary.overallStatus || "NEED_MORE_EVIDENCE"],
-        ["reason", res.overallReason || summary.overallReason || "-"],
-        ["items", res.itemCount ?? summary.itemCount ?? 0],
-        ["ready / gaps", `${summary.evidenceReadyCount ?? 0} / ${summary.dataGapCount ?? 0}`],
-        ["bridge written / updated", `${bridge.written ?? 0} / ${bridge.updatedExisting ?? 0}`],
-        ["backfill updated / gaps", `${backfill.updatedRows ?? 0} / ${backfill.dataGapRows ?? 0}`]
+        ["日期", fmtDate(res.date || date)],
+        ["主要狀態", zh(res.status || p.status)],
+        ["主要結論", zh(res.overallStatus || summary.overallStatus || "NEED_MORE_EVIDENCE")],
+        ["原因", lcReason(res.overallReason || summary.overallReason || "-")],
+        ["主要狀態筆數", res.itemCount ?? summary.itemCount ?? 0],
+        ["全部狀態筆數", res.totalQueueItems ?? allStatus.totalQueueItems ?? 0],
+        ["全部證據完成 / 缺口", `${allStatus.totalEvidenceReady ?? summary.evidenceReadyCount ?? 0} / ${allStatus.totalDataGaps ?? summary.dataGapCount ?? 0}`],
+        ["追蹤新增 / 更新", `${bridge.written ?? 0} / ${bridge.updatedExisting ?? 0}`],
+        ["報酬更新 / 缺口", `${backfill.updatedRows ?? 0} / ${backfill.dataGapRows ?? 0}`]
       ].map(([label,value]) => `<div class="stat-box"><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}</div></div>`).join("");
+      const byStatus = Array.isArray(res.byStatus) ? res.byStatus : Array.isArray(allStatus.byStatus) ? allStatus.byStatus : [];
+      const queueCounts = byStatus.reduce((acc, row) => {
+        const key = String(row.status || row.currentStatus || "UNKNOWN").toUpperCase();
+        acc[key] = row.itemCount ?? row.count ?? 0;
+        return acc;
+      }, {});
+      updatePromotionTodayConclusion({
+        status: res.overallStatus || summary.overallStatus || "NEED_MORE_EVIDENCE",
+        reason: res.overallReason || summary.overallReason || "每日摘要已產生；仍只作報告與證據檢查。",
+        queueCounts: Object.keys(queueCounts).length ? queueCounts : undefined,
+        safetyNote: `每日摘要完成：全部狀態 ${res.totalQueueItems ?? allStatus.totalQueueItems ?? 0} 筆；不影響最終決策。`
+      });
       await loadPolicySimulation();
     } catch(e) {
       showErr("errBoxLifecycle", e.message || "Daily validation summary 失敗");
@@ -4641,8 +4909,39 @@ function clearErr(boxId) {
       const sa = resolveCandidateSortScore(a);
       const sb = resolveCandidateSortScore(b);
       if (sb !== sa) return sb - sa;
+      const ia = a?.includeInFinalPlan === true ? 1 : 0;
+      const ib = b?.includeInFinalPlan === true ? 1 : 0;
+      if (ib !== ia) return ib - ia;
       return String(a.symbol || "").localeCompare(String(b.symbol || ""));
     });
+  }
+
+  function candidateRoleLabel(c) {
+    const role = String(c?.candidateRole || "").toUpperCase();
+    if (role === "THEME_LEADER") return "題材指標";
+    if (role === "BREAKOUT_CANDIDATE") return "突破候選";
+    if (role === "TRADABLE_PULLBACK") return "回測候選";
+    if (role === "LOW_BASE_FOLLOWER") return "低基期跟進";
+    if (role === "CHANNEL_DISTRIBUTOR") return "通路角色";
+    if (role === "WATCH_ONLY") return "觀察用";
+    return role ? zh(role) : "候選";
+  }
+
+  function candidateListRoleCell(c) {
+    const role = candidateRoleLabel(c);
+    const include = c?.includeInFinalPlan === true;
+    const leaderOnly = c?.isThemeLeader === true && c?.leaderTradable === false;
+    const main = include ? "研究追蹤" : (leaderOnly ? "題材觀察" : "未納入");
+    const cls = include ? "ok" : (leaderOnly ? "warn" : "muted");
+    const note = leaderOnly ? "僅作題材強弱參考，不進正式交易" : (include ? "納入研究追蹤，不代表可直接買進" : "未納入研究追蹤");
+    const title = c?.leaderRetentionReason || note;
+    return `<div title="${esc(title)}">${pill(main, cls)}<div class="quote-meta" style="margin-top:3px">${esc(role)} · ${esc(note)}</div></div>`;
+  }
+
+  function vetoStatusCell(c) {
+    if (c?.isVetoed === true) return `<span class="pill err" title="風控或 AI 明確淘汰">已淘汰</span>`;
+    if (c?.isVetoed === false) return `<span class="pill ok" title="已確認未被風控淘汰">未淘汰</span>`;
+    return `<span class="pill muted" title="isVetoed 尚未回填；不代表通過或淘汰">未判定</span>`;
   }
 
   function candidateDateMeta(items) {
@@ -4699,12 +4998,10 @@ function clearErr(boxId) {
             const clScore = c.claudeScore        != null ? Number(c.claudeScore).toFixed(1)        : "–";
             const cxScore = c.codexScore         != null ? Number(c.codexScore).toFixed(1)         : "–";
             const fScore  = c.finalRankScore     != null ? Number(c.finalRankScore).toFixed(1)     : "–";
-            const vetoCell = c.isVetoed
-              ? `<span class="pill err" title="已被淘汰">✗</span>`
-              : `<span class="pill ok">✓</span>`;
+            const vetoCell = vetoStatusCell(c);
             const jScoreCell = c.javaStructureScore != null
               ? `<span class="score-badge" style="background:${scoreBg(c.javaStructureScore)}">${jScore}</span>`
-              : `<span class="quote-meta">–</span>`;
+              : `<span class="pill muted" title="stock_evaluation.java_structure_score 尚未回填">缺 Java 分</span>`;
             const clScoreCell = c.claudeScore != null
               ? `<span class="score-badge" style="background:${scoreBg(c.claudeScore)}">${clScore}</span>`
               : `<span class="quote-meta">–</span>`;
@@ -4756,7 +5053,7 @@ function clearErr(boxId) {
               <td class="num-cell">${esc(c.stopLossPrice)}</td>
               <td class="num-cell">${esc(c.takeProfit1)}</td>
               <td class="num-cell">${esc(c.takeProfit2)}</td>
-              <td>${c.includeInFinalPlan ? pill("納入","ok") : pill("未納入","muted")}</td>
+              <td>${candidateListRoleCell(c)}</td>
               <td style="white-space:nowrap">
                 <button class="btn" style="padding:2px 8px;font-size:12px"
                   onclick="toggleCandidateInclude('${esc(c.symbol)}')">${c.includeInFinalPlan ? "移除" : "納入"}</button>

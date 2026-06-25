@@ -55,17 +55,18 @@ public class ThemeFirstDashboardService {
                 <head>
                   <meta charset=\"utf-8\">
                   <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">
-                  <title>Theme-first Ops Dashboard</title>
+                  <title>題材工作台</title>
                   <style>
                     :root { color-scheme: light dark; --bg:#f6f7fb; --panel:#ffffff; --text:#172033; --muted:#667085; --line:#d0d5dd; --ok:#067647; --warn:#b42318; --accent:#175cd3; }
                     @media (prefers-color-scheme: dark) { :root { --bg:#0b1220; --panel:#111827; --text:#eef2ff; --muted:#98a2b3; --line:#344054; --accent:#84caff; } }
                     * { box-sizing: border-box; }
                     body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:14px; line-height:1.45; }
-                    .topbar.sticky-date-selector { position:sticky; top:0; z-index:10; display:flex; gap:10px; align-items:flex-start; padding:12px max(12px, env(safe-area-inset-left)); background:color-mix(in srgb, var(--panel) 92%, transparent); border-bottom:1px solid var(--line); backdrop-filter: blur(10px); }
+                    .topbar.sticky-date-selector { position:sticky; top:0; z-index:10; display:flex; gap:10px; align-items:flex-start; padding:12px max(12px, env(safe-area-inset-left)); background:color-mix(in srgb, var(--panel) 92%, transparent); border-bottom:1px solid var(--line); backdrop-filter: blur(10px); flex-wrap:wrap; }
                     h1 { font-size:18px; margin:0 10px 0 0; white-space:nowrap; }
                     label { color:var(--muted); }
                     input, button { min-height:44px; border:1px solid var(--line); border-radius:10px; padding:8px 12px; font-size:14px; background:var(--panel); color:var(--text); }
                     button { color:var(--accent); font-weight:700; }
+                    .nav-link { min-height:44px; border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:var(--panel); color:var(--accent); font-weight:800; text-decoration:none; display:inline-flex; align-items:center; }
                     main.theme-first-dashboard { max-width:1280px; margin:0 auto; padding:16px; }
                     .summary-grid, .responsive-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
                     .panel, .mobile-card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px; box-shadow:0 1px 2px rgba(16,24,40,.04); }
@@ -99,10 +100,12 @@ public class ThemeFirstDashboardService {
                 </head>
                 <body>
                   <header class=\"topbar sticky-date-selector\">
-                    <h1>Theme-first Ops Dashboard</h1>
+                    <h1>題材工作台</h1>
+                    <a class=\"nav-link\" href=\"/\">返回主控台</a>
+                    <a class=\"nav-link\" href=\"/mobile.html#/themeops\">手機版題材頁</a>
                     <label for=\"dateInput\">日期</label>
                     <input id=\"dateInput\" type=\"date\" value=\"__DASHBOARD_DATE__\" aria-label=\"dashboard date\">
-                    <button id=\"refreshBtn\" type=\"button\">Refresh</button>
+                    <button id=\"refreshBtn\" type=\"button\">重新整理</button>
                   </header>
                   <main class=\"theme-first-dashboard responsive-grid\">
                     <section class=\"panel mobile-card\" id=\"topStatus\"><h2 class=\"section-title\">Top Status</h2><div class=\"loading\">Loading status...</div></section>
